@@ -6,7 +6,7 @@
 
 ### Крок 1. Перейдіть на сайт дашборду
 Відкрийте посилання на ваш опублікований дашборд у браузері:
-👉 **[Вставте сюди ваше посилання з Vercel]**
+👉 **[rozetka-scraper-extension-builder.vercel.app](https://rozetka-scraper-extension-builder.vercel.app)**
 
 Для входу використовуйте ці дані:
 * **Логін:** `admin`
