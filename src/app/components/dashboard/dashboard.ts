@@ -140,8 +140,8 @@ export class DashboardComponent implements OnInit {
   autoRefreshTimer: any;
 
   ngOnInit() {
-    this.loadProducts();
     if (typeof window !== 'undefined') {
+      this.loadProducts();
       this.autoRefreshTimer = setInterval(() => {
         this.loadProducts(true);
       }, 3000);
