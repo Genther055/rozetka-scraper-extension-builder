@@ -1,0 +1,138 @@
+/* You can add global styles to this file, and also import other style files */
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+:root {
+  --bg-main: #08070d;
+  --bg-sidebar: #0d0b14;
+  --bg-card: #121020;
+  --border-color: rgba(139, 92, 246, 0.12);
+  --border-hover: rgba(168, 85, 247, 0.35);
+  --color-indigo: #6366f1;
+  --color-purple: #a855f7;
+  --gradient-active: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  --glow-shadow: 0 0 20px rgba(124, 58, 237, 0.15);
+}
+
+body {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-main) !important;
+  color: #f1f5f9;
+}
+
+/* Premium Glassmorphic Cards */
+.premium-card {
+  background: linear-gradient(135deg, rgba(22, 19, 38, 0.7) 0%, rgba(13, 11, 23, 0.85) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 1rem;
+}
+
+.premium-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 12px 40px 0 rgba(139, 92, 246, 0.15), 0 0 20px 0 rgba(124, 58, 237, 0.05);
+  transform: translateY(-2px);
+}
+
+/* Pill Menu Buttons */
+.premium-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1.25rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.premium-menu-btn-active {
+  background: var(--gradient-active);
+  color: #ffffff;
+  box-shadow: 0 0 18px rgba(124, 58, 237, 0.35);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.premium-menu-btn-inactive {
+  background: transparent;
+  color: #94a3b8;
+}
+
+.premium-menu-btn-inactive:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #f1f5f9;
+  border-color: rgba(139, 92, 246, 0.08);
+}
+
+/* Premium Headers & Text */
+.premium-title {
+  background: linear-gradient(to right, #ffffff 30%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+/* Custom Scrollbar for Dark Theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+::-webkit-scrollbar-thumb {
+  background: #1e1b2e;
+  border-radius: 9999px;
+  border: 2px solid var(--bg-main);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #312b4f;
+}
+
+/* Custom Dark Table styling */
+.premium-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.premium-table th {
+  color: #c084fc;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+  background-color: rgba(13, 11, 22, 0.5);
+}
+
+.premium-table tr {
+  transition: all 0.2s ease;
+}
+
+.premium-table tbody tr:hover {
+  background-color: rgba(139, 92, 246, 0.03);
+}
+
+.premium-table td {
+  border-bottom: 1px solid rgba(139, 92, 246, 0.06);
+}
+
+/* Glowing Neon Elements */
+.glow-indigo {
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+}
+.glow-emerald {
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+}
+.glow-amber {
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
+}

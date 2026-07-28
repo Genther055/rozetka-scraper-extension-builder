@@ -1,0 +1,73 @@
+TRADE-SCOUT E-COMMERCE ANALYTICS DASHBOARD - IMPLEMENTATION PLAN
+
+This plan outlines the implementation of the TradeScout web platform. It serves as a central hub where scraped product data (e.g., from Rozetka or other sources) is received, analyzed, and visualized. The backend will persist the data and integrate the Gemini AI API for product audits, while the Angular frontend will provide an interactive, premium dashboard using Tailwind CSS.
+
+=========================================
+USER REVIEW REQUIRED
+=========================================
+
+1. Extension Webhook URL Change:
+Once this platform is running, you can point your Chrome extension directly to:
+http://localhost:4000/api/products
+This allows the extension to feed data directly into the dashboard without requiring an intermediate n8n setup, though the option to route through n8n remains fully compatible.
+
+2. Gemini AI Integration:
+We will use the @google/genai SDK on the server side to analyze product specifications. To enable this, make sure to add your GEMINI_API_KEY to the .env file in the project root.
+
+=========================================
+PROPOSED CHANGES
+=========================================
+
+We will modify the backend Express server to handle data ingestion, persistence (to a local JSON file to survive restarts), and Gemini AI calls. On the frontend, we will build a modern, high-fidelity dashboard containing the 4 core tools defined in the project presentation.
+
+-----------------------------------------
+BACKEND COMPONENTS
+-----------------------------------------
+
+File to Modify: /src/server.ts
+- Add express.json() middleware to parse incoming POST payloads.
+- Define a local storage mechanism (persisted in a local "data/products.json" file).
+- Create API endpoints:
+  * POST /api/products: Receives and appends scraped product data.
+  * GET /api/products: Retrieves all products.
+  * POST /api/products/clear: Resets/clears the products list.
+  * POST /api/products/analyze: Triggers Gemini API analysis on a product (matching names with descriptions/characteristics to identify discrepancies).
+
+-----------------------------------------
+FRONTEND COMPONENTS
+-----------------------------------------
+
+File to Create: /src/app/components/dashboard/dashboard.ts
+File to Create: /src/app/components/dashboard/dashboard.html
+- Main component for the TradeScout dashboard.
+- Implements:
+  * Overview Cards: High-level stats (total items, average price, highest-rated product).
+  * Product Explorer: Interactive table with sorting, search filters, and page selector.
+  * Demand Estimator: Metric calculator showing estimated monthly sales based on review count and growth rate.
+  * Competition Score: Visual indicator (Low / Medium / High difficulty) based on price spread and seller count.
+  * Product Tracker: Visual log of changes and active alerts.
+  * AI Spec Auditor: Integrated panel where users can trigger Gemini to inspect and flag suspicious product descriptions.
+
+File to Modify: /src/app/app.routes.ts
+- Define a route redirecting the root path (/) to the new Dashboard component.
+
+File to Modify: /src/app/app.ts
+- Update imports to support routing and HTTP client functionality.
+
+File to Modify: /src/app/app.config.ts
+- Add provideHttpClient to enable communication with the backend API.
+
+=========================================
+VERIFICATION PLAN
+=========================================
+
+1. Automated Tests:
+- Run "npm run build" to verify compiling of both SSR server and Angular client.
+- Test the Rest API endpoints using PowerShell commands (Invoke-RestMethod).
+
+2. Manual Verification:
+- Start the application locally via "npm run dev".
+- Open http://localhost:4000 in the browser.
+- Open the Chrome Extension popup, enter "http://localhost:4000/api/products" as the webhook URL, and run a scrape.
+- Verify that data appears instantly on the dashboard.
+- Trigger an AI audit on one of the products and verify the Gemini response.

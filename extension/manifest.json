@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Rozetka Scraper to n8n",
+  "version": "2.5",
+  "description": "Scrapes product data from Rozetka and sends it to n8n webhook or local API.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://rozetka.com.ua/*",
+    "https://*.rozetka.com.ua/*",
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*",
+    "https://*.n8n.cloud/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://rozetka.com.ua/*",
+        "https://*.rozetka.com.ua/*"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ]
+}

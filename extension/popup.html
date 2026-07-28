@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>TradeScout</title>
+    <style>
+        body {
+            width: 320px;
+            padding: 12px;
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            font-size: 13px;
+            background-color: #f4f5f7;
+            color: #1e293b;
+        }
+
+        h3 {
+            margin: 0 0 12px 0;
+            font-size: 16px;
+            font-weight: bold;
+            border-bottom: 2px solid #006400;
+            padding-bottom: 6px;
+            color: #0f172a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .version-badge {
+            font-size: 10px;
+            background: #e2e8f0;
+            color: #475569;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: normal;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 6px 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background-color: #fff;
+            font-family: inherit;
+            font-size: 12px;
+            outline: none;
+        }
+
+        input[type="text"]:focus {
+            border-color: #006400;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        button {
+            flex: 1;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background-color: #fff;
+            color: #334155;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background-color: #f1f5f9;
+            border-color: #94a3b8;
+        }
+
+        #btn-start {
+            background-color: #10b981;
+            color: #ffffff;
+            border-color: #059669;
+        }
+
+        #btn-start:hover {
+            background-color: #059669;
+        }
+
+        #btn-start:disabled {
+            background-color: #a7f3d0;
+            border-color: #a7f3d0;
+            cursor: not-allowed;
+        }
+
+        #btn-stop {
+            background-color: #ef4444;
+            color: #ffffff;
+            border-color: #dc2626;
+        }
+
+        #btn-stop:hover {
+            background-color: #dc2626;
+        }
+
+        #btn-stop:disabled {
+            background-color: #fca5a5;
+            border-color: #fca5a5;
+            cursor: not-allowed;
+        }
+
+        hr {
+            border: 0;
+            border-top: 1px solid #e2e8f0;
+            margin: 12px 0;
+        }
+
+        /* Progress & Status Bar */
+        .progress-wrapper {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 700;
+            color: #475569;
+            margin-bottom: 6px;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 10px;
+            background-color: #e2e8f0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #10b981 0%, #3b82f6 100%);
+            border-radius: 5px;
+            transition: width 0.3s ease;
+        }
+
+        .status-details {
+            font-family: "Segoe UI", sans-serif;
+            font-size: 11px;
+            line-height: 1.5;
+            color: #334155;
+        }
+
+        .status-action {
+            font-weight: 600;
+            color: #0f172a;
+            display: block;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .status-metrics {
+            display: flex;
+            justify-content: space-between;
+            color: #64748b;
+            font-size: 10px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <h3>
+        TradeScout Scraper
+        <span class="version-badge">v2.5</span>
+    </h3>
+
+    <div class="form-group">
+        <label for="webhook-url">URL Вебхука (Port 4000 / n8n):</label>
+        <input type="text" id="webhook-url" placeholder="http://localhost:4000/api/products">
+    </div>
+
+    <div class="button-container">
+        <button id="btn-start">Запустити</button>
+        <button id="btn-stop">Зупинити</button>
+    </div>
+
+    <div class="progress-wrapper">
+        <div class="progress-header">
+            <span>Прогрес скрапінгу:</span>
+            <span id="percent-text">0%</span>
+        </div>
+        
+        <div class="progress-bar-bg">
+            <div id="progress-fill" class="progress-bar-fill"></div>
+        </div>
+
+        <div class="status-details">
+            <span class="status-action" id="status-text">Очікування запуску...</span>
+            <div class="status-metrics">
+                <span id="count-text">Товарів: 0</span>
+                <span id="timer-text">Час: 00:00</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

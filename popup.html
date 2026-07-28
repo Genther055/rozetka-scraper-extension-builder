@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>TradeScout</title>
+    <style>
+        body {
+            width: 320px;
+            padding: 10px;
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            font-size: 13px;
+            background-color: #f0f0f0;
+            color: #000;
+        }
+
+        h3 {
+            margin: 0 0 12px 0;
+            font-size: 16px;
+            font-weight: bold;
+            border-bottom: 1px solid #999;
+            padding-bottom: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: bold;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 4px;
+            border: 1px solid #7a7a7a;
+            background-color: #fff;
+            font-family: inherit;
+            font-size: 12px;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        button {
+            flex: 1;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            border: 1px solid #7a7a7a;
+            background-color: #e1e1e1;
+            color: #000;
+        }
+
+        button:hover {
+            background-color: #d1d1d1;
+            border-color: #000;
+        }
+
+        button:active {
+            background-color: #c1c1c1;
+        }
+
+        #btn-start {
+            color: #006400; /* Dark Green */
+            border-color: #006400;
+        }
+
+        #btn-stop {
+            color: #8b0000; /* Dark Red */
+            border-color: #8b0000;
+        }
+
+        hr {
+            border: 0;
+            border-top: 1px solid #999;
+            margin: 12px 0;
+        }
+
+        #status-box {
+            background-color: #fff;
+            border: 1px solid #7a7a7a;
+            padding: 8px;
+            font-family: "Consolas", "Courier New", monospace;
+            font-size: 11px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+        }
+
+        .status-line {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h3>TradeScout</h3>
+
+    <div class="form-group">
+        <label for="webhook-url">URL Вебхука n8n:</label>
+        <input type="text" id="webhook-url" placeholder="http://localhost:5678/webhook-test/...">
+    </div>
+
+    <div class="button-container">
+        <button id="btn-start">Запустити</button>
+        <button id="btn-stop">Зупинити</button>
+    </div>
+
+    <hr>
+
+    <div id="status-box">
+        <span class="status-line" id="status-text">Статус: Очікування запуску</span>
+        <span class="status-line" id="count-text">Зібрано товарів: 0</span>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

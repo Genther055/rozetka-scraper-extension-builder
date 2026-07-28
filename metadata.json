@@ -1,0 +1,6 @@
+{
+  "name": "Rozetka Scraper Extension Builder",
+  "description": "A workspace for developing a Chrome extension that scrapes Rozetka product lists and sends them to n8n.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
