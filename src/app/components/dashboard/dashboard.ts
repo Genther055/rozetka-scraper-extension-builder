@@ -31,6 +31,10 @@ interface Product {
   templateUrl: './dashboard.html',
 })
 export class DashboardComponent implements OnInit {
+  apiUrl: string = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:4000'
+    : 'https://rozetka-scraper-extension-builder.onrender.com';
+
   products: Product[] = [];
   filteredProducts: Product[] = [];
   
@@ -152,7 +156,7 @@ export class DashboardComponent implements OnInit {
 
   loadProducts(silent = false) {
     if (!silent) this.loading = true;
-    this.http.get<{ success: boolean, products: Product[] }>('http://localhost:4000/api/products')
+    this.http.get<{ success: boolean, products: Product[] }>(`${this.apiUrl}/api/products`)
       .subscribe({
         next: (res) => {
           if (res.success) {
@@ -345,7 +349,7 @@ export class DashboardComponent implements OnInit {
 
   clearAllData() {
     if (confirm('Ви впевнені, що хочете видалити всі зібрані товари?')) {
-      this.http.post('http://localhost:4000/api/products/clear', {})
+      this.http.post(`${this.apiUrl}/api/products/clear`, {})
         .subscribe(() => {
           this.loadProducts();
         });
@@ -356,7 +360,7 @@ export class DashboardComponent implements OnInit {
     product.isAuditing = true;
     this.cdr.markForCheck();
 
-    this.http.post<{ success: boolean, status: any, verdict: string, specs?: string }>('http://localhost:4000/api/products/analyze', {
+    this.http.post<{ success: boolean, status: any, verdict: string, specs?: string }>(`${this.apiUrl}/api/products/analyze`, {
       link: product.link,
       name: product.name
     }).subscribe({
@@ -512,10 +516,7 @@ export class DashboardComponent implements OnInit {
   }
 
   getWebhookUrl(): string {
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}/api/products`;
-    }
-    return 'http://localhost:3000/api/products';
+    return `${this.apiUrl}/api/products`;
   }
 
   getPort(): string {
