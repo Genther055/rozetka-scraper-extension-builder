@@ -271,7 +271,7 @@ app.post('/api/products/analyze', async (req, res) => {
   });
 });
 
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`🚀 TradeScout Pure Express API Server listening on port ${PORT} (IPv4 & IPv6)`);
 });
