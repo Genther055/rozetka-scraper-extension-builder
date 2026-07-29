@@ -87,25 +87,33 @@ export class DashboardComponent implements OnInit {
     const parts = specsStr.split(';').map(s => s.trim()).filter(Boolean);
     const badges: { text: string; style: string }[] = [];
 
+    const getPartVal = (str: string) => {
+      const idx = str.indexOf(':');
+      return idx !== -1 ? str.slice(idx + 1).trim() : str.trim();
+    };
+
     for (const part of parts) {
       if (/mah|мАг/i.test(part)) {
         const match = part.match(/\d+[\d\s]*\s*(?:mah|мАг)/i);
-        badges.push({ text: match ? match[0] : part, style: 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60' });
+        const text = match ? match[0] : (part.length > 22 ? part.slice(0, 20) + '...' : part);
+        badges.push({ text, style: 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60' });
       } else if (/\d+\s*W|\b\d+\s*Вт\b/i.test(part)) {
         const match = part.match(/\d+(?:\.\d+)?\s*(?:W|Вт)/i);
-        badges.push({ text: match ? match[0] : part, style: 'bg-purple-950/80 text-purple-300 border-purple-800/60' });
+        const text = match ? match[0] : (part.length > 22 ? part.slice(0, 20) + '...' : part);
+        badges.push({ text, style: 'bg-purple-950/80 text-purple-300 border-purple-800/60' });
       } else if (/magsafe|quickcharge|qc|pd|бездрот|ліхтарик/i.test(part)) {
-        const val = part.includes(':') ? part.split(':')[1].trim() : part;
-        badges.push({ text: val.length > 20 ? val.slice(0, 20) + '...' : val, style: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/60' });
+        const val = getPartVal(part);
+        badges.push({ text: val.length > 22 ? val.slice(0, 20) + '...' : val, style: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/60' });
       } else if (badges.length < 3) {
-        const val = part.includes(':') ? part.split(':')[1].trim() : part;
-        if (val.length <= 20) {
-          badges.push({ text: val, style: 'bg-slate-800/80 text-slate-300 border-slate-700/60' });
+        const val = getPartVal(part);
+        if (val.length > 0) {
+          const displayText = val.length > 22 ? val.slice(0, 20) + '...' : val;
+          badges.push({ text: displayText, style: 'bg-slate-800/80 text-slate-300 border-slate-700/60' });
         }
       }
     }
     return badges;
-  } // 'all', 'inStock', 'outOfStock'
+  }
 
   // Metrics
   totalItems = 0;
