@@ -276,6 +276,42 @@ if (window.self !== window.top) {
             }
         }
 
+        function findShowMoreButton() {
+            const selectors = [
+                'rz-catalog-more button', 
+                '.catalog-more button', 
+                '.catalog-more__btn', 
+                'button.show-more', 
+                '.show-more', 
+                'a.show-more', 
+                '[class*="catalog-more"] button',
+                '[class*="catalog-more"] a'
+            ];
+            for (const sel of selectors) {
+                try {
+                    const btn = document.querySelector(sel);
+                    if (btn && !btn.disabled && !btn.classList.contains('button--loading')) {
+                        return btn;
+                    }
+                } catch (e) {}
+            }
+
+            const allElements = document.querySelectorAll('button, a, div[role="button"], span');
+            for (const el of allElements) {
+                const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+                if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more') {
+                    if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed')) {
+                        continue;
+                    }
+                    if (el.disabled || el.classList.contains('button--loading')) {
+                        continue;
+                    }
+                    return el;
+                }
+            }
+            return null;
+        }
+
         await waitForCatalog();
 
         let pageCount = 1;
@@ -284,8 +320,8 @@ if (window.self !== window.top) {
             await smoothScroll();
             await scrapeAndSendNewProducts(state.webhookUrl, pageCount);
 
-            const showMoreBtn = document.querySelector('rz-catalog-more button, .catalog-more button, .catalog-more__btn, button.show-more, .show-more, a.show-more, [class*="catalog-more"] button');
-            if (showMoreBtn && !showMoreBtn.disabled) {
+            const showMoreBtn = findShowMoreButton();
+            if (showMoreBtn) {
                 console.log(`TradeScout: Clicking "Show more" (page ${pageCount})...`);
                 showMoreBtn.click();
                 pageCount++;
