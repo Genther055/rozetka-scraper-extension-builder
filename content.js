@@ -19,6 +19,41 @@ if (window.self !== window.top) {
             } catch (e) {}
         }
 
+        function getEstimatedTotalFromPage() {
+            const selectors = [
+                '.catalog-heading__goods', 
+                '.catalog-selection__label',
+                '.goods-count',
+                '[class*="heading__goods"]',
+                '[class*="selection__label"]'
+            ];
+            for (const sel of selectors) {
+                try {
+                    const el = document.querySelector(sel);
+                    if (el) {
+                        const txt = el.textContent || '';
+                        const m = txt.match(/(\d[\d\s]*)/);
+                        if (m) {
+                            const num = parseInt(m[1].replace(/\s/g, ''), 10);
+                            if (num > 0) return num;
+                        }
+                    }
+                } catch (e) {}
+            }
+            try {
+                const headingEl = document.querySelector('h1, .catalog-heading');
+                if (headingEl) {
+                    const txt = headingEl.textContent || '';
+                    const m = txt.match(/(\d[\d\s]*)/);
+                    if (m) {
+                        const num = parseInt(m[1].replace(/\s/g, ''), 10);
+                        if (num > 0) return num;
+                    }
+                }
+            } catch (e) {}
+            return 113;
+        }
+
         // Потрійний гарантований канал відправки (Direct Fetch + Background Worker)
         async function sendWebhookPayload(webhookUrl, payload) {
             const targets = [
@@ -261,7 +296,7 @@ if (window.self !== window.top) {
                     scraped: sentLinks.size,
                     total: sentLinks.size,
                     statusMsg: `Зібрано базові ${sentLinks.size} товарів...`,
-                    estimatedTotal: 113
+                    estimatedTotal: getEstimatedTotalFromPage()
                 });
 
                 // 2. Фонове збагачення описами та таблицями характеристик (пачками по 6)
