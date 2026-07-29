@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Rozetka Scraper to n8n",
-  "version": "1.0",
-  "description": "Scrapes product data from Rozetka and sends it to n8n webhook.",
+  "version": "2.5",
+  "description": "Scrapes product data from Rozetka and sends it to n8n webhook or local API.",
   "permissions": [
     "activeTab",
     "scripting",
