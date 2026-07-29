@@ -114,36 +114,61 @@ if (window.self !== window.top) {
                 const res = await fetch(charUrl);
                 if (!res.ok) return;
                 const htmlText = await res.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlText, 'text/html');
 
-                // 1. Повний текстовий опис товару від продавця
-                const descEl = doc.querySelector('.product-about__description, [class*="description-content"], .rz-product-description, [data-testid="description"]');
-                if (descEl) {
-                    const cleanDesc = descEl.innerText.trim();
-                    if (cleanDesc && cleanDesc.length > 15) {
-                        product.description = cleanDesc;
-                    }
+                let description = '';
+                let specsMap = {};
+                const specsList = [];
+
+                // 1. Fast regex parsing (Regex)
+                const descMatch = htmlText.match(/class="[^"]*(?:product-about__description|rz-product-description|description-content)[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+                if (descMatch) {
+                    description = descMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
                 }
 
-                // 2. Повна таблиця характеристик товару
-                const specsList = [];
-                const specsMap = {};
-
-                const dts = Array.from(doc.querySelectorAll('dt, .characteristics-full__label, [class*="characteristics"] [class*="label"], [class*="characteristics"] [class*="name"]'));
-                dts.forEach(dt => {
-                    const dd = dt.nextElementSibling || dt.parentElement.querySelector('dd, .characteristics-full__value, [class*="characteristics"] [class*="value"]');
-                    const k = dt.innerText ? dt.innerText.trim() : '';
-                    const v = dd && dd.innerText ? dd.innerText.trim() : '';
+                const specMatches = htmlText.matchAll(/class="[^"]*(?:characteristics__label|characteristics-full__label)[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>[\s\S]*?class="[^"]*(?:characteristics__value|characteristics-full__value)[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>/gi);
+                for (const m of specMatches) {
+                    const k = m[1].replace(/<[^>]+>/g, '').trim();
+                    const v = m[2].replace(/<[^>]+>/g, '').trim();
                     if (k && v && k.length > 1 && v.length > 0) {
                         specsMap[k] = v;
                         specsList.push(`${k}: ${v}`);
                     }
-                });
+                }
 
+                // 2. If Regex succeeded, save. Else fallback to DOMParser
                 if (specsList.length > 0) {
                     product.specs = specsList.join('; ');
                     product.detailedSpecsMap = specsMap;
+                    if (description && description.length > 15) {
+                        product.description = description;
+                    }
+                } else {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlText, 'text/html');
+
+                    const descEl = doc.querySelector('.product-about__description, [class*="description-content"], .rz-product-description, [data-testid="description"]');
+                    if (descEl) {
+                        const cleanDesc = descEl.innerText.trim();
+                        if (cleanDesc && cleanDesc.length > 15) {
+                            product.description = cleanDesc;
+                        }
+                    }
+
+                    const dts = Array.from(doc.querySelectorAll('dt, .characteristics-full__label, [class*="characteristics"] [class*="label"], [class*="characteristics"] [class*="name"]'));
+                    dts.forEach(dt => {
+                        const dd = dt.nextElementSibling || dt.parentElement.querySelector('dd, .characteristics-full__value, [class*="characteristics"] [class*="value"]');
+                        const k = dt.innerText ? dt.innerText.trim() : '';
+                        const v = dd && dd.innerText ? dd.innerText.trim() : '';
+                        if (k && v && k.length > 1 && v.length > 0) {
+                            specsMap[k] = v;
+                            specsList.push(`${k}: ${v}`);
+                        }
+                    });
+
+                    if (specsList.length > 0) {
+                        product.specs = specsList.join('; ');
+                        product.detailedSpecsMap = specsMap;
+                    }
                 }
             } catch (err) {
                 console.warn('TradeScout: Detail fetch skipped for', product.name);
@@ -301,7 +326,7 @@ if (window.self !== window.top) {
 
                 // 2. Фонове збагачення описами та таблицями характеристик (пачками по 6)
                 console.log(`TradeScout: Enriching details & descriptions for ${newProducts.length} items...`);
-                const BATCH_SIZE = 6;
+                const BATCH_SIZE = 8;
                 for (let i = 0; i < newProducts.length; i += BATCH_SIZE) {
                     const batch = newProducts.slice(i, i + BATCH_SIZE);
                     await Promise.all(batch.map(p => fetchDetailForProduct(p)));
