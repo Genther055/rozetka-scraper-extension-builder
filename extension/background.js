@@ -39,8 +39,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
 
         // 3. Запускаємо асинхронне фонове збагачення описами та деталями (не блокує скрапер)
-        if (payload?.products && payload.products.length > 0) {
-            enrichProductsInBackground(payload.products);
+        if (payload?.products && payload.products.length > 0 && !payload.skipBackgroundEnrichment && !payload.isEnriched) {
+            enrichProductsInBackground(payload.products, webhookUrl);
         }
 
         return true;
@@ -83,7 +83,7 @@ async function fetchProductDetails(product) {
     }
 }
 
-async function enrichProductsInBackground(products) {
+async function enrichProductsInBackground(products, webhookUrl) {
     const BATCH_SIZE = 5;
     console.log(`TradeScout Background: Enriching details for ${products.length} products in background...`);
     
@@ -94,17 +94,18 @@ async function enrichProductsInBackground(products) {
 
         // Надсилаємо оновлені детальні дані на Дашборд
         const enrichedPayload = { products: batch };
-        fetch(LOCAL_DASHBOARD_API, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(enrichedPayload)
-        }).catch(() => {});
-        
-        fetch(LOCAL_IP_API, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(enrichedPayload)
-        }).catch(() => {});
+        const targets = [LOCAL_DASHBOARD_API, LOCAL_IP_API];
+        if (webhookUrl && !targets.includes(webhookUrl)) {
+            targets.push(webhookUrl);
+        }
+
+        for (const targetUrl of targets) {
+            fetch(targetUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(enrichedPayload)
+            }).catch(() => {});
+        }
     }
     console.log('TradeScout Background: All product details enriched successfully.');
 }

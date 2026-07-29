@@ -54,7 +54,7 @@ chrome.storage.local.get(['isRunning', 'webhookUrl', 'totalScraped', 'currentPag
     if (state.webhookUrl) {
         inputWebhook.value = state.webhookUrl;
     } else {
-        inputWebhook.value = 'http://localhost:4000/api/products';
+        inputWebhook.value = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
     }
 
     if (state.isRunning) {

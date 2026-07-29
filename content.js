@@ -253,7 +253,7 @@ if (window.self !== window.top) {
                 console.log(`TradeScout: Extracted ${newProducts.length} clean items. Total so far: ${sentLinks.size}`);
 
                 // 1. Негайно надсилаємо базові товари на Дашборд
-                await sendWebhookPayload(webhookUrl, { products: newProducts, page: pageIndex });
+                await sendWebhookPayload(webhookUrl, { products: newProducts, page: pageIndex, skipBackgroundEnrichment: true });
 
                 safeSendMessage({
                     action: 'progress',
@@ -270,7 +270,7 @@ if (window.self !== window.top) {
                 for (let i = 0; i < newProducts.length; i += BATCH_SIZE) {
                     const batch = newProducts.slice(i, i + BATCH_SIZE);
                     await Promise.all(batch.map(p => fetchDetailForProduct(p)));
-                    await sendWebhookPayload(webhookUrl, { products: batch, page: pageIndex });
+                    await sendWebhookPayload(webhookUrl, { products: batch, page: pageIndex, skipBackgroundEnrichment: true, isEnriched: true });
                     await new Promise(resolve => setTimeout(resolve, 200));
                 }
             }
