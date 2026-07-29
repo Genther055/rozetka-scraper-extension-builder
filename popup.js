@@ -3,7 +3,6 @@ const btnStart = document.getElementById('btn-start');
 const btnStop = document.getElementById('btn-stop');
 const inputWebhook = document.getElementById('webhook-url');
 const statusText = document.getElementById('status-text');
-const countText = document.getElementById('count-text');
 const timerText = document.getElementById('timer-text');
 const percentText = document.getElementById('percent-text');
 const progressFill = document.getElementById('progress-fill');
@@ -37,13 +36,6 @@ function updateProgress(percent, count, actionMsg, totalEstimated) {
     progressFill.style.width = `${safePercent}%`;
     percentText.innerText = `${safePercent}%`;
     
-    if (count !== undefined) {
-        if (totalEstimated && totalEstimated > 0) {
-            countText.innerText = `Товарів: ${count} з ${totalEstimated}`;
-        } else {
-            countText.innerText = `Товарів: ${count}`;
-        }
-    }
     if (actionMsg) {
         statusText.innerText = actionMsg;
     }
