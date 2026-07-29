@@ -315,10 +315,23 @@ if (window.self !== window.top) {
         await waitForCatalog();
 
         let pageCount = 1;
+        let lastScrapedCount = 0;
+        let consecutiveNoNewItems = 0;
+
         while (true) {
             await scrapeAndSendNewProducts(state.webhookUrl, pageCount);
             await smoothScroll();
             await scrapeAndSendNewProducts(state.webhookUrl, pageCount);
+
+            const currentScrapedCount = sentLinks.size;
+            const newItemsFound = currentScrapedCount > lastScrapedCount;
+
+            if (newItemsFound) {
+                consecutiveNoNewItems = 0;
+                lastScrapedCount = currentScrapedCount;
+            } else {
+                consecutiveNoNewItems++;
+            }
 
             const showMoreBtn = findShowMoreButton();
             if (showMoreBtn) {
@@ -327,8 +340,20 @@ if (window.self !== window.top) {
                 pageCount++;
                 await new Promise(resolve => setTimeout(resolve, 3500));
             } else {
-                console.log(`TradeScout: Reached catalog end. Total items collected: ${sentLinks.size}`);
-                break;
+                if (newItemsFound) {
+                    console.log('TradeScout: Infinite scroll active, loaded new items. Continuing...');
+                    pageCount++;
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    continue;
+                }
+                
+                if (consecutiveNoNewItems >= 2) {
+                    console.log(`TradeScout: Reached catalog end. Total items collected: ${sentLinks.size}`);
+                    break;
+                }
+                
+                console.log('TradeScout: No button found, retrying scroll...');
+                await new Promise(resolve => setTimeout(resolve, 1500));
             }
         }
 
