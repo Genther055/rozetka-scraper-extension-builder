@@ -154,6 +154,51 @@ if (window.self !== window.top) {
         const alreadyEnrichedLinks = new Set();
         let alreadyEnrichedLoaded = false;
 
+        async function waitForCatalog() {
+            for (let i = 0; i < 20; i++) {
+                const items = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], a[href*="/p"]');
+                if (items.length > 0) {
+                    console.log(`TradeScout: Catalog ready! Found ${items.length} potential items on DOM.`);
+                    return true;
+                }
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            return false;
+        }
+
+        async function smoothScroll() {
+            await new Promise((resolve) => {
+                const start = window.scrollY;
+                const target = document.body.scrollHeight - window.innerHeight;
+                if (target <= start) return resolve();
+                
+                const duration = 1500;
+                let startTime = null;
+                
+                function animation(currentTime) {
+                    if (startTime === null) startTime = currentTime;
+                    const timeElapsed = currentTime - startTime;
+                    const run = ease(timeElapsed, start, target - start, duration);
+                    window.scrollTo(0, run);
+                    
+                    if (timeElapsed < duration) {
+                        requestAnimationFrame(animation);
+                    } else {
+                        window.scrollTo(0, target);
+                        resolve();
+                    }
+                }
+                
+                function ease(t, b, c, d) {
+                    t /= d;
+                    return -c * t * (t - 2) + b;
+                }
+                
+                requestAnimationFrame(animation);
+            });
+            await new Promise(resolve => setTimeout(resolve, 800));
+        }
+
         async function loadAlreadyEnrichedLinks(webhookUrl) {
             if (alreadyEnrichedLoaded) return;
             try {
