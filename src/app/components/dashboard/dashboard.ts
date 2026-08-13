@@ -82,10 +82,54 @@ export class DashboardComponent implements OnInit {
     return !!this.expandedSpecsMap[link];
   }
 
-  getBadgeSpecs(specsStr?: string): { text: string; style: string }[] {
-    if (!specsStr) return [];
-    const parts = specsStr.split(';').map(s => s.trim()).filter(Boolean);
+  getBadgeSpecs(product: any): { text: string; style: string }[] {
+    if (!product) return [];
     const badges: { text: string; style: string }[] = [];
+    
+    // Спершу витягуємо ключові характеристики зі структурованого об'єкта
+    if (product.detailedSpecsMap && Object.keys(product.detailedSpecsMap).length > 0) {
+      const map = product.detailedSpecsMap;
+      
+      const capacityKey = Object.keys(map).find(k => /ємність|capacity|mah|мАг/i.test(k));
+      if (capacityKey) {
+        const val = map[capacityKey];
+        const match = val.match(/\d+[\d\s]*(?:mah|мАг)/i);
+        const text = match ? match[0] : (val.length > 20 ? val.slice(0, 18) + '...' : val);
+        badges.push({ text, style: 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60' });
+      }
+      
+      const powerKey = Object.keys(map).find(k => /потужність|power| W| Вт/i.test(k));
+      if (powerKey) {
+        const val = map[powerKey];
+        const match = val.match(/\d+(?:\.\d+)?\s*(?:W|Вт)/i);
+        const text = match ? match[0] : (val.length > 20 ? val.slice(0, 18) + '...' : val);
+        badges.push({ text, style: 'bg-purple-950/80 text-purple-300 border-purple-800/60' });
+      }
+      
+      const techKey = Object.keys(map).find(k => /magsafe|quickcharge|qc|pd|бездрот|ліхтарик/i.test(k));
+      if (techKey) {
+        const val = map[techKey];
+        badges.push({ text: val.length > 20 ? val.slice(0, 18) + '...' : val, style: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/60' });
+      }
+      
+      if (badges.length < 3) {
+        const keys = Object.keys(map).filter(k => k !== capacityKey && k !== powerKey && k !== techKey);
+        for (const k of keys) {
+          if (badges.length >= 3) break;
+          const val = map[k];
+          if (val) {
+            const text = val.length > 20 ? val.slice(0, 18) + '...' : val;
+            badges.push({ text, style: 'bg-slate-800/80 text-slate-300 border-slate-700/60' });
+          }
+        }
+      }
+      if (badges.length > 0) return badges;
+    }
+
+    // Резервний варіант (розбір рядка)
+    const specsStr = product.specs;
+    if (!specsStr) return [];
+    const parts = specsStr.split(';').map((s: any) => s.trim()).filter(Boolean);
 
     const getPartVal = (str: string) => {
       const idx = str.indexOf(':');
@@ -94,25 +138,38 @@ export class DashboardComponent implements OnInit {
 
     for (const part of parts) {
       if (/mah|мАг/i.test(part)) {
-        const match = part.match(/\d+[\d\s]*\s*(?:mah|мАг)/i);
-        const text = match ? match[0] : (part.length > 22 ? part.slice(0, 20) + '...' : part);
+        const match = part.match(/\d+[\d\s]*(?:mah|мАг)/i);
+        const text = match ? match[0] : (part.length > 20 ? part.slice(0, 18) + '...' : part);
         badges.push({ text, style: 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60' });
       } else if (/\d+\s*W|\b\d+\s*Вт\b/i.test(part)) {
         const match = part.match(/\d+(?:\.\d+)?\s*(?:W|Вт)/i);
-        const text = match ? match[0] : (part.length > 22 ? part.slice(0, 20) + '...' : part);
+        const text = match ? match[0] : (part.length > 20 ? part.slice(0, 18) + '...' : part);
         badges.push({ text, style: 'bg-purple-950/80 text-purple-300 border-purple-800/60' });
       } else if (/magsafe|quickcharge|qc|pd|бездрот|ліхтарик/i.test(part)) {
         const val = getPartVal(part);
-        badges.push({ text: val.length > 22 ? val.slice(0, 20) + '...' : val, style: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/60' });
+        badges.push({ text: val.length > 20 ? val.slice(0, 18) + '...' : val, style: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/60' });
       } else if (badges.length < 3) {
         const val = getPartVal(part);
         if (val.length > 0) {
-          const displayText = val.length > 22 ? val.slice(0, 20) + '...' : val;
-          badges.push({ text: displayText, style: 'bg-slate-800/80 text-slate-300 border-slate-700/60' });
+          badges.push({ text: val.length > 20 ? val.slice(0, 18) + '...' : val, style: 'bg-slate-800/80 text-slate-300 border-slate-700/60' });
         }
       }
     }
     return badges;
+  }
+
+  normalizeSpecKey(key: string): string {
+    const k = key.trim().toLowerCase();
+    if (k.includes('ємність') || k.includes('емкость')) return 'Ємність батареї';
+    if (k.includes('потужність') || k.includes('мощность')) return 'Потужність';
+    if (k.includes('колір') || k.includes('цвет')) return 'Колір';
+    if (k.includes('тип акум') || k.includes('тип батаре') || k.includes('тип акк')) return 'Тип батареї';
+    if (k.includes('вхідні') || k.includes('входные') || k.includes('вхідний')) return 'Вхідні роз\'єми';
+    if (k.includes('вихідні') || k.includes('выходные') || k.includes('вихідний')) return 'Вихідні роз\'єми';
+    if (k.includes('вага') || k.includes('вес')) return 'Вага';
+    if (k.includes('розмір') || k.includes('габарит') || k.includes('размер')) return 'Розміри';
+    if (k.includes('функції заряд') || k.includes('функции заряд') || k.includes('швидка заряд')) return 'Швидка зарядка';
+    return key.charAt(0).toUpperCase() + key.slice(1);
   }
 
   // Metrics
@@ -544,15 +601,18 @@ export class DashboardComponent implements OnInit {
   exportToExcel() {
     if (this.products.length === 0) return;
 
-    // 1. Збираємо всі унікальні назви характеристик
+    // 1. Збираємо всі унікальні НАДІЙНО НОРМАЛІЗОВАНІ назви характеристик
     const dynamicKeysSet = new Set<string>();
     this.products.forEach(p => {
-      const specsArr = this.getSpecsArray(p.specs);
-      specsArr.forEach(s => dynamicKeysSet.add(s.key));
+      const specsArr = this.getSpecsArray(p);
+      specsArr.forEach(s => {
+        const normKey = this.normalizeSpecKey(s.key);
+        dynamicKeysSet.add(normKey);
+      });
     });
     const dynamicKeys = Array.from(dynamicKeysSet);
 
-    // 2. Колонки
+    // 2. Формуємо заголовки колонок
     const baseHeaders = ['Назва товару', 'Ціна (грн)', 'Рейтинг', 'Відгуки', 'Наявність', 'Продавець', 'Категорія'];
     const headers = [...baseHeaders, ...dynamicKeys, 'Опис товару', 'Посилання'];
 
@@ -590,7 +650,6 @@ export class DashboardComponent implements OnInit {
       </head>
       <body>
         <table>
-          <!-- Вказуємо фіксовану ширину для кожної колонки -->
           <colgroup>
             <col width="320"> <!-- Назва товару -->
             <col width="90">  <!-- Ціна -->
@@ -599,8 +658,8 @@ export class DashboardComponent implements OnInit {
             <col width="110"> <!-- Наявність -->
             <col width="130"> <!-- Продавець -->
             <col width="150"> <!-- Категорія -->
-            ${dynamicKeys.map(() => '<col width="120">').join('')} <!-- Динамічні характеристики -->
-            <col width="280"> <!-- Опис товару -->
+            ${dynamicKeys.map(() => '<col width="150">').join('')} <!-- Динамічні характеристики -->
+            <col width="350"> <!-- Опис товару -->
             <col width="100"> <!-- Посилання -->
           </colgroup>
           <thead>
@@ -613,19 +672,19 @@ export class DashboardComponent implements OnInit {
 
     this.products.forEach(p => {
       const specsMap: Record<string, string> = {};
-      this.getSpecsArray(p.specs).forEach(s => {
-        specsMap[s.key] = s.val;
+      this.getSpecsArray(p).forEach(s => {
+        const normKey = this.normalizeSpecKey(s.key);
+        specsMap[normKey] = s.val;
       });
 
       const inStockClass = p.inStock !== false ? 'instock' : 'outofstock';
       const inStockText = p.inStock !== false ? 'В наявності' : 'Немає';
 
-      // Обрізаємо тексти
       const rawName = p.name || '';
-      const displayName = rawName.length > 75 ? rawName.slice(0, 72) + '...' : rawName;
+      const displayName = rawName.length > 95 ? rawName.slice(0, 92) + '...' : rawName;
 
       const rawDesc = p.description || '';
-      const displayDesc = rawDesc.length > 120 ? rawDesc.slice(0, 117) + '...' : rawDesc;
+      const displayDesc = rawDesc.length > 350 ? rawDesc.slice(0, 347) + '...' : rawDesc;
 
       html += '<tr>';
       html += `<td>${displayName.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
@@ -636,10 +695,10 @@ export class DashboardComponent implements OnInit {
       html += `<td>${(p.seller || 'Rozetka').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
       html += `<td>${(p.category || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
 
-      // Динамічні характеристики
+      // Надійна вибірка динамічних характеристик
       dynamicKeys.forEach(k => {
         const val = specsMap[k] || '—';
-        const displayVal = val.length > 50 ? val.slice(0, 47) + '...' : val;
+        const displayVal = val.length > 120 ? val.slice(0, 117) + '...' : val;
         html += `<td>${displayVal.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
       });
 
@@ -666,14 +725,26 @@ export class DashboardComponent implements OnInit {
   }
 
 
-  getSpecsArray(specsStr?: string): { key: string, val: string }[] {
+  getSpecsArray(product: any): { key: string, val: string }[] {
+    if (!product) return [];
+    
+    // Спробуємо зчитати зі структурованого об'єкта
+    if (product.detailedSpecsMap && Object.keys(product.detailedSpecsMap).length > 0) {
+      return Object.entries(product.detailedSpecsMap).map(([key, val]) => ({
+        key: String(key),
+        val: String(val)
+      }));
+    }
+
+    // Резервний варіант з розбором specs рядка
+    const specsStr = product.specs;
     if (!specsStr) return [];
-    return specsStr.split(';').map(part => {
+    return specsStr.split(';').map((part: string) => {
       const idx = part.indexOf(':');
       if (idx !== -1) {
         return { key: part.slice(0, idx).trim(), val: part.slice(idx + 1).trim() };
       }
       return { key: 'Характеристика', val: part.trim() };
-    }).filter(item => item.val.length > 0);
+    }).filter((item: any) => item.val.length > 0);
   }
 }

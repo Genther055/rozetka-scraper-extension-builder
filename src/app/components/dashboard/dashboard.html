@@ -553,7 +553,7 @@
                   <td class="py-4 px-3 text-xs max-w-[280px]">
                     <div *ngIf="item.specs" class="flex flex-wrap gap-1.5 items-center">
                       <span 
-                        *ngFor="let badge of getBadgeSpecs(item.specs)" 
+                        *ngFor="let badge of getBadgeSpecs(item)" 
                         [class]="badge.style" 
                         class="px-2 py-0.5 text-[11px] font-semibold border rounded-lg whitespace-normal break-words shadow-sm"
                       >
@@ -561,11 +561,11 @@
                       </span>
                       
                       <button 
-                        *ngIf="getSpecsArray(item.specs).length > getBadgeSpecs(item.specs).length"
+                        *ngIf="getSpecsArray(item).length > getBadgeSpecs(item).length"
                         (click)="openSpecsModal(item)"
                         class="px-2 py-0.5 text-[10px] font-bold bg-slate-950/60 hover:bg-slate-900 text-indigo-350 border border-slate-850 hover:border-indigo-500/30 rounded-full transition-all cursor-pointer shadow-sm"
                       >
-                        +{{ getSpecsArray(item.specs).length - getBadgeSpecs(item.specs).length }} ще
+                        +{{ getSpecsArray(item).length - getBadgeSpecs(item).length }} ще
                       </button>
                     </div>
                     <span *ngIf="!item.specs" class="text-slate-500 italic">Стандартні</span>
@@ -991,12 +991,12 @@
                 <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                   <span class="material-icons text-sm text-indigo-400">tune</span>
                   Розпис Характеристик Товару
-                  <span *ngIf="getSpecsArray(p.specs).length > 0" class="text-[10px] px-2 py-0.5 bg-slate-900 text-slate-400 rounded-full font-bold">
-                    {{ getSpecsArray(p.specs).length }} параметрів
+                  <span *ngIf="getSpecsArray(p).length > 0" class="text-[10px] px-2 py-0.5 bg-slate-900 text-slate-400 rounded-full font-bold">
+                    {{ getSpecsArray(p).length }} параметрів
                   </span>
                 </h4>
                 <button 
-                  *ngIf="getSpecsArray(p.specs).length > 3"
+                  *ngIf="getSpecsArray(p).length > 3"
                   (click)="toggleSpecs(p.link)"
                   class="text-xs font-bold text-indigo-300 hover:text-white transition-all flex items-center gap-1 cursor-pointer bg-slate-900/60 hover:bg-slate-950 px-3.5 py-1.5 rounded-full border border-[rgba(139,92,246,0.15)] shadow-md"
                 >
@@ -1006,22 +1006,22 @@
               </div>
 
               <!-- Collapsed state (top 3 key specs) -->
-              <div *ngIf="getSpecsArray(p.specs).length > 0 && !isSpecsExpanded(p.link)" class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div *ngFor="let spec of getSpecsArray(p.specs).slice(0, 3)" class="p-3 bg-black/30 border border-[rgba(139,92,246,0.08)] rounded-xl">
+              <div *ngIf="getSpecsArray(p).length > 0 && !isSpecsExpanded(p.link)" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div *ngFor="let spec of getSpecsArray(p).slice(0, 3)" class="p-3 bg-black/30 border border-[rgba(139,92,246,0.08)] rounded-xl">
                   <span class="text-[11px] text-slate-500 font-semibold block uppercase truncate">{{ spec.key }}</span>
-                  <span class="text-xs font-bold text-slate-200 mt-0.5 block truncate">{{ spec.val }}</span>
+                  <span class="text-xs font-bold text-slate-200 mt-0.5 block leading-relaxed break-words text-slate-100">{{ spec.val }}</span>
                 </div>
               </div>
 
               <!-- Expanded state (all specs) -->
-              <div *ngIf="getSpecsArray(p.specs).length > 0 && isSpecsExpanded(p.link)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                <div *ngFor="let spec of getSpecsArray(p.specs)" class="p-3 bg-black/30 border border-[rgba(139,92,246,0.08)] rounded-xl">
+              <div *ngIf="getSpecsArray(p).length > 0 && isSpecsExpanded(p.link)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div *ngFor="let spec of getSpecsArray(p)" class="p-3 bg-black/30 border border-[rgba(139,92,246,0.08)] rounded-xl">
                   <span class="text-[11px] text-slate-500 font-semibold block uppercase truncate">{{ spec.key }}</span>
-                  <span class="text-xs font-bold text-slate-200 mt-0.5 block truncate">{{ spec.val }}</span>
+                  <span class="text-xs font-bold text-slate-200 mt-0.5 block leading-relaxed break-words text-slate-100">{{ spec.val }}</span>
                 </div>
               </div>
 
-              <div *ngIf="getSpecsArray(p.specs).length === 0" class="p-4 bg-slate-950/40 border border-slate-800/40 rounded-xl text-xs text-slate-500 italic">
+              <div *ngIf="getSpecsArray(p).length === 0" class="p-4 bg-slate-950/40 border border-slate-800/40 rounded-xl text-xs text-slate-500 italic">
                 Детальні специфікації підвантажуються фоновим скрапером...
               </div>
             </div>
@@ -1087,7 +1087,7 @@
 
       <div class="overflow-y-auto space-y-4 pr-1 flex-1">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div *ngFor="let spec of getSpecsArray(activeModalProduct.specs)" class="p-3 bg-black/40 border border-[rgba(139,92,246,0.08)] rounded-xl">
+          <div *ngFor="let spec of getSpecsArray(activeModalProduct)" class="p-3 bg-black/40 border border-[rgba(139,92,246,0.08)] rounded-xl">
             <span class="text-[11px] text-slate-500 font-semibold block uppercase">{{ spec.key }}</span>
             <span class="text-xs font-bold text-slate-200 mt-0.5 block">{{ spec.val }}</span>
           </div>
