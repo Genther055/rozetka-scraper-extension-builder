@@ -544,7 +544,7 @@ export class DashboardComponent implements OnInit {
   exportToExcel() {
     if (this.products.length === 0) return;
 
-    // 1. Збираємо всі унікальні назви характеристик (Ємність, Потужність, MagSafe, Вага, Гарантія...)
+    // 1. Збираємо всі унікальні назви характеристик
     const dynamicKeysSet = new Set<string>();
     this.products.forEach(p => {
       const specsArr = this.getSpecsArray(p.specs);
@@ -552,43 +552,92 @@ export class DashboardComponent implements OnInit {
     });
     const dynamicKeys = Array.from(dynamicKeysSet);
 
-    // 2. Формуємо базові колонки + окрему колонку для кожної характеристики
+    // 2. Колонки
     const baseHeaders = ['Назва товару', 'Ціна (грн)', 'Рейтинг', 'Відгуки', 'Наявність', 'Продавець', 'Категорія'];
     const headers = [...baseHeaders, ...dynamicKeys, 'Повний Опис товару', 'Посилання'];
 
-    // 3. Формуємо рядок для кожного товару
-    const rows = this.products.map(p => {
+    // 3. Генеруємо HTML-таблицю для Excel з гарними CSS стилями
+    let html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>TradeScout Export</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; }
+          th { background-color: #0f172a; color: #ffffff; font-weight: bold; border: 1px solid #334155; padding: 10px; text-align: left; }
+          td { border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; }
+          .price { color: #059669; font-weight: bold; text-align: right; }
+          .rating { color: #d97706; font-weight: bold; text-align: center; }
+          .reviews { text-align: center; color: #475569; }
+          .instock { color: #10b981; font-weight: 600; text-align: center; }
+          .outofstock { color: #ef4444; font-weight: 600; text-align: center; }
+          .link { color: #2563eb; text-decoration: underline; }
+          tr:nth-child(even) { background-color: #f8fafc; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <thead>
+            <tr>
+              ${headers.map(h => `<th>${h}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    this.products.forEach(p => {
       const specsMap: Record<string, string> = {};
       this.getSpecsArray(p.specs).forEach(s => {
         specsMap[s.key] = s.val;
       });
 
-      const baseValues = [
-        `"${(p.name || '').replace(/"/g, '""')}"`,
-        p.price || 0,
-        p.rating || 0,
-        p.reviews || 0,
-        p.inStock !== false ? 'В наявності' : 'Немає в наявності',
-        `"${(p.seller || '').replace(/"/g, '""')}"`,
-        `"${(p.category || '').replace(/"/g, '""')}"`
-      ];
+      const inStockClass = p.inStock !== false ? 'instock' : 'outofstock';
+      const inStockText = p.inStock !== false ? 'В наявності' : 'Немає';
 
-      const dynamicValues = dynamicKeys.map(k => `"${(specsMap[k] || '—').replace(/"/g, '""')}"`);
+      html += '<tr>';
+      html += `<td>${(p.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+      html += `<td class="price">${p.price || 0}</td>`;
+      html += `<td class="rating">${p.rating || 0}</td>`;
+      html += `<td class="reviews">${p.reviews || 0}</td>`;
+      html += `<td class="${inStockClass}">${inStockText}</td>`;
+      html += `<td>${(p.seller || 'Rozetka').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+      html += `<td>${(p.category || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
 
-      const tailValues = [
-        `"${(p.description || '').replace(/"/g, '""')}"`,
-        `"${(p.link || '').replace(/"/g, '""')}"`
-      ];
+      // Динамічні характеристики
+      dynamicKeys.forEach(k => {
+        html += `<td>${(specsMap[k] || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+      });
 
-      return [...baseValues, ...dynamicValues, ...tailValues];
+      html += `<td>${(p.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+      html += `<td><a class="link" href="${p.link || '#'}">${p.link || ''}</a></td>`;
+      html += '</tr>';
     });
 
-    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    html += `
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `TradeScout_Rozetka_Master_Specs_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `TradeScout_Master_Export_${new Date().toISOString().slice(0, 10)}.xls`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
