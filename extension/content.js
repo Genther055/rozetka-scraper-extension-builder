@@ -147,7 +147,7 @@ if (window.self !== window.top) {
         // Черга та керування фоновим завантаженням деталей
         const detailsQueue = [];
         let activeEnrichmentThreads = 0;
-        const MAX_CONCURRENT_ENRICHMENTS = 5; // Збільшено до 5 для паралельного фонового завантаження
+        const MAX_CONCURRENT_ENRICHMENTS = 5;
         let totalEnrichCount = 0;
         let processedEnrichCount = 0;
 
@@ -199,6 +199,25 @@ if (window.self !== window.top) {
                         page: 1, 
                         skipBackgroundEnrichment: true, 
                         isEnriched: true 
+                    });
+
+                    // Записуємо прогрес безпосередньо в сховище для надійності
+                    const percentVal = totalEnrichCount > 0 ? Math.round((processedEnrichCount / totalEnrichCount) * 100) : 100;
+                    const statusMsg = `Фонове збагачення деталей: ${processedEnrichCount}/${totalEnrichCount} товарів...`;
+                    chrome.storage.local.set({
+                        totalScraped: processedEnrichCount,
+                        percentProgress: percentVal,
+                        statusMsg: statusMsg
+                    });
+
+                    // Також надсилаємо в реальному часі для відкритого popup
+                    safeSendMessage({
+                        action: 'progress',
+                        page: 1,
+                        scraped: processedEnrichCount,
+                        total: processedEnrichCount,
+                        statusMsg: statusMsg,
+                        estimatedTotal: totalEnrichCount
                     });
 
                     processDetailsQueue();
@@ -312,19 +331,27 @@ if (window.self !== window.top) {
                 if (toEnrich.length > 0) {
                     detailsQueue.push(...toEnrich);
                     totalEnrichCount += toEnrich.length;
-                    
-                    // Запускаємо фонову обробку деталей паралельно з перегортанням сторінок
                     processDetailsQueue();
                 }
 
-                // Швидке оновлення прогресу без затримки
+                // Записуємо поточний стан базового скрапінгу
+                const statusMsg = `Зібрано базові ${sentLinks.size} товарів...`;
+                const estimatedTotal = getEstimatedTotalFromPage();
+                const percentVal = Math.min(95, Math.round((sentLinks.size / estimatedTotal) * 100));
+                
+                chrome.storage.local.set({
+                    totalScraped: sentLinks.size,
+                    percentProgress: percentVal,
+                    statusMsg: statusMsg
+                });
+
                 safeSendMessage({
                     action: 'progress',
                     page: pageIndex,
                     scraped: sentLinks.size,
                     total: sentLinks.size,
-                    statusMsg: `Зібрано базові ${sentLinks.size} товарів...`,
-                    estimatedTotal: getEstimatedTotalFromPage()
+                    statusMsg: statusMsg,
+                    estimatedTotal: estimatedTotal
                 });
             }
         }
@@ -370,6 +397,7 @@ if (window.self !== window.top) {
         let pageCount = 1;
         let lastScrapedCount = 0;
         let consecutiveNoNewItems = 0;
+        const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
 
         while (true) {
             if (!(await checkIsRunning())) {
@@ -410,13 +438,24 @@ if (window.self !== window.top) {
                     break;
                 }
                 console.log(`TradeScout: Clicking "Show more" (page ${pageCount})...`);
+                
+                const previousCount = document.querySelectorAll(tileSelectors).length;
                 showMoreBtn.click();
                 pageCount++;
                 
-                // Швидке очікування завантаження нової сторінки
-                for (let w = 0; w < 7; w++) {
+                // Динамічне очікування завантаження нових елементів до 15 секунд
+                let loaded = false;
+                for (let w = 0; w < 30; w++) {
                     if (!(await checkIsRunning())) break;
                     await new Promise(resolve => setTimeout(resolve, 500));
+                    const currentCount = document.querySelectorAll(tileSelectors).length;
+                    if (currentCount > previousCount) {
+                        loaded = true;
+                        break;
+                    }
+                }
+                if (!loaded) {
+                    console.log('TradeScout: Dynamic load timeout. Proceeding...');
                 }
             } else {
                 if (newItemsFound) {
@@ -449,20 +488,34 @@ if (window.self !== window.top) {
             
             const processed = totalEnrichCount - detailsQueue.length - activeEnrichmentThreads;
             const percentVal = totalEnrichCount > 0 ? Math.round((processed / totalEnrichCount) * 100) : 100;
+            const statusMsg = `Фонове збагачення деталей: ${processed}/&nbsp;${totalEnrichCount} товарів...`;
             
+            chrome.storage.local.set({
+                totalScraped: processed,
+                percentProgress: percentVal,
+                statusMsg: statusMsg
+            });
+
             safeSendMessage({
                 action: 'status',
                 percent: percentVal,
                 total: processed,
                 estimatedTotal: totalEnrichCount,
-                statusMsg: `Фонове збагачення деталей: ${processed}/${totalEnrichCount} товарів...`
+                statusMsg: statusMsg
             });
             
             await new Promise(resolve => setTimeout(resolve, 800));
         }
 
         console.log(`TradeScout: Scrape finished completely. Sent total of ${sentLinks.size} products.`);
-        chrome.storage.local.set({ isRunning: false });
+        
+        chrome.storage.local.set({ 
+            isRunning: false,
+            totalScraped: sentLinks.size,
+            percentProgress: 100,
+            statusMsg: `Успішно зібрано ${sentLinks.size} товарів!`
+        });
+
         safeSendMessage({ action: 'finished', total: sentLinks.size });
     });
 }
