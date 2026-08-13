@@ -77,6 +77,7 @@ app.post('/api/products', (req, res) => {
 
       const exists = products.some(p => {
         if (!p || typeof p !== 'object') return false;
+        if (!p || typeof p !== 'object') return false;
         const pLink = p.link ? p.link.split('?')[0].split('#')[0] : '';
         return pLink === normalizedLink;
       });
@@ -101,6 +102,7 @@ app.post('/api/products', (req, res) => {
         });
       } else {
         const index = products.findIndex(p => {
+          if (!p || typeof p !== 'object') return false;
           if (!p || typeof p !== 'object') return false;
           const pLink = p.link ? p.link.split('?')[0].split('#')[0] : '';
           return pLink === normalizedLink;
@@ -154,7 +156,7 @@ app.post('/api/products/clear', (req, res) => {
 
 // Функція для алгоритмічного аудиту товарів без використання Gemini API (безкоштовно та миттєво)
 function performAlgorithmicAudit(name: string, htmlContent: string, productItem: any) {
-  const textToSearch = (name + ' ' + htmlContent).toLowerCase();
+  const textToSearch = (String(name || '') + ' ' + String(htmlContent || '')).toLowerCase();
 
   // 1. Визначення ємності
   let capacity = '';
@@ -276,7 +278,7 @@ app.post('/api/products/analyze', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Product link is required' });
   }
 
-  const productItem = products.find(p => p.link === link) || {};
+  const productItem = products.find(p => p && p.link === link) || {};
   let htmlContent = '';
   
   // 1. Завантажуємо сторінку товару для зчитування характеристик
@@ -335,7 +337,7 @@ ${htmlContent || 'No page content available.'}
       const parsed = JSON.parse(resultText);
 
       // Оновлюємо в базі
-      const prodIndex = products.findIndex(p => p.link === link);
+      const prodIndex = products.findIndex(p => p && p.link === link);
       if (prodIndex !== -1) {
         products[prodIndex].aiStatus = parsed.status || 'ok';
         products[prodIndex].aiVerdict = parsed.verdict || 'Перевірено ШІ';

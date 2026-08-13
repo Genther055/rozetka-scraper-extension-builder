@@ -74,7 +74,7 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
       const itemRating = typeof item.rating === 'number' ? item.rating : parseFloat(item.rating) || 5.0;
 
       const itemKey = getItemKey({ ...item, link: normalizedLink });
-      const exists = products.some(p => getItemKey(p) === itemKey);
+      const exists = products.some(p => p && getItemKey(p) === itemKey);
 
       if (!exists) {
         products.push({
@@ -95,7 +95,7 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
           aiVerdict: ''
         });
       } else {
-        const index = products.findIndex(p => getItemKey(p) === itemKey);
+        const index = products.findIndex(p => p && getItemKey(p) === itemKey);
         if (index !== -1) {
           const oldPrice = products[index].price || 0;
           const oldReviews = products[index].reviews || 0;
@@ -153,7 +153,7 @@ app.post('/api/products/clear', (req, res) => {
 
 // Algorithmic Audit
 function performAlgorithmicAudit(name: string, htmlContent: string, productItem: any) {
-  const textToSearch = (name + ' ' + htmlContent).toLowerCase();
+  const textToSearch = (String(name || '') + ' ' + String(htmlContent || '')).toLowerCase();
 
   let capacity = '';
   const capacityMatch = textToSearch.match(/(\d{3,6})\s*(?:mah|маг|мАг|милиампер|міліампер)/i);
@@ -249,7 +249,7 @@ app.post('/api/products/analyze', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Product link is required' });
   }
 
-  const productItem = products.find(p => p.link === link) || {};
+  const productItem = products.find(p => p && p.link === link) || {};
   let htmlContent = '';
   
   try {
@@ -271,7 +271,7 @@ app.post('/api/products/analyze', async (req, res) => {
 
   const auditResult = performAlgorithmicAudit(name, htmlContent, productItem);
 
-  const prodIndex = products.findIndex(p => p.link === link);
+  const prodIndex = products.findIndex(p => p && p.link === link);
   if (prodIndex !== -1) {
     products[prodIndex].aiStatus = auditResult.status;
     products[prodIndex].aiVerdict = auditResult.verdict;
