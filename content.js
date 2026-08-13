@@ -229,7 +229,35 @@ if (window.self !== window.top) {
 
         const sentLinks = new Set();
 
+        const alreadyEnrichedLinks = new Set();
+        let alreadyEnrichedLoaded = false;
+
+        async function loadAlreadyEnrichedLinks(webhookUrl) {
+            if (alreadyEnrichedLoaded) return;
+            try {
+                const baseUrl = webhookUrl.replace('/api/products', '');
+                const res = await fetch(`${baseUrl}/api/products`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.products) {
+                        data.products.forEach(p => {
+                            if (p.link && p.specs && p.specs !== 'Стандартні' && p.specs !== '') {
+                                alreadyEnrichedLinks.add(p.link.split('?')[0].split('#')[0]);
+                            }
+                        });
+                        console.log(`TradeScout: Loaded ${alreadyEnrichedLinks.size} already enriched links from database.`);
+                    }
+                }
+            } catch (err) {
+                console.log('TradeScout: Failed to load already enriched links, will enrich all.', err);
+            }
+            alreadyEnrichedLoaded = true;
+        }
+
         async function scrapeAndSendNewProducts(webhookUrl, pageIndex) {
+            // Завантажуємо вже відомі товари з бази, щоб уникнути повторного скрапінгу деталей
+            await loadAlreadyEnrichedLinks(webhookUrl);
+
             const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
             let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => !item.closest('.recently-viewed'));
             
@@ -246,11 +274,7 @@ if (window.self !== window.top) {
 
             items.forEach((item) => {
                 try {
-                    // 1. ПЕРЕВІРКА НА РЕКЛАМНИЙ БЛОК "Реклама"
-                    if (isSponsoredTile(item)) {
-                        console.log(`TradeScout: Filtered out ad tile ("Реклама")`);
-                        return;
-                    }
+                    if (isSponsoredTile(item)) return;
 
                     const linkTag = item.tagName === 'A' ? item : item.querySelector('a[href*="/p"], a[href]');
                     if (!linkTag) return;
@@ -258,25 +282,25 @@ if (window.self !== window.top) {
                     const linkEl = linkTag.getAttribute('href');
                     if (!linkEl) return;
 
-                    const titleEl = item.querySelector('a.tile-title, a.goods-tile__heading, .goods-tile__heading, .tile-title, [class*="heading"], [class*="title"]') || linkTag;
-                    const name = titleEl && titleEl.innerText ? titleEl.innerText.trim() : linkTag.innerText.trim();
-                    if (!name || name.length < 3) return;
-
-                    let link = linkEl.startsWith('http') ? linkEl : (linkEl.startsWith('/') ? `https://rozetka.com.ua${linkEl}` : `https://rozetka.com.ua/${linkEl}`);
-                    link = link.split('?')[0].split('#')[0];
-
+                    const link = linkEl.split('?')[0].split('#')[0];
                     if (sentLinks.has(link)) return;
 
-                    const priceEl = item.querySelector('.price, [class*="price"], .goods-tile__price-value');
-                    const priceText = priceEl && priceEl.innerText ? priceEl.innerText : '';
-                    const price = priceText ? parseInt(priceText.replace(/\D/g, '')) || 0 : 0;
+                    const nameEl = item.querySelector('.goods-tile__title, [class*="title"], a.goods-tile__heading');
+                    const name = nameEl ? nameEl.innerText.trim() : '';
+                    if (!name) return;
 
-                    const reviewsEl = item.querySelector('.rating-block-rating, [class*="rating"], [class*="comments"]');
-                    const reviewsText = reviewsEl && reviewsEl.innerText ? reviewsEl.innerText : '';
-                    const reviews = reviewsText ? parseInt(reviewsText.replace(/\D/g, '')) || 0 : 0;
+                    const priceEl = item.querySelector('.goods-tile__price-value, [class*="price-value"]');
+                    const price = priceEl ? parseFloat(priceEl.innerText.replace(/\s/g, '')) || 0 : 0;
 
-                    const starsEl = item.querySelector('.stars_rating, [data-testid="stars-rating"]');
+                    let reviews = 0;
+                    const reviewsEl = item.querySelector('.goods-tile__reviews-link, [class*="reviews"]');
+                    if (reviewsEl) {
+                        const revMatch = reviewsEl.innerText.match(/\d+/);
+                        if (revMatch) reviews = parseInt(revMatch[0]);
+                    }
+
                     let rating = 5.0;
+                    const starsEl = item.querySelector('.goods-tile__stars svg, [class*="stars"]');
                     if (starsEl) {
                         const style = starsEl.getAttribute('style') || '';
                         const match = style.match(/width:\s*calc\(([\d.]+)%/);
@@ -330,23 +354,60 @@ if (window.self !== window.top) {
                     estimatedTotal: getEstimatedTotalFromPage()
                 });
 
-                // 2. Фонове збагачення описами та таблицями характеристик (пачками по 8)
-                console.log(`TradeScout: Enriching details & descriptions for ${newProducts.length} items...`);
-                const BATCH_SIZE = 8;
-                const pageStartTime = Date.now();
-                for (let i = 0; i < newProducts.length; i += BATCH_SIZE) {
-                    if (!(await checkIsRunning())) {
-                        console.log('TradeScout: Stop signal received. Aborting detail enrichment.');
-                        break;
-                    }
+                // 2. Фільтруємо товари, для яких деталі ВЖЕ є у базі
+                const toEnrich = newProducts.filter(p => !alreadyEnrichedLinks.has(p.link));
+                const alreadyEnriched = newProducts.filter(p => alreadyEnrichedLinks.has(p.link));
 
-                    const batch = newProducts.slice(i, i + BATCH_SIZE);
-                    await Promise.all(batch.map(p => fetchDetailForProduct(p)));
-                    await sendWebhookPayload(webhookUrl, { products: batch, page: pageIndex, skipBackgroundEnrichment: true, isEnriched: true });
-                    await new Promise(resolve => setTimeout(resolve, 200));
+                if (alreadyEnriched.length > 0) {
+                    console.log(`TradeScout: Skipping detail fetch for ${alreadyEnriched.length} products (already cached in DB).`);
+                    await sendWebhookPayload(webhookUrl, { products: alreadyEnriched, page: pageIndex, skipBackgroundEnrichment: true, isEnriched: true });
+                }
+
+                if (toEnrich.length > 0) {
+                    console.log(`TradeScout: Fetching details for ${toEnrich.length} new products...`);
+                    
+                    const CONCURRENCY_LIMIT = 3;
+                    let activeRequests = 0;
+                    let currentIndex = 0;
+
+                    await new Promise((resolve) => {
+                        async function startNext() {
+                            if (!(await checkIsRunning())) {
+                                resolve();
+                                return;
+                            }
+
+                            if (currentIndex >= toEnrich.length) {
+                                if (activeRequests === 0) {
+                                    resolve();
+                                }
+                                return;
+                            }
+
+                            const product = toEnrich[currentIndex++];
+                            activeRequests++;
+
+                            // Додаємо невелику затримку 150мс між запуском запитів у пулі
+                            await new Promise(r => setTimeout(r, 150));
+
+                            fetchDetailForProduct(product).then(async () => {
+                                activeRequests--;
+                                await sendWebhookPayload(webhookUrl, { products: [product], page: pageIndex, skipBackgroundEnrichment: true, isEnriched: true });
+                                startNext();
+                            }).catch(() => {
+                                activeRequests--;
+                                startNext();
+                            });
+                        }
+
+                        for (let i = 0; i < Math.min(CONCURRENCY_LIMIT, toEnrich.length); i++) {
+                            startNext();
+                        }
+                    });
                 }
             }
         }
+
 
         function findShowMoreButton() {
             const selectors = [
