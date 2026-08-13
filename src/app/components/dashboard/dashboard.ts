@@ -554,9 +554,9 @@ export class DashboardComponent implements OnInit {
 
     // 2. Колонки
     const baseHeaders = ['Назва товару', 'Ціна (грн)', 'Рейтинг', 'Відгуки', 'Наявність', 'Продавець', 'Категорія'];
-    const headers = [...baseHeaders, ...dynamicKeys, 'Повний Опис товару', 'Посилання'];
+    const headers = [...baseHeaders, ...dynamicKeys, 'Опис товару', 'Посилання'];
 
-    // 3. Генеруємо HTML-таблицю для Excel з гарними CSS стилями
+    // 3. Генеруємо HTML-таблицю для Excel з гарними CSS стилями та авто-шириною
     let html = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
       <head>
@@ -576,20 +576,33 @@ export class DashboardComponent implements OnInit {
         </xml>
         <![endif]-->
         <style>
-          table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; }
-          th { background-color: #0f172a; color: #ffffff; font-weight: bold; border: 1px solid #334155; padding: 10px; text-align: left; }
-          td { border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; }
+          table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; }
+          th { background-color: #0f172a; color: #ffffff; font-weight: bold; border: 1px solid #334155; padding: 10px 8px; text-align: left; }
+          td { border: 1px solid #cbd5e1; padding: 6px 8px; vertical-align: middle; }
           .price { color: #059669; font-weight: bold; text-align: right; }
           .rating { color: #d97706; font-weight: bold; text-align: center; }
           .reviews { text-align: center; color: #475569; }
           .instock { color: #10b981; font-weight: 600; text-align: center; }
           .outofstock { color: #ef4444; font-weight: 600; text-align: center; }
-          .link { color: #2563eb; text-decoration: underline; }
+          .link { color: #2563eb; text-decoration: underline; font-weight: 600; text-align: center; }
           tr:nth-child(even) { background-color: #f8fafc; }
         </style>
       </head>
       <body>
         <table>
+          <!-- Вказуємо фіксовану ширину для кожної колонки -->
+          <colgroup>
+            <col width="320"> <!-- Назва товару -->
+            <col width="90">  <!-- Ціна -->
+            <col width="85">  <!-- Рейтинг -->
+            <col width="85">  <!-- Відгуки -->
+            <col width="110"> <!-- Наявність -->
+            <col width="130"> <!-- Продавець -->
+            <col width="150"> <!-- Категорія -->
+            ${dynamicKeys.map(() => '<col width="120">').join('')} <!-- Динамічні характеристики -->
+            <col width="280"> <!-- Опис товару -->
+            <col width="100"> <!-- Посилання -->
+          </colgroup>
           <thead>
             <tr>
               ${headers.map(h => `<th>${h}</th>`).join('')}
@@ -607,8 +620,15 @@ export class DashboardComponent implements OnInit {
       const inStockClass = p.inStock !== false ? 'instock' : 'outofstock';
       const inStockText = p.inStock !== false ? 'В наявності' : 'Немає';
 
+      // Обрізаємо тексти
+      const rawName = p.name || '';
+      const displayName = rawName.length > 75 ? rawName.slice(0, 72) + '...' : rawName;
+
+      const rawDesc = p.description || '';
+      const displayDesc = rawDesc.length > 120 ? rawDesc.slice(0, 117) + '...' : rawDesc;
+
       html += '<tr>';
-      html += `<td>${(p.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+      html += `<td>${displayName.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
       html += `<td class="price">${p.price || 0}</td>`;
       html += `<td class="rating">${p.rating || 0}</td>`;
       html += `<td class="reviews">${p.reviews || 0}</td>`;
@@ -618,11 +638,13 @@ export class DashboardComponent implements OnInit {
 
       // Динамічні характеристики
       dynamicKeys.forEach(k => {
-        html += `<td>${(specsMap[k] || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+        const val = specsMap[k] || '—';
+        const displayVal = val.length > 50 ? val.slice(0, 47) + '...' : val;
+        html += `<td>${displayVal.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
       });
 
-      html += `<td>${(p.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
-      html += `<td><a class="link" href="${p.link || '#'}">${p.link || ''}</a></td>`;
+      html += `<td>${displayDesc.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+      html += `<td><a class="link" href="${p.link || '#'}">Відкрити 🔗</a></td>`;
       html += '</tr>';
     });
 
@@ -642,6 +664,7 @@ export class DashboardComponent implements OnInit {
     link.click();
     document.body.removeChild(link);
   }
+
 
   getSpecsArray(specsStr?: string): { key: string, val: string }[] {
     if (!specsStr) return [];
