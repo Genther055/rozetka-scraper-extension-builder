@@ -19,6 +19,12 @@ if (window.self !== window.top) {
             } catch (e) {}
         }
 
+        async function checkIsRunning() {
+            return new Promise(resolve => {
+                chrome.storage.local.get(['isRunning'], (res) => resolve(!!res.isRunning));
+            });
+        }
+
         function getEstimatedTotalFromPage() {
             const selectors = [
                 '.catalog-heading__goods', 
@@ -111,7 +117,10 @@ if (window.self !== window.top) {
             if (!product.link) return;
             try {
                 const charUrl = product.link.endsWith('/') ? `${product.link}characteristics/` : `${product.link}/characteristics/`;
-                const res = await fetch(charUrl);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                const res = await fetch(charUrl, { signal: controller.signal });
+                clearTimeout(timeoutId);
                 if (!res.ok) return;
                 const htmlText = await res.text();
 
@@ -324,10 +333,19 @@ if (window.self !== window.top) {
                     estimatedTotal: getEstimatedTotalFromPage()
                 });
 
-                // 2. Фонове збагачення описами та таблицями характеристик (пачками по 6)
+                // 2. Фонове збагачення описами та таблицями характеристик (пачками по 8)
                 console.log(`TradeScout: Enriching details & descriptions for ${newProducts.length} items...`);
                 const BATCH_SIZE = 8;
+                const pageStartTime = Date.now();
                 for (let i = 0; i < newProducts.length; i += BATCH_SIZE) {
+                    if (!(await checkIsRunning())) {
+                        console.log('TradeScout: Stop signal received. Aborting detail enrichment.');
+                        break;
+                    }
+                    if (Date.now() - pageStartTime > 20000) {
+                        console.warn('TradeScout: Page scraping timeout reached (20 seconds). Skipping remaining product details.');
+                        break;
+                    }
                     const batch = newProducts.slice(i, i + BATCH_SIZE);
                     await Promise.all(batch.map(p => fetchDetailForProduct(p)));
                     await sendWebhookPayload(webhookUrl, { products: batch, page: pageIndex, skipBackgroundEnrichment: true, isEnriched: true });
@@ -379,8 +397,25 @@ if (window.self !== window.top) {
         let consecutiveNoNewItems = 0;
 
         while (true) {
+            if (!(await checkIsRunning())) {
+                console.log('TradeScout: Stop signal detected at loop start. Exiting.');
+                break;
+            }
+
             await scrapeAndSendNewProducts(state.webhookUrl, pageCount);
+
+            if (!(await checkIsRunning())) {
+                console.log('TradeScout: Stop signal detected after scraping page. Exiting.');
+                break;
+            }
+
             await smoothScroll();
+
+            if (!(await checkIsRunning())) {
+                console.log('TradeScout: Stop signal detected after scroll. Exiting.');
+                break;
+            }
+
             await scrapeAndSendNewProducts(state.webhookUrl, pageCount);
 
             const currentScrapedCount = sentLinks.size;
@@ -395,15 +430,28 @@ if (window.self !== window.top) {
 
             const showMoreBtn = findShowMoreButton();
             if (showMoreBtn) {
+                if (!(await checkIsRunning())) {
+                    console.log('TradeScout: Stop signal detected before click. Exiting.');
+                    break;
+                }
                 console.log(`TradeScout: Clicking "Show more" (page ${pageCount})...`);
                 showMoreBtn.click();
                 pageCount++;
-                await new Promise(resolve => setTimeout(resolve, 3500));
+                
+                // Wait 3.5s but check isRunning in between
+                for (let w = 0; w < 7; w++) {
+                    if (!(await checkIsRunning())) break;
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
             } else {
                 if (newItemsFound) {
                     console.log('TradeScout: Infinite scroll active, loaded new items. Continuing...');
                     pageCount++;
-                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    // Wait 1.5s but check isRunning
+                    for (let w = 0; w < 3; w++) {
+                        if (!(await checkIsRunning())) break;
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
                     continue;
                 }
                 
@@ -413,7 +461,11 @@ if (window.self !== window.top) {
                 }
                 
                 console.log('TradeScout: No button found, retrying scroll...');
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                // Wait 1.5s but check isRunning
+                for (let w = 0; w < 3; w++) {
+                    if (!(await checkIsRunning())) break;
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
             }
         }
 

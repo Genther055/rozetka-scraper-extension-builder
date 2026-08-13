@@ -64,40 +64,60 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
   };
 
   newItems.forEach((item: any) => {
-    const normalizedLink = item.link ? item.link.split('?')[0].split('#')[0] : '';
-    item.link = normalizedLink;
+    if (!item || typeof item !== 'object') return;
+    try {
+      const normalizedLink = item.link ? item.link.split('?')[0].split('#')[0] : '';
+      item.link = normalizedLink;
 
-    const itemKey = getItemKey(item);
-    const exists = products.some(p => getItemKey(p) === itemKey);
+      const itemPrice = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+      const itemReviews = typeof item.reviews === 'number' ? item.reviews : parseInt(item.reviews) || 0;
+      const itemRating = typeof item.rating === 'number' ? item.rating : parseFloat(item.rating) || 5.0;
 
-    if (!exists) {
-      products.push({
-        ...item,
-        scrapedAt: new Date().toISOString(),
-        aiStatus: 'pending',
-        aiVerdict: ''
-      });
-    } else {
-      const index = products.findIndex(p => getItemKey(p) === itemKey);
-      if (index !== -1) {
-        const oldPrice = products[index].price || 0;
-        const oldReviews = products[index].reviews || 0;
+      const itemKey = getItemKey({ ...item, link: normalizedLink });
+      const exists = products.some(p => getItemKey(p) === itemKey);
 
-        products[index].priceChange = item.price - oldPrice;
-        products[index].reviewsGrowth = item.reviews - oldReviews;
+      if (!exists) {
+        products.push({
+          name: item.name || 'Товар без назви',
+          price: itemPrice,
+          rating: itemRating,
+          reviews: itemReviews,
+          inStock: item.inStock !== false,
+          category: item.category || 'Загальна',
+          specs: item.specs || '',
+          description: item.description || '',
+          detailedSpecsMap: item.detailedSpecsMap || {},
+          seller: item.seller || 'Rozetka',
+          sellersCount: item.sellersCount || 1,
+          link: normalizedLink,
+          scrapedAt: new Date().toISOString(),
+          aiStatus: 'pending',
+          aiVerdict: ''
+        });
+      } else {
+        const index = products.findIndex(p => getItemKey(p) === itemKey);
+        if (index !== -1) {
+          const oldPrice = products[index].price || 0;
+          const oldReviews = products[index].reviews || 0;
 
-        products[index].price = item.price;
-        products[index].reviews = item.reviews;
-        products[index].rating = item.rating;
-        products[index].name = item.name;
-        products[index].inStock = item.inStock;
-        products[index].category = item.category;
-        if (item.specs) products[index].specs = item.specs;
-        if (item.description) products[index].description = item.description;
-        if (item.detailedSpecsMap) products[index].detailedSpecsMap = item.detailedSpecsMap;
-        products[index].seller = item.seller;
-        products[index].sellersCount = item.sellersCount;
+          products[index].priceChange = itemPrice - oldPrice;
+          products[index].reviewsGrowth = itemReviews - oldReviews;
+
+          products[index].price = itemPrice;
+          products[index].reviews = itemReviews;
+          products[index].rating = itemRating;
+          products[index].name = item.name || products[index].name;
+          products[index].inStock = item.inStock !== false;
+          if (item.category) products[index].category = item.category;
+          if (item.specs) products[index].specs = item.specs;
+          if (item.description) products[index].description = item.description;
+          if (item.detailedSpecsMap) products[index].detailedSpecsMap = item.detailedSpecsMap;
+          if (item.seller) products[index].seller = item.seller;
+          if (item.sellersCount) products[index].sellersCount = item.sellersCount;
+        }
       }
+    } catch (e) {
+      console.error('Error processing scraped product item inside api-server:', e, item);
     }
   });
 
