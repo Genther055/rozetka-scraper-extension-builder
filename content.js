@@ -180,7 +180,7 @@ if (window.self !== window.top) {
                     }
                 }
             } catch (err) {
-                console.warn('TradeScout: Detail fetch skipped for', product.name);
+                console.log('TradeScout: Detail fetch skipped for', product.name);
             }
         }
 
@@ -343,7 +343,7 @@ if (window.self !== window.top) {
                         break;
                     }
                     if (Date.now() - pageStartTime > 20000) {
-                        console.warn('TradeScout: Page scraping timeout reached (20 seconds). Skipping remaining product details.');
+                        console.log('TradeScout: Page scraping timeout reached (20 seconds). Skipping remaining product details.');
                         break;
                     }
                     const batch = newProducts.slice(i, i + BATCH_SIZE);
