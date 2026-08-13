@@ -117,10 +117,7 @@ if (window.self !== window.top) {
             if (!product.link) return;
             try {
                 const charUrl = product.link.endsWith('/') ? `${product.link}characteristics/` : `${product.link}/characteristics/`;
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
-                const res = await fetch(charUrl, { signal: controller.signal });
-                clearTimeout(timeoutId);
+                const res = await fetch(charUrl);
                 if (!res.ok) return;
                 const htmlText = await res.text();
 
@@ -342,10 +339,7 @@ if (window.self !== window.top) {
                         console.log('TradeScout: Stop signal received. Aborting detail enrichment.');
                         break;
                     }
-                    if (Date.now() - pageStartTime > 20000) {
-                        console.log('TradeScout: Page scraping timeout reached (20 seconds). Skipping remaining product details.');
-                        break;
-                    }
+
                     const batch = newProducts.slice(i, i + BATCH_SIZE);
                     await Promise.all(batch.map(p => fetchDetailForProduct(p)));
                     await sendWebhookPayload(webhookUrl, { products: batch, page: pageIndex, skipBackgroundEnrichment: true, isEnriched: true });
