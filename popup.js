@@ -136,7 +136,7 @@ btnStop.addEventListener('click', async () => {
 chrome.runtime.onMessage.addListener((message) => {
     if (message.action === 'progress') {
         const estimatedTotal = message.estimatedTotal || 155;
-        const percent = message.percent !== undefined ? message.percent : Math.min(99, (message.total / estimatedTotal) * 100);
+        const percent = Math.min(99, (message.total / estimatedTotal) * 100);
         const actionStr = message.statusMsg || `Сканування сторінки ${message.page}...`;
         
         chrome.storage.local.set({

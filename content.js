@@ -145,40 +145,41 @@ if (window.self !== window.top) {
             try {
                 const charUrl = product.link.endsWith('/') ? `${product.link}characteristics/` : `${product.link}/characteristics/`;
                 const res = await fetch(charUrl);
-                if (res.ok) {
-                    const htmlText = await res.text();
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(htmlText, 'text/html');
+                if (!res.ok) return;
+                const htmlText = await res.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlText, 'text/html');
 
-                    // Текстовий опис товару
-                    const descEl = doc.querySelector('.product-about__description, [class*="description-content"], .rz-product-description, [data-testid="description"]');
-                    if (descEl) {
-                        const cleanDesc = descEl.innerText.trim();
-                        if (cleanDesc && cleanDesc.length > 15) {
-                            product.description = cleanDesc;
-                        }
-                    }
-
-                    // Таблиця характеристик
-                    const specsList = [];
-                    const specsMap = {};
-                    const dts = Array.from(doc.querySelectorAll('dt, .characteristics-full__label, [class*="characteristics"] [class*="label"], [class*="characteristics"] [class*="name"]'));
-                    dts.forEach(dt => {
-                        const dd = dt.nextElementSibling || dt.parentElement.querySelector('dd, .characteristics-full__value, [class*="characteristics"] [class*="value"]');
-                        const k = dt.innerText ? dt.innerText.trim() : '';
-                        const v = dd && dd.innerText ? dd.innerText.trim() : '';
-                        if (k && v && k.length > 1 && v.length > 0) {
-                            specsMap[k] = v;
-                            specsList.push(`${k}: ${v}`);
-                        }
-                    });
-                    if (specsList.length > 0) {
-                        product.specs = specsList.join('; ');
-                        product.detailedSpecsMap = specsMap;
+                // 1. Повний текстовий опис товару від продавця
+                const descEl = doc.querySelector('.product-about__description, [class*="description-content"], .rz-product-description, [data-testid="description"]');
+                if (descEl) {
+                    const cleanDesc = descEl.innerText.trim();
+                    if (cleanDesc && cleanDesc.length > 15) {
+                        product.description = cleanDesc;
                     }
                 }
+
+                // 2. Повна таблиця характеристик товару
+                const specsList = [];
+                const specsMap = {};
+
+                const dts = Array.from(doc.querySelectorAll('dt, .characteristics-full__label, [class*="characteristics"] [class*="label"], [class*="characteristics"] [class*="name"]'));
+                dts.forEach(dt => {
+                    const dd = dt.nextElementSibling || dt.parentElement.querySelector('dd, .characteristics-full__value, [class*="characteristics"] [class*="value"]');
+                    const k = dt.innerText ? dt.innerText.trim() : '';
+                    const v = dd && dd.innerText ? dd.innerText.trim() : '';
+                    if (k && v && k.length > 1 && v.length > 0) {
+                        specsMap[k] = v;
+                        specsList.push(`${k}: ${v}`);
+                    }
+                });
+
+                if (specsList.length > 0) {
+                    product.specs = specsList.join('; ');
+                    product.detailedSpecsMap = specsMap;
+                }
             } catch (err) {
-                console.log('TradeScout: Specs detail fetch skipped for', product.name, err.message);
+                console.log('TradeScout: Detail fetch skipped for', product.name);
             }
         }
 
@@ -195,24 +196,36 @@ if (window.self !== window.top) {
         }
 
         async function smoothScroll() {
-            console.log('TradeScout: Native step-by-step smooth scroll progression...');
-            const steps = 4;
-            const scrollHeight = document.body.scrollHeight;
-            const windowHeight = window.innerHeight;
-            const currentScroll = window.scrollY;
-            const distance = scrollHeight - windowHeight - currentScroll;
-            
-            if (distance > 0) {
-                const stepDistance = distance / steps;
-                for (let i = 1; i <= steps; i++) {
-                    window.scrollTo({ top: currentScroll + (stepDistance * i), behavior: 'smooth' });
-                    await new Promise(resolve => setTimeout(resolve, 250));
+            await new Promise((resolve) => {
+                const start = window.scrollY;
+                const target = document.body.scrollHeight - window.innerHeight;
+                if (target <= start) return resolve();
+                
+                const duration = 1500;
+                let startTime = null;
+                
+                function animation(currentTime) {
+                    if (startTime === null) startTime = currentTime;
+                    const timeElapsed = currentTime - startTime;
+                    const run = ease(timeElapsed, start, target - start, duration);
+                    window.scrollTo(0, run);
+                    
+                    if (timeElapsed < duration) {
+                        requestAnimationFrame(animation);
+                    } else {
+                        window.scrollTo(0, target);
+                        resolve();
+                    }
                 }
-            } else {
-                window.scrollTo({ top: scrollHeight, behavior: 'smooth' });
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
-            await new Promise(resolve => setTimeout(resolve, 500));
+                
+                function ease(t, b, c, d) {
+                    t /= d;
+                    return -c * t * (t - 2) + b;
+                }
+                
+                requestAnimationFrame(animation);
+            });
+            await new Promise(resolve => setTimeout(resolve, 800));
         }
 
         const webhookUrl = state.webhookUrl;
@@ -308,7 +321,6 @@ if (window.self !== window.top) {
                                 scraped: sentLinks.size,
                                 total: sentLinks.size,
                                 statusMsg: statusMsg,
-                                percent: percentVal,
                                 estimatedTotal: getEstimatedTotalFromPage(),
                                 syncedCount: lastSynced
                             });
@@ -340,7 +352,6 @@ if (window.self !== window.top) {
                 scraped: sentLinks.size,
                 total: sentLinks.size,
                 statusMsg: startMsg,
-                percent: 0,
                 estimatedTotal: getEstimatedTotalFromPage()
             });
 
