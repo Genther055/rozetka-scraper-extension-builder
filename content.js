@@ -158,16 +158,26 @@ if (window.self !== window.top) {
                 // 2. Зчитуємо точного продавця з офіційного API деталей Rozetka за ID товару
                 const productIdMatch = product.link.match(/p(\d+)/);
                 const productId = productIdMatch ? productIdMatch[1] : null;
+                console.log(`TradeScout Debug: Product link: ${product.link}, Parsed ID: ${productId}`);
                 if (productId) {
-                    const apiRes = await fetch(`https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`);
+                    const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`;
+                    const apiRes = await fetch(apiUrl);
+                    console.log(`TradeScout Debug: API Status: ${apiRes.status} for ID: ${productId}`);
                     if (apiRes.ok) {
                         const apiData = await apiRes.json();
+                        console.log(`TradeScout Debug: API Data received:`, apiData);
                         const sellerObj = apiData.data?.[0]?.seller;
                         if (sellerObj && sellerObj.title) {
                             product.seller = sellerObj.title.trim();
-                            console.log(`TradeScout: Parsed seller from API for ${product.name} -> ${product.seller}`);
+                            console.log(`TradeScout: SUCCESS Parsed seller for ${product.name} -> ${product.seller}`);
+                        } else {
+                            console.log(`TradeScout Debug: seller or seller.title is missing in API response for ${product.name}`);
                         }
+                    } else {
+                        console.log(`TradeScout Debug: API request failed for ${product.name}`);
                     }
+                } else {
+                    console.log(`TradeScout Debug: Could not parse ID from link: ${product.link}`);
                 }
             } catch (err) {
                 console.log('TradeScout: Detail fetch skipped for', product.name, err.message);
