@@ -601,124 +601,90 @@ export class DashboardComponent implements OnInit {
   exportToExcel() {
     if (this.products.length === 0) return;
 
-    // 1. Збираємо всі унікальні НАДІЙНО НОРМАЛІЗОВАНІ назви характеристик
-    const dynamicKeysSet = new Set<string>();
+    // 1. Рахуємо частоту появи кожної характеристики
+    const keyCounts: Record<string, number> = {};
     this.products.forEach(p => {
       const specsArr = this.getSpecsArray(p);
       specsArr.forEach(s => {
         const normKey = this.normalizeSpecKey(s.key);
-        dynamicKeysSet.add(normKey);
+        keyCounts[normKey] = (keyCounts[normKey] || 0) + 1;
       });
     });
-    const dynamicKeys = Array.from(dynamicKeysSet);
+
+    // Визначаємо поріг: характеристика є спільною, якщо вона є хоча б у 5% товарів (мінімум у 3 товарах)
+    const minOccurrences = Math.max(3, Math.round(this.products.length * 0.05));
+    const commonKeys = Object.keys(keyCounts).filter(k => keyCounts[k] >= minOccurrences);
 
     // 2. Формуємо заголовки колонок
     const baseHeaders = ['Назва товару', 'Ціна (грн)', 'Рейтинг', 'Відгуки', 'Наявність', 'Продавець', 'Категорія'];
-    const headers = [...baseHeaders, ...dynamicKeys, 'Опис товару', 'Посилання'];
+    const headers = [...baseHeaders, ...commonKeys, 'Інші характеристики', 'Опис товару', 'Посилання'];
 
-    // 3. Генеруємо HTML-таблицю для Excel з гарними CSS стилями та авто-шириною
-    let html = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-        <!--[if gte mso 9]>
-        <xml>
-          <x:ExcelWorkbook>
-            <x:ExcelWorksheets>
-              <x:ExcelWorksheet>
-                <x:Name>TradeScout Export</x:Name>
-                <x:WorksheetOptions>
-                  <x:DisplayGridlines/>
-                </x:WorksheetOptions>
-              </x:ExcelWorksheet>
-            </x:ExcelWorksheets>
-          </x:ExcelWorkbook>
-        </xml>
-        <![endif]-->
-        <style>
-          table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; }
-          th { background-color: #0f172a; color: #ffffff; font-weight: bold; border: 1px solid #334155; padding: 10px 8px; text-align: left; }
-          td { border: 1px solid #cbd5e1; padding: 6px 8px; vertical-align: middle; }
-          .price { color: #059669; font-weight: bold; text-align: right; }
-          .rating { color: #d97706; font-weight: bold; text-align: center; }
-          .reviews { text-align: center; color: #475569; }
-          .instock { color: #10b981; font-weight: 600; text-align: center; }
-          .outofstock { color: #ef4444; font-weight: 600; text-align: center; }
-          .link { color: #2563eb; text-decoration: underline; font-weight: 600; text-align: center; }
-          tr:nth-child(even) { background-color: #f8fafc; }
-        </style>
-      </head>
-      <body>
-        <table>
-          <colgroup>
-            <col width="320"> <!-- Назва товару -->
-            <col width="90">  <!-- Ціна -->
-            <col width="85">  <!-- Рейтинг -->
-            <col width="85">  <!-- Відгуки -->
-            <col width="110"> <!-- Наявність -->
-            <col width="130"> <!-- Продавець -->
-            <col width="150"> <!-- Категорія -->
-            ${dynamicKeys.map(() => '<col width="150">').join('')} <!-- Динамічні характеристики -->
-            <col width="350"> <!-- Опис товару -->
-            <col width="100"> <!-- Посилання -->
-          </colgroup>
-          <thead>
-            <tr>
-              ${headers.map(h => `<th>${h}</th>`).join('')}
-            </tr>
-          </thead>
-          <tbody>
-    `;
+    // Helper для безпечного екранування значень CSV (запобігає ламанню структури лапками)
+    const escapeCsv = (val: any): string => {
+      const str = val === null || val === undefined ? '' : String(val);
+      return '"' + str.replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
+    };
 
+    // 3. Генеруємо контент CSV
+    const csvRows: string[] = [];
+
+    // Додаємо заголовки
+    csvRows.push(headers.map(escapeCsv).join(';'));
+
+    // Додаємо рядки товарів
     this.products.forEach(p => {
       const specsMap: Record<string, string> = {};
+      const otherSpecs: string[] = [];
+
       this.getSpecsArray(p).forEach(s => {
         const normKey = this.normalizeSpecKey(s.key);
-        specsMap[normKey] = s.val;
+        if (commonKeys.includes(normKey)) {
+          specsMap[normKey] = s.val;
+        } else {
+          otherSpecs.push(`${s.key}: ${s.val}`);
+        }
       });
 
-      const inStockClass = p.inStock !== false ? 'instock' : 'outofstock';
       const inStockText = p.inStock !== false ? 'В наявності' : 'Немає';
-
       const rawName = p.name || '';
       const displayName = rawName.length > 95 ? rawName.slice(0, 92) + '...' : rawName;
-
       const rawDesc = p.description || '';
-      const displayDesc = rawDesc.length > 350 ? rawDesc.slice(0, 347) + '...' : rawDesc;
+      const displayDesc = rawDesc.length > 250 ? rawDesc.slice(0, 247) + '...' : rawDesc;
 
-      html += '<tr>';
-      html += `<td>${displayName.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
-      html += `<td class="price">${p.price || 0}</td>`;
-      html += `<td class="rating">${p.rating || 0}</td>`;
-      html += `<td class="reviews">${p.reviews || 0}</td>`;
-      html += `<td class="${inStockClass}">${inStockText}</td>`;
-      html += `<td>${(p.seller || 'Rozetka').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
-      html += `<td>${(p.category || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+      const rowData: string[] = [];
+      rowData.push(displayName);
+      rowData.push(String(p.price || 0));
+      rowData.push(String(p.rating || 0));
+      rowData.push(String(p.reviews || 0));
+      rowData.push(inStockText);
+      rowData.push(p.seller || 'Rozetka');
+      rowData.push(p.category || 'Загальна');
 
-      // Надійна вибірка динамічних характеристик
-      dynamicKeys.forEach(k => {
-        const val = specsMap[k] || '—';
-        const displayVal = val.length > 120 ? val.slice(0, 117) + '...' : val;
-        html += `<td>${displayVal.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+      // Динамічні характеристики
+      commonKeys.forEach(k => {
+        rowData.push(specsMap[k] || '—');
       });
 
-      html += `<td>${displayDesc.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
-      html += `<td><a class="link" href="${p.link || '#'}">Відкрити 🔗</a></td>`;
-      html += '</tr>';
+      // Інші характеристики
+      rowData.push(otherSpecs.join('; ') || '—');
+
+      // Опис та посилання
+      rowData.push(displayDesc);
+      rowData.push(p.link || '');
+
+      csvRows.push(rowData.map(escapeCsv).join(';'));
     });
 
-    html += `
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `;
+    // Створюємо CSV із UTF-8 BOM та явним роздільником "sep=;" для бездоганного відкриття в Excel
+    const bom = '\uFEFF';
+    const separatorLine = 'sep=;\n';
+    const csvContent = bom + separatorLine + csvRows.join('\n');
 
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `TradeScout_Master_Export_${new Date().toISOString().slice(0, 10)}.xls`);
+    link.setAttribute('download', `TradeScout_Master_Export_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
