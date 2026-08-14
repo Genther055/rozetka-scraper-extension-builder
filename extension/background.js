@@ -8,8 +8,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'fetchSeller') {
         const { productId } = message;
         const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`;
-        fetch(apiUrl)
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        
+        fetch(apiUrl, { signal: controller.signal })
             .then(res => {
+                clearTimeout(timeoutId);
                 if (!res.ok) throw new Error(`HTTP status ${res.status}`);
                 return res.json();
             })
@@ -19,6 +24,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponse({ success: true, seller: title });
             })
             .catch(err => {
+                clearTimeout(timeoutId);
                 console.warn(`TradeScout Background: Failed to fetch seller for ID ${productId}:`, err.message);
                 sendResponse({ success: false, seller: 'Rozetka' });
             });
