@@ -121,9 +121,13 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
     }
   });
 
+  // Рахуємо кількість товарів у поточній категорії для зворотного зв'язку
+  const currentCategory = newItems[0]?.category || 'Загальна';
+  const categoryCount = products.filter((p: any) => p && p.category === currentCategory).length;
+
   try {
     writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
-    res.json({ success: true, count: products.length });
+    res.json({ success: true, count: products.length, categoryCount: categoryCount });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

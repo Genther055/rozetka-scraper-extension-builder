@@ -67,6 +67,7 @@ if (window.self !== window.top) {
 
         // Потрійний гарантований канал відправки (Direct Fetch + Background Worker)
         async function sendWebhookPayload(webhookUrl, payload) {
+            let serverInfo = null;
             const targets = [
                 'http://localhost:4000/api/products',
                 'http://127.0.0.1:4000/api/products'
@@ -77,12 +78,23 @@ if (window.self !== window.top) {
 
             for (const targetUrl of targets) {
                 try {
-                    await fetch(targetUrl, {
+                    const res = await fetch(targetUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                } catch (e) {}
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && typeof data.count === 'number') {
+                            serverInfo = {
+                                count: data.count,
+                                categoryCount: data.categoryCount || data.count
+                            };
+                        }
+                    }
+                } catch (e) {
+                    console.log('TradeScout: Target fetch failed for', targetUrl, e.message);
+                }
             }
 
             safeSendMessage({
@@ -90,6 +102,8 @@ if (window.self !== window.top) {
                 webhookUrl: webhookUrl || 'http://localhost:4000/api/products',
                 payload: payload
             });
+
+            return serverInfo;
         }
 
         // Глибокий витягувач опису та характеристики з картки товару через DOMParser
@@ -221,14 +235,14 @@ if (window.self !== window.top) {
         let bufferTimeout = null;
 
         async function flushEnrichedBuffer() {
-            if (enrichedBuffer.length === 0) return;
+            if (enrichedBuffer.length === 0) return null;
             const batch = [...enrichedBuffer];
             enrichedBuffer = [];
             if (bufferTimeout) {
                 clearTimeout(bufferTimeout);
                 bufferTimeout = null;
             }
-            await sendWebhookPayload(webhookUrl, { 
+            return await sendWebhookPayload(webhookUrl, { 
                 products: batch, 
                 page: 1, 
                 skipBackgroundEnrichment: true, 
@@ -246,7 +260,6 @@ if (window.self !== window.top) {
                 const product = detailsQueue.shift();
                 activeEnrichmentThreads++;
 
-                // Мікро-пауза 100мс між запуском потоків для захисту від блокування
                 await new Promise(r => setTimeout(r, 100));
 
                 fetchDetailForProduct(product).then(async () => {
@@ -255,31 +268,52 @@ if (window.self !== window.top) {
 
                     enrichedBuffer.push(product);
                     
+                    let serverInfo = null;
                     if (enrichedBuffer.length >= 15) {
-                        await flushEnrichedBuffer();
+                        serverInfo = await flushEnrichedBuffer();
                     } else {
                         if (bufferTimeout) clearTimeout(bufferTimeout);
-                        bufferTimeout = setTimeout(flushEnrichedBuffer, 1500);
+                        bufferTimeout = setTimeout(async () => {
+                            serverInfo = await flushEnrichedBuffer();
+                            if (serverInfo) {
+                                chrome.storage.local.set({ syncedCount: serverInfo.categoryCount });
+                                safeSendMessage({
+                                    action: 'progress',
+                                    page: 1,
+                                    scraped: processedEnrichCount,
+                                    total: processedEnrichCount,
+                                    statusMsg: `Фонове збагачення деталей: ${processedEnrichCount}/${totalEnrichCount} товарів...`,
+                                    estimatedTotal: totalEnrichCount,
+                                    syncedCount: serverInfo.categoryCount
+                                });
+                            }
+                        }, 1500);
                     }
 
-                    // Записуємо прогрес безпосередньо в сховище для надійності
-                    const percentVal = totalEnrichCount > 0 ? Math.round((processedEnrichCount / totalEnrichCount) * 100) : 100;
-                    const statusMsg = `Фонове збагачення деталей: ${processedEnrichCount}/${totalEnrichCount} товарів...`;
-                    
-                    chrome.storage.local.set({
-                        totalScraped: processedEnrichCount,
-                        percentProgress: percentVal,
-                        statusMsg: statusMsg
-                    });
+                    // Отримуємо актуальний лічильник з сервера або вираховуємо приблизний
+                    chrome.storage.local.get(['syncedCount'], (res) => {
+                        const baseSynced = res.syncedCount || 0;
+                        const currentSynced = serverInfo ? serverInfo.categoryCount : Math.max(baseSynced, processedEnrichCount);
+                        
+                        const percentVal = totalEnrichCount > 0 ? Math.round((processedEnrichCount / totalEnrichCount) * 100) : 100;
+                        const statusMsg = `Фонове збагачення деталей: ${processedEnrichCount}/${totalEnrichCount} товарів...`;
+                        
+                        chrome.storage.local.set({
+                            totalScraped: processedEnrichCount,
+                            percentProgress: percentVal,
+                            statusMsg: statusMsg,
+                            syncedCount: currentSynced
+                        });
 
-                    // Також надсилаємо в реальному часі для відкритого popup
-                    safeSendMessage({
-                        action: 'progress',
-                        page: 1,
-                        scraped: processedEnrichCount,
-                        total: processedEnrichCount,
-                        statusMsg: statusMsg,
-                        estimatedTotal: totalEnrichCount
+                        safeSendMessage({
+                            action: 'progress',
+                            page: 1,
+                            scraped: processedEnrichCount,
+                            total: processedEnrichCount,
+                            statusMsg: statusMsg,
+                            estimatedTotal: totalEnrichCount,
+                            syncedCount: currentSynced
+                        });
                     });
 
                     processDetailsQueue();
@@ -378,8 +412,9 @@ if (window.self !== window.top) {
             if (newProducts.length > 0) {
                 console.log(`TradeScout: Extracted ${newProducts.length} clean items. Total so far: ${sentLinks.size}`);
 
-                // 1. Негайно надсилаємо базові товари на Дашборд
-                await sendWebhookPayload(webhookUrl, { products: newProducts, page: pageIndex, skipBackgroundEnrichment: true });
+                // 1. Негайно надсилаємо базові товари на Дашборд і дізнаємося кількість у базі
+                const serverInfo = await sendWebhookPayload(webhookUrl, { products: newProducts, page: pageIndex, skipBackgroundEnrichment: true });
+                const currentSyncedCount = serverInfo ? serverInfo.categoryCount : sentLinks.size;
 
                 // 2. Додаємо в чергу на фонове збагачення
                 const toEnrich = newProducts.filter(p => !alreadyEnrichedLinks.has(p.link));
@@ -387,7 +422,10 @@ if (window.self !== window.top) {
 
                 if (alreadyEnriched.length > 0) {
                     console.log(`TradeScout: Skipping detail fetch for ${alreadyEnriched.length} products (already cached in DB).`);
-                    await sendWebhookPayload(webhookUrl, { products: alreadyEnriched, page: pageIndex, skipBackgroundEnrichment: true, isEnriched: true });
+                    const enrichServerInfo = await sendWebhookPayload(webhookUrl, { products: alreadyEnriched, page: pageIndex, skipBackgroundEnrichment: true, isEnriched: true });
+                    if (enrichServerInfo) {
+                        chrome.storage.local.set({ syncedCount: enrichServerInfo.categoryCount });
+                    }
                 }
 
                 if (toEnrich.length > 0) {
@@ -404,7 +442,8 @@ if (window.self !== window.top) {
                 chrome.storage.local.set({
                     totalScraped: sentLinks.size,
                     percentProgress: percentVal,
-                    statusMsg: statusMsg
+                    statusMsg: statusMsg,
+                    syncedCount: currentSyncedCount
                 });
 
                 safeSendMessage({
@@ -413,7 +452,8 @@ if (window.self !== window.top) {
                     scraped: sentLinks.size,
                     total: sentLinks.size,
                     statusMsg: statusMsg,
-                    estimatedTotal: estimatedTotal
+                    estimatedTotal: estimatedTotal,
+                    syncedCount: currentSyncedCount
                 });
             }
         }
@@ -558,12 +598,16 @@ if (window.self !== window.top) {
                 statusMsg: statusMsg
             });
 
-            safeSendMessage({
-                action: 'status',
-                percent: percentVal,
-                total: processed,
-                estimatedTotal: totalEnrichCount,
-                statusMsg: statusMsg
+            chrome.storage.local.get(['syncedCount'], (res) => {
+                const currentSynced = res.syncedCount || processed;
+                safeSendMessage({
+                    action: 'status',
+                    percent: percentVal,
+                    total: processed,
+                    estimatedTotal: totalEnrichCount,
+                    statusMsg: statusMsg,
+                    syncedCount: currentSynced
+                });
             });
             
             await new Promise(resolve => setTimeout(resolve, 800));
@@ -574,13 +618,16 @@ if (window.self !== window.top) {
 
         console.log(`TradeScout: Scrape finished completely. Sent total of ${sentLinks.size} products.`);
         
-        chrome.storage.local.set({ 
-            isRunning: false,
-            totalScraped: sentLinks.size,
-            percentProgress: 100,
-            statusMsg: `Успішно зібрано ${sentLinks.size} товарів!`
+        chrome.storage.local.get(['syncedCount'], (res) => {
+            const finalSynced = res.syncedCount || sentLinks.size;
+            chrome.storage.local.set({ 
+                isRunning: false,
+                totalScraped: sentLinks.size,
+                percentProgress: 100,
+                statusMsg: `Успішно зібрано ${sentLinks.size} товарів!`,
+                syncedCount: finalSynced
+            });
+            safeSendMessage({ action: 'finished', total: sentLinks.size, syncedCount: finalSynced });
         });
-
-        safeSendMessage({ action: 'finished', total: sentLinks.size });
     });
 }
