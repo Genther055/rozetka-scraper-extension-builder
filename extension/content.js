@@ -357,13 +357,21 @@ if (window.self !== window.top) {
                 return n.includes(b);
             }
 
-            const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
-            let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => {
-                // Товари мають бути виключно всередині головної сітки каталогу та не належати до рекомендаційних блоків
-                const isInsideCatalog = item.closest('.catalog-grid, #catalog-grid');
-                const isInsideRecommendations = item.closest('.recently-viewed, [class*="recommend"], [class*="similar"], [class*="popular"]');
-                if (!isInsideCatalog || isInsideRecommendations) return false;
+            const mainGrid = document.querySelector('.catalog-grid, #catalog-grid');
+            let items = [];
+            if (mainGrid) {
+                // Вибираємо виключно нащадків головної сітки каталогу
+                items = Array.from(mainGrid.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id]'));
+            } else {
+                const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id]';
+                items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => {
+                    const isInsideCatalog = item.closest('.catalog-grid, #catalog-grid');
+                    const isInsideRecommendations = item.closest('.recently-viewed, [class*="recommend"], [class*="similar"], [class*="popular"]');
+                    return isInsideCatalog && !isInsideRecommendations;
+                });
+            }
 
+            items = items.filter(item => {
                 // Перевірка на рекламні класи або статус промо
                 if (item.classList.contains('catalog-grid__cell_type_promo') || 
                     item.classList.contains('goods-tile_state_promo') ||
