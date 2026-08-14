@@ -570,8 +570,8 @@
                     </div>
                     <span *ngIf="!item.specs" class="text-slate-500 italic">Стандартні</span>
                   </td>
-                  <td class="py-4 px-3 text-emerald-400 font-bold font-mono">{{ item.price }} ₴</td>
-                  <td class="py-4 px-3">
+                  <td class="py-4 px-3 text-emerald-400 font-bold font-mono whitespace-nowrap">{{ item.price }} ₴</td>
+                  <td class="py-4 px-3 whitespace-nowrap">
                     <div class="flex items-center gap-1">
                       <span class="material-icons text-amber-500 text-sm">star</span>
                       <span>{{ item.rating > 0 ? item.rating : 'немає' }}</span>
@@ -590,35 +590,35 @@
                       {{ calculateLQS(item) }} / 10
                     </span>
                   </td>
-                  <td class="py-4 px-3 font-mono">{{ item.reviews }}</td>
-                  <td class="py-4 px-3 text-xs text-slate-400">{{ item.seller || 'Rozetka' }}</td>
-                  <td class="py-4 px-3 font-mono text-center">{{ item.sellersCount || 1 }}</td>
+                  <td class="py-4 px-3 font-mono whitespace-nowrap">{{ item.reviews }}</td>
+                  <td class="py-4 px-3 text-xs text-slate-400 whitespace-nowrap">{{ item.seller || 'Rozetka' }}</td>
+                  <td class="py-4 px-3 font-mono text-center whitespace-nowrap">{{ item.sellersCount || 1 }}</td>
                   
                   <!-- Зміни ціни -->
-                  <td class="py-4 px-3 font-mono text-xs">
+                  <td class="py-4 px-3 font-mono text-xs whitespace-nowrap">
                     <span *ngIf="item.priceChange && item.priceChange > 0" class="text-rose-400">+{{ item.priceChange }} ₴</span>
                     <span *ngIf="item.priceChange && item.priceChange < 0" class="text-emerald-400">{{ item.priceChange }} ₴</span>
                     <span *ngIf="!item.priceChange" class="text-slate-600">—</span>
                   </td>
                   
                   <!-- Зростання кількості відгуків -->
-                  <td class="py-4 px-3 font-mono text-xs text-center">
+                  <td class="py-4 px-3 font-mono text-xs text-center whitespace-nowrap">
                     <span *ngIf="item.reviewsGrowth && item.reviewsGrowth > 0" class="text-indigo-400">+{{ item.reviewsGrowth }}</span>
                     <span *ngIf="!item.reviewsGrowth" class="text-slate-600">—</span>
                   </td>
                   
-                  <td class="py-4 px-3">
+                  <td class="py-4 px-3 whitespace-nowrap">
                     <span 
                       [class.text-emerald-400]="item.inStock !== false"
                       [class.bg-emerald-950/30]="item.inStock !== false"
                       [class.text-slate-400]="item.inStock === false"
                       [class.bg-slate-900]="item.inStock === false"
-                      class="px-2 py-0.5 text-[10px] font-bold rounded-lg uppercase tracking-wider"
+                      class="px-2 py-0.5 text-[10px] font-bold rounded-lg uppercase tracking-wider whitespace-nowrap"
                     >
                       {{ item.inStock !== false ? 'в наявності' : 'немає' }}
                     </span>
                   </td>
-                  <td class="py-4 px-3">
+                  <td class="py-4 px-3 whitespace-nowrap">
                     <span 
                       [class.text-slate-400]="item.aiStatus === 'pending'"
                       [class.bg-slate-950]="item.aiStatus === 'pending'"
@@ -628,7 +628,7 @@
                       [class.bg-amber-950/30]="item.aiStatus === 'warning'"
                       [class.text-red-400]="item.aiStatus === 'suspicious'"
                       [class.bg-red-950/30]="item.aiStatus === 'suspicious'"
-                      class="px-2.5 py-1 text-xs font-semibold rounded-full uppercase tracking-wider"
+                      class="px-2.5 py-1 text-xs font-semibold rounded-full uppercase tracking-wider whitespace-nowrap"
                     >
                       <span *ngIf="item.aiStatus === 'pending'">очікує</span>
                       <span *ngIf="item.aiStatus === 'ok'">успішно (ок)</span>
@@ -820,21 +820,21 @@
               <tr *ngFor="let item of getFilteredDemandProducts(); let i = index" class="hover:bg-slate-850/30 transition-all">
                 <td class="py-4 px-3 text-center font-mono text-xs text-slate-500">{{ i + 1 }}</td>
                 <td class="py-4 px-6 font-semibold text-white max-w-xs truncate">{{ item.name }}</td>
-                <td class="py-4 px-6 font-mono">{{ item.price }} ₴</td>
-                <td class="py-4 px-6">
+                <td class="py-4 px-6 font-mono whitespace-nowrap">{{ item.price }} ₴</td>
+                <td class="py-4 px-6 whitespace-nowrap">
                   <span 
                     [class.text-emerald-400]="item.inStock !== false"
                     [class.bg-emerald-950/30]="item.inStock !== false"
                     [class.text-slate-400]="item.inStock === false"
                     [class.bg-slate-900]="item.inStock === false"
-                    class="px-2.5 py-1 text-xs font-semibold rounded-full uppercase tracking-wider"
+                    class="px-2.5 py-1 text-xs font-semibold rounded-full uppercase tracking-wider whitespace-nowrap"
                   >
                     {{ item.inStock !== false ? 'в наявності' : 'немає' }}
                   </span>
                 </td>
-                <td class="py-4 px-6 font-mono">{{ item.reviews }}</td>
-                <td class="py-4 px-6 text-indigo-400 font-bold font-mono">{{ getEstimatedSales(item.reviews) }}</td>
-                <td class="py-4 px-6 text-emerald-400 font-bold font-mono">
+                <td class="py-4 px-6 font-mono whitespace-nowrap">{{ item.reviews }}</td>
+                <td class="py-4 px-6 text-indigo-400 font-bold font-mono whitespace-nowrap">{{ getEstimatedSales(item.reviews) }}</td>
+                <td class="py-4 px-6 text-emerald-400 font-bold font-mono whitespace-nowrap">
                   {{ (getEstimatedSales(item.reviews) * item.price) }} ₴
                 </td>
                 <td class="py-4 px-6">
