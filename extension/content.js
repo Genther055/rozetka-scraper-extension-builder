@@ -360,8 +360,14 @@ if (window.self !== window.top) {
             const mainGrid = document.querySelector('.catalog-grid, #catalog-grid');
             let items = [];
             if (mainGrid) {
-                // Вибираємо виключно нащадків головної сітки каталогу
-                items = Array.from(mainGrid.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id]'));
+                // Вибираємо тільки самі комірки сітки (ліміт 60)
+                const cells = Array.from(mainGrid.querySelectorAll('.catalog-grid__cell, li.catalog-grid__cell'));
+                cells.forEach(cell => {
+                    const tile = cell.querySelector('rz-catalog-tile, rz-product-tile, .goods-tile, article, div[class*="goods-tile"]');
+                    if (tile) {
+                        items.push(tile);
+                    }
+                });
             } else {
                 const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id]';
                 items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => {
