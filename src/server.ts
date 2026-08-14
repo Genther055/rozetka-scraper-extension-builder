@@ -64,13 +64,13 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
       if (sellerTitle) {
         const cleanedSeller = sellerTitle.trim();
         const dbPath = join(import.meta.dirname, '../data/products.json');
-        if (fs.existsSync(dbPath)) {
-          const raw = fs.readFileSync(dbPath, 'utf-8');
+        if (existsSync(dbPath)) {
+          const raw = readFileSync(dbPath, 'utf-8');
           const currentProducts = JSON.parse(raw);
           const index = currentProducts.findIndex((p: any) => p && p.link === normalizedLink);
           if (index !== -1) {
             currentProducts[index].seller = cleanedSeller;
-            fs.writeFileSync(dbPath, JSON.stringify(currentProducts, null, 2), 'utf-8');
+            writeFileSync(dbPath, JSON.stringify(currentProducts, null, 2), 'utf-8');
             console.log(`[Backend Enriched] Successfully updated seller for ${normalizedLink} -> ${cleanedSeller}`);
             
             // Also update the in-memory array in server.ts
