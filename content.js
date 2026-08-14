@@ -340,7 +340,7 @@ if (window.self !== window.top) {
             const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
             let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => {
                 // Товари мають бути виключно всередині головної сітки каталогу та не належати до рекомендаційних блоків
-                const isInsideCatalog = item.closest('rz-catalog, .catalog-grid, #catalog-grid');
+                const isInsideCatalog = item.closest('.catalog-grid, #catalog-grid');
                 const isInsideRecommendations = item.closest('.recently-viewed, [class*="recommend"], [class*="similar"], [class*="popular"]');
                 return isInsideCatalog && !isInsideRecommendations;
             });
