@@ -5,6 +5,26 @@ const LOCAL_DASHBOARD_API = 'http://localhost:4000/api/products';
 const LOCAL_IP_API = 'http://127.0.0.1:4000/api/products';
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'fetchSeller') {
+        const { productId } = message;
+        const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`;
+        fetch(apiUrl)
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP status ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                const sellerObj = data.data?.[0]?.seller;
+                const title = sellerObj && sellerObj.title ? sellerObj.title.trim() : 'Rozetka';
+                sendResponse({ success: true, seller: title });
+            })
+            .catch(err => {
+                console.warn(`TradeScout Background: Failed to fetch seller for ID ${productId}:`, err.message);
+                sendResponse({ success: false, seller: 'Rozetka' });
+            });
+        return true; // Keep message channel open for asynchronous sendResponse
+    }
+
     if (message.action === 'sendWebhook') {
         const { webhookUrl, payload } = message;
         const itemCount = payload?.products?.length || 0;

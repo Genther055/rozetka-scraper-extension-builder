@@ -118,8 +118,31 @@ if (window.self !== window.top) {
         // Глибокий витягувач опису та характеристики з картки товару через DOMParser
         async function fetchDetailForProduct(product) {
             if (!product.link) return;
+            
+            // Крок 1. Завжди отримуємо точного продавця через Background API запит (це обходить будь-які CORS/блокування)
             try {
-                // 1. Зчитуємо опис та характеристики з веб-сторінки характеристик
+                const productIdMatch = product.link.match(/p(\d+)/);
+                const productId = productIdMatch ? productIdMatch[1] : null;
+                if (productId) {
+                    const sellerResponse = await new Promise((resolve) => {
+                        chrome.runtime.sendMessage({ action: 'fetchSeller', productId: productId }, (response) => {
+                            resolve(response);
+                        });
+                    });
+                    if (sellerResponse && sellerResponse.success) {
+                        product.seller = sellerResponse.seller;
+                        console.log(`TradeScout: SUCCESS Parsed seller from background API for ${product.name} -> ${product.seller}`);
+                    } else {
+                        product.seller = 'Rozetka';
+                    }
+                }
+            } catch (err) {
+                console.warn('TradeScout: Background seller fetch failed, defaulting to Rozetka', err.message);
+                product.seller = 'Rozetka';
+            }
+
+            // Крок 2. Отримуємо опис та характеристики з веб-сторінки характеристик
+            try {
                 const charUrl = product.link.endsWith('/') ? `${product.link}characteristics/` : `${product.link}/characteristics/`;
                 const res = await fetch(charUrl);
                 if (res.ok) {
@@ -154,33 +177,8 @@ if (window.self !== window.top) {
                         product.detailedSpecsMap = specsMap;
                     }
                 }
-
-                // 2. Зчитуємо точного продавця з офіційного API деталей Rozetka за ID товару
-                const productIdMatch = product.link.match(/p(\d+)/);
-                const productId = productIdMatch ? productIdMatch[1] : null;
-                console.log(`TradeScout Debug: Product link: ${product.link}, Parsed ID: ${productId}`);
-                if (productId) {
-                    const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`;
-                    const apiRes = await fetch(apiUrl);
-                    console.log(`TradeScout Debug: API Status: ${apiRes.status} for ID: ${productId}`);
-                    if (apiRes.ok) {
-                        const apiData = await apiRes.json();
-                        console.log(`TradeScout Debug: API Data received:`, apiData);
-                        const sellerObj = apiData.data?.[0]?.seller;
-                        if (sellerObj && sellerObj.title) {
-                            product.seller = sellerObj.title.trim();
-                            console.log(`TradeScout: SUCCESS Parsed seller for ${product.name} -> ${product.seller}`);
-                        } else {
-                            console.log(`TradeScout Debug: seller or seller.title is missing in API response for ${product.name}`);
-                        }
-                    } else {
-                        console.log(`TradeScout Debug: API request failed for ${product.name}`);
-                    }
-                } else {
-                    console.log(`TradeScout Debug: Could not parse ID from link: ${product.link}`);
-                }
             } catch (err) {
-                console.log('TradeScout: Detail fetch skipped for', product.name, err.message);
+                console.log('TradeScout: Specs detail fetch skipped for', product.name, err.message);
             }
         }
 
@@ -197,16 +195,24 @@ if (window.self !== window.top) {
         }
 
         async function smoothScroll() {
-            // Замість повного перемальовування всього екрану, плавно скролимо тільки до кнопки "Показати ще"
-            const showMoreBtn = findShowMoreButton();
-            if (showMoreBtn) {
-                console.log('TradeScout: Native smooth scroll to "Show more" button...');
-                showMoreBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            console.log('TradeScout: Native step-by-step smooth scroll progression...');
+            const steps = 4;
+            const scrollHeight = document.body.scrollHeight;
+            const windowHeight = window.innerHeight;
+            const currentScroll = window.scrollY;
+            const distance = scrollHeight - windowHeight - currentScroll;
+            
+            if (distance > 0) {
+                const stepDistance = distance / steps;
+                for (let i = 1; i <= steps; i++) {
+                    window.scrollTo({ top: currentScroll + (stepDistance * i), behavior: 'smooth' });
+                    await new Promise(resolve => setTimeout(resolve, 250));
+                }
             } else {
-                console.log('TradeScout: Native smooth scroll to end of page...');
-                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                window.scrollTo({ top: scrollHeight, behavior: 'smooth' });
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
-            await new Promise(resolve => setTimeout(resolve, 800));
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
 
         const webhookUrl = state.webhookUrl;
