@@ -207,7 +207,13 @@ if (window.self !== window.top) {
         const webhookUrl = state.webhookUrl;
         const sentLinks = new Set();
         
-        // Ознака завантажених збережених посилань
+        // Черга та керування фоновим завантаженням деталей
+        const detailsQueue = [];
+        let activeEnrichmentThreads = 0;
+        const MAX_CONCURRENT_ENRICHMENTS = 5;
+        let totalEnrichCount = 0;
+        let processedEnrichCount = 0;
+
         const alreadyEnrichedLinks = new Set();
         let alreadyEnrichedLoaded = false;
 
@@ -233,117 +239,123 @@ if (window.self !== window.top) {
             alreadyEnrichedLoaded = true;
         }
 
-        // Посторінковий синхронний збирач деталей
-        async function enrichPageProducts(productsToEnrich, pageIndex, currentSyncedCount) {
-            const totalToEnrich = productsToEnrich.length;
-            if (totalToEnrich === 0) return currentSyncedCount;
+        // Буфер пакетної відправки збагачених товарів
+        let enrichedBuffer = [];
+        let bufferTimeout = null;
 
-            let enrichedCount = 0;
-            let activeWorkers = 0;
-            let index = 0;
-            let batchBuffer = [];
-            let lastSynced = currentSyncedCount;
-
-            return new Promise((resolve) => {
-                async function startWorker() {
-                    while (index < totalToEnrich) {
-                        if (!(await checkIsRunning())) {
-                            resolve(lastSynced);
-                            break;
-                        }
-                        const currentIdx = index++;
-                        const product = productsToEnrich[currentIdx];
-                        activeWorkers++;
-
-                        // Мікро-пауза 150мс між запитами для захисту від блокування
-                        await new Promise(r => setTimeout(r, 150));
-
-                        try {
-                            await fetchDetailForProduct(product);
-                            batchBuffer.push(product);
-                        } catch (e) {
-                            console.warn('TradeScout: Error enriching product:', product.name, e.message);
-                        } finally {
-                            activeWorkers--;
-                            enrichedCount++;
-
-                            const statusMsg = `Характеристики (стор. ${pageIndex}): ${enrichedCount}/${totalToEnrich} товарів...`;
-                            const percentVal = Math.round((enrichedCount / totalToEnrich) * 100);
-
-                            if (batchBuffer.length >= 15 || enrichedCount === totalToEnrich) {
-                                const batch = [...batchBuffer];
-                                batchBuffer = [];
-                                const resInfo = await sendWebhookPayload(webhookUrl, { 
-                                    products: batch, 
-                                    page: pageIndex, 
-                                    skipBackgroundEnrichment: true, 
-                                    isEnriched: true 
-                                });
-                                if (resInfo) {
-                                    lastSynced = resInfo.categoryCount;
-                                }
-                            }
-
-                            chrome.storage.local.set({
-                                totalScraped: sentLinks.size,
-                                percentProgress: percentVal,
-                                statusMsg: statusMsg,
-                                syncedCount: lastSynced
-                            });
-
-                            safeSendMessage({
-                                action: 'progress',
-                                page: pageIndex,
-                                scraped: sentLinks.size,
-                                total: sentLinks.size,
-                                statusMsg: statusMsg,
-                                estimatedTotal: getEstimatedTotalFromPage(),
-                                syncedCount: lastSynced
-                            });
-
-                            // Вирішуємо проміс тільки тоді, коли абсолютно всі товари оброблені та відправлені
-                            if (enrichedCount === totalToEnrich) {
-                                resolve(lastSynced);
-                            }
-                        }
-                    }
-                }
-
-                // Використовуємо 4 паралельних потоки для оптимальної швидкості на сторінці
-                const concurrency = Math.min(4, totalToEnrich);
-                for (let c = 0; c < concurrency; c++) {
-                    startWorker();
-                }
+        async function flushEnrichedBuffer() {
+            if (enrichedBuffer.length === 0) return null;
+            const batch = [...enrichedBuffer];
+            enrichedBuffer = [];
+            if (bufferTimeout) {
+                clearTimeout(bufferTimeout);
+                bufferTimeout = null;
+            }
+            return await sendWebhookPayload(webhookUrl, { 
+                products: batch, 
+                page: 1, 
+                skipBackgroundEnrichment: true, 
+                isEnriched: true 
             });
         }
 
-        async function scrapeAndSendNewProducts(webhookUrl, pageIndex, lastScrapedCount) {
+        // Фоновий пул завантаження деталей
+        async function processDetailsQueue() {
+            if (activeEnrichmentThreads >= MAX_CONCURRENT_ENRICHMENTS) return;
+
+            while (detailsQueue.length > 0 && activeEnrichmentThreads < MAX_CONCURRENT_ENRICHMENTS) {
+                if (!(await checkIsRunning())) break;
+
+                const product = detailsQueue.shift();
+                activeEnrichmentThreads++;
+
+                await new Promise(r => setTimeout(r, 100));
+
+                fetchDetailForProduct(product).then(async () => {
+                    activeEnrichmentThreads--;
+                    processedEnrichCount++;
+
+                    enrichedBuffer.push(product);
+                    
+                    let serverInfo = null;
+                    if (enrichedBuffer.length >= 15) {
+                        serverInfo = await flushEnrichedBuffer();
+                    } else {
+                        if (bufferTimeout) clearTimeout(bufferTimeout);
+                        bufferTimeout = setTimeout(async () => {
+                            serverInfo = await flushEnrichedBuffer();
+                            if (serverInfo) {
+                                chrome.storage.local.set({ syncedCount: serverInfo.categoryCount });
+                                safeSendMessage({
+                                    action: 'progress',
+                                    page: 1,
+                                    scraped: processedEnrichCount,
+                                    total: processedEnrichCount,
+                                    statusMsg: `Фонове збагачення деталей: ${processedEnrichCount}/${totalEnrichCount} товарів...`,
+                                    estimatedTotal: totalEnrichCount,
+                                    syncedCount: serverInfo.categoryCount
+                                });
+                            }
+                        }, 1500);
+                    }
+
+                    // Отримуємо актуальний лічильник з сервера або вираховуємо приблизний
+                    chrome.storage.local.get(['syncedCount'], (res) => {
+                        const baseSynced = res.syncedCount || 0;
+                        const currentSynced = serverInfo ? serverInfo.categoryCount : Math.max(baseSynced, processedEnrichCount);
+                        
+                        const percentVal = totalEnrichCount > 0 ? Math.round((processedEnrichCount / totalEnrichCount) * 100) : 100;
+                        const statusMsg = `Фонове збагачення деталей: ${processedEnrichCount}/${totalEnrichCount} товарів...`;
+                        
+                        chrome.storage.local.set({
+                            totalScraped: processedEnrichCount,
+                            percentProgress: percentVal,
+                            statusMsg: statusMsg,
+                            syncedCount: currentSynced
+                        });
+
+                        safeSendMessage({
+                            action: 'progress',
+                            page: 1,
+                            scraped: processedEnrichCount,
+                            total: processedEnrichCount,
+                            statusMsg: statusMsg,
+                            estimatedTotal: totalEnrichCount,
+                            syncedCount: currentSynced
+                        });
+                    });
+
+                    processDetailsQueue();
+                }).catch(() => {
+                    activeEnrichmentThreads--;
+                    processedEnrichCount++;
+                    processDetailsQueue();
+                });
+            }
+        }
+
+        async function scrapeAndSendNewProducts(webhookUrl, pageIndex) {
             await loadAlreadyEnrichedLinks(webhookUrl);
 
-            // Оповіщаємо про початок обробки сторінки
-            const startMsg = `Аналіз сторінки ${pageIndex}...`;
-            safeSendMessage({
-                action: 'progress',
-                page: pageIndex,
-                scraped: sentLinks.size,
-                total: sentLinks.size,
-                statusMsg: startMsg,
-                estimatedTotal: getEstimatedTotalFromPage()
-            });
-
             const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
-            let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => !item.closest('.recently-viewed'));
+            let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => {
+                // Товари мають бути виключно всередині головної сітки каталогу та не належати до рекомендаційних блоків
+                const isInsideCatalog = item.closest('rz-catalog, .catalog-grid, #catalog-grid');
+                const isInsideRecommendations = item.closest('.recently-viewed, [class*="recommend"], [class*="similar"], [class*="popular"]');
+                return isInsideCatalog && !isInsideRecommendations;
+            });
             
             if (items.length === 0) {
                 const links = document.querySelectorAll('a[href*="/p"]');
                 items = Array.from(links).map(l => l.closest('li, div, rz-catalog-tile, article, section') || l).filter(Boolean);
             }
 
+            if (items.length === 0) return;
+
             const categoryEl = document.querySelector('h1, .breadcrumbs__last');
             const category = categoryEl && categoryEl.innerText ? categoryEl.innerText.trim() : 'Повербанки та УМБ';
             const newProducts = [];
 
-            // Проходимо по всіх елементах каталогу та відбираємо нові за унікальними посиланнями (sentLinks)
             items.forEach((item) => {
                 try {
                     if (isSponsoredTile(item)) return;
@@ -412,11 +424,13 @@ if (window.self !== window.top) {
             });
 
             if (newProducts.length > 0) {
+                console.log(`TradeScout: Extracted ${newProducts.length} clean items. Total so far: ${sentLinks.size}`);
+
                 // 1. Негайно надсилаємо базові товари на Дашборд і дізнаємося кількість у базі
                 const serverInfo = await sendWebhookPayload(webhookUrl, { products: newProducts, page: pageIndex, skipBackgroundEnrichment: true });
-                let currentSyncedCount = serverInfo ? serverInfo.categoryCount : sentLinks.size;
+                const currentSyncedCount = serverInfo ? serverInfo.categoryCount : sentLinks.size;
 
-                // 2. Розділяємо на збагачені (в базі) та нові
+                // 2. Додаємо в чергу на фонове збагачення
                 const toEnrich = newProducts.filter(p => !alreadyEnrichedLinks.has(p.link));
                 const alreadyEnriched = newProducts.filter(p => alreadyEnrichedLinks.has(p.link));
 
@@ -424,17 +438,38 @@ if (window.self !== window.top) {
                     console.log(`TradeScout: Skipping detail fetch for ${alreadyEnriched.length} products (already cached in DB).`);
                     const enrichServerInfo = await sendWebhookPayload(webhookUrl, { products: alreadyEnriched, page: pageIndex, skipBackgroundEnrichment: true, isEnriched: true });
                     if (enrichServerInfo) {
-                        currentSyncedCount = enrichServerInfo.categoryCount;
+                        chrome.storage.local.set({ syncedCount: enrichServerInfo.categoryCount });
                     }
                 }
 
-                // 3. Синхронно чекаємо завершення збагачення деталей для поточної сторінки
                 if (toEnrich.length > 0) {
-                    currentSyncedCount = await enrichPageProducts(toEnrich, pageIndex, currentSyncedCount);
+                    detailsQueue.push(...toEnrich);
+                    totalEnrichCount += toEnrich.length;
+                    processDetailsQueue();
                 }
-            }
 
-            return sentLinks.size;
+                // Записуємо поточний стан базового скрапінгу
+                const statusMsg = `Зібрано базові ${sentLinks.size} товарів...`;
+                const estimatedTotal = getEstimatedTotalFromPage();
+                const percentVal = Math.min(95, Math.round((sentLinks.size / estimatedTotal) * 100));
+                
+                chrome.storage.local.set({
+                    totalScraped: sentLinks.size,
+                    percentProgress: percentVal,
+                    statusMsg: statusMsg,
+                    syncedCount: currentSyncedCount
+                });
+
+                safeSendMessage({
+                    action: 'progress',
+                    page: pageIndex,
+                    scraped: sentLinks.size,
+                    total: sentLinks.size,
+                    statusMsg: statusMsg,
+                    estimatedTotal: estimatedTotal,
+                    syncedCount: currentSyncedCount
+                });
+            }
         }
 
         function findShowMoreButton() {
@@ -461,7 +496,7 @@ if (window.self !== window.top) {
             for (const el of allElements) {
                 const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
                 if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more') {
-                    if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed')) {
+                    if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed') || el.closest('[class*="recommend"]') || el.closest('[class*="similar"]')) {
                         continue;
                     }
                     if (el.disabled || el.classList.contains('button--loading')) {
@@ -477,6 +512,7 @@ if (window.self !== window.top) {
 
         let pageCount = 1;
         let lastScrapedCount = 0;
+        let consecutiveNoNewItems = 0;
         const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
 
         while (true) {
@@ -485,8 +521,7 @@ if (window.self !== window.top) {
                 break;
             }
 
-            // Зчитуємо та опрацьовуємо товари поточної сторінки повністю (разом із деталями)
-            lastScrapedCount = await scrapeAndSendNewProducts(state.webhookUrl, pageCount, lastScrapedCount);
+            await scrapeAndSendNewProducts(state.webhookUrl, pageCount);
 
             if (!(await checkIsRunning())) {
                 console.log('TradeScout: Stop signal detected after scraping page. Exiting.');
@@ -500,15 +535,31 @@ if (window.self !== window.top) {
                 break;
             }
 
+            await scrapeAndSendNewProducts(state.webhookUrl, pageCount);
+
+            const currentScrapedCount = sentLinks.size;
+            const newItemsFound = currentScrapedCount > lastScrapedCount;
+
+            if (newItemsFound) {
+                consecutiveNoNewItems = 0;
+                lastScrapedCount = currentScrapedCount;
+            } else {
+                consecutiveNoNewItems++;
+            }
+
             const showMoreBtn = findShowMoreButton();
             if (showMoreBtn) {
+                if (!(await checkIsRunning())) {
+                    console.log('TradeScout: Stop signal detected before click. Exiting.');
+                    break;
+                }
                 console.log(`TradeScout: Clicking "Show more" (page ${pageCount})...`);
                 
                 const previousCount = document.querySelectorAll(tileSelectors).length;
                 showMoreBtn.click();
                 pageCount++;
                 
-                // Чекаємо, поки нові товари завантажаться
+                // Динамічне очікування завантаження нових елементів до 15 секунд
                 let loaded = false;
                 for (let w = 0; w < 30; w++) {
                     if (!(await checkIsRunning())) break;
@@ -523,10 +574,61 @@ if (window.self !== window.top) {
                     console.log('TradeScout: Dynamic load timeout. Proceeding...');
                 }
             } else {
-                console.log(`TradeScout: Reached catalog end. Total items collected: ${sentLinks.size}`);
-                break;
+                if (newItemsFound) {
+                    console.log('TradeScout: Infinite scroll active, loaded new items. Continuing...');
+                    pageCount++;
+                    for (let w = 0; w < 3; w++) {
+                        if (!(await checkIsRunning())) break;
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                    continue;
+                }
+                
+                if (consecutiveNoNewItems >= 2) {
+                    console.log(`TradeScout: Reached catalog end. Total items collected: ${sentLinks.size}`);
+                    break;
+                }
+                
+                console.log('TradeScout: No button found, retrying scroll...');
+                for (let w = 0; w < 3; w++) {
+                    if (!(await checkIsRunning())) break;
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
             }
         }
+
+        // В кінці скрапінгу чекаємо, поки завершиться фонове збагачення деталей
+        console.log('TradeScout: Waiting for background details queue to finish...');
+        while (detailsQueue.length > 0 || activeEnrichmentThreads > 0) {
+            if (!(await checkIsRunning())) break;
+            
+            const processed = totalEnrichCount - detailsQueue.length - activeEnrichmentThreads;
+            const percentVal = totalEnrichCount > 0 ? Math.round((processed / totalEnrichCount) * 100) : 100;
+            const statusMsg = `Фонове збагачення деталей: ${processed}/${totalEnrichCount} товарів...`;
+            
+            chrome.storage.local.set({
+                totalScraped: processed,
+                percentProgress: percentVal,
+                statusMsg: statusMsg
+            });
+
+            chrome.storage.local.get(['syncedCount'], (res) => {
+                const currentSynced = res.syncedCount || processed;
+                safeSendMessage({
+                    action: 'status',
+                    percent: percentVal,
+                    total: processed,
+                    estimatedTotal: totalEnrichCount,
+                    statusMsg: statusMsg,
+                    syncedCount: currentSynced
+                });
+            });
+            
+            await new Promise(resolve => setTimeout(resolve, 800));
+        }
+
+        // Забезпечимо фінальну відправку залишків буфера перед завершенням
+        await flushEnrichedBuffer();
 
         console.log(`TradeScout: Scrape finished completely. Sent total of ${sentLinks.size} products.`);
         
