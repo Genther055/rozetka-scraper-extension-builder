@@ -337,69 +337,8 @@ if (window.self !== window.top) {
         async function scrapeAndSendNewProducts(webhookUrl, pageIndex) {
             await loadAlreadyEnrichedLinks(webhookUrl);
 
-            // Отримуємо поточний бренд з URL для фільтрації реклами інших брендів
-            const urlText = window.location.href.toLowerCase();
-            const producerMatch = urlText.match(/producer=([^/;]+)/);
-            let activeBrand = null;
-            if (producerMatch) {
-                activeBrand = decodeURIComponent(producerMatch[1]).trim().toLowerCase();
-            }
-
-            function matchesActiveBrand(name, brandSlug) {
-                const n = name.toLowerCase();
-                const b = brandSlug.toLowerCase();
-                if (b === 'xiaomi') return n.includes('xiaomi') || n.includes('сяомі');
-                if (b === 'apple') return n.includes('apple') || n.includes('iphone') || n.includes('айфон');
-                if (b === 'samsung') return n.includes('samsung') || n.includes('самсунг');
-                if (b === 'hoco') return n.includes('hoco') || n.includes('хоко');
-                if (b === 'baseus') return n.includes('baseus') || n.includes('басеус') || n.includes('базеус');
-                if (b === 'ugreen') return n.includes('ugreen') || n.includes('югрін');
-                return n.includes(b);
-            }
-
-            const mainGrid = document.querySelector('.catalog-grid, #catalog-grid');
-            let items = [];
-            if (mainGrid) {
-                // Вибираємо тільки самі комірки сітки (ліміт 60)
-                const cells = Array.from(mainGrid.querySelectorAll('.catalog-grid__cell, li.catalog-grid__cell'));
-                cells.forEach(cell => {
-                    const tile = cell.querySelector('rz-catalog-tile, rz-product-tile, .goods-tile, article, div[class*="goods-tile"]');
-                    if (tile) {
-                        items.push(tile);
-                    }
-                });
-            } else {
-                const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id]';
-                items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => {
-                    const isInsideCatalog = item.closest('.catalog-grid, #catalog-grid');
-                    const isInsideRecommendations = item.closest('.recently-viewed, [class*="recommend"], [class*="similar"], [class*="popular"]');
-                    return isInsideCatalog && !isInsideRecommendations;
-                });
-            }
-
-            items = items.filter(item => {
-                // Перевірка на рекламні класи або статус промо
-                if (item.classList.contains('catalog-grid__cell_type_promo') || 
-                    item.classList.contains('goods-tile_state_promo') ||
-                    item.querySelector('.goods-tile_state_promo') ||
-                    item.closest('.catalog-grid__cell_type_promo') ||
-                    item.closest('.goods-tile_state_promo')) {
-                    return false;
-                }
-
-                // Перевірка відповідності бренду, якщо є активний фільтр
-                if (activeBrand) {
-                    const linkTag = item.tagName === 'A' ? item : item.querySelector('a[href*="/p"], a[href]');
-                    if (!linkTag) return false;
-                    const titleEl = item.querySelector('a.tile-title, a.goods-tile__heading, .goods-tile__heading, .tile-title, [class*="heading"], [class*="title"]') || linkTag;
-                    const name = titleEl && titleEl.innerText ? titleEl.innerText.trim() : '';
-                    if (name && !matchesActiveBrand(name, activeBrand)) {
-                        return false;
-                    }
-                }
-
-                return true;
-            });
+            const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
+            let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => !item.closest('.recently-viewed'));
             
             if (items.length === 0) {
                 const links = document.querySelectorAll('a[href*="/p"]');
@@ -552,7 +491,7 @@ if (window.self !== window.top) {
             for (const el of allElements) {
                 const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
                 if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more') {
-                    if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed') || el.closest('[class*="recommend"]') || el.closest('[class*="similar"]')) {
+                    if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed')) {
                         continue;
                     }
                     if (el.disabled || el.classList.contains('button--loading')) {
@@ -601,13 +540,6 @@ if (window.self !== window.top) {
                 lastScrapedCount = currentScrapedCount;
             } else {
                 consecutiveNoNewItems++;
-            }
-
-            // Очікуємо повного фонового збагачення та відправки всіх товарів поточної сторінки перед переходом
-            console.log('TradeScout: Waiting for current page enrichment to complete before page transition...');
-            while (detailsQueue.length > 0 || activeEnrichmentThreads > 0) {
-                if (!(await checkIsRunning())) break;
-                await new Promise(resolve => setTimeout(resolve, 300));
             }
 
             const showMoreBtn = findShowMoreButton();
