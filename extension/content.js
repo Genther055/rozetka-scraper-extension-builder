@@ -157,6 +157,8 @@ if (window.self !== window.top) {
 
                 // 3. Збираємо точного продавця з детальної сторінки
                 const sellerSelectors = [
+                    'a[href*="/seller/"]',
+                    '[href*="/seller/"]',
                     'a.product-seller__name',
                     '.product-seller__title a',
                     '[data-testid="seller-link"]',
