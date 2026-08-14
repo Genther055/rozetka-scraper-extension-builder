@@ -30,7 +30,8 @@ function stopTimer() {
     }
 }
 
-function updateProgress(percent, count, actionMsg, totalEstimated, syncedCount) {
+// Оновлення повзунка прогресу та відсотків
+function updateProgress(percent, count, actionMsg, totalEstimated) {
     const safePercent = Math.min(100, Math.max(0, Math.round(percent)));
     progressFill.style.width = `${safePercent}%`;
     percentText.innerText = `${safePercent}%`;
@@ -38,21 +39,10 @@ function updateProgress(percent, count, actionMsg, totalEstimated, syncedCount) 
     if (actionMsg) {
         statusText.innerText = actionMsg;
     }
-
-    const syncContainer = document.getElementById('sync-container');
-    const syncText = document.getElementById('sync-text');
-    if (syncContainer && syncText) {
-        if (syncedCount !== undefined && syncedCount > 0) {
-            syncContainer.style.display = 'flex';
-            syncText.innerHTML = `Синхронізовано з платформою: <strong>${syncedCount}</strong> шт.`;
-        } else {
-            syncContainer.style.display = 'none';
-        }
-    }
 }
 
 // Відновлення стану з chrome.storage
-chrome.storage.local.get(['isRunning', 'webhookUrl', 'totalScraped', 'currentPage', 'startTime', 'statusMsg', 'percentProgress', 'syncedCount'], (state) => {
+chrome.storage.local.get(['isRunning', 'webhookUrl', 'totalScraped', 'currentPage', 'startTime', 'statusMsg', 'percentProgress'], (state) => {
     if (state.webhookUrl) {
         inputWebhook.value = state.webhookUrl;
     } else {
@@ -64,16 +54,16 @@ chrome.storage.local.get(['isRunning', 'webhookUrl', 'totalScraped', 'currentPag
         btnStop.disabled = false;
         inputWebhook.disabled = true;
         startTimer(state.startTime);
-        updateProgress(state.percentProgress || 10, state.totalScraped || 0, state.statusMsg || 'Скрейпінг активний...', 155, state.syncedCount || 0);
+        updateProgress(state.percentProgress || 10, state.totalScraped || 0, state.statusMsg || 'Скрейпінг активний...', 155);
     } else {
         btnStart.disabled = false;
         btnStop.disabled = true;
         inputWebhook.disabled = false;
         stopTimer();
         if (state.totalScraped) {
-            updateProgress(100, state.totalScraped, 'Збір завершено успішно!', state.totalScraped, state.syncedCount || state.totalScraped);
+            updateProgress(100, state.totalScraped, 'Збір завершено успішно!', state.totalScraped);
         } else {
-            updateProgress(0, 0, 'Очікування запуску...', 0, 0);
+            updateProgress(0, 0, 'Очікування запуску...', 0);
         }
     }
 });
@@ -143,20 +133,14 @@ chrome.runtime.onMessage.addListener((message) => {
             totalScraped: message.total,
             currentPage: message.page,
             statusMsg: actionStr,
-            percentProgress: percent,
-            syncedCount: message.syncedCount || 0
+            percentProgress: percent
         });
         
-        updateProgress(percent, message.total, actionStr, estimatedTotal, message.syncedCount || 0);
+        updateProgress(percent, message.total, actionStr, estimatedTotal);
     } else if (message.action === 'status') {
         statusText.innerText = message.statusMsg;
         if (message.percent !== undefined) {
-            chrome.storage.local.set({
-                percentProgress: message.percent,
-                statusMsg: message.statusMsg,
-                syncedCount: message.syncedCount || 0
-            });
-            updateProgress(message.percent, message.total, message.statusMsg, message.estimatedTotal || 155, message.syncedCount || 0);
+            updateProgress(message.percent, message.total, message.statusMsg, message.estimatedTotal || 155);
         }
     } else if (message.action === 'finished') {
         stopTimer();
@@ -164,8 +148,8 @@ chrome.runtime.onMessage.addListener((message) => {
         btnStop.disabled = true;
         inputWebhook.disabled = false;
         
-        chrome.storage.local.set({ isRunning: false, percentProgress: 100, syncedCount: message.syncedCount || message.total });
-        updateProgress(100, message.total, `Успішно зібрано ${message.total} товарів!`, message.total, message.syncedCount || message.total);
+        chrome.storage.local.set({ isRunning: false });
+        updateProgress(100, message.total, `Успішно зібрано ${message.total} товарів!`, message.total);
     } else if (message.action === 'error') {
         stopTimer();
         btnStart.disabled = false;

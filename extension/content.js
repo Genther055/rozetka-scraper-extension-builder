@@ -25,21 +25,6 @@ if (window.self !== window.top) {
             });
         }
 
-        // Асинхронний допоміжний метод для швидкого завантаження характеристик із таймаутом
-        async function fetchWithTimeout(resource, options = {}) {
-            const { timeout = 4000 } = options;
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), timeout);
-            try {
-                const response = await fetch(resource, { ...options, signal: controller.signal });
-                clearTimeout(id);
-                return response;
-            } catch (error) {
-                clearTimeout(id);
-                throw error;
-            }
-        }
-
         function getEstimatedTotalFromPage() {
             const selectors = [
                 '.catalog-heading__goods', 
@@ -133,33 +118,9 @@ if (window.self !== window.top) {
         // Глибокий витягувач опису та характеристики з картки товару через DOMParser
         async function fetchDetailForProduct(product) {
             if (!product.link) return;
-            
-            // Крок 1. Завжди отримуємо точного продавця через Background API запит (це обходить будь-які CORS/блокування)
-            try {
-                const productIdMatch = product.link.match(/p(\d+)/);
-                const productId = productIdMatch ? productIdMatch[1] : null;
-                if (productId) {
-                    const sellerResponse = await new Promise((resolve) => {
-                        chrome.runtime.sendMessage({ action: 'fetchSeller', productId: productId }, (response) => {
-                            resolve(response);
-                        });
-                    });
-                    if (sellerResponse && sellerResponse.success) {
-                        product.seller = sellerResponse.seller;
-                        console.log(`TradeScout: SUCCESS Parsed seller from background API for ${product.name} -> ${product.seller}`);
-                    } else {
-                        product.seller = 'Rozetka';
-                    }
-                }
-            } catch (err) {
-                console.warn('TradeScout: Background seller fetch failed, defaulting to Rozetka', err.message);
-                product.seller = 'Rozetka';
-            }
-
-            // Крок 2. Отримуємо опис та характеристики з веб-сторінки характеристик
             try {
                 const charUrl = product.link.endsWith('/') ? `${product.link}characteristics/` : `${product.link}/characteristics/`;
-                const res = await fetchWithTimeout(charUrl, { timeout: 4000 });
+                const res = await fetch(charUrl);
                 if (!res.ok) return;
                 const htmlText = await res.text();
                 const parser = new DOMParser();
@@ -286,10 +247,7 @@ if (window.self !== window.top) {
             return new Promise((resolve) => {
                 async function startWorker() {
                     while (index < totalToEnrich) {
-                        if (!(await checkIsRunning())) {
-                            resolve(lastSynced);
-                            break;
-                        }
+                        if (!(await checkIsRunning())) break;
                         const currentIdx = index++;
                         const product = productsToEnrich[currentIdx];
                         activeWorkers++;
@@ -339,12 +297,11 @@ if (window.self !== window.top) {
                                 estimatedTotal: getEstimatedTotalFromPage(),
                                 syncedCount: lastSynced
                             });
-
-                            // Вирішуємо проміс тільки тоді, коли абсолютно всі товари оброблені та відправлені
-                            if (enrichedCount === totalToEnrich) {
-                                resolve(lastSynced);
-                            }
                         }
+                    }
+
+                    if (activeWorkers === 0) {
+                        resolve(lastSynced);
                     }
                 }
 
@@ -371,12 +328,7 @@ if (window.self !== window.top) {
             });
 
             const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
-            let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => {
-                // Товари мають бути виключно всередині головної сітки каталогу та не належати до рекомендаційних блоків
-                const isInsideCatalog = item.closest('rz-catalog, .catalog-grid, rz-grid, #catalog-grid');
-                const isInsideRecommendations = item.closest('.recently-viewed, [class*="recommend"], [class*="similar"], [class*="popular"]');
-                return isInsideCatalog && !isInsideRecommendations;
-            });
+            let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => !item.closest('.recently-viewed'));
             
             if (items.length === 0) {
                 const links = document.querySelectorAll('a[href*="/p"]');
@@ -505,7 +457,7 @@ if (window.self !== window.top) {
             for (const el of allElements) {
                 const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
                 if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more') {
-                    if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed') || el.closest('[class*="recommend"]') || el.closest('[class*="similar"]')) {
+                    if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed')) {
                         continue;
                     }
                     if (el.disabled || el.classList.contains('button--loading')) {

@@ -53,6 +53,40 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
  * REST API endpoints for TradeScout Ingestion & AI analysis
  */
 
+// Asynchronous background seller resolver for Rozetka products
+async function resolveSellerInServerBackground(productId: string, normalizedLink: string) {
+  try {
+    const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`;
+    const response = await fetch(apiUrl);
+    if (response.ok) {
+      const apiData: any = await response.json();
+      const sellerTitle = apiData.data?.[0]?.seller?.title;
+      if (sellerTitle) {
+        const cleanedSeller = sellerTitle.trim();
+        const dbPath = join(import.meta.dirname, '../data/products.json');
+        if (fs.existsSync(dbPath)) {
+          const raw = fs.readFileSync(dbPath, 'utf-8');
+          const currentProducts = JSON.parse(raw);
+          const index = currentProducts.findIndex((p: any) => p && p.link === normalizedLink);
+          if (index !== -1) {
+            currentProducts[index].seller = cleanedSeller;
+            fs.writeFileSync(dbPath, JSON.stringify(currentProducts, null, 2), 'utf-8');
+            console.log(`[Backend Enriched] Successfully updated seller for ${normalizedLink} -> ${cleanedSeller}`);
+            
+            // Also update the in-memory array in server.ts
+            const memoryIndex = products.findIndex((p: any) => p && p.link === normalizedLink);
+            if (memoryIndex !== -1) {
+              products[memoryIndex].seller = cleanedSeller;
+            }
+          }
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error(`[Backend Enrichment Error] Failed to resolve seller for ${productId}:`, error.message);
+  }
+}
+
 app.post('/api/products', (req, res) => {
   let newItems = req.body ? (req.body.products || req.body) : [];
   if (typeof newItems === 'string') {
@@ -100,6 +134,13 @@ app.post('/api/products', (req, res) => {
           aiStatus: 'pending',
           aiVerdict: ''
         });
+
+        // Trigger background seller resolution
+        const productIdMatch = normalizedLink.match(/p(\d+)/);
+        const productId = productIdMatch ? productIdMatch[1] : null;
+        if (productId) {
+          resolveSellerInServerBackground(productId, normalizedLink);
+        }
       } else {
         const index = products.findIndex(p => {
           if (!p || typeof p !== 'object') return false;
@@ -125,6 +166,15 @@ app.post('/api/products', (req, res) => {
           if (item.detailedSpecsMap) products[index].detailedSpecsMap = item.detailedSpecsMap;
           if (item.seller) products[index].seller = item.seller;
           if (item.sellersCount) products[index].sellersCount = item.sellersCount;
+
+          // If the seller remains Rozetka, verify it in the background
+          if (products[index].seller === 'Rozetka') {
+            const productIdMatch = normalizedLink.match(/p(\d+)/);
+            const productId = productIdMatch ? productIdMatch[1] : null;
+            if (productId) {
+              resolveSellerInServerBackground(productId, normalizedLink);
+            }
+          }
         }
       }
     } catch (e) {
