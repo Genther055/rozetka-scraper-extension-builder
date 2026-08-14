@@ -589,6 +589,13 @@ if (window.self !== window.top) {
                 consecutiveNoNewItems++;
             }
 
+            // Очікуємо повного фонового збагачення та відправки всіх товарів поточної сторінки перед переходом
+            console.log('TradeScout: Waiting for current page enrichment to complete before page transition...');
+            while (detailsQueue.length > 0 || activeEnrichmentThreads > 0) {
+                if (!(await checkIsRunning())) break;
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+
             const showMoreBtn = findShowMoreButton();
             if (showMoreBtn) {
                 if (!(await checkIsRunning())) {
