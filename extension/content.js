@@ -119,73 +119,58 @@ if (window.self !== window.top) {
         async function fetchDetailForProduct(product) {
             if (!product.link) return;
             try {
+                // 1. Зчитуємо опис та характеристики з веб-сторінки характеристик
                 const charUrl = product.link.endsWith('/') ? `${product.link}characteristics/` : `${product.link}/characteristics/`;
                 const res = await fetch(charUrl);
-                if (!res.ok) return;
-                const htmlText = await res.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlText, 'text/html');
+                if (res.ok) {
+                    const htmlText = await res.text();
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlText, 'text/html');
 
-                // 1. Повний текстовий опис товару від продавця
-                const descEl = doc.querySelector('.product-about__description, [class*="description-content"], .rz-product-description, [data-testid="description"]');
-                if (descEl) {
-                    const cleanDesc = descEl.innerText.trim();
-                    if (cleanDesc && cleanDesc.length > 15) {
-                        product.description = cleanDesc;
+                    // Текстовий опис товару
+                    const descEl = doc.querySelector('.product-about__description, [class*="description-content"], .rz-product-description, [data-testid="description"]');
+                    if (descEl) {
+                        const cleanDesc = descEl.innerText.trim();
+                        if (cleanDesc && cleanDesc.length > 15) {
+                            product.description = cleanDesc;
+                        }
+                    }
+
+                    // Таблиця характеристик
+                    const specsList = [];
+                    const specsMap = {};
+                    const dts = Array.from(doc.querySelectorAll('dt, .characteristics-full__label, [class*="characteristics"] [class*="label"], [class*="characteristics"] [class*="name"]'));
+                    dts.forEach(dt => {
+                        const dd = dt.nextElementSibling || dt.parentElement.querySelector('dd, .characteristics-full__value, [class*="characteristics"] [class*="value"]');
+                        const k = dt.innerText ? dt.innerText.trim() : '';
+                        const v = dd && dd.innerText ? dd.innerText.trim() : '';
+                        if (k && v && k.length > 1 && v.length > 0) {
+                            specsMap[k] = v;
+                            specsList.push(`${k}: ${v}`);
+                        }
+                    });
+                    if (specsList.length > 0) {
+                        product.specs = specsList.join('; ');
+                        product.detailedSpecsMap = specsMap;
                     }
                 }
 
-                // 2. Повна таблиця характеристик товару
-                const specsList = [];
-                const specsMap = {};
-
-                const dts = Array.from(doc.querySelectorAll('dt, .characteristics-full__label, [class*="characteristics"] [class*="label"], [class*="characteristics"] [class*="name"]'));
-                dts.forEach(dt => {
-                    const dd = dt.nextElementSibling || dt.parentElement.querySelector('dd, .characteristics-full__value, [class*="characteristics"] [class*="value"]');
-                    const k = dt.innerText ? dt.innerText.trim() : '';
-                    const v = dd && dd.innerText ? dd.innerText.trim() : '';
-                    if (k && v && k.length > 1 && v.length > 0) {
-                        specsMap[k] = v;
-                        specsList.push(`${k}: ${v}`);
-                    }
-                });
-
-                if (specsList.length > 0) {
-                    product.specs = specsList.join('; ');
-                    product.detailedSpecsMap = specsMap;
-                }
-
-                // 3. Збираємо точного продавця з детальної сторінки
-                const sellerSelectors = [
-                    'a[href*="/seller/"]',
-                    '[href*="/seller/"]',
-                    'a.product-seller__name',
-                    '.product-seller__title a',
-                    '[data-testid="seller-link"]',
-                    '.product-seller__name',
-                    '.product-seller__title',
-                    '[class*="seller-name"]',
-                    '[class*="seller__name"]',
-                    '[class*="seller__title"] a',
-                    '[class*="seller-link"]'
-                ];
-                
-                let foundSeller = '';
-                for (const selector of sellerSelectors) {
-                    const el = doc.querySelector(selector);
-                    if (el) {
-                        const txt = el.innerText.replace(/Продавець:|Продавец:/i, '').trim();
-                        if (txt && txt.length > 0 && txt.length < 50 && !txt.includes('назад') && !txt.includes('відгук') && !txt.includes('запитати')) {
-                            foundSeller = txt;
-                            break;
+                // 2. Зчитуємо точного продавця з офіційного API деталей Rozetka за ID товару
+                const productIdMatch = product.link.match(/p(\d+)/);
+                const productId = productIdMatch ? productIdMatch[1] : null;
+                if (productId) {
+                    const apiRes = await fetch(`https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`);
+                    if (apiRes.ok) {
+                        const apiData = await apiRes.json();
+                        const sellerObj = apiData.data?.[0]?.seller;
+                        if (sellerObj && sellerObj.title) {
+                            product.seller = sellerObj.title.trim();
+                            console.log(`TradeScout: Parsed seller from API for ${product.name} -> ${product.seller}`);
                         }
                     }
                 }
-                if (foundSeller) {
-                    product.seller = foundSeller;
-                }
             } catch (err) {
-                console.log('TradeScout: Detail fetch skipped for', product.name);
+                console.log('TradeScout: Detail fetch skipped for', product.name, err.message);
             }
         }
 
