@@ -819,7 +819,12 @@
             <tbody class="divide-y divide-slate-800/60 text-sm text-slate-300">
               <tr *ngFor="let item of getFilteredDemandProducts(); let i = index" class="hover:bg-slate-850/30 transition-all">
                 <td class="py-4 px-3 text-center font-mono text-xs text-slate-500">{{ i + 1 }}</td>
-                <td class="py-4 px-6 font-semibold text-white max-w-xs truncate">{{ item.name }}</td>
+                <td class="py-4 px-6 font-semibold text-white max-w-xs">
+                  <a [href]="item.link" target="_blank" class="hover:underline flex items-start gap-1.5 hover:text-indigo-400 line-clamp-2 text-xs leading-snug">
+                    {{ item.name }}
+                    <span class="material-icons text-[10px] mt-0.5 shrink-0 text-slate-400">open_in_new</span>
+                  </a>
+                </td>
                 <td class="py-4 px-6 font-mono whitespace-nowrap">{{ item.price }} ₴</td>
                 <td class="py-4 px-6 whitespace-nowrap">
                   <span 
