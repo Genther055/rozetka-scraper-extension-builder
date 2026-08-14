@@ -316,6 +316,17 @@ if (window.self !== window.top) {
         async function scrapeAndSendNewProducts(webhookUrl, pageIndex, lastScrapedCount) {
             await loadAlreadyEnrichedLinks(webhookUrl);
 
+            // Оповіщаємо про початок обробки сторінки
+            const startMsg = `Аналіз сторінки ${pageIndex}...`;
+            safeSendMessage({
+                action: 'progress',
+                page: pageIndex,
+                scraped: sentLinks.size,
+                total: sentLinks.size,
+                statusMsg: startMsg,
+                estimatedTotal: getEstimatedTotalFromPage()
+            });
+
             const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
             let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => !item.closest('.recently-viewed'));
             
@@ -324,17 +335,12 @@ if (window.self !== window.top) {
                 items = Array.from(links).map(l => l.closest('li, div, rz-catalog-tile, article, section') || l).filter(Boolean);
             }
 
-            // Отримуємо тільки нові товари поточної сторінки
-            const newPageItems = items.slice(lastScrapedCount);
-            console.log(`TradeScout: Page ${pageIndex} has ${newPageItems.length} new items (Total: ${items.length}, last: ${lastScrapedCount})`);
-
-            if (newPageItems.length === 0) return lastScrapedCount;
-
             const categoryEl = document.querySelector('h1, .breadcrumbs__last');
             const category = categoryEl && categoryEl.innerText ? categoryEl.innerText.trim() : 'Повербанки та УМБ';
             const newProducts = [];
 
-            newPageItems.forEach((item) => {
+            // Проходимо по всіх елементах каталогу та відбираємо нові за унікальними посиланнями (sentLinks)
+            items.forEach((item) => {
                 try {
                     if (isSponsoredTile(item)) return;
 
@@ -424,7 +430,7 @@ if (window.self !== window.top) {
                 }
             }
 
-            return lastScrapedCount + newPageItems.length;
+            return sentLinks.size;
         }
 
         function findShowMoreButton() {
