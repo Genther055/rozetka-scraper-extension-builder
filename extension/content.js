@@ -154,6 +154,34 @@ if (window.self !== window.top) {
                     product.specs = specsList.join('; ');
                     product.detailedSpecsMap = specsMap;
                 }
+
+                // 3. Збираємо точного продавця з детальної сторінки
+                const sellerSelectors = [
+                    'a.product-seller__name',
+                    '.product-seller__title a',
+                    '[data-testid="seller-link"]',
+                    '.product-seller__name',
+                    '.product-seller__title',
+                    '[class*="seller-name"]',
+                    '[class*="seller__name"]',
+                    '[class*="seller__title"] a',
+                    '[class*="seller-link"]'
+                ];
+                
+                let foundSeller = '';
+                for (const selector of sellerSelectors) {
+                    const el = doc.querySelector(selector);
+                    if (el) {
+                        const txt = el.innerText.replace(/Продавець:|Продавец:/i, '').trim();
+                        if (txt && txt.length > 0 && txt.length < 50 && !txt.includes('назад') && !txt.includes('відгук') && !txt.includes('запитати')) {
+                            foundSeller = txt;
+                            break;
+                        }
+                    }
+                }
+                if (foundSeller) {
+                    product.seller = foundSeller;
+                }
             } catch (err) {
                 console.log('TradeScout: Detail fetch skipped for', product.name);
             }
