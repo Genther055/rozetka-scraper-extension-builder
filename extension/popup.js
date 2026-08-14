@@ -30,7 +30,6 @@ function stopTimer() {
     }
 }
 
-// Оновлення повзунка прогресу та відсотків
 function updateProgress(percent, count, actionMsg, totalEstimated, syncedCount) {
     const safePercent = Math.min(100, Math.max(0, Math.round(percent)));
     progressFill.style.width = `${safePercent}%`;
@@ -49,12 +48,6 @@ function updateProgress(percent, count, actionMsg, totalEstimated, syncedCount) 
         } else {
             syncContainer.style.display = 'none';
         }
-    }
-}%`;
-    percentText.innerText = `${safePercent}%`;
-    
-    if (actionMsg) {
-        statusText.innerText = actionMsg;
     }
 }
 
