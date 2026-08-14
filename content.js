@@ -337,12 +337,54 @@ if (window.self !== window.top) {
         async function scrapeAndSendNewProducts(webhookUrl, pageIndex) {
             await loadAlreadyEnrichedLinks(webhookUrl);
 
+            // Отримуємо поточний бренд з URL для фільтрації реклами інших брендів
+            const urlText = window.location.href.toLowerCase();
+            const producerMatch = urlText.match(/producer=([^/;]+)/);
+            let activeBrand = null;
+            if (producerMatch) {
+                activeBrand = decodeURIComponent(producerMatch[1]).trim().toLowerCase();
+            }
+
+            function matchesActiveBrand(name, brandSlug) {
+                const n = name.toLowerCase();
+                const b = brandSlug.toLowerCase();
+                if (b === 'xiaomi') return n.includes('xiaomi') || n.includes('сяомі');
+                if (b === 'apple') return n.includes('apple') || n.includes('iphone') || n.includes('айфон');
+                if (b === 'samsung') return n.includes('samsung') || n.includes('самсунг');
+                if (b === 'hoco') return n.includes('hoco') || n.includes('хоко');
+                if (b === 'baseus') return n.includes('baseus') || n.includes('басеус') || n.includes('базеус');
+                if (b === 'ugreen') return n.includes('ugreen') || n.includes('югрін');
+                return n.includes(b);
+            }
+
             const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
             let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => {
                 // Товари мають бути виключно всередині головної сітки каталогу та не належати до рекомендаційних блоків
                 const isInsideCatalog = item.closest('.catalog-grid, #catalog-grid');
                 const isInsideRecommendations = item.closest('.recently-viewed, [class*="recommend"], [class*="similar"], [class*="popular"]');
-                return isInsideCatalog && !isInsideRecommendations;
+                if (!isInsideCatalog || isInsideRecommendations) return false;
+
+                // Перевірка на рекламні класи або статус промо
+                if (item.classList.contains('catalog-grid__cell_type_promo') || 
+                    item.classList.contains('goods-tile_state_promo') ||
+                    item.querySelector('.goods-tile_state_promo') ||
+                    item.closest('.catalog-grid__cell_type_promo') ||
+                    item.closest('.goods-tile_state_promo')) {
+                    return false;
+                }
+
+                // Перевірка відповідності бренду, якщо є активний фільтр
+                if (activeBrand) {
+                    const linkTag = item.tagName === 'A' ? item : item.querySelector('a[href*="/p"], a[href]');
+                    if (!linkTag) return false;
+                    const titleEl = item.querySelector('a.tile-title, a.goods-tile__heading, .goods-tile__heading, .tile-title, [class*="heading"], [class*="title"]') || linkTag;
+                    const name = titleEl && titleEl.innerText ? titleEl.innerText.trim() : '';
+                    if (name && !matchesActiveBrand(name, activeBrand)) {
+                        return false;
+                    }
+                }
+
+                return true;
             });
             
             if (items.length === 0) {
