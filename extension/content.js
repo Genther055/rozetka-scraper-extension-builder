@@ -247,7 +247,10 @@ if (window.self !== window.top) {
             return new Promise((resolve) => {
                 async function startWorker() {
                     while (index < totalToEnrich) {
-                        if (!(await checkIsRunning())) break;
+                        if (!(await checkIsRunning())) {
+                            resolve(lastSynced);
+                            break;
+                        }
                         const currentIdx = index++;
                         const product = productsToEnrich[currentIdx];
                         activeWorkers++;
@@ -297,11 +300,12 @@ if (window.self !== window.top) {
                                 estimatedTotal: getEstimatedTotalFromPage(),
                                 syncedCount: lastSynced
                             });
-                        }
-                    }
 
-                    if (activeWorkers === 0) {
-                        resolve(lastSynced);
+                            // Вирішуємо проміс тільки тоді, коли абсолютно всі товари оброблені та відправлені
+                            if (enrichedCount === totalToEnrich) {
+                                resolve(lastSynced);
+                            }
+                        }
                     }
                 }
 
