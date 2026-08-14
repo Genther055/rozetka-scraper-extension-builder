@@ -68,21 +68,30 @@ if (window.self !== window.top) {
         // Потрійний гарантований канал відправки (Direct Fetch + Background Worker)
         async function sendWebhookPayload(webhookUrl, payload) {
             let serverInfo = null;
-            const targets = [
-                'http://localhost:4000/api/products',
-                'http://127.0.0.1:4000/api/products'
-            ];
-            if (webhookUrl && !targets.includes(webhookUrl)) {
+            const targets = [];
+            if (webhookUrl) {
                 targets.push(webhookUrl);
             }
+            const local4000 = 'http://localhost:4000/api/products';
+            const local127 = 'http://127.0.0.1:4000/api/products';
+            if (!targets.includes(local4000)) targets.push(local4000);
+            if (!targets.includes(local127)) targets.push(local127);
 
-            for (const targetUrl of targets) {
+            // Виконуємо всі запити паралельно з таймаутом 3 секунди, щоб уникнути зависання
+            await Promise.all(targets.map(async (targetUrl) => {
                 try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
                     const res = await fetch(targetUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
+                        body: JSON.stringify(payload),
+                        signal: controller.signal
                     });
+
+                    clearTimeout(timeoutId);
+
                     if (res.ok) {
                         const data = await res.json();
                         if (data && typeof data.count === 'number') {
@@ -93,9 +102,9 @@ if (window.self !== window.top) {
                         }
                     }
                 } catch (e) {
-                    console.log('TradeScout: Target fetch failed for', targetUrl, e.message);
+                    // Мовчазне ігнорування недоступних хостів (наприклад, неактивного localhost)
                 }
-            }
+            }));
 
             safeSendMessage({
                 action: 'sendWebhook',
