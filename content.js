@@ -197,35 +197,15 @@ if (window.self !== window.top) {
         }
 
         async function smoothScroll() {
-            await new Promise((resolve) => {
-                const start = window.scrollY;
-                const target = document.body.scrollHeight - window.innerHeight;
-                if (target <= start) return resolve();
-                
-                const duration = 1500;
-                let startTime = null;
-                
-                function animation(currentTime) {
-                    if (startTime === null) startTime = currentTime;
-                    const timeElapsed = currentTime - startTime;
-                    const run = ease(timeElapsed, start, target - start, duration);
-                    window.scrollTo(0, run);
-                    
-                    if (timeElapsed < duration) {
-                        requestAnimationFrame(animation);
-                    } else {
-                        window.scrollTo(0, target);
-                        resolve();
-                    }
-                }
-                
-                function ease(t, b, c, d) {
-                    t /= d;
-                    return -c * t * (t - 2) + b;
-                }
-                
-                requestAnimationFrame(animation);
-            });
+            // Замість повного перемальовування всього екрану, плавно скролимо тільки до кнопки "Показати ще"
+            const showMoreBtn = findShowMoreButton();
+            if (showMoreBtn) {
+                console.log('TradeScout: Native smooth scroll to "Show more" button...');
+                showMoreBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                console.log('TradeScout: Native smooth scroll to end of page...');
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            }
             await new Promise(resolve => setTimeout(resolve, 800));
         }
 
@@ -322,6 +302,7 @@ if (window.self !== window.top) {
                                 scraped: sentLinks.size,
                                 total: sentLinks.size,
                                 statusMsg: statusMsg,
+                                percent: percentVal,
                                 estimatedTotal: getEstimatedTotalFromPage(),
                                 syncedCount: lastSynced
                             });
@@ -353,6 +334,7 @@ if (window.self !== window.top) {
                 scraped: sentLinks.size,
                 total: sentLinks.size,
                 statusMsg: startMsg,
+                percent: 0,
                 estimatedTotal: getEstimatedTotalFromPage()
             });
 
