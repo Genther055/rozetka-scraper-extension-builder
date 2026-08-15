@@ -87,7 +87,43 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
   }
 }
 
+const lastActivityFilePath = join(dataDir, 'last_activity.json');
+let lastDbUpdateTime = Date.now();
+if (existsSync(lastActivityFilePath)) {
+  try {
+    const raw = readFileSync(lastActivityFilePath, 'utf-8');
+    lastDbUpdateTime = JSON.parse(raw).timestamp || Date.now();
+  } catch (e) {
+    console.error('Error loading last_activity.json:', e);
+  }
+}
+
+function updateLastActivityTime() {
+  lastDbUpdateTime = Date.now();
+  try {
+    writeFileSync(lastActivityFilePath, JSON.stringify({ timestamp: lastDbUpdateTime }), 'utf-8');
+  } catch (e) {
+    console.error('Error saving last_activity.json:', e);
+  }
+}
+
+function checkAndCleanExpiredData() {
+  const threeHoursMs = 3 * 60 * 60 * 1000;
+  if (products.length > 0 && (Date.now() - lastDbUpdateTime > threeHoursMs)) {
+    console.log('[Backend] 3 hours of inactivity reached. Auto-clearing database products.');
+    products = [];
+    try {
+      const dataFilePath = join(join(import.meta.dirname, '../data'), 'products.json');
+      writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
+    } catch (e) {
+      console.error('Failed to write cleared products.json:', e);
+    }
+    updateLastActivityTime();
+  }
+}
+
 app.post('/api/products', (req, res) => {
+  checkAndCleanExpiredData();
   let newItems = req.body ? (req.body.products || req.body) : [];
   if (typeof newItems === 'string') {
     try {
@@ -187,6 +223,7 @@ app.post('/api/products', (req, res) => {
   const categoryCount = products.filter((p: any) => p && p.category === currentCategory).length;
 
   try {
+    updateLastActivityTime();
     writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
     res.json({ success: true, count: products.length, categoryCount: categoryCount });
   } catch (error: any) {
@@ -195,6 +232,7 @@ app.post('/api/products', (req, res) => {
 });
 
 app.get('/api/products', (req, res) => {
+  checkAndCleanExpiredData();
   res.json({ success: true, products });
 });
 
