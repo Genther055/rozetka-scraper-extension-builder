@@ -414,9 +414,23 @@ export class DashboardComponent implements OnInit {
 
   clearAllData() {
     if (confirm('Ви впевнені, що хочете видалити всі зібрані товари?')) {
+      this.loading = true;
+      // Миттєве очищення інтерфейсу для відгуку користувачу (опимістичний апдейт)
+      this.products = [];
+      this.applyFilters();
+      this.calculateMetrics();
+      this.cdr.markForCheck();
+
       this.http.post(`${this.apiUrl}/api/products/clear`, {})
-        .subscribe(() => {
-          this.loadProducts();
+        .subscribe({
+          next: () => {
+            this.loadProducts();
+          },
+          error: (err) => {
+            console.error('Failed to clear data:', err);
+            this.loading = false;
+            this.cdr.markForCheck();
+          }
         });
     }
   }
