@@ -203,12 +203,29 @@ export class DashboardComponent implements OnInit {
   }
 
   autoRefreshTimer: any;
+  lastActivityTime = Date.now();
+  isIdle = false;
+
+  onUserActivity = () => {
+    this.lastActivityTime = Date.now();
+    if (this.isIdle) {
+      this.isIdle = false;
+      this.loadProducts(true);
+      this.cdr.markForCheck();
+    }
+  };
 
   ngOnInit() {
     if (typeof window !== 'undefined') {
       this.loadProducts();
+
+      const activityEvents = ['mousemove', 'keydown', 'click', 'scroll'];
+      activityEvents.forEach(e => {
+        window.addEventListener(e, this.onUserActivity);
+      });
+
       this.autoRefreshTimer = setInterval(() => {
-        this.loadProducts(true);
+        this.checkAndRefresh();
       }, 3000);
     }
   }
@@ -217,6 +234,29 @@ export class DashboardComponent implements OnInit {
     if (this.autoRefreshTimer) {
       clearInterval(this.autoRefreshTimer);
     }
+    if (typeof window !== 'undefined') {
+      const activityEvents = ['mousemove', 'keydown', 'click', 'scroll'];
+      activityEvents.forEach(e => {
+        window.removeEventListener(e, this.onUserActivity);
+      });
+    }
+  }
+
+  checkAndRefresh() {
+    if (typeof document !== 'undefined' && document.hidden) {
+      return;
+    }
+
+    const idleLimit = 3 * 60 * 1000; // 3 хвилини
+    if (Date.now() - this.lastActivityTime > idleLimit) {
+      if (!this.isIdle) {
+        this.isIdle = true;
+        this.cdr.markForCheck();
+      }
+      return;
+    }
+
+    this.loadProducts(true);
   }
 
   loadProducts(silent = false) {

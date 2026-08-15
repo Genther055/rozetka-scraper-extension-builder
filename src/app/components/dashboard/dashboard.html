@@ -138,8 +138,10 @@
 
         <!-- Live status -->
         <div class="flex items-center gap-2 px-3.5 py-1.5 bg-[#121020] border border-[rgba(139,92,246,0.15)] rounded-full shadow-inner">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-          <span class="text-[10px] font-bold text-indigo-300 uppercase tracking-wide">Порт: {{ getPort() }}</span>
+          <span class="w-1.5 h-1.5 rounded-full" [class.bg-emerald-500]="!isIdle" [class.animate-ping]="!isIdle" [class.bg-amber-500]="isIdle"></span>
+          <span class="text-[10px] font-bold text-indigo-300 uppercase tracking-wide">
+            {{ isIdle ? 'Пауза автооновлення' : 'Порт: ' + getPort() }}
+          </span>
         </div>
         
         <button 
