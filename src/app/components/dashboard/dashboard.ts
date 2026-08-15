@@ -7,6 +7,8 @@ import {CommonModule} from '@angular/common';
 interface Product {
   name: string;
   price: number;
+  oldPrice?: number;
+  discount?: number;
   rating: number;
   reviews: number;
   link: string;
@@ -627,7 +629,7 @@ export class DashboardComponent implements OnInit {
     const dynamicKeys = Array.from(dynamicKeysSet);
 
     // 2. Формуємо заголовки колонок
-    const baseHeaders = ['Назва товару', 'Ціна (грн)', 'Рейтинг', 'Відгуки', 'Наявність', 'Продавець', 'Категорія'];
+    const baseHeaders = ['Назва товару', 'Ціна (грн)', 'Стара ціна (грн)', 'Знижка (%)', 'Рейтинг', 'Відгуки', 'Наявність', 'Продавець', 'Категорія'];
     const headers = [...baseHeaders, ...dynamicKeys, 'Опис товару', 'Посилання'];
 
     // 3. Генеруємо HTML-таблицю для Excel з гарними CSS стилями та авто-шириною
@@ -703,6 +705,8 @@ export class DashboardComponent implements OnInit {
       html += '<tr>';
       html += `<td>${displayName.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
       html += `<td class="price">${p.price || 0}</td>`;
+      html += `<td class="price">${p.oldPrice || p.price || 0}</td>`;
+      html += `<td class="rating">${p.discount ? p.discount + '%' : '0%'}</td>`;
       html += `<td class="rating">${p.rating || 0}</td>`;
       html += `<td class="reviews">${p.reviews || 0}</td>`;
       html += `<td class="${inStockClass}">${inStockText}</td>`;
