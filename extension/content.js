@@ -341,7 +341,7 @@ if (window.self !== window.top) {
             let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => !item.closest('.recently-viewed'));
             
             if (items.length === 0) {
-                const links = document.querySelectorAll('a[href*="/p"]');
+                const links = document.querySelectorAll('a[href*="/p/"], a[href*="/p-"]');
                 items = Array.from(links).map(l => l.closest('li, div, rz-catalog-tile, article, section') || l).filter(Boolean);
             }
 
