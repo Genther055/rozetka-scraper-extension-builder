@@ -615,11 +615,11 @@ export class DashboardComponent implements OnInit {
   }
 
   exportToExcel() {
-    if (this.products.length === 0) return;
+    if (this.filteredProducts.length === 0) return;
 
     // 1. Збираємо всі унікальні НАДІЙНО НОРМАЛІЗОВАНІ назви характеристик
     const dynamicKeysSet = new Set<string>();
-    this.products.forEach(p => {
+    this.filteredProducts.forEach(p => {
       const specsArr = this.getSpecsArray(p);
       specsArr.forEach(s => {
         const normKey = this.normalizeSpecKey(s.key);
@@ -686,7 +686,7 @@ export class DashboardComponent implements OnInit {
           <tbody>
     `;
 
-    this.products.forEach(p => {
+    this.filteredProducts.forEach(p => {
       const specsMap: Record<string, string> = {};
       this.getSpecsArray(p).forEach(s => {
         const normKey = this.normalizeSpecKey(s.key);
@@ -707,7 +707,7 @@ export class DashboardComponent implements OnInit {
       html += `<td class="price">${p.price || 0}</td>`;
       html += `<td class="price">${p.oldPrice || p.price || 0}</td>`;
       html += `<td class="rating">${p.discount ? p.discount + '%' : '0%'}</td>`;
-      html += `<td class="rating">${p.rating || 0}</td>`;
+      html += `<td style="mso-number-format:'\\@';" class="rating">${p.rating || 0}</td>`;
       html += `<td class="reviews">${p.reviews || 0}</td>`;
       html += `<td class="${inStockClass}">${inStockText}</td>`;
       html += `<td>${(p.seller || 'Rozetka').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
