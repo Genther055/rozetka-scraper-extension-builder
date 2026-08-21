@@ -6,7 +6,7 @@ import {
 } from '@angular/ssr/node';
 import express from 'express';
 import {join} from 'node:path';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { GoogleGenAI } from '@google/genai';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
@@ -18,14 +18,62 @@ if (!existsSync(dataDir)) {
   mkdirSync(dataDir, { recursive: true });
 }
 
-// Load initial products
-let products: any[] = [];
-if (existsSync(dataFilePath)) {
+const activeDbPath = join(dataDir, 'active_db.json');
+
+// Migrate legacy products.json to db_default.json
+const legacyFilePath = join(dataDir, 'products.json');
+const defaultDbPath = join(dataDir, 'db_default.json');
+if (existsSync(legacyFilePath) && !existsSync(defaultDbPath)) {
   try {
-    const raw = readFileSync(dataFilePath, 'utf-8');
-    products = JSON.parse(raw);
+    renameSync(legacyFilePath, defaultDbPath);
   } catch (e) {
-    console.error('Error loading products.json:', e);
+    console.error('Error migrating legacy products.json:', e);
+  }
+}
+
+function getActiveDbName(): string {
+  if (existsSync(activeDbPath)) {
+    try {
+      const data = JSON.parse(readFileSync(activeDbPath, 'utf-8'));
+      return data.active || 'default';
+    } catch (e) {
+      return 'default';
+    }
+  }
+  return 'default';
+}
+
+function getDbFilePath(name: string): string {
+  const safeName = name.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+  return join(dataDir, `db_${safeName}.json`);
+}
+
+function loadProductsOfActiveDb(): any[] {
+  const name = getActiveDbName();
+  const path = getDbFilePath(name);
+  if (existsSync(path)) {
+    try {
+      return JSON.parse(readFileSync(path, 'utf-8'));
+    } catch (e) {
+      return [];
+    }
+  }
+  // Initialize default database with empty array if it doesn't exist
+  if (name === 'default') {
+    try {
+      writeFileSync(path, JSON.stringify([], null, 2), 'utf-8');
+    } catch (e) {}
+  }
+  return [];
+}
+
+function saveProductsOfActiveDb(items: any[]) {
+  const name = getActiveDbName();
+  const path = getDbFilePath(name);
+  try {
+    writeFileSync(path, JSON.stringify(items, null, 2), 'utf-8');
+  } catch (e) {
+    console.error(`Failed to save database ${name}:`, e);
   }
 }
 
@@ -63,22 +111,12 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
       const sellerTitle = apiData.data?.[0]?.seller?.title;
       if (sellerTitle) {
         const cleanedSeller = sellerTitle.trim();
-        const dbPath = join(import.meta.dirname, '../data/products.json');
-        if (existsSync(dbPath)) {
-          const raw = readFileSync(dbPath, 'utf-8');
-          const currentProducts = JSON.parse(raw);
-          const index = currentProducts.findIndex((p: any) => p && p.link === normalizedLink);
-          if (index !== -1) {
-            currentProducts[index].seller = cleanedSeller;
-            writeFileSync(dbPath, JSON.stringify(currentProducts, null, 2), 'utf-8');
-            console.log(`[Backend Enriched] Successfully updated seller for ${normalizedLink} -> ${cleanedSeller}`);
-            
-            // Also update the in-memory array in server.ts
-            const memoryIndex = products.findIndex((p: any) => p && p.link === normalizedLink);
-            if (memoryIndex !== -1) {
-              products[memoryIndex].seller = cleanedSeller;
-            }
-          }
+        const activeProducts = loadProductsOfActiveDb();
+        const index = activeProducts.findIndex((p: any) => p && p.link === normalizedLink);
+        if (index !== -1) {
+          activeProducts[index].seller = cleanedSeller;
+          saveProductsOfActiveDb(activeProducts);
+          console.log(`[Backend Enriched] Successfully updated seller for ${normalizedLink} -> ${cleanedSeller}`);
         }
       }
     }
@@ -109,21 +147,17 @@ function updateLastActivityTime() {
 
 function checkAndCleanExpiredData() {
   const threeHoursMs = 3 * 60 * 60 * 1000;
-  if (products.length > 0 && (Date.now() - lastDbUpdateTime > threeHoursMs)) {
-    console.log('[Backend] 3 hours of inactivity reached. Auto-clearing database products.');
-    products = [];
-    try {
-      const dataFilePath = join(join(import.meta.dirname, '../data'), 'products.json');
-      writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
-    } catch (e) {
-      console.error('Failed to write cleared products.json:', e);
-    }
+  const activeProducts = loadProductsOfActiveDb();
+  if (activeProducts.length > 0 && (Date.now() - lastDbUpdateTime > threeHoursMs)) {
+    console.log('[Backend] 3 hours of inactivity reached. Auto-clearing active database.');
+    saveProductsOfActiveDb([]);
     updateLastActivityTime();
   }
 }
 
 app.post('/api/products', (req, res) => {
   checkAndCleanExpiredData();
+  const products = loadProductsOfActiveDb();
   let newItems = req.body ? (req.body.products || req.body) : [];
   if (typeof newItems === 'string') {
     try {
@@ -230,7 +264,7 @@ app.post('/api/products', (req, res) => {
 
   try {
     updateLastActivityTime();
-    writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
+    saveProductsOfActiveDb(products);
     res.json({ success: true, count: products.length, categoryCount: categoryCount });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -239,13 +273,14 @@ app.post('/api/products', (req, res) => {
 
 app.get('/api/products', (req, res) => {
   checkAndCleanExpiredData();
-  res.json({ success: true, products });
+  const products = loadProductsOfActiveDb();
+  res.json({ success: true, products, activeDb: getActiveDbName() });
 });
 
 app.post('/api/products/clear', (req, res) => {
-  products = [];
   try {
-    writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
+    saveProductsOfActiveDb([]);
+    updateLastActivityTime();
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -376,6 +411,7 @@ app.post('/api/products/analyze', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Product link is required' });
   }
 
+  const products = loadProductsOfActiveDb();
   const productItem = products.find(p => p && p.link === link) || {};
   let htmlContent = '';
   
@@ -442,7 +478,7 @@ ${htmlContent || 'No page content available.'}
         if (parsed.specs) {
           products[prodIndex].specs = parsed.specs;
         }
-        writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
+        saveProductsOfActiveDb(products);
       }
 
       return res.json({ success: true, status: parsed.status, verdict: parsed.verdict, specs: parsed.specs });
@@ -464,7 +500,7 @@ ${htmlContent || 'No page content available.'}
     if (auditResult.realSalesCount) {
       products[prodIndex].realSalesCount = auditResult.realSalesCount;
     }
-    writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
+    saveProductsOfActiveDb(products);
   }
 
   return res.json({
@@ -526,3 +562,103 @@ if (isMainModule(import.meta.url) || process.env['pm_id']) {
  * Request handler used by the Angular CLI (for dev-server and during build) or Firebase Cloud Functions.
  */
 export const reqHandler = createNodeRequestHandler(app);
+
+// Database Management API Endpoints
+app.get('/api/databases', (req, res) => {
+  const files = readdirSync(dataDir);
+  const dbFiles = files.filter(f => f.startsWith('db_') && f.endsWith('.json'));
+  const activeName = getActiveDbName();
+  
+  const dbs = dbFiles.map(file => {
+    const name = file.slice(3, -5); // remove 'db_' and '.json'
+    const filePath = join(dataDir, file);
+    let count = 0;
+    let mtime = Date.now();
+    try {
+      const stats = statSync(filePath);
+      mtime = stats.mtimeMs;
+      const raw = readFileSync(filePath, 'utf-8');
+      count = JSON.parse(raw).length || 0;
+    } catch (e) {}
+    
+    return {
+      name,
+      count,
+      lastModified: mtime,
+      isActive: name === activeName
+    };
+  });
+  
+  res.json({ success: true, databases: dbs, activeDb: activeName });
+});
+
+app.post('/api/databases/create', (req, res) => {
+  const { name } = req.body;
+  if (!name || typeof name !== 'string') {
+    res.status(400).json({ success: false, error: 'Database name is required' });
+    return;
+  }
+  const safeName = name.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+  if (safeName === 'active_db' || safeName === 'last_activity') {
+    res.status(400).json({ success: false, error: 'Invalid database name' });
+    return;
+  }
+  const filePath = join(dataDir, `db_${safeName}.json`);
+  if (existsSync(filePath)) {
+    res.status(400).json({ success: false, error: 'Database already exists' });
+    return;
+  }
+  try {
+    writeFileSync(filePath, JSON.stringify([], null, 2), 'utf-8');
+    res.json({ success: true, name: safeName });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/databases/select', (req, res) => {
+  const { name } = req.body;
+  if (!name || typeof name !== 'string') {
+    res.status(400).json({ success: false, error: 'Database name is required' });
+    return;
+  }
+  const safeName = name.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+  const filePath = join(dataDir, `db_${safeName}.json`);
+  if (!existsSync(filePath)) {
+    res.status(404).json({ success: false, error: 'Database not found' });
+    return;
+  }
+  try {
+    writeFileSync(activeDbPath, JSON.stringify({ active: safeName }), 'utf-8');
+    res.json({ success: true, activeDb: safeName });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/databases/delete', (req, res) => {
+  const { name } = req.body;
+  if (!name || typeof name !== 'string') {
+    res.status(400).json({ success: false, error: 'Database name is required' });
+    return;
+  }
+  const safeName = name.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+  if (safeName === 'default') {
+    res.status(400).json({ success: false, error: 'Cannot delete default database' });
+    return;
+  }
+  const filePath = join(dataDir, `db_${safeName}.json`);
+  if (!existsSync(filePath)) {
+    res.status(404).json({ success: false, error: 'Database not found' });
+    return;
+  }
+  try {
+    unlinkSync(filePath);
+    if (getActiveDbName() === safeName) {
+      writeFileSync(activeDbPath, JSON.stringify({ active: 'default' }), 'utf-8');
+    }
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});

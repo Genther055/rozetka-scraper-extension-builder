@@ -35,6 +35,11 @@ interface Product {
 export class DashboardComponent implements OnInit {
   categoryFilter = 'all';
   uniqueCategories: string[] = [];
+  databases: { name: string; count: number; lastModified: number; isActive: boolean }[] = [];
+  activeDb = 'default';
+  showNewDbModal = false;
+  newDbName = '';
+  dbError = '';
   apiUrl: string = typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? 'http://localhost:4000'
     : 'https://rozetka-scraper-extension-builder.onrender.com';
@@ -211,6 +216,7 @@ export class DashboardComponent implements OnInit {
   ngOnInit() {
     if (typeof window !== 'undefined') {
       this.loadProducts();
+      this.loadDatabases();
       this.autoRefreshTimer = setInterval(() => {
         this.loadProducts(true);
       }, 3000);
@@ -233,6 +239,7 @@ export class DashboardComponent implements OnInit {
             this.uniqueCategories = Array.from(new Set(this.products.map(p => p.category || 'Загальна').filter(Boolean)));
             this.applyFilters();
             this.calculateMetrics();
+            this.loadDatabases();
           }
           if (!silent) this.loading = false;
           this.cdr.markForCheck();
@@ -415,6 +422,71 @@ export class DashboardComponent implements OnInit {
 
   onFilterChange() {
     this.applyFilters();
+  }
+
+  loadDatabases() {
+    this.http.get<{ success: boolean; databases: any[]; activeDb: string }>(`${this.apiUrl}/api/databases`)
+      .subscribe({
+        next: (res) => {
+          if (res.success) {
+            this.databases = res.databases || [];
+            this.activeDb = res.activeDb || 'default';
+          }
+        }
+      });
+  }
+
+  selectDatabase(name: string) {
+    this.http.post<{ success: boolean; activeDb: string }>(`${this.apiUrl}/api/databases/select`, { name })
+      .subscribe({
+        next: (res) => {
+          if (res.success) {
+            this.activeDb = res.activeDb;
+            this.loadProducts(false);
+            this.loadDatabases();
+          }
+        }
+      });
+  }
+
+  createDatabase() {
+    if (!this.newDbName.trim()) return;
+    this.dbError = '';
+    const cleanName = this.newDbName.trim().replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+    this.http.post<{ success: boolean; name: string }>(`${this.apiUrl}/api/databases/create`, { name: cleanName })
+      .subscribe({
+        next: (res) => {
+          if (res.success) {
+            this.newDbName = '';
+            this.showNewDbModal = false;
+            this.selectDatabase(res.name);
+          }
+        },
+        error: (err) => {
+          this.dbError = err.error?.error || 'Помилка створення бази';
+        }
+      });
+  }
+
+  deleteDatabase(name: string, event: Event) {
+    event.stopPropagation();
+    if (name === 'default') {
+      alert('Неможливо видалити стандартну базу даних!');
+      return;
+    }
+    if (confirm(`Ви впевнені, що хочете видалити базу "${name}"? Усі дані в ній будуть втрачені назавжди!`)) {
+      this.http.post<{ success: boolean }>(`${this.apiUrl}/api/databases/delete`, { name })
+        .subscribe({
+          next: (res) => {
+            if (res.success) {
+              this.loadDatabases();
+              if (this.activeDb === name) {
+                this.selectDatabase('default');
+              }
+            }
+          }
+        });
+    }
   }
 
   onCategoryFilterChange() {
