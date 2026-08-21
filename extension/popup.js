@@ -106,8 +106,6 @@ async function initPopup() {
                 resetState[`isRunning_${currentTabId}`] = false;
                 await chrome.storage.local.set(resetState);
             }
-
-        const isRunning = state[`isRunning_${currentTabId}`] || false;
         const totalScraped = state[`totalScraped_${currentTabId}`] || 0;
         const currentPage = state[`currentPage_${currentTabId}`] || 1;
         const startTimeVal = state[`startTime_${currentTabId}`] || null;
