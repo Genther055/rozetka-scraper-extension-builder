@@ -41,14 +41,28 @@ const defaultDbPath = join(dataDir, 'db_default.json');
 
 if (existsSync(legacyFilePath) && !existsSync(defaultDbPath)) {
   try {
-    renameSync(legacyFilePath, defaultDbPath);
+    try {
+      renameSync(legacyFilePath, defaultDbPath);
+    } catch (renameErr) {
+      // Fallback if renaming across mount points (EXDEV)
+      const data = readFileSync(legacyFilePath, 'utf-8');
+      writeFileSync(defaultDbPath, data, 'utf-8');
+      try { unlinkSync(legacyFilePath); } catch (e) {}
+    }
   } catch (e) {
     console.error('Error migrating legacy products.json:', e);
   }
 }
 if (existsSync(legacyDefaultDbPath) && !existsSync(defaultDbPath)) {
   try {
-    renameSync(legacyDefaultDbPath, defaultDbPath);
+    try {
+      renameSync(legacyDefaultDbPath, defaultDbPath);
+    } catch (renameErr) {
+      // Fallback if renaming across mount points (EXDEV)
+      const data = readFileSync(legacyDefaultDbPath, 'utf-8');
+      writeFileSync(defaultDbPath, data, 'utf-8');
+      try { unlinkSync(legacyDefaultDbPath); } catch (e) {}
+    }
   } catch (e) {
     console.error('Error migrating legacy db_default.json:', e);
   }
