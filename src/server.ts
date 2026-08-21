@@ -10,9 +10,13 @@ import {fileURLToPath} from 'node:url';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { GoogleGenAI } from '@google/genai';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const browserDistFolder = process.env['VERCEL'] === '1' ? '' : join(__dirname, '../browser');
+let currentDirname = '';
+try {
+  currentDirname = __dirname;
+} catch (e) {
+  currentDirname = dirname(fileURLToPath(import.meta.url));
+}
+const browserDistFolder = process.env['VERCEL'] === '1' ? '' : join(currentDirname, '../browser');
 let dataDir = join(process.cwd(), 'database_store');
 
 // Спроба створити папку локально. Якщо файлова система read-only (як на Vercel), використовуємо /tmp
@@ -613,7 +617,8 @@ app.use((req, res, next) => {
 /**
  * Start the server if this module is the main entry point, or it is ran via PM2.
  */
-if (isMainModule(import.meta.url) || process.env['pm_id']) {
+const metaUrl = typeof import.meta !== 'undefined' ? import.meta.url : '';
+if ((metaUrl && isMainModule(metaUrl)) || process.env['pm_id']) {
   const port = Number(process.env['PORT']) || 4000;
   app.listen(port, '0.0.0.0', (error?: any) => {
     if (error) {
