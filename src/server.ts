@@ -5,11 +5,14 @@ import {
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
 import express from 'express';
-import {join} from 'node:path';
+import {join, dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { GoogleGenAI } from '@google/genai';
 
-const browserDistFolder = join(import.meta.dirname, '../browser');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const browserDistFolder = join(__dirname, '../browser');
 const dataDir = join(process.cwd(), 'database_store');
 const dataFilePath = join(dataDir, 'products.json');
 
