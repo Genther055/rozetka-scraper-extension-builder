@@ -403,13 +403,22 @@ if (window.self !== window.top) {
             
             // Видаляємо наявні сегменти пагінації /page=X/
             path = path.replace(/\/page=\d+\/?/, '/');
-            if (!path.endsWith('/')) {
-                path += '/';
-            }
             
             // Додаємо сегмент нової сторінки
             if (pageIndex > 1) {
-                path += `page=${pageIndex}/`;
+                // На Rozetka сегмент /page=X/ має йти відразу після ID категорії /cXXXXX/
+                const catMatch = path.match(/\/c\d+\/?/);
+                if (catMatch) {
+                    const catSegment = catMatch[0]; // Наприклад: "/c4675061/"
+                    const insertIdx = path.indexOf(catSegment) + catSegment.length;
+                    path = path.slice(0, insertIdx) + `page=${pageIndex}/` + path.slice(insertIdx);
+                } else {
+                    // Фолбек для сторінок пошуку та ін.
+                    if (!path.endsWith('/')) {
+                        path += '/';
+                    }
+                    path += `page=${pageIndex}/`;
+                }
             }
             
             urlObj.pathname = path;
