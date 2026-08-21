@@ -12,7 +12,7 @@ import { GoogleGenAI } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const browserDistFolder = join(__dirname, '../browser');
+const browserDistFolder = process.env['VERCEL'] === '1' ? '' : join(__dirname, '../browser');
 let dataDir = join(process.cwd(), 'database_store');
 
 // Спроба створити папку локально. Якщо файлова система read-only (як на Vercel), використовуємо /tmp
@@ -539,18 +539,23 @@ ${htmlContent || 'No page content available.'}
   });
 });
 
-const angularApp = new AngularNodeAppEngine();
+let angularApp: any = null;
+const isVercel = process.env['VERCEL'] === '1';
 
-/**
- * Serve static files from /browser
- */
-app.use(
-  express.static(browserDistFolder, {
-    maxAge: '1y',
-    index: false,
-    redirect: false,
-  }),
-);
+if (!isVercel) {
+  angularApp = new AngularNodeAppEngine();
+
+  /**
+   * Serve static files from /browser
+   */
+  app.use(
+    express.static(browserDistFolder, {
+      maxAge: '1y',
+      index: false,
+      redirect: false,
+    }),
+  );
+}
 
 /**
  * Handle API 404s cleanly without passing to Angular SSR engine
@@ -663,9 +668,12 @@ app.use('/api', (req, res) => {
  * Handle all other requests by rendering the Angular application.
  */
 app.use((req, res, next) => {
+  if (isVercel) {
+    return next();
+  }
   angularApp
     .handle(req)
-    .then((response) =>
+    .then((response: any) =>
       response ? writeResponseToNodeResponse(response, res) : next(),
     )
     .catch(next);
