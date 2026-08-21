@@ -116,7 +116,7 @@ async function initPopup() {
         const syncedCount = state[`syncedCount_${currentTabId}`] || 0;
         const targetDb = state[`targetDb_${currentTabId}`] || '';
 
-        if (state.webhookUrl) {
+        if (state.webhookUrl && !state.webhookUrl.includes('localhost') && !state.webhookUrl.includes('127.0.0.1')) {
             inputWebhook.value = state.webhookUrl;
         } else {
             inputWebhook.value = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
