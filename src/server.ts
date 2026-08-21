@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, readdir
 import { GoogleGenAI } from '@google/genai';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
-const dataDir = join(process.cwd(), 'data');
+const dataDir = join(process.cwd(), 'database_store');
 const dataFilePath = join(dataDir, 'products.json');
 
 // Ensure data folder exists
@@ -20,14 +20,28 @@ if (!existsSync(dataDir)) {
 
 const activeDbPath = join(dataDir, 'active_db.json');
 
-// Migrate legacy products.json to db_default.json
-const legacyFilePath = join(dataDir, 'products.json');
+// Ensure database_store exists
+if (!existsSync(dataDir)) {
+  mkdirSync(dataDir, { recursive: true });
+}
+
+// Migrate legacy products.json to db_default.json inside database_store
+const legacyFilePath = join(process.cwd(), 'data/products.json');
+const legacyDefaultDbPath = join(process.cwd(), 'data/db_default.json');
 const defaultDbPath = join(dataDir, 'db_default.json');
+
 if (existsSync(legacyFilePath) && !existsSync(defaultDbPath)) {
   try {
     renameSync(legacyFilePath, defaultDbPath);
   } catch (e) {
     console.error('Error migrating legacy products.json:', e);
+  }
+}
+if (existsSync(legacyDefaultDbPath) && !existsSync(defaultDbPath)) {
+  try {
+    renameSync(legacyDefaultDbPath, defaultDbPath);
+  } catch (e) {
+    console.error('Error migrating legacy db_default.json:', e);
   }
 }
 
