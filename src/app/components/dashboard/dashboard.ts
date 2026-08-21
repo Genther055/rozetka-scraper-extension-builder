@@ -452,7 +452,7 @@ export class DashboardComponent implements OnInit {
   createDatabase() {
     if (!this.newDbName.trim()) return;
     this.dbError = '';
-    const cleanName = this.newDbName.trim().replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+    const cleanName = this.newDbName.trim().replace(/[\\/:*?"<>|]/g, '_');
     this.http.post<{ success: boolean; name: string }>(`${this.apiUrl}/api/databases/create`, { name: cleanName })
       .subscribe({
         next: (res) => {

@@ -546,41 +546,6 @@ app.use(
 /**
  * Handle API 404s cleanly without passing to Angular SSR engine
  */
-app.use('/api', (req, res) => {
-  res.status(404).json({ error: 'API endpoint not found' });
-});
-
-/**
- * Handle all other requests by rendering the Angular application.
- */
-app.use((req, res, next) => {
-  angularApp
-    .handle(req)
-    .then((response) =>
-      response ? writeResponseToNodeResponse(response, res) : next(),
-    )
-    .catch(next);
-});
-
-/**
- * Start the server if this module is the main entry point, or it is ran via PM2.
- */
-if (isMainModule(import.meta.url) || process.env['pm_id']) {
-  const port = Number(process.env['PORT']) || 4000;
-  app.listen(port, '0.0.0.0', (error?: any) => {
-    if (error) {
-      throw error;
-    }
-
-    console.log(`Node Express server listening on http://localhost:${port}`);
-  });
-}
-
-/**
- * Request handler used by the Angular CLI (for dev-server and during build) or Firebase Cloud Functions.
- */
-export const reqHandler = createNodeRequestHandler(app);
-
 // Database Management API Endpoints
 app.get('/api/databases', (req, res) => {
   const files = readdirSync(dataDir);
@@ -680,3 +645,39 @@ app.post('/api/databases/delete', (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 });
+
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'API endpoint not found' });
+});
+
+/**
+ * Handle all other requests by rendering the Angular application.
+ */
+app.use((req, res, next) => {
+  angularApp
+    .handle(req)
+    .then((response) =>
+      response ? writeResponseToNodeResponse(response, res) : next(),
+    )
+    .catch(next);
+});
+
+/**
+ * Start the server if this module is the main entry point, or it is ran via PM2.
+ */
+if (isMainModule(import.meta.url) || process.env['pm_id']) {
+  const port = Number(process.env['PORT']) || 4000;
+  app.listen(port, '0.0.0.0', (error?: any) => {
+    if (error) {
+      throw error;
+    }
+
+    console.log(`Node Express server listening on http://localhost:${port}`);
+  });
+}
+
+/**
+ * Request handler used by the Angular CLI (for dev-server and during build) or Firebase Cloud Functions.
+ */
+export const reqHandler = createNodeRequestHandler(app);
+
