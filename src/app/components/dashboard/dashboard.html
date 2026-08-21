@@ -1183,11 +1183,11 @@
       </div>
       
       <div>
-        <label class="block text-[11px] font-semibold text-slate-400 mb-2">Введіть назву (англійські літери, цифри):</label>
+        <label class="block text-[11px] font-semibold text-slate-400 mb-2">Введіть назву (будь-якою мовою):</label>
         <input 
           type="text" 
           [(ngModel)]="newDbName" 
-          placeholder="Наприклад: stylers_august" 
+          placeholder="Наприклад: Павербанки" 
           class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 focus:border-indigo-500 rounded-xl text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-medium"
         >
         <p *ngIf="dbError" class="text-xs text-red-400 mt-2 font-semibold">{{ dbError }}</p>
