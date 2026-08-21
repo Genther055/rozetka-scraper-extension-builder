@@ -5,6 +5,12 @@ const LOCAL_DASHBOARD_API = 'http://localhost:4000/api/products';
 const LOCAL_IP_API = 'http://127.0.0.1:4000/api/products';
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'getTabId') {
+        const tabId = sender.tab ? sender.tab.id : null;
+        sendResponse({ tabId });
+        return false;
+    }
+
     if (message.action === 'sendWebhook') {
         const { webhookUrl, payload } = message;
         const itemCount = payload?.products?.length || 0;

@@ -4,16 +4,62 @@ if (window.self !== window.top) {
 } else {
     console.log('TradeScout Content Script loaded in main page.');
 
-    chrome.storage.local.get(['isRunning', 'webhookUrl', 'targetDb'], async (state) => {
+    // Запитуємо ID поточної вкладки у background script для ізоляції стану
+    chrome.runtime.sendMessage({ action: 'getTabId' }, async (response) => {
+        const tabId = response ? response.tabId : null;
+        if (!tabId) {
+            console.error('TradeScout: Failed to resolve tab ID, exiting.');
+            return;
+        }
+
+        console.log(`TradeScout: Initialized with Tab ID ${tabId}`);
+
+        // Помічники для збереження ізольованого стану в chrome.storage.local
+        function getTabKey(key) {
+            return `${key}_${tabId}`;
+        }
+
+        function getStorageState(keys) {
+            return new Promise(resolve => {
+                const mappedKeys = keys.map(k => k === 'webhookUrl' ? 'webhookUrl' : getTabKey(k));
+                chrome.storage.local.get(mappedKeys, (res) => {
+                    const mappedResult = {};
+                    keys.forEach(k => {
+                        if (k === 'webhookUrl') {
+                            mappedResult[k] = res[k];
+                        } else {
+                            mappedResult[k] = res[getTabKey(k)];
+                        }
+                    });
+                    resolve(mappedResult);
+                });
+            });
+        }
+
+        function setStorageState(stateObj) {
+            return new Promise(resolve => {
+                const mappedState = {};
+                Object.keys(stateObj).forEach(k => {
+                    if (k === 'webhookUrl') {
+                        mappedState[k] = stateObj[k];
+                    } else {
+                        mappedState[getTabKey(k)] = stateObj[k];
+                    }
+                });
+                chrome.storage.local.set(mappedState, () => resolve());
+            });
+        }
+
+        const state = await getStorageState(['isRunning', 'webhookUrl', 'targetDb']);
         if (!state.isRunning) {
             return;
         }
-        
+
         const categoryEl = document.querySelector('h1, .breadcrumbs__last');
         const pageCategory = categoryEl && categoryEl.innerText ? categoryEl.innerText.trim() : 'Загальна';
         const targetDbName = state.targetDb || pageCategory;
 
-        console.log('TradeScout: Scraper ACTIVE! Starting item extraction...');
+        console.log(`TradeScout: Scraper ACTIVE! Target session tab name: ${targetDbName}`);
 
         function safeSendMessage(msg) {
             try {
@@ -24,12 +70,11 @@ if (window.self !== window.top) {
         }
 
         async function checkIsRunning() {
-            return new Promise(resolve => {
-                chrome.storage.local.get(['isRunning'], (res) => resolve(!!res.isRunning));
-            });
+            const res = await getStorageState(['isRunning']);
+            return !!res.isRunning;
         }
 
-        function getEstimatedTotalFromPage() {
+        function getEstimatedTotalFromPage(doc = document) {
             const selectors = [
                 '.catalog-heading__goods', 
                 '.catalog-selection__label',
@@ -39,10 +84,10 @@ if (window.self !== window.top) {
             ];
             for (const sel of selectors) {
                 try {
-                    const el = document.querySelector(sel);
+                    const el = doc.querySelector(sel);
                     if (el) {
                         const txt = el.textContent || '';
-                        const match = txt.replace(/\s/g, '').match(/\d+/);
+                        const match = txt.replace(/s/g, '').match(/d+/);
                         if (match) return parseInt(match[0]);
                     }
                 } catch (e) {}
@@ -50,284 +95,169 @@ if (window.self !== window.top) {
             return 155;
         }
 
-        // Детектор рекламних вставок за точною міткою Rozetka ("Реклама")
-        function isSponsoredTile(item) {
-            const itemText = item.innerText || '';
-            if (itemText.includes('Реклама') || itemText.includes('Спонсор') || itemText.includes('Рекламний')) {
-                return true;
-            }
-            const spans = item.querySelectorAll('span, rz-tile-info, [class*="tile-info"], [class*="badge"]');
-            for (const s of spans) {
-                const txt = (s.innerText || '').trim().toLowerCase();
-                if (txt === 'реклама' || txt.startsWith('реклама') || txt === 'спонсор') {
-                    return true;
-                }
-            }
-            if (item.querySelector('.goods-tile__badge_type_promo, [class*="sponsored"], [class*="advertising"], .promo-tile')) {
-                return true;
-            }
-            return false;
-        }
-
-        // Потрійний гарантований канал відправки (Direct Fetch + Background Worker)
-        async function sendWebhookPayload(webhookUrl, payload) {
-            payload.database = targetDbName;
-            let serverInfo = null;
-            const targets = [];
-            if (webhookUrl) {
-                targets.push(webhookUrl);
-            }
-            const local4000 = 'http://localhost:4000/api/products';
-            const local127 = 'http://127.0.0.1:4000/api/products';
-            if (!targets.includes(local4000)) targets.push(local4000);
-            if (!targets.includes(local127)) targets.push(local127);
-
-            // Виконуємо всі запити паралельно з таймаутом 3 секунди, щоб уникнути зависання
-            await Promise.all(targets.map(async (targetUrl) => {
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-                    const res = await fetch(targetUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
-                        signal: controller.signal
-                    });
-
-                    clearTimeout(timeoutId);
-
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data && typeof data.count === 'number') {
-                            serverInfo = {
-                                count: data.count,
-                                categoryCount: data.categoryCount || data.count
-                            };
-                        }
-                    }
-                } catch (e) {
-                    // Мовчазне ігнорування недоступних хостів (наприклад, неактивного localhost)
-                }
-            }));
-
-            safeSendMessage({
-                action: 'sendWebhook',
-                webhookUrl: webhookUrl || 'http://localhost:4000/api/products',
-                payload: payload
-            });
-
-            return serverInfo;
-        }
-
-        // Глибокий витягувач опису та характеристики з картки товару через DOMParser
-        async function fetchDetailForProduct(product) {
-            if (!product.link) return;
-            try {
-                const charUrl = product.link.endsWith('/') ? `${product.link}characteristics/` : `${product.link}/characteristics/`;
-                const res = await fetch(charUrl);
-                if (!res.ok) return;
-                const htmlText = await res.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlText, 'text/html');
-
-                // 1. Повний текстовий опис товару від продавця
-                const descEl = doc.querySelector('.product-about__description, [class*="description-content"], .rz-product-description, [data-testid="description"]');
-                if (descEl) {
-                    const cleanDesc = descEl.innerText.trim();
-                    if (cleanDesc && cleanDesc.length > 15) {
-                        product.description = cleanDesc;
-                    }
-                }
-
-                // 2. Повна таблиця характеристик товару
-                const specsList = [];
-                const specsMap = {};
-
-                const dts = Array.from(doc.querySelectorAll('dt, .characteristics-full__label, [class*="characteristics"] [class*="label"], [class*="characteristics"] [class*="name"]'));
-                dts.forEach(dt => {
-                    const dd = dt.nextElementSibling || dt.parentElement.querySelector('dd, .characteristics-full__value, [class*="characteristics"] [class*="value"]');
-                    const k = dt.innerText ? dt.innerText.trim() : '';
-                    const v = dd && dd.innerText ? dd.innerText.trim() : '';
-                    if (k && v && k.length > 1 && v.length > 0) {
-                        specsMap[k] = v;
-                        specsList.push(`${k}: ${v}`);
-                    }
-                });
-
-                if (specsList.length > 0) {
-                    product.specs = specsList.join('; ');
-                    product.detailedSpecsMap = specsMap;
-                }
-            } catch (err) {
-                console.log('TradeScout: Detail fetch skipped for', product.name);
-            }
-        }
-
-        async function waitForCatalog() {
-            for (let i = 0; i < 20; i++) {
-                const items = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], a[href*="/p"]');
-                if (items.length > 0) {
-                    console.log(`TradeScout: Catalog ready! Found ${items.length} potential items on DOM.`);
-                    return true;
-                }
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
-            return false;
-        }
-
-        async function smoothScroll() {
-            // Безпечний миттєвий скрол для фонових вкладок (запобігає зависанню requestAnimationFrame)
-            const target = document.body.scrollHeight - window.innerHeight;
-            window.scrollTo(0, target);
-            // Коротка пауза для підвантаження контенту браузером
-            await new Promise(resolve => setTimeout(resolve, 800));
-        }
-
-        const webhookUrl = state.webhookUrl;
         const sentLinks = new Set();
-        
-        // Черга та керування фоновим завантаженням деталей
-        const detailsQueue = [];
-        let activeEnrichmentThreads = 0;
-        const MAX_CONCURRENT_ENRICHMENTS = 5;
-        let totalEnrichCount = 0;
-        let processedEnrichCount = 0;
-
         const alreadyEnrichedLinks = new Set();
-        let alreadyEnrichedLoaded = false;
+        let syncedCountVal = 0;
+
+        async function sendWebhookPayload(webhookUrl, payload) {
+            payload.database = targetDbName; // Завжди маркуємо товари назвою вкладки (сесії)
+            
+            try {
+                // Відправляємо на локальну платформу (через background script для обходу CORS)
+                const res = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({
+                        action: 'sendWebhook',
+                        webhookUrl: webhookUrl,
+                        payload: payload
+                    }, (response) => {
+                        resolve(response);
+                    });
+                });
+                return res;
+            } catch (e) {
+                console.error('TradeScout Webhook Error:', e);
+                return null;
+            }
+        }
 
         async function loadAlreadyEnrichedLinks(webhookUrl) {
-            if (alreadyEnrichedLoaded) return;
             try {
-                const baseUrl = webhookUrl.replace('/api/products', '');
-                const res = await fetch(`${baseUrl}/api/products`);
+                // Отримуємо з бекенду список товарів, що вже пройшли аудит, щоб не скрапити їх опис по колу
+                const productsUrl = webhookUrl.replace('/products', '/products'); 
+                const res = await fetch(productsUrl);
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.products) {
                         data.products.forEach(p => {
-                            if (p.link && p.specs && p.specs !== 'Стандартні' && p.specs !== '') {
-                                alreadyEnrichedLinks.add(p.link.split('?')[0].split('#')[0]);
+                            if (p && p.link) {
+                                const normLink = p.link.split('?')[0].split('#')[0];
+                                if (p.specs && p.specs !== 'Стандартні' && p.specs !== 'Стандарт') {
+                                    alreadyEnrichedLinks.add(normLink);
+                                }
                             }
                         });
-                        console.log(`TradeScout: Loaded ${alreadyEnrichedLinks.size} already enriched links from database.`);
+                        console.log(`TradeScout: Loaded ${alreadyEnrichedLinks.size} already enriched links from DB.`);
                     }
                 }
-            } catch (err) {
-                console.log('TradeScout: Failed to load already enriched links, will enrich all.', err);
+            } catch (e) {
+                console.warn('TradeScout: Failed to load cached database products, will enrich all items.', e.message);
             }
-            alreadyEnrichedLoaded = true;
         }
 
-        // Буфер пакетної відправки збагачених товарів
-        let enrichedBuffer = [];
-        let bufferTimeout = null;
-
-        async function flushEnrichedBuffer() {
-            if (enrichedBuffer.length === 0) return null;
-            const batch = [...enrichedBuffer];
-            enrichedBuffer = [];
-            if (bufferTimeout) {
-                clearTimeout(bufferTimeout);
-                bufferTimeout = null;
+        function isSponsoredTile(item) {
+            const sponsoredText = item.querySelector('.promo-label, [class*="promo"], .goods-tile__label_type_promo');
+            if (sponsoredText) return true;
+            
+            const advertisementTag = item.querySelector('span.goods-tile__label');
+            if (advertisementTag && (advertisementTag.innerText.toLowerCase().includes('реклама') || advertisementTag.innerText.toLowerCase().includes('реклама'))) {
+                return true;
             }
-            return await sendWebhookPayload(webhookUrl, { 
-                products: batch, 
-                page: 1, 
-                skipBackgroundEnrichment: true, 
-                isEnriched: true 
-            });
+            return false;
         }
 
-        // Фоновий пул завантаження деталей
+        // Черга та пули потоків для фонового збагачення описами (Enrichment)
+        const detailsQueue = [];
+        const MAX_CONCURRENT_THREAD = 6;
+        let activeEnrichmentThreads = 0;
+        let totalEnrichedCount = 0;
+        let totalEnrichCount = 0;
+
         async function processDetailsQueue() {
-            if (activeEnrichmentThreads >= MAX_CONCURRENT_ENRICHMENTS) return;
+            if (activeEnrichmentThreads >= MAX_CONCURRENT_THREAD || detailsQueue.length === 0) {
+                return;
+            }
 
-            while (detailsQueue.length > 0 && activeEnrichmentThreads < MAX_CONCURRENT_ENRICHMENTS) {
-                if (!(await checkIsRunning())) break;
+            activeEnrichmentThreads++;
+            const product = detailsQueue.shift();
 
-                const product = detailsQueue.shift();
-                activeEnrichmentThreads++;
+            try {
+                await fetchProductDetails(product, state.webhookUrl);
+            } catch (e) {
+                console.warn('Details enrichment error for product:', product.name, e);
+            } finally {
+                activeEnrichmentThreads--;
+                totalEnrichedCount++;
 
-                await new Promise(r => setTimeout(r, 100));
-
-                fetchDetailForProduct(product).then(async () => {
-                    activeEnrichmentThreads--;
-                    processedEnrichCount++;
-
-                    enrichedBuffer.push(product);
+                // Оновлюємо статус прогресу збагачення
+                const isRunning = await checkIsRunning();
+                if (isRunning) {
+                    const statusStr = `Скрапінг: Збагачено деталей ${totalEnrichedCount}/${totalEnrichCount}...`;
+                    const estimatedTotal = getEstimatedTotalFromPage();
+                    const percentVal = Math.min(99, Math.round((sentLinks.size / estimatedTotal) * 100));
                     
-                    let serverInfo = null;
-                    if (enrichedBuffer.length >= 15) {
-                        serverInfo = await flushEnrichedBuffer();
-                    } else {
-                        if (bufferTimeout) clearTimeout(bufferTimeout);
-                        bufferTimeout = setTimeout(async () => {
-                            serverInfo = await flushEnrichedBuffer();
-                            if (serverInfo) {
-                                chrome.storage.local.set({ syncedCount: serverInfo.categoryCount });
-                                safeSendMessage({
-                                    action: 'progress',
-                                    page: 1,
-                                    scraped: processedEnrichCount,
-                                    total: processedEnrichCount,
-                                    statusMsg: `Фонове збагачення деталей: ${processedEnrichCount}/${totalEnrichCount} товарів...`,
-                                    estimatedTotal: totalEnrichCount,
-                                    syncedCount: serverInfo.categoryCount
-                                });
-                            }
-                        }, 1500);
-                    }
-
-                    // Отримуємо актуальний лічильник з сервера або вираховуємо приблизний
-                    chrome.storage.local.get(['syncedCount'], (res) => {
-                        const baseSynced = res.syncedCount || 0;
-                        const currentSynced = serverInfo ? serverInfo.categoryCount : Math.max(baseSynced, processedEnrichCount);
-                        
-                        const percentVal = totalEnrichCount > 0 ? Math.round((processedEnrichCount / totalEnrichCount) * 100) : 100;
-                        const statusMsg = `Фонове збагачення деталей: ${processedEnrichCount}/${totalEnrichCount} товарів...`;
-                        
-                        chrome.storage.local.set({
-                            totalScraped: processedEnrichCount,
-                            percentProgress: percentVal,
-                            statusMsg: statusMsg,
-                            syncedCount: currentSynced
-                        });
-
-                        safeSendMessage({
-                            action: 'progress',
-                            page: 1,
-                            scraped: processedEnrichCount,
-                            total: processedEnrichCount,
-                            statusMsg: statusMsg,
-                            estimatedTotal: totalEnrichCount,
-                            syncedCount: currentSynced
-                        });
+                    await setStorageState({
+                        statusMsg: statusStr,
+                        percentProgress: percentVal
                     });
 
-                    processDetailsQueue();
-                }).catch(() => {
-                    activeEnrichmentThreads--;
-                    processedEnrichCount++;
-                    processDetailsQueue();
-                });
+                    safeSendMessage({
+                        action: 'status',
+                        statusMsg: statusStr,
+                        percent: percentVal,
+                        total: sentLinks.size,
+                        estimatedTotal: estimatedTotal,
+                        syncedCount: syncedCountVal
+                    });
+                }
+
+                // Запускаємо наступний потік
+                processDetailsQueue();
             }
         }
 
-        async function scrapeAndSendNewProducts(webhookUrl, pageIndex) {
+        async function fetchProductDetails(product, webhookUrl) {
+            if (!product.link) return;
+            
+            const charUrl = product.link.endsWith('/') ? `${product.link}characteristics/` : `${product.link}/characteristics/`;
+            const res = await fetch(charUrl);
+            if (!res.ok) return;
+            const htmlText = await res.text();
+
+            // 1. Опис товару
+            const descMatch = htmlText.match(/class="[^"]*(?:product-about__description|rz-product-description)[^"]*"[^>]*>([sS]*?)</div>/i);
+            if (descMatch) {
+                const cleanDesc = descMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                if (cleanDesc && cleanDesc.length > 10) {
+                    product.description = cleanDesc;
+                }
+            }
+
+            // 2. Структуровані характеристики
+            const specsList = [];
+            const specMatches = htmlText.matchAll(/class="[^"]*characteristics__label[^"]*"[^>]*>([sS]*?)</[^>]+>[sS]*?class="[^"]*characteristics__value[^"]*"[^>]*>([sS]*?)</[^>]+>/gi);
+            for (const m of specMatches) {
+                const k = m[1].replace(/<[^>]+>/g, '').trim();
+                const v = m[2].replace(/<[^>]+>/g, '').trim();
+                if (k && v) {
+                    specsList.push(`${k}: ${v}`);
+                }
+            }
+            if (specsList.length > 0) {
+                product.specs = specsList.join('; ');
+            }
+
+            // Надсилаємо оновлені детальні характеристики на дашборд
+            const serverInfo = await sendWebhookPayload(webhookUrl, { products: [product], skipBackgroundEnrichment: true, isEnriched: true });
+            if (serverInfo && serverInfo.success) {
+                syncedCountVal = serverInfo.categoryCount;
+                await setStorageState({ syncedCount: syncedCountVal });
+            }
+        }
+
+        async function scrapeAndSendNewProducts(webhookUrl, pageIndex, doc = document) {
             await loadAlreadyEnrichedLinks(webhookUrl);
 
             const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
-            let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => !item.closest('.recently-viewed'));
+            let items = Array.from(doc.querySelectorAll(tileSelectors)).filter(item => !item.closest('.recently-viewed'));
             
             if (items.length === 0) {
-                const links = document.querySelectorAll('a[href*="/p/"], a[href*="/p-"]');
+                const links = doc.querySelectorAll('a[href*="/p/"], a[href*="/p-"]');
                 items = Array.from(links).map(l => l.closest('li, div, rz-catalog-tile, article, section') || l).filter(Boolean);
             }
 
             if (items.length === 0) return;
 
-            const categoryEl = document.querySelector('h1, .breadcrumbs__last');
+            const categoryEl = doc.querySelector('h1, .breadcrumbs__last');
             const category = categoryEl && categoryEl.innerText ? categoryEl.innerText.trim() : 'Повербанки та УМБ';
             const newProducts = [];
 
@@ -368,22 +298,28 @@ if (window.self !== window.top) {
                     if (starsEl) {
                         const style = starsEl.getAttribute('style') || '';
                         const match = style.match(/width:\s*calc\(([\d.]+)%/);
-                        if (match) rating = parseFloat(((parseFloat(match[1]) || 100) / 20).toFixed(1));
+                        if (match) {
+                            rating = parseFloat(((parseFloat(match[1]) / 100) * 5.0).toFixed(1));
+                        } else {
+                            const starClass = starsEl.getAttribute('class') || '';
+                            const classMatch = starClass.match(/rating-(d+)/);
+                            if (classMatch) rating = parseFloat(classMatch[1]);
+                        }
                     }
 
-                    const itemText = item.innerText || '';
-                    const inStock = !(item.classList.contains('tile-disabled') || itemText.includes('Немає в наявності'));
+                    const inStockText = item.querySelector('.goods-tile__availability, [class*="availability"], .status');
+                    const inStock = inStockText ? !inStockText.innerText.toLowerCase().includes('немає') : true;
 
-                    const capacityMatch = name.match(/(\d+)\s*(?:mah|мАг)/i);
-                    const capacity = capacityMatch ? `${capacityMatch[1]} mAh` : '';
-                    const powerMatch = name.match(/(\d+(?:\.\d+)?)\s*W/i);
-                    const power = powerMatch ? `${powerMatch[1]}W` : '';
-                    const specs = [capacity, power].filter(Boolean).join(', ') || 'Стандартні';
+                    // Збираємо короткі характеристики з картки товару
+                    const characteristicsList = [];
+                    const charBlocks = item.querySelectorAll('.goods-tile__characteristics-item, [class*="characteristics"] span, [class*="features"]');
+                    charBlocks.forEach(c => {
+                        const t = c.innerText ? c.innerText.trim() : '';
+                        if (t) characteristicsList.push(t);
+                    });
+                    const specs = characteristicsList.join('; ') || 'Стандартні';
 
-                    const merchantEl = item.querySelector('.goods-tile__merchant, [class*="merchant"]');
-                    const seller = merchantEl && merchantEl.innerText ? merchantEl.innerText.trim() : 'Rozetka';
-
-                    newProducts.push({
+                    const payloadProduct = {
                         name,
                         price,
                         oldPrice: oldPrice || price,
@@ -393,49 +329,55 @@ if (window.self !== window.top) {
                         inStock,
                         category,
                         specs,
-                        description: '',
-                        seller,
-                        sellersCount: 1,
-                        priceChange: 0,
-                        reviewsGrowth: 0,
-                        link
-                    });
+                        link,
+                        seller: 'Rozetka',
+                        scrapedAt: new Date().toISOString()
+                    };
 
+                    newProducts.push(payloadProduct);
                     sentLinks.add(link);
-                } catch (err) {}
+
+                } catch (e) {
+                    console.error('Error parsing product card:', e);
+                }
             });
 
             if (newProducts.length > 0) {
-                console.log(`TradeScout: Extracted ${newProducts.length} clean items. Total so far: ${sentLinks.size}`);
-
                 // 1. Негайно надсилаємо базові товари на Дашборд і дізнаємося кількість у базі
                 const serverInfo = await sendWebhookPayload(webhookUrl, { products: newProducts, page: pageIndex, skipBackgroundEnrichment: true });
-                const currentSyncedCount = serverInfo ? serverInfo.categoryCount : sentLinks.size;
+                if (serverInfo && serverInfo.success) {
+                    syncedCountVal = serverInfo.categoryCount;
+                }
+                const currentSyncedCount = syncedCountVal || sentLinks.size;
 
-                // 2. Додаємо в чергу на фонове збагачення
+                // 2. Додаємо в чергу на фонове збагачення (детальні опис та характеристики)
                 const toEnrich = newProducts.filter(p => !alreadyEnrichedLinks.has(p.link));
                 const alreadyEnriched = newProducts.filter(p => alreadyEnrichedLinks.has(p.link));
 
                 if (alreadyEnriched.length > 0) {
                     console.log(`TradeScout: Skipping detail fetch for ${alreadyEnriched.length} products (already cached in DB).`);
                     const enrichServerInfo = await sendWebhookPayload(webhookUrl, { products: alreadyEnriched, page: pageIndex, skipBackgroundEnrichment: true, isEnriched: true });
-                    if (enrichServerInfo) {
-                        chrome.storage.local.set({ syncedCount: enrichServerInfo.categoryCount });
+                    if (enrichServerInfo && enrichServerInfo.success) {
+                        syncedCountVal = enrichServerInfo.categoryCount;
+                        await setStorageState({ syncedCount: syncedCountVal });
                     }
                 }
 
                 if (toEnrich.length > 0) {
                     detailsQueue.push(...toEnrich);
                     totalEnrichCount += toEnrich.length;
-                    processDetailsQueue();
+                    // Запуск збагачення у MAX_CONCURRENT_THREAD паралельних потоках
+                    for (let th = 0; th < MAX_CONCURRENT_THREAD; th++) {
+                        processDetailsQueue();
+                    }
                 }
 
                 // Записуємо поточний стан базового скрапінгу
                 const statusMsg = `Зібрано базові ${sentLinks.size} товарів...`;
-                const estimatedTotal = getEstimatedTotalFromPage();
+                const estimatedTotal = getEstimatedTotalFromPage(doc);
                 const percentVal = Math.min(95, Math.round((sentLinks.size / estimatedTotal) * 100));
                 
-                chrome.storage.local.set({
+                await setStorageState({
                     totalScraped: sentLinks.size,
                     percentProgress: percentVal,
                     statusMsg: statusMsg,
@@ -454,183 +396,119 @@ if (window.self !== window.top) {
             }
         }
 
-        function findShowMoreButton() {
-            const selectors = [
-                'rz-catalog-more button', 
-                '.catalog-more button', 
-                '.catalog-more__btn', 
-                'button.show-more', 
-                '.show-more', 
-                'a.show-more', 
-                '[class*="catalog-more"] button',
-                '[class*="catalog-more"] a'
-            ];
-            for (const sel of selectors) {
-                try {
-                    const btn = document.querySelector(sel);
-                    if (btn && !btn.disabled && !btn.classList.contains('button--loading')) {
-                        return btn;
-                    }
-                } catch (e) {}
+        // Помічник для побудови правильних URL-адрес пагінації Rozetka
+        function getPageUrl(baseUrl, pageIndex) {
+            const urlObj = new URL(window.location.href);
+            let path = urlObj.pathname;
+            
+            // Видаляємо наявні сегменти пагінації /page=X/
+            path = path.replace(/\/page=\d+\/?/, '/');
+            if (!path.endsWith('/')) {
+                path += '/';
             }
-
-            const allElements = document.querySelectorAll('button, a, div[role="button"], span');
-            for (const el of allElements) {
-                const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
-                if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more') {
-                    if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed')) {
-                        continue;
-                    }
-                    if (el.disabled || el.classList.contains('button--loading')) {
-                        continue;
-                    }
-                    return el;
-                }
+            
+            // Додаємо сегмент нової сторінки
+            if (pageIndex > 1) {
+                path += `page=${pageIndex}/`;
             }
-            return null;
+            
+            urlObj.pathname = path;
+            return urlObj.toString();
         }
 
-        await waitForCatalog();
+        // ------------------ ГОЛОВНИЙ ЦИКЛ ФОНОВОГО СКРАПІНГУ ------------------
+        (async function() {
+            console.log('TradeScout: Initializing background crawl session...');
+            
+            let pageCount = 1;
+            const maxPages = 15; // Ліміт глибини скрапінгу
+            let lastScrapedCount = 0;
+            let consecutiveNoNewItems = 0;
 
-        let pageCount = 1;
-        let lastScrapedCount = 0;
-        let consecutiveNoNewItems = 0;
-        const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
+            const baseUrl = window.location.href.split('?')[0].split('#')[0];
 
-        while (true) {
-            if (!(await checkIsRunning())) {
-                console.log('TradeScout: Stop signal detected at loop start. Exiting.');
-                break;
+            // Отримуємо раніше синхронізовану кількість
+            const syncState = await getStorageState(['syncedCount']);
+            syncedCountVal = syncState.syncedCount || 0;
+
+            while (pageCount <= maxPages) {
+                if (!(await checkIsRunning())) {
+                    console.log('TradeScout: Stop signal detected. Exiting.');
+                    break;
+                }
+
+                // Будуємо лінк наступної сторінки
+                const pageUrl = getPageUrl(baseUrl, pageCount);
+                
+                safeSendMessage({
+                    action: 'status',
+                    statusMsg: `Завантаження сторінки ${pageCount}...`,
+                    percent: Math.min(95, Math.round((pageCount / maxPages) * 100)),
+                    total: sentLinks.size,
+                    syncedCount: syncedCountVal
+                });
+
+                try {
+                    // Робимо фоновий запит fetch
+                    const res = await fetch(pageUrl);
+                    if (!res.ok) {
+                        throw new Error(`HTTP статус ${res.status}`);
+                    }
+                    const html = await res.text();
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+
+                    // Запускаємо парсинг завантаженого DOM сторінки
+                    await scrapeAndSendNewProducts(state.webhookUrl, pageCount, doc);
+
+                    const currentScrapedCount = sentLinks.size;
+                    const newItemsFound = currentScrapedCount > lastScrapedCount;
+
+                    if (newItemsFound) {
+                        consecutiveNoNewItems = 0;
+                        lastScrapedCount = currentScrapedCount;
+                    } else {
+                        consecutiveNoNewItems++;
+                    }
+
+                    // Перевіряємо, чи є взагалі картки товарів на сторінці
+                    const tilesOnPage = doc.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile').length;
+                    if (tilesOnPage === 0 || consecutiveNoNewItems >= 3) {
+                        console.log('TradeScout: No more items or pagination limit reached. Ending crawl.');
+                        break;
+                    }
+
+                } catch (err) {
+                    console.error(`TradeScout Error crawling page ${pageCount}:`, err);
+                    safeSendMessage({
+                        action: 'status',
+                        statusMsg: `Помилка сторінки ${pageCount}: ${err.message}. Продовження...`,
+                        total: sentLinks.size
+                    });
+                }
+
+                pageCount++;
+
+                // Захисна затримка 1.5 - 2 секунди
+                await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 500));
             }
 
-            await scrapeAndSendNewProducts(state.webhookUrl, pageCount);
-
-            if (!(await checkIsRunning())) {
-                console.log('TradeScout: Stop signal detected after scraping page. Exiting.');
-                break;
-            }
-
-            await smoothScroll();
-
-            if (!(await checkIsRunning())) {
-                console.log('TradeScout: Stop signal detected after scroll. Exiting.');
-                break;
-            }
-
-            await scrapeAndSendNewProducts(state.webhookUrl, pageCount);
-
-            const currentScrapedCount = sentLinks.size;
-            const newItemsFound = currentScrapedCount > lastScrapedCount;
-
-            if (newItemsFound) {
-                consecutiveNoNewItems = 0;
-                lastScrapedCount = currentScrapedCount;
-            } else {
-                consecutiveNoNewItems++;
-            }
-
-            // Очікуємо повного фонового збагачення та відправки всіх товарів поточної сторінки перед переходом
-            console.log('TradeScout: Waiting for current page enrichment to complete before page transition...');
+            // Очікуємо закінчення всіх активних потоків збагачення
+            console.log('TradeScout: Waiting for active detail enrichments...');
             while (detailsQueue.length > 0 || activeEnrichmentThreads > 0) {
                 if (!(await checkIsRunning())) break;
                 await new Promise(resolve => setTimeout(resolve, 300));
             }
 
-            const showMoreBtn = findShowMoreButton();
-            if (showMoreBtn) {
-                if (!(await checkIsRunning())) {
-                    console.log('TradeScout: Stop signal detected before click. Exiting.');
-                    break;
-                }
-                console.log(`TradeScout: Clicking "Show more" (page ${pageCount})...`);
-                
-                const previousCount = document.querySelectorAll(tileSelectors).length;
-                showMoreBtn.click();
-                pageCount++;
-                
-                // Динамічне очікування завантаження нових елементів до 15 секунд
-                let loaded = false;
-                for (let w = 0; w < 30; w++) {
-                    if (!(await checkIsRunning())) break;
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    const currentCount = document.querySelectorAll(tileSelectors).length;
-                    if (currentCount > previousCount) {
-                        loaded = true;
-                        break;
-                    }
-                }
-                if (!loaded) {
-                    console.log('TradeScout: Dynamic load timeout. Proceeding...');
-                }
-            } else {
-                if (newItemsFound) {
-                    console.log('TradeScout: Infinite scroll active, loaded new items. Continuing...');
-                    pageCount++;
-                    for (let w = 0; w < 3; w++) {
-                        if (!(await checkIsRunning())) break;
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    }
-                    continue;
-                }
-                
-                if (consecutiveNoNewItems >= 2) {
-                    console.log(`TradeScout: Reached catalog end. Total items collected: ${sentLinks.size}`);
-                    break;
-                }
-                
-                console.log('TradeScout: No button found, retrying scroll...');
-                for (let w = 0; w < 3; w++) {
-                    if (!(await checkIsRunning())) break;
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                }
-            }
-        }
-
-        // В кінці скрапінгу чекаємо, поки завершиться фонове збагачення деталей
-        console.log('TradeScout: Waiting for background details queue to finish...');
-        while (detailsQueue.length > 0 || activeEnrichmentThreads > 0) {
-            if (!(await checkIsRunning())) break;
-            
-            const processed = totalEnrichCount - detailsQueue.length - activeEnrichmentThreads;
-            const percentVal = totalEnrichCount > 0 ? Math.round((processed / totalEnrichCount) * 100) : 100;
-            const statusMsg = `Фонове збагачення деталей: ${processed}/${totalEnrichCount} товарів...`;
-            
-            chrome.storage.local.set({
-                totalScraped: processed,
-                percentProgress: percentVal,
-                statusMsg: statusMsg
-            });
-
-            chrome.storage.local.get(['syncedCount'], (res) => {
-                const currentSynced = res.syncedCount || processed;
-                safeSendMessage({
-                    action: 'status',
-                    percent: percentVal,
-                    total: processed,
-                    estimatedTotal: totalEnrichCount,
-                    statusMsg: statusMsg,
-                    syncedCount: currentSynced
-                });
+            safeSendMessage({
+                action: 'finished',
+                total: sentLinks.size,
+                syncedCount: syncedCountVal
             });
             
-            await new Promise(resolve => setTimeout(resolve, 800));
-        }
+            // Вимикаємо прапорець запуску
+            await setStorageState({ isRunning: false });
 
-        // Забезпечимо фінальну відправку залишків буфера перед завершенням
-        await flushEnrichedBuffer();
-
-        console.log(`TradeScout: Scrape finished completely. Sent total of ${sentLinks.size} products.`);
-        
-        chrome.storage.local.get(['syncedCount'], (res) => {
-            const finalSynced = res.syncedCount || sentLinks.size;
-            chrome.storage.local.set({ 
-                isRunning: false,
-                totalScraped: sentLinks.size,
-                percentProgress: 100,
-                statusMsg: `Успішно зібрано ${sentLinks.size} товарів!`,
-                syncedCount: finalSynced
-            });
-            safeSendMessage({ action: 'finished', total: sentLinks.size, syncedCount: finalSynced });
-        });
+        })();
     });
 }

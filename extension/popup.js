@@ -9,6 +9,7 @@ const progressFill = document.getElementById('progress-fill');
 
 let timerInterval = null;
 let startTime = null;
+let currentTabId = null;
 
 // Функція оновлення таймера
 function startTimer(savedStartTime) {
@@ -51,35 +52,91 @@ function updateProgress(percent, count, actionMsg, totalEstimated, syncedCount) 
     }
 }
 
-// Відновлення стану з chrome.storage
-chrome.storage.local.get(['isRunning', 'webhookUrl', 'totalScraped', 'currentPage', 'startTime', 'statusMsg', 'percentProgress', 'syncedCount', 'targetDb'], (state) => {
-    if (state.webhookUrl) {
-        inputWebhook.value = state.webhookUrl;
-    } else {
-        inputWebhook.value = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
+// Автоматичне зчитування категорії з активної сторінки Rozetka
+async function detectPageCategory() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && tab.url && tab.url.includes('rozetka.com.ua')) {
+        chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+                const el = document.querySelector('h1, .breadcrumbs__last');
+                return el ? el.innerText.trim() : '';
+            }
+        }, (results) => {
+            if (results && results[0] && results[0].result) {
+                const detectedCategory = results[0].result;
+                const tabInput = document.getElementById('tab-name-input');
+                if (tabInput && !tabInput.value) {
+                    tabInput.value = detectedCategory;
+                }
+            }
+        });
     }
-    loadDatabasesFromServer(inputWebhook.value, state.targetDb);
+}
 
-    if (state.isRunning) {
-        btnStart.disabled = true;
-        btnStop.disabled = false;
-        inputWebhook.disabled = true;
-        startTimer(state.startTime);
-        updateProgress(state.percentProgress || 10, state.totalScraped || 0, state.statusMsg || 'Скрейпінг активний...', 155, state.syncedCount || 0);
-    } else {
-        btnStart.disabled = false;
-        btnStop.disabled = true;
-        inputWebhook.disabled = false;
-        stopTimer();
-        if (state.totalScraped) {
-            updateProgress(100, state.totalScraped, 'Збір завершено успішно!', state.totalScraped, state.syncedCount || state.totalScraped);
+// Ініціалізація та відновлення стану для активної вкладки
+async function initPopup() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) return;
+    currentTabId = tab.id;
+
+    const keys = [
+        'webhookUrl',
+        `isRunning_${currentTabId}`,
+        `totalScraped_${currentTabId}`,
+        `currentPage_${currentTabId}`,
+        `startTime_${currentTabId}`,
+        `statusMsg_${currentTabId}`,
+        `percentProgress_${currentTabId}`,
+        `syncedCount_${currentTabId}`,
+        `targetDb_${currentTabId}`
+    ];
+
+    chrome.storage.local.get(keys, (state) => {
+        const isRunning = state[`isRunning_${currentTabId}`] || false;
+        const totalScraped = state[`totalScraped_${currentTabId}`] || 0;
+        const currentPage = state[`currentPage_${currentTabId}`] || 1;
+        const startTimeVal = state[`startTime_${currentTabId}`] || null;
+        const statusMsg = state[`statusMsg_${currentTabId}`] || 'Очікування запуску...';
+        const percentProgress = state[`percentProgress_${currentTabId}`] || 0;
+        const syncedCount = state[`syncedCount_${currentTabId}`] || 0;
+        const targetDb = state[`targetDb_${currentTabId}`] || '';
+
+        if (state.webhookUrl) {
+            inputWebhook.value = state.webhookUrl;
         } else {
-            updateProgress(0, 0, 'Очікування запуску...', 0, 0);
+            inputWebhook.value = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
         }
-    }
-});
 
-// Запуск
+        const tabInput = document.getElementById('tab-name-input');
+        if (targetDb && tabInput) {
+            tabInput.value = targetDb;
+        }
+
+        if (isRunning) {
+            btnStart.disabled = true;
+            btnStop.disabled = false;
+            inputWebhook.disabled = true;
+            if (tabInput) tabInput.disabled = true;
+            startTimer(startTimeVal);
+            updateProgress(percentProgress, totalScraped, statusMsg, 155, syncedCount);
+        } else {
+            btnStart.disabled = false;
+            btnStop.disabled = true;
+            inputWebhook.disabled = false;
+            if (tabInput) tabInput.disabled = false;
+            stopTimer();
+            if (totalScraped > 0) {
+                updateProgress(100, totalScraped, 'Збір завершено успішно!', totalScraped, syncedCount || totalScraped);
+            } else {
+                updateProgress(0, 0, 'Очікування запуску...', 0, 0);
+                detectPageCategory();
+            }
+        }
+    });
+}
+
+// Запуск скрапінгу
 btnStart.addEventListener('click', async () => {
     const webhookUrl = inputWebhook.value.trim();
     if (!webhookUrl) {
@@ -92,16 +149,17 @@ btnStart.addEventListener('click', async () => {
         statusText.innerText = 'Помилка: Відкрийте каталог Rozetka!';
         return;
     }
+    currentTabId = tab.id;
 
     btnStart.disabled = true;
     btnStop.disabled = false;
     inputWebhook.disabled = true;
+    const tabInput = document.getElementById('tab-name-input');
+    if (tabInput) tabInput.disabled = true;
 
     const now = Date.now();
-    const tabInput = document.getElementById('tab-name-input');
     let targetDb = tabInput ? tabInput.value.trim() : '';
     if (!targetDb) {
-        // Якщо поле пусте, спробуємо знайти h1
         const results = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             func: () => {
@@ -111,22 +169,23 @@ btnStart.addEventListener('click', async () => {
         });
         targetDb = (results && results[0] && results[0].result) ? results[0].result : 'Загальна';
     }
-    
-    await chrome.storage.local.set({
-        isRunning: true,
-        webhookUrl: webhookUrl,
-        targetDb: targetDb,
-        totalScraped: 0,
-        currentPage: 1,
-        startTime: now,
-        statusMsg: 'Запуск скрапінгу на сторінці...',
-        percentProgress: 5
-    });
+
+    const startState = {};
+    startState['webhookUrl'] = webhookUrl;
+    startState[`isRunning_${currentTabId}`] = true;
+    startState[`targetDb_${currentTabId}`] = targetDb;
+    startState[`totalScraped_${currentTabId}`] = 0;
+    startState[`currentPage_${currentTabId}`] = 1;
+    startState[`startTime_${currentTabId}`] = now;
+    startState[`statusMsg_${currentTabId}`] = 'Запуск скрапінгу на сторінці...';
+    startState[`percentProgress_${currentTabId}`] = 5;
+
+    await chrome.storage.local.set(startState);
 
     startTimer(now);
     updateProgress(5, 0, 'Запуск скрапінгу на сторінці...', 155);
 
-    // Прямий запуск content.js без необхідності перезавантаження сторінки
+    // Прямий запуск контент-скрипта
     chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ['content.js']
@@ -138,57 +197,99 @@ btnStart.addEventListener('click', async () => {
     });
 });
 
-// Зупинка
+// Зупинка скрапінгу
 btnStop.addEventListener('click', async () => {
-    await chrome.storage.local.set({ isRunning: false });
+    if (!currentTabId) {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab) currentTabId = tab.id;
+    }
+    if (currentTabId) {
+        const stopState = {};
+        stopState[`isRunning_${currentTabId}`] = false;
+        await chrome.storage.local.set(stopState);
+    }
     btnStart.disabled = false;
     btnStop.disabled = true;
     inputWebhook.disabled = false;
+    const tabInput = document.getElementById('tab-name-input');
+    if (tabInput) tabInput.disabled = false;
     stopTimer();
     updateProgress(0, 0, 'Скрейпінг зупинено.', 0);
 });
 
-// Слухач повідомлень від content.js
-chrome.runtime.onMessage.addListener((message) => {
+// Слухач повідомлень від контент-скриптів різних вкладок
+chrome.runtime.onMessage.addListener((message, sender) => {
+    const tabId = sender.tab ? sender.tab.id : currentTabId;
+    if (!tabId) return;
+
     if (message.action === 'progress') {
         const estimatedTotal = message.estimatedTotal || 155;
         const percent = Math.min(99, (message.total / estimatedTotal) * 100);
         const actionStr = message.statusMsg || `Сканування сторінки ${message.page}...`;
         
-        chrome.storage.local.set({
-            totalScraped: message.total,
-            currentPage: message.page,
-            statusMsg: actionStr,
-            percentProgress: percent,
-            syncedCount: message.syncedCount || 0
-        });
+        const updateState = {};
+        updateState[`totalScraped_${tabId}`] = message.total;
+        updateState[`currentPage_${tabId}`] = message.page;
+        updateState[`statusMsg_${tabId}`] = actionStr;
+        updateState[`percentProgress_${tabId}`] = percent;
+        updateState[`syncedCount_${tabId}`] = message.syncedCount || 0;
         
-        updateProgress(percent, message.total, actionStr, estimatedTotal, message.syncedCount || 0);
+        chrome.storage.local.set(updateState);
+        
+        if (tabId === currentTabId) {
+            updateProgress(percent, message.total, actionStr, estimatedTotal, message.syncedCount || 0);
+        }
     } else if (message.action === 'status') {
-        statusText.innerText = message.statusMsg;
         if (message.percent !== undefined) {
-            chrome.storage.local.set({
-                percentProgress: message.percent,
-                statusMsg: message.statusMsg,
-                syncedCount: message.syncedCount || 0
-            });
-            updateProgress(message.percent, message.total, message.statusMsg, message.estimatedTotal || 155, message.syncedCount || 0);
+            const updateState = {};
+            updateState[`percentProgress_${tabId}`] = message.percent;
+            updateState[`statusMsg_${tabId}`] = message.statusMsg;
+            updateState[`syncedCount_${tabId}`] = message.syncedCount || 0;
+            
+            chrome.storage.local.set(updateState);
+            
+            if (tabId === currentTabId) {
+                updateProgress(message.percent, message.total, message.statusMsg, message.estimatedTotal || 155, message.syncedCount || 0);
+            }
+        } else {
+            if (tabId === currentTabId) {
+                statusText.innerText = message.statusMsg;
+            }
         }
     } else if (message.action === 'finished') {
-        stopTimer();
-        btnStart.disabled = false;
-        btnStop.disabled = true;
-        inputWebhook.disabled = false;
+        const updateState = {};
+        updateState[`isRunning_${tabId}`] = false;
+        updateState[`percentProgress_${tabId}`] = 100;
+        updateState[`syncedCount_${tabId}`] = message.syncedCount || message.total;
+        updateState[`totalScraped_${tabId}`] = message.total;
         
-        chrome.storage.local.set({ isRunning: false, percentProgress: 100, syncedCount: message.syncedCount || message.total });
-        updateProgress(100, message.total, `Успішно зібрано ${message.total} товарів!`, message.total, message.syncedCount || message.total);
+        chrome.storage.local.set(updateState);
+        
+        if (tabId === currentTabId) {
+            stopTimer();
+            btnStart.disabled = false;
+            btnStop.disabled = true;
+            inputWebhook.disabled = false;
+            const tabInput = document.getElementById('tab-name-input');
+            if (tabInput) tabInput.disabled = false;
+            updateProgress(100, message.total, `Успішно зібрано ${message.total} товарів!`, message.total, message.syncedCount || message.total);
+        }
     } else if (message.action === 'error') {
-        stopTimer();
-        btnStart.disabled = false;
-        btnStop.disabled = true;
-        inputWebhook.disabled = false;
+        const updateState = {};
+        updateState[`isRunning_${tabId}`] = false;
+        chrome.storage.local.set(updateState);
         
-        chrome.storage.local.set({ isRunning: false });
-        statusText.innerText = `Помилка: ${message.message}`;
+        if (tabId === currentTabId) {
+            stopTimer();
+            btnStart.disabled = false;
+            btnStop.disabled = true;
+            inputWebhook.disabled = false;
+            const tabInput = document.getElementById('tab-name-input');
+            if (tabInput) tabInput.disabled = false;
+            statusText.innerText = `Помилка: ${message.message}`;
+        }
     }
 });
+
+// Ініціалізація попапу при завантаженні сторінки
+document.addEventListener('DOMContentLoaded', initPopup);
