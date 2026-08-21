@@ -101,7 +101,7 @@ function saveProductsOfActiveDb(items: any[], name?: string) {
   }
 }
 
-const app = express();
+export const app = express();
 app.use((req, res, next) => {
   // Видаляємо заголовки перевірки походження (origin/sec-fetch), щоб Angular SSR не видавав 403 Forbidden
   delete req.headers['sec-fetch-site'];
