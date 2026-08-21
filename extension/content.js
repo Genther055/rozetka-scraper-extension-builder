@@ -214,7 +214,7 @@ if (window.self !== window.top) {
             const htmlText = await res.text();
 
             // 1. Опис товару
-            const descMatch = htmlText.match(/class="[^"]*(?:product-about__description|rz-product-description)[^"]*"[^>]*>([sS]*?)</div>/i);
+            const descMatch = htmlText.match(/class="[^"]*(?:product-about__description|rz-product-description)[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
             if (descMatch) {
                 const cleanDesc = descMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
                 if (cleanDesc && cleanDesc.length > 10) {
@@ -224,7 +224,7 @@ if (window.self !== window.top) {
 
             // 2. Структуровані характеристики
             const specsList = [];
-            const specMatches = htmlText.matchAll(/class="[^"]*characteristics__label[^"]*"[^>]*>([sS]*?)</[^>]+>[sS]*?class="[^"]*characteristics__value[^"]*"[^>]*>([sS]*?)</[^>]+>/gi);
+            const specMatches = htmlText.matchAll(/class="[^"]*characteristics__label[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>[\s\S]*?class="[^"]*characteristics__value[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>/gi);
             for (const m of specMatches) {
                 const k = m[1].replace(/<[^>]+>/g, '').trim();
                 const v = m[2].replace(/<[^>]+>/g, '').trim();
@@ -302,7 +302,7 @@ if (window.self !== window.top) {
                             rating = parseFloat(((parseFloat(match[1]) / 100) * 5.0).toFixed(1));
                         } else {
                             const starClass = starsEl.getAttribute('class') || '';
-                            const classMatch = starClass.match(/rating-(d+)/);
+                            const classMatch = starClass.match(/rating-(\d+)/);
                             if (classMatch) rating = parseFloat(classMatch[1]);
                         }
                     }
