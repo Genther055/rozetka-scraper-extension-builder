@@ -56,7 +56,7 @@ chrome.storage.local.get(['isRunning', 'webhookUrl', 'totalScraped', 'currentPag
     if (state.webhookUrl) {
         inputWebhook.value = state.webhookUrl;
     } else {
-        inputWebhook.value = 'https://rozetka-scraper-extension-builder-9.vercel.app/api/products';
+        inputWebhook.value = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
     }
     loadDatabasesFromServer(inputWebhook.value, state.targetDb);
 
