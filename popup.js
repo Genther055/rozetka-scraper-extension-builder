@@ -51,43 +51,6 @@ function updateProgress(percent, count, actionMsg, totalEstimated, syncedCount) 
     }
 }
 
-// Функція завантаження баз даних із сервера
-function loadDatabasesFromServer(webhookUrl, selectedDbName) {
-    const serverUrl = webhookUrl.replace('/api/products', '');
-    fetch(`${serverUrl}/api/databases`)
-        .then(res => res.json())
-        .then(data => {
-            if (data && data.success && data.databases) {
-                const dbSelect = document.getElementById('db-select');
-                if (dbSelect) {
-                    dbSelect.innerHTML = '';
-                    data.databases.forEach(db => {
-                        const opt = document.createElement('option');
-                        opt.value = db.name;
-                        opt.text = `${db.name} (${db.count} шт.)`;
-                        if (selectedDbName && db.name === selectedDbName) {
-                            opt.selected = true;
-                        } else if (!selectedDbName && db.isActive) {
-                            opt.selected = true;
-                        }
-                        dbSelect.appendChild(opt);
-                    });
-                }
-            }
-        })
-        .catch(err => {
-            console.warn('Failed to load databases in popup:', err);
-        });
-}
-
-// Слухач зміни обраної бази
-const dbSelectEl = document.getElementById('db-select');
-if (dbSelectEl) {
-    dbSelectEl.addEventListener('change', () => {
-        chrome.storage.local.set({ targetDb: dbSelectEl.value });
-    });
-}
-
 // Відновлення стану з chrome.storage
 chrome.storage.local.get(['isRunning', 'webhookUrl', 'totalScraped', 'currentPage', 'startTime', 'statusMsg', 'percentProgress', 'syncedCount', 'targetDb'], (state) => {
     if (state.webhookUrl) {
@@ -135,7 +98,20 @@ btnStart.addEventListener('click', async () => {
     inputWebhook.disabled = true;
 
     const now = Date.now();
-    const targetDb = document.getElementById('db-select') ? document.getElementById('db-select').value : 'default';
+    const tabInput = document.getElementById('tab-name-input');
+    let targetDb = tabInput ? tabInput.value.trim() : '';
+    if (!targetDb) {
+        // Якщо поле пусте, спробуємо знайти h1
+        const results = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+                const el = document.querySelector('h1, .breadcrumbs__last');
+                return el ? el.innerText.trim() : '';
+            }
+        });
+        targetDb = (results && results[0] && results[0].result) ? results[0].result : 'Загальна';
+    }
+    
     await chrome.storage.local.set({
         isRunning: true,
         webhookUrl: webhookUrl,

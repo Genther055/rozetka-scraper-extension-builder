@@ -66,46 +66,7 @@
       </button>
 
 
-      <!-- Database management panel inside sidebar -->
-      <div class="px-4 py-4 border-t border-[rgba(139,92,246,0.1)] flex flex-col gap-2">
-        <div class="flex items-center justify-between">
-          <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Бази даних</span>
-          <button 
-            (click)="showNewDbModal = true" 
-            class="text-indigo-450 hover:text-indigo-350 flex items-center justify-center p-1 rounded hover:bg-slate-900 border border-[rgba(139,92,246,0.15)] bg-slate-950/40 cursor-pointer transition-all"
-            title="Створити нову базу"
-          >
-            <span class="material-icons text-sm">add</span>
-          </button>
-        </div>
-        
-        <div class="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto pr-1">
-          <div 
-            *ngFor="let db of databases"
-            (click)="selectDatabase(db.name)"
-            [class.bg-indigo-950/30]="db.isActive"
-            [class.border-indigo-500/35]="db.isActive"
-            [class.text-indigo-350]="db.isActive"
-            [class.bg-slate-900/10]="!db.isActive"
-            [class.border-slate-850]="!db.isActive"
-            [class.text-slate-400]="!db.isActive"
-            class="flex items-center justify-between px-3 py-2 border rounded-xl cursor-pointer hover:border-indigo-500/20 hover:text-slate-200 transition-all text-xs font-semibold"
-          >
-            <div class="flex items-center gap-1.5 min-w-0">
-              <span class="material-icons text-sm shrink-0" [class.text-indigo-450]="db.isActive">storage</span>
-              <span class="truncate">{{ db.name }}</span>
-              <span class="text-[9px] font-mono font-bold text-slate-500">({{ db.count }})</span>
-            </div>
-            <button 
-              *ngIf="db.name !== 'default'"
-              (click)="deleteDatabase(db.name, $event)" 
-              class="text-slate-600 hover:text-red-400 hover:bg-red-950/15 p-0.5 rounded transition-all shrink-0 cursor-pointer"
-            >
-              <span class="material-icons text-xs">delete</span>
-            </button>
-          </div>
-        </div>
-      </div>
+
 
     </nav>
 
@@ -186,6 +147,42 @@
 
     <!-- Main Content Body -->
     <div class="flex-1 overflow-y-auto p-8 space-y-8">
+      
+      <!-- Category/Session Tabs Bar -->
+      <div *ngIf="products.length > 0" class="flex flex-wrap items-center gap-2 pb-4 border-b border-[rgba(139,92,246,0.1)]">
+        <button 
+          (click)="switchSessionTab('all')" 
+          [class.bg-gradient-to-r]="activeSessionTab === 'all'"
+          [class.from-indigo-600]="activeSessionTab === 'all'"
+          [class.to-purple-600]="activeSessionTab === 'all'"
+          [class.text-white]="activeSessionTab === 'all'"
+          [class.border-indigo-500/30]="activeSessionTab === 'all'"
+          [class.bg-slate-900/30]="activeSessionTab !== 'all'"
+          [class.border-slate-800]="activeSessionTab !== 'all'"
+          [class.text-slate-400]="activeSessionTab !== 'all'"
+          class="px-4 py-2 border border-slate-800 rounded-full text-xs font-bold transition-all hover:text-white cursor-pointer flex items-center gap-2 hover:border-indigo-500/20"
+        >
+          <span class="material-icons text-sm">grid_view</span>
+          Всі товари
+        </button>
+
+        <button 
+          *ngFor="let tabName of availableSessionTabs"
+          (click)="switchSessionTab(tabName)" 
+          [class.bg-gradient-to-r]="activeSessionTab === tabName"
+          [class.from-indigo-600]="activeSessionTab === tabName"
+          [class.to-purple-600]="activeSessionTab === tabName"
+          [class.text-white]="activeSessionTab === tabName"
+          [class.border-indigo-500/30]="activeSessionTab === tabName"
+          [class.bg-slate-900/30]="activeSessionTab !== tabName"
+          [class.border-slate-800]="activeSessionTab !== tabName"
+          [class.text-slate-400]="activeSessionTab !== tabName"
+          class="px-4 py-2 border border-slate-800 rounded-full text-xs font-bold transition-all hover:text-white cursor-pointer flex items-center gap-2 hover:border-indigo-500/20"
+        >
+          <span class="material-icons text-sm">folder</span>
+          {{ tabName }}
+        </button>
+      </div>
       
       <!-- Loading indicator -->
       <div *ngIf="loading && products.length === 0" class="flex flex-col items-center justify-center py-20 gap-3">
@@ -1169,43 +1166,4 @@
 
 </div>
 
-  <!-- CREATE DATABASE MODAL -->
-  <div *ngIf="showNewDbModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="premium-card max-w-sm w-full p-6 space-y-4 animate-scaleUp">
-      <div class="flex items-center justify-between">
-        <h3 class="text-base font-bold text-white flex items-center gap-2">
-          <span class="material-icons text-indigo-400">storage</span>
-          Нова база даних
-        </h3>
-        <button (click)="showNewDbModal = false" class="text-slate-500 hover:text-white cursor-pointer transition-all">
-          <span class="material-icons">close</span>
-        </button>
-      </div>
-      
-      <div>
-        <label class="block text-[11px] font-semibold text-slate-400 mb-2">Введіть назву (будь-якою мовою):</label>
-        <input 
-          type="text" 
-          [(ngModel)]="newDbName" 
-          placeholder="Наприклад: Павербанки" 
-          class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 focus:border-indigo-500 rounded-xl text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-medium"
-        >
-        <p *ngIf="dbError" class="text-xs text-red-400 mt-2 font-semibold">{{ dbError }}</p>
-      </div>
-      
-      <div class="flex items-center justify-end gap-3 pt-2">
-        <button 
-          (click)="showNewDbModal = false" 
-          class="px-4 py-2 border border-slate-800 text-slate-400 hover:text-white rounded-full text-xs font-bold transition-all cursor-pointer"
-        >
-          Скасувати
-        </button>
-        <button 
-          (click)="createDatabase()" 
-          class="px-5 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-full text-xs font-bold hover:shadow-lg hover:shadow-indigo-500/20 transition-all cursor-pointer"
-        >
-          Створити
-        </button>
-      </div>
-    </div>
-  </div>
+

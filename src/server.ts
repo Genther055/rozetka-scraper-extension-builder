@@ -185,19 +185,24 @@ function updateLastActivityTime() {
 
 function checkAndCleanExpiredData() {
   const threeHoursMs = 3 * 60 * 60 * 1000;
-  const activeProducts = loadProductsOfActiveDb();
+  const activeProducts = loadProductsOfActiveDb('default');
   if (activeProducts.length > 0 && (Date.now() - lastDbUpdateTime > threeHoursMs)) {
     console.log('[Backend] 3 hours of inactivity reached. Auto-clearing active database.');
-    saveProductsOfActiveDb([]);
+    saveProductsOfActiveDb([], 'default');
     updateLastActivityTime();
   }
 }
 
 app.post('/api/products', (req, res) => {
   checkAndCleanExpiredData();
-  const dbName = req.body.database || getActiveDbName();
+  // Завжди зберігаємо у спільну дефолтну базу даних
+  const dbName = 'default';
   const products = loadProductsOfActiveDb(dbName);
   let newItems = req.body ? (req.body.products || req.body) : [];
+  
+  // Визначаємо назву вкладки (сесії)
+  const targetCategory = newItems && newItems[0] && newItems[0].category ? newItems[0].category : 'Загальна';
+  const sessionName = req.body.database || targetCategory;
   if (typeof newItems === 'string') {
     try {
       const parsed = JSON.parse(newItems);
@@ -237,6 +242,7 @@ app.post('/api/products', (req, res) => {
           reviews: itemReviews,
           inStock: item.inStock !== false,
           category: item.category || 'Загальна',
+          database: sessionName, // Мітка вкладки
           specs: item.specs || '',
           description: item.description || '',
           detailedSpecsMap: item.detailedSpecsMap || {},
@@ -252,7 +258,7 @@ app.post('/api/products', (req, res) => {
         const productIdMatch = normalizedLink.match(/p(\d+)/);
         const productId = productIdMatch ? productIdMatch[1] : null;
         if (productId) {
-          resolveSellerInServerBackground(productId, normalizedLink, dbName);
+          resolveSellerInServerBackground(productId, normalizedLink, 'default');
         }
       } else {
         const index = products.findIndex(p => {
@@ -276,6 +282,7 @@ app.post('/api/products', (req, res) => {
           products[index].name = item.name || products[index].name;
           products[index].inStock = item.inStock !== false;
           if (item.category) products[index].category = item.category;
+          products[index].database = sessionName; // Оновлюємо мітку вкладки
           if (item.specs) products[index].specs = item.specs;
           if (item.description) products[index].description = item.description;
           if (item.detailedSpecsMap) products[index].detailedSpecsMap = item.detailedSpecsMap;
@@ -287,7 +294,7 @@ app.post('/api/products', (req, res) => {
             const productIdMatch = normalizedLink.match(/p(\d+)/);
             const productId = productIdMatch ? productIdMatch[1] : null;
             if (productId) {
-              resolveSellerInServerBackground(productId, normalizedLink, dbName);
+              resolveSellerInServerBackground(productId, normalizedLink, 'default');
             }
           }
         }
@@ -303,7 +310,7 @@ app.post('/api/products', (req, res) => {
 
   try {
     updateLastActivityTime();
-    saveProductsOfActiveDb(products, dbName);
+    saveProductsOfActiveDb(products, 'default');
     res.json({ success: true, count: products.length, categoryCount: categoryCount });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -312,14 +319,22 @@ app.post('/api/products', (req, res) => {
 
 app.get('/api/products', (req, res) => {
   checkAndCleanExpiredData();
-  const products = loadProductsOfActiveDb();
-  res.json({ success: true, products, activeDb: getActiveDbName() });
+  const products = loadProductsOfActiveDb('default');
+  res.json({ success: true, products });
 });
 
 app.post('/api/products/clear', (req, res) => {
   try {
-    const dbName = req.body.database || getActiveDbName();
-    saveProductsOfActiveDb([], dbName);
+    const targetSession = req.body.database;
+    if (targetSession && targetSession !== 'all') {
+      // Очищуємо тільки товари конкретної вкладки
+      const products = loadProductsOfActiveDb('default');
+      const filtered = products.filter((p: any) => p && p.database !== targetSession);
+      saveProductsOfActiveDb(filtered, 'default');
+    } else {
+      // Очищуємо абсолютно всі товари
+      saveProductsOfActiveDb([], 'default');
+    }
     updateLastActivityTime();
     res.json({ success: true });
   } catch (error: any) {
@@ -574,105 +589,7 @@ if (!isVercel) {
 /**
  * Handle API 404s cleanly without passing to Angular SSR engine
  */
-// Database Management API Endpoints
-app.get('/api/databases', (req, res) => {
-  const files = readdirSync(dataDir);
-  const dbFiles = files.filter(f => f.startsWith('db_') && f.endsWith('.json'));
-  const activeName = getActiveDbName();
-  
-  const dbs = dbFiles.map(file => {
-    const name = file.slice(3, -5); // remove 'db_' and '.json'
-    const filePath = join(dataDir, file);
-    let count = 0;
-    let mtime = Date.now();
-    try {
-      const stats = statSync(filePath);
-      mtime = stats.mtimeMs;
-      const raw = readFileSync(filePath, 'utf-8');
-      count = JSON.parse(raw).length || 0;
-    } catch (e) {}
-    
-    return {
-      name,
-      count,
-      lastModified: mtime,
-      isActive: name === activeName
-    };
-  });
-  
-  res.json({ success: true, databases: dbs, activeDb: activeName });
-});
 
-app.post('/api/databases/create', (req, res) => {
-  const { name } = req.body;
-  if (!name || typeof name !== 'string') {
-    res.status(400).json({ success: false, error: 'Database name is required' });
-    return;
-  }
-  const safeName = name.replace(/[\\/:*?"<>|]/g, '_').trim();
-  if (!safeName || safeName === 'active_db' || safeName === 'last_activity' || safeName.toLowerCase() === 'default') {
-    res.status(400).json({ success: false, error: 'Invalid database name' });
-    return;
-  }
-  const filePath = join(dataDir, `db_${safeName}.json`);
-  if (existsSync(filePath)) {
-    res.status(400).json({ success: false, error: 'Database already exists' });
-    return;
-  }
-  try {
-    writeFileSync(filePath, JSON.stringify([], null, 2), 'utf-8');
-    res.json({ success: true, name: safeName });
-  } catch (e: any) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-app.post('/api/databases/select', (req, res) => {
-  const { name } = req.body;
-  if (!name || typeof name !== 'string') {
-    res.status(400).json({ success: false, error: 'Database name is required' });
-    return;
-  }
-  const safeName = name.replace(/[\\/:*?"<>|]/g, '_').trim();
-  const filePath = join(dataDir, `db_${safeName}.json`);
-  if (!existsSync(filePath)) {
-    res.status(404).json({ success: false, error: 'Database not found' });
-    return;
-  }
-  try {
-    writeFileSync(activeDbPath, JSON.stringify({ active: safeName }), 'utf-8');
-    res.json({ success: true, activeDb: safeName });
-  } catch (e: any) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-app.post('/api/databases/delete', (req, res) => {
-  const { name } = req.body;
-  if (!name || typeof name !== 'string') {
-    res.status(400).json({ success: false, error: 'Database name is required' });
-    return;
-  }
-  const safeName = name.replace(/[\\/:*?"<>|]/g, '_').trim();
-  if (safeName.toLowerCase() === 'default') {
-    res.status(400).json({ success: false, error: 'Cannot delete default database' });
-    return;
-  }
-  const filePath = join(dataDir, `db_${safeName}.json`);
-  if (!existsSync(filePath)) {
-    res.status(404).json({ success: false, error: 'Database not found' });
-    return;
-  }
-  try {
-    unlinkSync(filePath);
-    if (getActiveDbName() === safeName) {
-      writeFileSync(activeDbPath, JSON.stringify({ active: 'default' }), 'utf-8');
-    }
-    res.json({ success: true });
-  } catch (e: any) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
 
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'API endpoint not found' });

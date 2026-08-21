@@ -9,7 +9,9 @@ if (window.self !== window.top) {
             return;
         }
         
-        const targetDbName = state.targetDb || 'default';
+        const categoryEl = document.querySelector('h1, .breadcrumbs__last');
+        const pageCategory = categoryEl && categoryEl.innerText ? categoryEl.innerText.trim() : 'Загальна';
+        const targetDbName = state.targetDb || pageCategory;
 
         console.log('TradeScout: Scraper ACTIVE! Starting item extraction...');
 

@@ -18,6 +18,7 @@ interface Product {
   isAuditing?: boolean;
   inStock?: boolean;
   category?: string;
+  database?: string;
   specs?: string;
   description?: string;
   seller?: string;
@@ -33,13 +34,10 @@ interface Product {
   templateUrl: './dashboard.html',
 })
 export class DashboardComponent implements OnInit {
+  activeSessionTab: string = 'all';
+  availableSessionTabs: string[] = [];
   categoryFilter = 'all';
   uniqueCategories: string[] = [];
-  databases: { name: string; count: number; lastModified: number; isActive: boolean }[] = [];
-  activeDb = 'default';
-  showNewDbModal = false;
-  newDbName = '';
-  dbError = '';
   apiUrl: string = typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? 'http://localhost:4000'
     : 'https://rozetka-scraper-extension-builder.onrender.com';
@@ -216,7 +214,7 @@ export class DashboardComponent implements OnInit {
   ngOnInit() {
     if (typeof window !== 'undefined') {
       this.loadProducts();
-      this.loadDatabases();
+      
       this.autoRefreshTimer = setInterval(() => {
         this.loadProducts(true);
       }, 3000);
@@ -236,10 +234,25 @@ export class DashboardComponent implements OnInit {
         next: (res) => {
           if (res.success) {
             this.products = res.products || [];
-            this.uniqueCategories = Array.from(new Set(this.products.map(p => p.category || 'Загальна').filter(Boolean)));
+            
+            // Витягуємо унікальні назви вкладок (сесій) з продуктів
+            const rawTabs = this.products.map(p => p.database).filter(Boolean);
+            this.availableSessionTabs = Array.from(new Set(rawTabs)) as string[];
+            
+            // Якщо активна вкладка зникла (наприклад, була очищена), скидаємо на 'all'
+            if (this.activeSessionTab !== 'all' && !this.availableSessionTabs.includes(this.activeSessionTab)) {
+              this.activeSessionTab = 'all';
+            }
+
+            this.uniqueCategories = Array.from(
+              new Set(
+                this.getActiveSessionTabProducts()
+                  .map(p => p.category || 'Загальна')
+                  .filter(Boolean)
+              )
+            );
             this.applyFilters();
             this.calculateMetrics();
-            this.loadDatabases();
           }
           if (!silent) this.loading = false;
           this.cdr.markForCheck();
@@ -274,10 +287,18 @@ export class DashboardComponent implements OnInit {
     return score;
   }
 
+  getActiveSessionTabProducts(): Product[] {
+    if (this.activeSessionTab === 'all') {
+      return this.products;
+    }
+    return this.products.filter(p => p.database === this.activeSessionTab);
+  }
+
   calculateOpportunityScore() {
+    const tabProducts = this.getActiveSessionTabProducts();
     const activeProducts = this.categoryFilter === 'all'
-      ? this.products
-      : this.products.filter(p => (p.category || 'Загальна') === this.categoryFilter);
+      ? tabProducts
+      : tabProducts.filter(p => (p.category || 'Загальна') === this.categoryFilter);
 
     if (activeProducts.length === 0) {
       this.nicheOpportunityScore = 0;
@@ -311,9 +332,10 @@ export class DashboardComponent implements OnInit {
   }
 
   calculateMetrics() {
+    const tabProducts = this.getActiveSessionTabProducts();
     const activeProducts = this.categoryFilter === 'all'
-      ? this.products
-      : this.products.filter(p => (p.category || 'Загальна') === this.categoryFilter);
+      ? tabProducts
+      : tabProducts.filter(p => (p.category || 'Загальна') === this.categoryFilter);
 
     this.totalItems = activeProducts.length;
     if (this.totalItems > 0) {
@@ -352,7 +374,8 @@ export class DashboardComponent implements OnInit {
   }
 
   applyFilters() {
-    this.filteredProducts = this.products.filter(p => {
+    const tabProducts = this.getActiveSessionTabProducts();
+    this.filteredProducts = tabProducts.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(this.searchQuery.toLowerCase());
       const matchesPrice = p.price >= this.minPrice && p.price <= this.maxPrice;
       const matchesRating = p.rating >= this.minRating;
@@ -424,69 +447,18 @@ export class DashboardComponent implements OnInit {
     this.applyFilters();
   }
 
-  loadDatabases() {
-    this.http.get<{ success: boolean; databases: any[]; activeDb: string }>(`${this.apiUrl}/api/databases`)
-      .subscribe({
-        next: (res) => {
-          if (res.success) {
-            this.databases = res.databases || [];
-            this.activeDb = res.activeDb || 'default';
-          }
-        }
-      });
-  }
-
-  selectDatabase(name: string) {
-    this.http.post<{ success: boolean; activeDb: string }>(`${this.apiUrl}/api/databases/select`, { name })
-      .subscribe({
-        next: (res) => {
-          if (res.success) {
-            this.activeDb = res.activeDb;
-            this.loadProducts(false);
-            this.loadDatabases();
-          }
-        }
-      });
-  }
-
-  createDatabase() {
-    if (!this.newDbName.trim()) return;
-    this.dbError = '';
-    const cleanName = this.newDbName.trim().replace(/[\\/:*?"<>|]/g, '_');
-    this.http.post<{ success: boolean; name: string }>(`${this.apiUrl}/api/databases/create`, { name: cleanName })
-      .subscribe({
-        next: (res) => {
-          if (res.success) {
-            this.newDbName = '';
-            this.showNewDbModal = false;
-            this.selectDatabase(res.name);
-          }
-        },
-        error: (err) => {
-          this.dbError = err.error?.error || 'Помилка створення бази';
-        }
-      });
-  }
-
-  deleteDatabase(name: string, event: Event) {
-    event.stopPropagation();
-    if (name === 'default') {
-      alert('Неможливо видалити стандартну базу даних!');
-      return;
-    }
-    if (confirm(`Ви впевнені, що хочете видалити базу "${name}"? Усі дані в ній будуть втрачені назавжди!`)) {
-      this.http.post<{ success: boolean }>(`${this.apiUrl}/api/databases/delete`, { name })
-        .subscribe({
-          next: (res) => {
-            if (res.success) {
-              this.loadDatabases();
-              if (this.activeDb === name) {
-                this.selectDatabase('default');
-              }
-            }
-          }
-        });
-    }
+  switchSessionTab(tabName: string) {
+    this.activeSessionTab = tabName;
+    this.categoryFilter = 'all'; // скидаємо фільтр категорії при перемиканні вкладок
+    this.uniqueCategories = Array.from(
+      new Set(
+        this.getActiveSessionTabProducts()
+          .map(p => p.category || 'Загальна')
+          .filter(Boolean)
+      )
+    );
+    this.applyFilters();
+    this.calculateMetrics();
   }
 
   onCategoryFilterChange() {
