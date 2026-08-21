@@ -13,20 +13,26 @@ import { GoogleGenAI } from '@google/genai';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const browserDistFolder = join(__dirname, '../browser');
-const dataDir = join(process.cwd(), 'database_store');
+let dataDir = join(process.cwd(), 'database_store');
+
+// Спроба створити папку локально. Якщо файлова система read-only (як на Vercel), використовуємо /tmp
+try {
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
+  }
+  const testFile = join(dataDir, '.test_write');
+  writeFileSync(testFile, 'test');
+  unlinkSync(testFile);
+} catch (e) {
+  console.warn('[Backend Warning] Project directory is read-only. Falling back to /tmp/database_store.');
+  dataDir = '/tmp/database_store';
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
+  }
+}
+
 const dataFilePath = join(dataDir, 'products.json');
-
-// Ensure data folder exists
-if (!existsSync(dataDir)) {
-  mkdirSync(dataDir, { recursive: true });
-}
-
 const activeDbPath = join(dataDir, 'active_db.json');
-
-// Ensure database_store exists
-if (!existsSync(dataDir)) {
-  mkdirSync(dataDir, { recursive: true });
-}
 
 // Migrate legacy products.json to db_default.json inside database_store
 const legacyFilePath = join(process.cwd(), 'data/products.json');
