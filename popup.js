@@ -80,19 +80,33 @@ async function initPopup() {
     if (!tab) return;
     currentTabId = tab.id;
 
-    const keys = [
-        'webhookUrl',
-        `isRunning_${currentTabId}`,
-        `totalScraped_${currentTabId}`,
-        `currentPage_${currentTabId}`,
-        `startTime_${currentTabId}`,
-        `statusMsg_${currentTabId}`,
-        `percentProgress_${currentTabId}`,
-        `syncedCount_${currentTabId}`,
-        `targetDb_${currentTabId}`
-    ];
+    // Перевіряємо життєздатність контент-скрипта на сторінці
+    chrome.tabs.sendMessage(currentTabId, { action: 'ping' }, (response) => {
+        const isAlive = !!(response && response.status === 'alive');
 
-    chrome.storage.local.get(keys, (state) => {
+        const keys = [
+            'webhookUrl',
+            `isRunning_${currentTabId}`,
+            `totalScraped_${currentTabId}`,
+            `currentPage_${currentTabId}`,
+            `startTime_${currentTabId}`,
+            `statusMsg_${currentTabId}`,
+            `percentProgress_${currentTabId}`,
+            `syncedCount_${currentTabId}`,
+            `targetDb_${currentTabId}`
+        ];
+
+        chrome.storage.local.get(keys, async (state) => {
+            let isRunning = state[`isRunning_${currentTabId}`] || false;
+
+            // Якщо сховище каже, що скрапінг запущено, але скрипт на сторінці не відповідає — скидаємо стан
+            if (isRunning && !isAlive) {
+                isRunning = false;
+                const resetState = {};
+                resetState[`isRunning_${currentTabId}`] = false;
+                await chrome.storage.local.set(resetState);
+            }
+
         const isRunning = state[`isRunning_${currentTabId}`] || false;
         const totalScraped = state[`totalScraped_${currentTabId}`] || 0;
         const currentPage = state[`currentPage_${currentTabId}`] || 1;
@@ -134,6 +148,7 @@ async function initPopup() {
             }
         }
     });
+  });
 }
 
 // Запуск скрапінгу

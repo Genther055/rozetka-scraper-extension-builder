@@ -4,6 +4,14 @@ if (window.self !== window.top) {
 } else {
     console.log('TradeScout Content Script loaded in main page.');
 
+    // Слухач пінгів життєздатності для попапу
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === 'ping') {
+            sendResponse({ status: 'alive' });
+            return false;
+        }
+    });
+
     // Запитуємо ID поточної вкладки у background script для ізоляції стану
     chrome.runtime.sendMessage({ action: 'getTabId' }, async (response) => {
         const tabId = response ? response.tabId : null;
