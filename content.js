@@ -172,35 +172,10 @@ if (window.self !== window.top) {
         }
 
         async function smoothScroll() {
-            await new Promise((resolve) => {
-                const start = window.scrollY;
-                const target = document.body.scrollHeight - window.innerHeight;
-                if (target <= start) return resolve();
-                
-                const duration = 1500;
-                let startTime = null;
-                
-                function animation(currentTime) {
-                    if (startTime === null) startTime = currentTime;
-                    const timeElapsed = currentTime - startTime;
-                    const run = ease(timeElapsed, start, target - start, duration);
-                    window.scrollTo(0, run);
-                    
-                    if (timeElapsed < duration) {
-                        requestAnimationFrame(animation);
-                    } else {
-                        window.scrollTo(0, target);
-                        resolve();
-                    }
-                }
-                
-                function ease(t, b, c, d) {
-                    t /= d;
-                    return -c * t * (t - 2) + b;
-                }
-                
-                requestAnimationFrame(animation);
-            });
+            // Безпечний миттєвий скрол для фонових вкладок (запобігає зависанню requestAnimationFrame)
+            const target = document.body.scrollHeight - window.innerHeight;
+            window.scrollTo(0, target);
+            // Коротка пауза для підвантаження контенту браузером
             await new Promise(resolve => setTimeout(resolve, 800));
         }
 
@@ -374,6 +349,11 @@ if (window.self !== window.top) {
                     const priceText = priceEl && priceEl.innerText ? priceEl.innerText : '';
                     const price = priceText ? parseInt(priceText.replace(/\D/g, '')) || 0 : 0;
 
+                    const oldPriceEl = item.querySelector('.goods-tile__price--old, [class*="price--old"], .price--old, .goods-tile__price-value_type_old');
+                    const oldPriceText = oldPriceEl && oldPriceEl.innerText ? oldPriceEl.innerText : '';
+                    const oldPrice = oldPriceText ? parseInt(oldPriceText.replace(/\D/g, '')) || 0 : 0;
+                    const discount = (oldPrice && oldPrice > price) ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0;
+
                     const reviewsEl = item.querySelector('.rating-block-rating, [class*="rating"], [class*="comments"], .goods-tile__reviews-link');
                     const reviewsText = reviewsEl && reviewsEl.innerText ? reviewsEl.innerText : '';
                     const reviews = reviewsText ? parseInt(reviewsText.replace(/\D/g, '')) || 0 : 0;
@@ -401,6 +381,8 @@ if (window.self !== window.top) {
                     newProducts.push({
                         name,
                         price,
+                        oldPrice: oldPrice || price,
+                        discount,
                         rating,
                         reviews,
                         inStock,
