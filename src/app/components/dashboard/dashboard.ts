@@ -33,6 +33,8 @@ interface Product {
   templateUrl: './dashboard.html',
 })
 export class DashboardComponent implements OnInit {
+  categoryFilter = 'all';
+  uniqueCategories: string[] = [];
   apiUrl: string = typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? 'http://localhost:4000'
     : 'https://rozetka-scraper-extension-builder.onrender.com';
@@ -228,6 +230,7 @@ export class DashboardComponent implements OnInit {
         next: (res) => {
           if (res.success) {
             this.products = res.products || [];
+            this.uniqueCategories = Array.from(new Set(this.products.map(p => p.category || 'Загальна').filter(Boolean)));
             this.applyFilters();
             this.calculateMetrics();
           }
@@ -265,13 +268,17 @@ export class DashboardComponent implements OnInit {
   }
 
   calculateOpportunityScore() {
-    if (this.products.length === 0) {
+    const activeProducts = this.categoryFilter === 'all'
+      ? this.products
+      : this.products.filter(p => (p.category || 'Загальна') === this.categoryFilter);
+
+    if (activeProducts.length === 0) {
       this.nicheOpportunityScore = 0;
       return;
     }
 
     // 1. Рівень попиту (середня кількість відгуків)
-    const avgReviews = this.products.reduce((acc, p) => acc + p.reviews, 0) / this.products.length;
+    const avgReviews = activeProducts.reduce((acc, p) => acc + p.reviews, 0) / activeProducts.length;
     let demandScore = 0;
     if (avgReviews > 100) demandScore = 4;
     else if (avgReviews > 30) demandScore = 3;
@@ -279,17 +286,17 @@ export class DashboardComponent implements OnInit {
     else demandScore = 1;
 
     // 2. Рівень конкуренції (частка Rozetka як продавця)
-    const rozetkaSellers = this.products.filter(p => p.seller && p.seller.toLowerCase() === 'rozetka').length;
-    const rozetkaShare = rozetkaSellers / this.products.length;
+    const rozetkaSellers = activeProducts.filter(p => p.seller && p.seller.toLowerCase() === 'rozetka').length;
+    const rozetkaShare = rozetkaSellers / activeProducts.length;
     let compScore = 0;
-    if (rozetkaShare < 0.25) compScore = 3; // мало товарів від Rozetka -> високі шанси для нас
+    if (rozetkaShare < 0.25) compScore = 3;
     else if (rozetkaShare < 0.6) compScore = 2;
-    else compScore = 1; // Rozetka домінує -> низькі шанси
+    else compScore = 1;
 
     // 3. Рівень оптимізації конкурентів (середній LQS)
-    const avgLqs = this.products.reduce((acc, p) => acc + this.calculateLQS(p), 0) / this.products.length;
+    const avgLqs = activeProducts.reduce((acc, p) => acc + this.calculateLQS(p), 0) / activeProducts.length;
     let lqsScore = 0;
-    if (avgLqs < 5.5) lqsScore = 3; // у конкурентів погано налаштовані картки -> великий потенціал
+    if (avgLqs < 5.5) lqsScore = 3;
     else if (avgLqs < 7.5) lqsScore = 2;
     else lqsScore = 1;
 
@@ -297,12 +304,16 @@ export class DashboardComponent implements OnInit {
   }
 
   calculateMetrics() {
-    this.totalItems = this.products.length;
+    const activeProducts = this.categoryFilter === 'all'
+      ? this.products
+      : this.products.filter(p => (p.category || 'Загальна') === this.categoryFilter);
+
+    this.totalItems = activeProducts.length;
     if (this.totalItems > 0) {
-      const sumPrice = this.products.reduce((acc, curr) => acc + curr.price, 0);
+      const sumPrice = activeProducts.reduce((acc, curr) => acc + curr.price, 0);
       this.avgPrice = Math.round(sumPrice / this.totalItems);
 
-      const ratedProducts = this.products.filter(p => p.rating > 0);
+      const ratedProducts = activeProducts.filter(p => p.rating > 0);
       if (ratedProducts.length > 0) {
         const sumRating = ratedProducts.reduce((acc, curr) => acc + curr.rating, 0);
         this.avgRating = parseFloat((sumRating / ratedProducts.length).toFixed(1));
@@ -314,7 +325,7 @@ export class DashboardComponent implements OnInit {
       this.avgRating = 0.0;
     }
     
-    this.aiAlertsCount = this.products.filter(p => p.aiStatus === 'warning' || p.aiStatus === 'suspicious').length;
+    this.aiAlertsCount = activeProducts.filter(p => p.aiStatus === 'warning' || p.aiStatus === 'suspicious').length;
     this.calculateOpportunityScore();
   }
 
@@ -346,8 +357,10 @@ export class DashboardComponent implements OnInit {
       } else if (this.stockFilter === 'outOfStock') {
         matchesStock = p.inStock === false;
       }
+
+      const matchesCategory = this.categoryFilter === 'all' || (p.category || 'Загальна') === this.categoryFilter;
       
-      return matchesSearch && matchesPrice && matchesRating && matchesStatus && matchesStock;
+      return matchesSearch && matchesPrice && matchesRating && matchesStatus && matchesStock && matchesCategory;
     });
 
     if (this.sortColumn) {
@@ -404,6 +417,12 @@ export class DashboardComponent implements OnInit {
     this.applyFilters();
   }
 
+  onCategoryFilterChange() {
+    this.applyFilters();
+    this.calculateMetrics();
+    this.cdr.markForCheck();
+  }
+
   resetFilters() {
     this.searchQuery = '';
     this.minPrice = 0;
@@ -411,7 +430,9 @@ export class DashboardComponent implements OnInit {
     this.minRating = 0;
     this.statusFilter = 'all';
     this.stockFilter = 'all';
+    this.categoryFilter = 'all';
     this.applyFilters();
+    this.calculateMetrics();
   }
 
   clearAllData() {
