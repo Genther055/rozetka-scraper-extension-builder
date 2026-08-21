@@ -4,10 +4,12 @@ if (window.self !== window.top) {
 } else {
     console.log('TradeScout Content Script loaded in main page.');
 
-    chrome.storage.local.get(['isRunning', 'webhookUrl'], async (state) => {
+    chrome.storage.local.get(['isRunning', 'webhookUrl', 'targetDb'], async (state) => {
         if (!state.isRunning) {
             return;
         }
+        
+        const targetDbName = state.targetDb || 'default';
 
         console.log('TradeScout: Scraper ACTIVE! Starting item extraction...');
 
@@ -67,6 +69,7 @@ if (window.self !== window.top) {
 
         // Потрійний гарантований канал відправки (Direct Fetch + Background Worker)
         async function sendWebhookPayload(webhookUrl, payload) {
+            payload.database = targetDbName;
             let serverInfo = null;
             const targets = [];
             if (webhookUrl) {

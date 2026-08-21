@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, readdir
 import { GoogleGenAI } from '@google/genai';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
-const dataDir = join(import.meta.dirname, '../data');
+const dataDir = join(process.cwd(), 'data');
 const dataFilePath = join(dataDir, 'products.json');
 
 // Ensure data folder exists
@@ -44,13 +44,14 @@ function getActiveDbName(): string {
 }
 
 function getDbFilePath(name: string): string {
-  const safeName = name.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+  // Безпечне ім'я файлу для будь-яких мов (зокрема кирилиці)
+  const safeName = name.replace(/[\\/:*?"<>|]/g, '_').trim();
   return join(dataDir, `db_${safeName}.json`);
 }
 
-function loadProductsOfActiveDb(): any[] {
-  const name = getActiveDbName();
-  const path = getDbFilePath(name);
+function loadProductsOfActiveDb(name?: string): any[] {
+  const dbName = name || getActiveDbName();
+  const path = getDbFilePath(dbName);
   if (existsSync(path)) {
     try {
       return JSON.parse(readFileSync(path, 'utf-8'));
@@ -58,8 +59,8 @@ function loadProductsOfActiveDb(): any[] {
       return [];
     }
   }
-  // Initialize default database with empty array if it doesn't exist
-  if (name === 'default') {
+  // Ініціалізація за замовчуванням
+  if (dbName === 'default') {
     try {
       writeFileSync(path, JSON.stringify([], null, 2), 'utf-8');
     } catch (e) {}
@@ -67,13 +68,13 @@ function loadProductsOfActiveDb(): any[] {
   return [];
 }
 
-function saveProductsOfActiveDb(items: any[]) {
-  const name = getActiveDbName();
-  const path = getDbFilePath(name);
+function saveProductsOfActiveDb(items: any[], name?: string) {
+  const dbName = name || getActiveDbName();
+  const path = getDbFilePath(dbName);
   try {
     writeFileSync(path, JSON.stringify(items, null, 2), 'utf-8');
   } catch (e) {
-    console.error(`Failed to save database ${name}:`, e);
+    console.error(`Failed to save database ${dbName}:`, e);
   }
 }
 
@@ -102,7 +103,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
  */
 
 // Asynchronous background seller resolver for Rozetka products
-async function resolveSellerInServerBackground(productId: string, normalizedLink: string) {
+async function resolveSellerInServerBackground(productId: string, normalizedLink: string, dbName: string) {
   try {
     const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`;
     const response = await fetch(apiUrl);
@@ -111,12 +112,12 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
       const sellerTitle = apiData.data?.[0]?.seller?.title;
       if (sellerTitle) {
         const cleanedSeller = sellerTitle.trim();
-        const activeProducts = loadProductsOfActiveDb();
+        const activeProducts = loadProductsOfActiveDb(dbName);
         const index = activeProducts.findIndex((p: any) => p && p.link === normalizedLink);
         if (index !== -1) {
           activeProducts[index].seller = cleanedSeller;
-          saveProductsOfActiveDb(activeProducts);
-          console.log(`[Backend Enriched] Successfully updated seller for ${normalizedLink} -> ${cleanedSeller}`);
+          saveProductsOfActiveDb(activeProducts, dbName);
+          console.log(`[Backend Enriched] Successfully updated seller for ${normalizedLink} -> ${cleanedSeller} in DB ${dbName}`);
         }
       }
     }
@@ -157,7 +158,8 @@ function checkAndCleanExpiredData() {
 
 app.post('/api/products', (req, res) => {
   checkAndCleanExpiredData();
-  const products = loadProductsOfActiveDb();
+  const dbName = req.body.database || getActiveDbName();
+  const products = loadProductsOfActiveDb(dbName);
   let newItems = req.body ? (req.body.products || req.body) : [];
   if (typeof newItems === 'string') {
     try {
@@ -213,7 +215,7 @@ app.post('/api/products', (req, res) => {
         const productIdMatch = normalizedLink.match(/p(\d+)/);
         const productId = productIdMatch ? productIdMatch[1] : null;
         if (productId) {
-          resolveSellerInServerBackground(productId, normalizedLink);
+          resolveSellerInServerBackground(productId, normalizedLink, dbName);
         }
       } else {
         const index = products.findIndex(p => {
@@ -248,7 +250,7 @@ app.post('/api/products', (req, res) => {
             const productIdMatch = normalizedLink.match(/p(\d+)/);
             const productId = productIdMatch ? productIdMatch[1] : null;
             if (productId) {
-              resolveSellerInServerBackground(productId, normalizedLink);
+              resolveSellerInServerBackground(productId, normalizedLink, dbName);
             }
           }
         }
@@ -264,7 +266,7 @@ app.post('/api/products', (req, res) => {
 
   try {
     updateLastActivityTime();
-    saveProductsOfActiveDb(products);
+    saveProductsOfActiveDb(products, dbName);
     res.json({ success: true, count: products.length, categoryCount: categoryCount });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -279,7 +281,8 @@ app.get('/api/products', (req, res) => {
 
 app.post('/api/products/clear', (req, res) => {
   try {
-    saveProductsOfActiveDb([]);
+    const dbName = req.body.database || getActiveDbName();
+    saveProductsOfActiveDb([], dbName);
     updateLastActivityTime();
     res.json({ success: true });
   } catch (error: any) {
@@ -406,12 +409,13 @@ function performAlgorithmicAudit(name: string, htmlContent: string, productItem:
 }
 
 app.post('/api/products/analyze', async (req, res) => {
-  const { link, name, useAi } = req.body;
+  const { link, name, useAi, database } = req.body;
   if (!link) {
     return res.status(400).json({ success: false, error: 'Product link is required' });
   }
 
-  const products = loadProductsOfActiveDb();
+  const dbName = database || getActiveDbName();
+  const products = loadProductsOfActiveDb(dbName);
   const productItem = products.find(p => p && p.link === link) || {};
   let htmlContent = '';
   
@@ -478,7 +482,7 @@ ${htmlContent || 'No page content available.'}
         if (parsed.specs) {
           products[prodIndex].specs = parsed.specs;
         }
-        saveProductsOfActiveDb(products);
+        saveProductsOfActiveDb(products, dbName);
       }
 
       return res.json({ success: true, status: parsed.status, verdict: parsed.verdict, specs: parsed.specs });
@@ -500,7 +504,7 @@ ${htmlContent || 'No page content available.'}
     if (auditResult.realSalesCount) {
       products[prodIndex].realSalesCount = auditResult.realSalesCount;
     }
-    saveProductsOfActiveDb(products);
+    saveProductsOfActiveDb(products, dbName);
   }
 
   return res.json({
@@ -598,8 +602,8 @@ app.post('/api/databases/create', (req, res) => {
     res.status(400).json({ success: false, error: 'Database name is required' });
     return;
   }
-  const safeName = name.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
-  if (safeName === 'active_db' || safeName === 'last_activity') {
+  const safeName = name.replace(/[\\/:*?"<>|]/g, '_').trim();
+  if (!safeName || safeName === 'active_db' || safeName === 'last_activity' || safeName.toLowerCase() === 'default') {
     res.status(400).json({ success: false, error: 'Invalid database name' });
     return;
   }
@@ -622,7 +626,7 @@ app.post('/api/databases/select', (req, res) => {
     res.status(400).json({ success: false, error: 'Database name is required' });
     return;
   }
-  const safeName = name.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+  const safeName = name.replace(/[\\/:*?"<>|]/g, '_').trim();
   const filePath = join(dataDir, `db_${safeName}.json`);
   if (!existsSync(filePath)) {
     res.status(404).json({ success: false, error: 'Database not found' });
@@ -642,8 +646,8 @@ app.post('/api/databases/delete', (req, res) => {
     res.status(400).json({ success: false, error: 'Database name is required' });
     return;
   }
-  const safeName = name.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
-  if (safeName === 'default') {
+  const safeName = name.replace(/[\\/:*?"<>|]/g, '_').trim();
+  if (safeName.toLowerCase() === 'default') {
     res.status(400).json({ success: false, error: 'Cannot delete default database' });
     return;
   }

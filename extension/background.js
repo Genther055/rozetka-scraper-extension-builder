@@ -40,7 +40,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         // 3. Запускаємо асинхронне фонове збагачення описами та деталями (не блокує скрапер)
         if (payload?.products && payload.products.length > 0 && !payload.skipBackgroundEnrichment && !payload.isEnriched) {
-            enrichProductsInBackground(payload.products, webhookUrl);
+            enrichProductsInBackground(payload.products, webhookUrl, payload.database);
         }
 
         return true;

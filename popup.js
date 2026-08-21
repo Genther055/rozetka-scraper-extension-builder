@@ -30,8 +30,7 @@ function stopTimer() {
     }
 }
 
-// Оновлення повзунка прогресу та відсотків
-function updateProgress(percent, count, actionMsg, totalEstimated) {
+function updateProgress(percent, count, actionMsg, totalEstimated, syncedCount) {
     const safePercent = Math.min(100, Math.max(0, Math.round(percent)));
     progressFill.style.width = `${safePercent}%`;
     percentText.innerText = `${safePercent}%`;
@@ -39,31 +38,80 @@ function updateProgress(percent, count, actionMsg, totalEstimated) {
     if (actionMsg) {
         statusText.innerText = actionMsg;
     }
+
+    const syncContainer = document.getElementById('sync-container');
+    const syncText = document.getElementById('sync-text');
+    if (syncContainer && syncText) {
+        if (syncedCount !== undefined && syncedCount > 0) {
+            syncContainer.style.display = 'flex';
+            syncText.innerHTML = `Синхронізовано з платформою: <strong>${syncedCount}</strong> шт.`;
+        } else {
+            syncContainer.style.display = 'none';
+        }
+    }
+}
+
+// Функція завантаження баз даних із сервера
+function loadDatabasesFromServer(webhookUrl, selectedDbName) {
+    const serverUrl = webhookUrl.replace('/api/products', '');
+    fetch(`${serverUrl}/api/databases`)
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.success && data.databases) {
+                const dbSelect = document.getElementById('db-select');
+                if (dbSelect) {
+                    dbSelect.innerHTML = '';
+                    data.databases.forEach(db => {
+                        const opt = document.createElement('option');
+                        opt.value = db.name;
+                        opt.text = `${db.name} (${db.count} шт.)`;
+                        if (selectedDbName && db.name === selectedDbName) {
+                            opt.selected = true;
+                        } else if (!selectedDbName && db.isActive) {
+                            opt.selected = true;
+                        }
+                        dbSelect.appendChild(opt);
+                    });
+                }
+            }
+        })
+        .catch(err => {
+            console.warn('Failed to load databases in popup:', err);
+        });
+}
+
+// Слухач зміни обраної бази
+const dbSelectEl = document.getElementById('db-select');
+if (dbSelectEl) {
+    dbSelectEl.addEventListener('change', () => {
+        chrome.storage.local.set({ targetDb: dbSelectEl.value });
+    });
 }
 
 // Відновлення стану з chrome.storage
-chrome.storage.local.get(['isRunning', 'webhookUrl', 'totalScraped', 'currentPage', 'startTime', 'statusMsg', 'percentProgress'], (state) => {
+chrome.storage.local.get(['isRunning', 'webhookUrl', 'totalScraped', 'currentPage', 'startTime', 'statusMsg', 'percentProgress', 'syncedCount', 'targetDb'], (state) => {
     if (state.webhookUrl) {
         inputWebhook.value = state.webhookUrl;
     } else {
         inputWebhook.value = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
     }
+    loadDatabasesFromServer(inputWebhook.value, state.targetDb);
 
     if (state.isRunning) {
         btnStart.disabled = true;
         btnStop.disabled = false;
         inputWebhook.disabled = true;
         startTimer(state.startTime);
-        updateProgress(state.percentProgress || 10, state.totalScraped || 0, state.statusMsg || 'Скрейпінг активний...', 155);
+        updateProgress(state.percentProgress || 10, state.totalScraped || 0, state.statusMsg || 'Скрейпінг активний...', 155, state.syncedCount || 0);
     } else {
         btnStart.disabled = false;
         btnStop.disabled = true;
         inputWebhook.disabled = false;
         stopTimer();
         if (state.totalScraped) {
-            updateProgress(100, state.totalScraped, 'Збір завершено успішно!', state.totalScraped);
+            updateProgress(100, state.totalScraped, 'Збір завершено успішно!', state.totalScraped, state.syncedCount || state.totalScraped);
         } else {
-            updateProgress(0, 0, 'Очікування запуску...', 0);
+            updateProgress(0, 0, 'Очікування запуску...', 0, 0);
         }
     }
 });
@@ -87,9 +135,11 @@ btnStart.addEventListener('click', async () => {
     inputWebhook.disabled = true;
 
     const now = Date.now();
+    const targetDb = document.getElementById('db-select') ? document.getElementById('db-select').value : 'default';
     await chrome.storage.local.set({
         isRunning: true,
         webhookUrl: webhookUrl,
+        targetDb: targetDb,
         totalScraped: 0,
         currentPage: 1,
         startTime: now,
@@ -133,14 +183,20 @@ chrome.runtime.onMessage.addListener((message) => {
             totalScraped: message.total,
             currentPage: message.page,
             statusMsg: actionStr,
-            percentProgress: percent
+            percentProgress: percent,
+            syncedCount: message.syncedCount || 0
         });
         
-        updateProgress(percent, message.total, actionStr, estimatedTotal);
+        updateProgress(percent, message.total, actionStr, estimatedTotal, message.syncedCount || 0);
     } else if (message.action === 'status') {
         statusText.innerText = message.statusMsg;
         if (message.percent !== undefined) {
-            updateProgress(message.percent, message.total, message.statusMsg, message.estimatedTotal || 155);
+            chrome.storage.local.set({
+                percentProgress: message.percent,
+                statusMsg: message.statusMsg,
+                syncedCount: message.syncedCount || 0
+            });
+            updateProgress(message.percent, message.total, message.statusMsg, message.estimatedTotal || 155, message.syncedCount || 0);
         }
     } else if (message.action === 'finished') {
         stopTimer();
@@ -148,8 +204,8 @@ chrome.runtime.onMessage.addListener((message) => {
         btnStop.disabled = true;
         inputWebhook.disabled = false;
         
-        chrome.storage.local.set({ isRunning: false });
-        updateProgress(100, message.total, `Успішно зібрано ${message.total} товарів!`, message.total);
+        chrome.storage.local.set({ isRunning: false, percentProgress: 100, syncedCount: message.syncedCount || message.total });
+        updateProgress(100, message.total, `Успішно зібрано ${message.total} товарів!`, message.total, message.syncedCount || message.total);
     } else if (message.action === 'error') {
         stopTimer();
         btnStart.disabled = false;
