@@ -41,6 +41,39 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Asynchronous background seller resolver for Rozetka products
+async function resolveSellerInServerBackground(productId: string, normalizedLink: string) {
+  try {
+    const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`;
+    const response = await fetch(apiUrl);
+    if (response.ok) {
+      const apiData: any = await response.json();
+      const sellerTitle = apiData.data?.[0]?.seller?.title;
+      if (sellerTitle) {
+        const cleanedSeller = sellerTitle.trim();
+        if (existsSync(dataFilePath)) {
+          const raw = readFileSync(dataFilePath, 'utf-8');
+          const currentProducts = JSON.parse(raw);
+          const index = currentProducts.findIndex((p: any) => p && p.link === normalizedLink);
+          if (index !== -1) {
+            currentProducts[index].seller = cleanedSeller;
+            writeFileSync(dataFilePath, JSON.stringify(currentProducts, null, 2), 'utf-8');
+            console.log(`[Backend Enriched] Successfully updated seller for ${normalizedLink} -> ${cleanedSeller}`);
+            
+            // Also update the in-memory array in api-server.ts
+            const memoryIndex = products.findIndex((p: any) => p && p.link === normalizedLink);
+            if (memoryIndex !== -1) {
+              products[memoryIndex].seller = cleanedSeller;
+            }
+          }
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error(`[Backend Enrichment Error] Failed to resolve seller for ${productId}:`, error.message);
+  }
+}
+
 // Ingestion Endpoint (supports /api/products, /dashboard, /products)
 app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, res) => {
   console.log(`[API PORT 4000] Received POST request from n8n. Raw body keys:`, Object.keys(req.body || {}));
@@ -98,6 +131,13 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
           aiStatus: 'pending',
           aiVerdict: ''
         });
+
+        // Trigger background seller resolution
+        const productIdMatch = normalizedLink.match(/p(\d+)/);
+        const productId = productIdMatch ? productIdMatch[1] : null;
+        if (productId) {
+          resolveSellerInServerBackground(productId, normalizedLink);
+        }
       } else {
         const index = products.findIndex(p => p && getItemKey(p) === itemKey);
         if (index !== -1) {
@@ -120,6 +160,15 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
           if (item.detailedSpecsMap) products[index].detailedSpecsMap = item.detailedSpecsMap;
           if (item.seller) products[index].seller = item.seller;
           if (item.sellersCount) products[index].sellersCount = item.sellersCount;
+
+          // If the seller remains Rozetka, verify it in the background
+          if (products[index].seller === 'Rozetka') {
+            const productIdMatch = normalizedLink.match(/p(\d+)/);
+            const productId = productIdMatch ? productIdMatch[1] : null;
+            if (productId) {
+              resolveSellerInServerBackground(productId, normalizedLink);
+            }
+          }
         }
       }
     } catch (e) {

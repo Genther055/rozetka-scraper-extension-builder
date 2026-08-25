@@ -374,7 +374,7 @@ if (window.self !== window.top) {
                     const priceText = priceEl && priceEl.innerText ? priceEl.innerText : '';
                     const price = priceText ? parseInt(priceText.replace(/\D/g, '')) || 0 : 0;
 
-                    const oldPriceEl = item.querySelector('.goods-tile__price--old, [class*="price--old"], .price--old, .goods-tile__price-value_type_old');
+                    const oldPriceEl = item.querySelector('.goods-tile__price--old, .goods-tile__price.type_old, .goods-tile__price-value_type_old, [class*="price--old"], .price--old');
                     const oldPriceText = oldPriceEl && oldPriceEl.innerText ? oldPriceEl.innerText : '';
                     const oldPrice = oldPriceText ? parseInt(oldPriceText.replace(/\D/g, '')) || 0 : 0;
                     const discount = (oldPrice && oldPrice > price) ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0;
