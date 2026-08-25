@@ -693,6 +693,11 @@ export class DashboardComponent implements OnInit {
     });
     ws['!cols'] = colWidths;
 
+    // Вмикаємо фільтри на всі колонки (AutoFilter)
+    if (ws['!ref']) {
+      ws['!autofilter'] = { ref: ws['!ref'] };
+    }
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Товари Rozetka');
 
