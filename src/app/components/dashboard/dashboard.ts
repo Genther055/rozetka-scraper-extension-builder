@@ -3,6 +3,7 @@ import {Router} from '@angular/router';
 import {HttpClient} from '@angular/common/http';
 import {FormsModule} from '@angular/forms';
 import {CommonModule} from '@angular/common';
+import * as XLSX from 'xlsx';
 
 interface Product {
   name: string;
@@ -638,59 +639,8 @@ export class DashboardComponent implements OnInit {
     const baseHeaders = ['Назва товару', 'Ціна без знижки (грн)', 'Ціна зі знижкою (грн)', 'Знижка (%)', 'Рейтинг', 'Відгуки', 'Наявність', 'Продавець', 'Категорія'];
     const headers = [...baseHeaders, ...dynamicKeys, 'Опис товару', 'Посилання'];
 
-    // 3. Генеруємо HTML-таблицю для Excel з гарними CSS стилями та авто-шириною
-    let html = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-        <!--[if gte mso 9]>
-        <xml>
-          <x:ExcelWorkbook>
-            <x:ExcelWorksheets>
-              <x:ExcelWorksheet>
-                <x:Name>TradeScout Export</x:Name>
-                <x:WorksheetOptions>
-                  <x:DisplayGridlines/>
-                </x:WorksheetOptions>
-              </x:ExcelWorksheet>
-            </x:ExcelWorksheets>
-          </x:ExcelWorkbook>
-        </xml>
-        <![endif]-->
-        <style>
-          table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; }
-          th { background-color: #0f172a; color: #ffffff; font-weight: bold; border: 1px solid #334155; padding: 10px 8px; text-align: left; }
-          td { border: 1px solid #cbd5e1; padding: 6px 8px; vertical-align: middle; }
-          .price { color: #059669; font-weight: bold; text-align: right; }
-          .rating { color: #d97706; font-weight: bold; text-align: center; }
-          .reviews { text-align: center; color: #475569; }
-          .instock { color: #10b981; font-weight: 600; text-align: center; }
-          .outofstock { color: #ef4444; font-weight: 600; text-align: center; }
-          .link { color: #2563eb; text-decoration: underline; font-weight: 600; text-align: center; }
-          tr:nth-child(even) { background-color: #f8fafc; }
-        </style>
-      </head>
-      <body>
-        <table>
-          <colgroup>
-            <col width="320"> <!-- Назва товару -->
-            <col width="90">  <!-- Ціна -->
-            <col width="85">  <!-- Рейтинг -->
-            <col width="85">  <!-- Відгуки -->
-            <col width="110"> <!-- Наявність -->
-            <col width="130"> <!-- Продавець -->
-            <col width="150"> <!-- Категорія -->
-            ${dynamicKeys.map(() => '<col width="150">').join('')} <!-- Динамічні характеристики -->
-            <col width="350"> <!-- Опис товару -->
-            <col width="100"> <!-- Посилання -->
-          </colgroup>
-          <thead>
-            <tr>
-              ${headers.map(h => `<th>${h}</th>`).join('')}
-            </tr>
-          </thead>
-          <tbody>
-    `;
+    // 3. Формуємо масив рядків даних для XLSX
+    const dataRows: (string | number)[][] = [headers];
 
     this.filteredProducts.forEach(p => {
       const specsMap: Record<string, string> = {};
@@ -699,53 +649,56 @@ export class DashboardComponent implements OnInit {
         specsMap[normKey] = s.val;
       });
 
-      const inStockClass = p.inStock !== false ? 'instock' : 'outofstock';
       const inStockText = p.inStock !== false ? 'В наявності' : 'Немає';
-
       const rawName = p.name || '';
-      const displayName = rawName.length > 95 ? rawName.slice(0, 92) + '...' : rawName;
-
       const rawDesc = p.description || '';
-      const displayDesc = rawDesc.length > 350 ? rawDesc.slice(0, 347) + '...' : rawDesc;
 
-      html += '<tr>';
-      html += `<td>${displayName.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
-      html += `<td class="price">${p.oldPrice || p.price || 0}</td>`;
-      html += `<td class="price">${p.price || 0}</td>`;
-      html += `<td class="rating">${p.discount ? p.discount + '%' : '0%'}</td>`;
-      html += `<td style="mso-number-format:'\\@';" class="rating">${p.rating || 0}</td>`;
-      html += `<td class="reviews">${p.reviews || 0}</td>`;
-      html += `<td class="${inStockClass}">${inStockText}</td>`;
-      html += `<td>${(p.seller || 'Rozetka').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
-      html += `<td>${(p.category || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+      const row: (string | number)[] = [
+        rawName,
+        p.oldPrice || p.price || 0,
+        p.price || 0,
+        p.discount ? `${p.discount}%` : '0%',
+        p.rating || 0,
+        p.reviews || 0,
+        inStockText,
+        p.seller || 'Rozetka',
+        p.category || ''
+      ];
 
-      // Надійна вибірка динамічних характеристик
+      // Динамічні характеристики
       dynamicKeys.forEach(k => {
         const val = specsMap[k] || '—';
-        const displayVal = val.length > 120 ? val.slice(0, 117) + '...' : val;
-        html += `<td>${displayVal.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+        row.push(val);
       });
 
-      html += `<td>${displayDesc.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
-      html += `<td><a class="link" href="${p.link || '#'}">Відкрити 🔗</a></td>`;
-      html += '</tr>';
+      row.push(rawDesc);
+      row.push(p.link || '');
+
+      dataRows.push(row);
     });
 
-    html += `
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `;
+    // 4. Створюємо Excel робочу книгу та сторінку
+    const ws = XLSX.utils.aoa_to_sheet(dataRows);
 
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `TradeScout_Master_Export_${new Date().toISOString().slice(0, 10)}.xls`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Налаштовуємо авто-ширину колонок
+    const colWidths = headers.map((h, i) => {
+      let maxLen = h.length;
+      dataRows.forEach(r => {
+        const cell = r[i] !== undefined && r[i] !== null ? String(r[i]) : '';
+        if (cell.length > maxLen) {
+          maxLen = cell.length;
+        }
+      });
+      return { wch: Math.min(Math.max(maxLen + 2, 12), 65) };
+    });
+    ws['!cols'] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Товари Rozetka');
+
+    // 5. Зберігаємо у справжній бінарний .xlsx файл
+    const fileName = `TradeScout_Master_Export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   }
 
 
