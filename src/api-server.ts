@@ -91,9 +91,8 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
 
   const getItemKey = (p: any) => {
     const pLink = p.link ? p.link.split('?')[0].split('#')[0] : '';
-    const pSeller = (p.seller || 'rozetka').trim().toLowerCase();
     const pName = (p.name || '').trim().toLowerCase();
-    return pLink ? `${pLink}::${pSeller}` : `${pName}::${pSeller}`;
+    return pLink ? pLink : pName;
   };
 
   newItems.forEach((item: any) => {

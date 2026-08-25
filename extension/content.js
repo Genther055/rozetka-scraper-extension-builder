@@ -154,6 +154,37 @@ if (window.self !== window.top) {
                     product.specs = specsList.join('; ');
                     product.detailedSpecsMap = specsMap;
                 }
+
+                // 3. Збагачуємо продавця та ціни через офіційний API Rozetka
+                const productIdMatch = product.link.match(/p(\d+)/);
+                const productId = productIdMatch ? productIdMatch[1] : null;
+                if (productId) {
+                    try {
+                        const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`;
+                        const apiRes = await fetch(apiUrl);
+                        if (apiRes.ok) {
+                            const apiData = await apiRes.json();
+                            const apiProduct = apiData.data?.[0];
+                            if (apiProduct) {
+                                if (apiProduct.seller && apiProduct.seller.title) {
+                                    product.seller = apiProduct.seller.title.trim();
+                                }
+                                if (apiProduct.old_price && apiProduct.old_price > 0) {
+                                    product.oldPrice = parseInt(apiProduct.old_price) || product.oldPrice;
+                                    const actualPrice = apiProduct.price || product.price;
+                                    if (product.oldPrice > actualPrice) {
+                                        product.discount = Math.round(((product.oldPrice - actualPrice) / product.oldPrice) * 100);
+                                    }
+                                }
+                                if (apiProduct.price && apiProduct.price > 0) {
+                                    product.price = parseInt(apiProduct.price) || product.price;
+                                }
+                            }
+                        }
+                    } catch (apiErr) {
+                        console.log('TradeScout: Failed to fetch Rozetka API for details', apiErr);
+                    }
+                }
             } catch (err) {
                 console.log('TradeScout: Detail fetch skipped for', product.name);
             }
