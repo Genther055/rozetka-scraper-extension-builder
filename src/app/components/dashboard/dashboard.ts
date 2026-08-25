@@ -3,7 +3,7 @@ import {Router} from '@angular/router';
 import {HttpClient} from '@angular/common/http';
 import {FormsModule} from '@angular/forms';
 import {CommonModule} from '@angular/common';
-import * as XLSX from 'xlsx';
+import * as ExcelJS from 'exceljs';
 
 interface Product {
   name: string;
@@ -621,7 +621,7 @@ export class DashboardComponent implements OnInit {
     this.router.navigate(['/login']);
   }
 
-  exportToExcel() {
+  async exportToExcel() {
     if (this.filteredProducts.length === 0) return;
 
     // 1. Збираємо всі унікальні НАДІЙНО НОРМАЛІЗОВАНІ назви характеристик
@@ -635,75 +635,183 @@ export class DashboardComponent implements OnInit {
     });
     const dynamicKeys = Array.from(dynamicKeysSet);
 
-    // 2. Формуємо заголовки колонок
-    const baseHeaders = ['Назва товару', 'Ціна без знижки (грн)', 'Ціна зі знижкою (грн)', 'Знижка (%)', 'Рейтинг', 'Відгуки', 'Наявність', 'Продавець', 'Категорія'];
-    const headers = [...baseHeaders, ...dynamicKeys, 'Опис товару', 'Посилання'];
+    // 2. Створюємо Excel Workbook & Worksheet
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'TradeScout Analytics';
+    workbook.created = new Date();
 
-    // 3. Формуємо масив рядків даних для XLSX
-    const dataRows: (string | number)[][] = [headers];
+    const worksheet = workbook.addWorksheet('Товари Rozetka', {
+      views: [{ state: 'frozen', ySplit: 1, showGridLines: true }]
+    });
 
-    this.filteredProducts.forEach(p => {
+    // 3. Формуємо опис колонок
+    const columns: Partial<ExcelJS.Column>[] = [
+      { header: 'Назва товару', key: 'name', width: 40 },
+      { header: 'Ціна без знижки (грн)', key: 'oldPrice', width: 22 },
+      { header: 'Ціна зі знижкою (грн)', key: 'price', width: 22 },
+      { header: 'Знижка (%)', key: 'discount', width: 14 },
+      { header: 'Рейтинг', key: 'rating', width: 12 },
+      { header: 'Відгуки', key: 'reviews', width: 12 },
+      { header: 'Наявність', key: 'inStock', width: 16 },
+      { header: 'Продавець', key: 'seller', width: 20 },
+      { header: 'Категорія', key: 'category', width: 22 },
+    ];
+
+    dynamicKeys.forEach((k, idx) => {
+      columns.push({ header: k, key: `spec_${idx}`, width: 22 });
+    });
+
+    columns.push(
+      { header: 'Опис товару', key: 'description', width: 45 },
+      { header: 'Посилання', key: 'link', width: 16 }
+    );
+
+    worksheet.columns = columns;
+
+    // 4. Стилізуємо заголовок (Row 1)
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 30;
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF0F172A' } // Dark Slate Navy #0F172A
+      };
+      cell.font = {
+        name: 'Segoe UI',
+        size: 10.5,
+        bold: true,
+        color: { argb: 'FFFFFFFF' }
+      };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF334155' } },
+        left: { style: 'thin', color: { argb: 'FF334155' } },
+        bottom: { style: 'medium', color: { argb: 'FF3B82F6' } },
+        right: { style: 'thin', color: { argb: 'FF334155' } }
+      };
+    });
+
+    // 5. Додаємо та стилізуємо дані
+    this.filteredProducts.forEach((p, index) => {
       const specsMap: Record<string, string> = {};
       this.getSpecsArray(p).forEach(s => {
         const normKey = this.normalizeSpecKey(s.key);
         specsMap[normKey] = s.val;
       });
 
-      const inStockText = p.inStock !== false ? 'В наявності' : 'Немає';
-      const rawName = p.name || '';
-      const rawDesc = p.description || '';
+      const inStock = p.inStock !== false;
+      const inStockText = inStock ? 'В наявності' : 'Немає';
+      const rowData: Record<string, any> = {
+        name: p.name || '',
+        oldPrice: p.oldPrice || p.price || 0,
+        price: p.price || 0,
+        discount: p.discount ? `${p.discount}%` : '0%',
+        rating: p.rating ? Number(p.rating) : 0,
+        reviews: p.reviews ? Number(p.reviews) : 0,
+        inStock: inStockText,
+        seller: p.seller || 'Rozetka',
+        category: p.category || ''
+      };
 
-      const row: (string | number)[] = [
-        rawName,
-        p.oldPrice || p.price || 0,
-        p.price || 0,
-        p.discount ? `${p.discount}%` : '0%',
-        p.rating || 0,
-        p.reviews || 0,
-        inStockText,
-        p.seller || 'Rozetka',
-        p.category || ''
-      ];
-
-      // Динамічні характеристики
-      dynamicKeys.forEach(k => {
-        const val = specsMap[k] || '—';
-        row.push(val);
+      dynamicKeys.forEach((k, idx) => {
+        rowData[`spec_${idx}`] = specsMap[k] || '—';
       });
 
-      row.push(rawDesc);
-      row.push(p.link || '');
+      rowData['description'] = p.description || '';
+      rowData['link'] = p.link ? { text: 'Відкрити 🔗', hyperlink: p.link } : '';
 
-      dataRows.push(row);
-    });
+      const row = worksheet.addRow(rowData);
+      row.height = 22;
 
-    // 4. Створюємо Excel робочу книгу та сторінку
-    const ws = XLSX.utils.aoa_to_sheet(dataRows);
+      const isEven = index % 2 === 0;
+      const bgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC'; // Zebra striping
 
-    // Налаштовуємо авто-ширину колонок
-    const colWidths = headers.map((h, i) => {
-      let maxLen = h.length;
-      dataRows.forEach(r => {
-        const cell = r[i] !== undefined && r[i] !== null ? String(r[i]) : '';
-        if (cell.length > maxLen) {
-          maxLen = cell.length;
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        cell.font = { name: 'Segoe UI', size: 10, color: { argb: 'FF1E293B' } };
+        cell.alignment = { vertical: 'middle' };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+        };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: bgArgb }
+        };
+
+        // Спеціальні стилі для колонок
+        if (colNumber === 1) { // Назва
+          cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+        } else if (colNumber === 2) { // Стара ціна
+          cell.alignment = { vertical: 'middle', horizontal: 'right' };
+          cell.numFmt = '#,##0 "грн"';
+          cell.font = { name: 'Segoe UI', size: 10, color: { argb: 'FF64748B' } };
+        } else if (colNumber === 3) { // Ціна зі знижкою
+          cell.alignment = { vertical: 'middle', horizontal: 'right' };
+          cell.numFmt = '#,##0 "грн"';
+          cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF059669' } }; // Emerald Green
+        } else if (colNumber === 4) { // Знижка
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          if (p.discount && p.discount > 0) {
+            cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FFDC2626' } }; // Red
+          }
+        } else if (colNumber === 5) { // Рейтинг
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FFD97706' } }; // Amber
+        } else if (colNumber === 6) { // Відгуки
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.numFmt = '#,##0';
+        } else if (colNumber === 7) { // Наявність
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.font = {
+            name: 'Segoe UI',
+            size: 10,
+            bold: true,
+            color: { argb: inStock ? 'FF10B981' : 'FFEF4444' }
+          };
+        } else if (colNumber === 8) { // Продавець
+          cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          cell.font = { name: 'Segoe UI', size: 10, bold: (p.seller === 'Rozetka'), color: { argb: 'FF1E293B' } };
+        } else if (colNumber === columns.length) { // Посилання
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.font = { name: 'Segoe UI', size: 10, underline: true, color: { argb: 'FF2563EB' } };
         }
       });
-      return { wch: Math.min(Math.max(maxLen + 2, 12), 65) };
     });
-    ws['!cols'] = colWidths;
 
-    // Вмикаємо фільтри на всі колонки (AutoFilter)
-    if (ws['!ref']) {
-      ws['!autofilter'] = { ref: ws['!ref'] };
-    }
+    // 6. Вмикаємо AutoFilter на всі колонки
+    worksheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: columns.length }
+    };
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Товари Rozetka');
+    // 7. Автопідбір ширини колонок за вмістом
+    worksheet.columns.forEach((col) => {
+      let maxLen = col.header ? String(col.header).length : 12;
+      col.eachCell?.({ includeEmpty: false }, (cell) => {
+        const cellVal = cell.value ? (typeof cell.value === 'object' && 'text' in cell.value ? cell.value.text : String(cell.value)) : '';
+        if (cellVal.length > maxLen) {
+          maxLen = cellVal.length;
+        }
+      });
+      col.width = Math.min(Math.max(maxLen + 3, 14), 55);
+    });
 
-    // 5. Зберігаємо у справжній бінарний .xlsx файл
-    const fileName = `TradeScout_Master_Export_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    // 8. Генеруємо та завантажуємо нативний .xlsx файл
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `TradeScout_Master_Export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
 
