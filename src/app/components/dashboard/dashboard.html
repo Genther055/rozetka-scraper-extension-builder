@@ -518,21 +518,7 @@
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('priceChange')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
-                    <div class="flex items-center gap-1">
-                      <span>Зміни ціни</span>
-                      <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'priceChange'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                      <span class="material-icons text-xs text-slate-600" *ngIf="sortColumn !== 'priceChange'">unfold_more</span>
-                    </div>
-                  </th>
-                  
-                  <th (click)="sortBy('reviewsGrowth')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
-                    <div class="flex items-center gap-1">
-                      <span>Ріст відгуків</span>
-                      <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'reviewsGrowth'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                      <span class="material-icons text-xs text-slate-600" *ngIf="sortColumn !== 'reviewsGrowth'">unfold_more</span>
-                    </div>
-                  </th>
+
                   
                   <th (click)="sortBy('inStock')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
                     <div class="flex items-center gap-1">
@@ -625,19 +611,6 @@
                   <td class="py-4 px-3 text-xs text-slate-400 whitespace-nowrap">{{ item.seller || 'Rozetka' }}</td>
                   <td class="py-4 px-3 font-mono text-center whitespace-nowrap">{{ item.sellersCount || 1 }}</td>
                   
-                  <!-- Зміни ціни -->
-                  <td class="py-4 px-3 font-mono text-xs whitespace-nowrap">
-                    <span *ngIf="item.priceChange && item.priceChange > 0" class="text-rose-400">+{{ item.priceChange }} ₴</span>
-                    <span *ngIf="item.priceChange && item.priceChange < 0" class="text-emerald-400">{{ item.priceChange }} ₴</span>
-                    <span *ngIf="!item.priceChange" class="text-slate-600">—</span>
-                  </td>
-                  
-                  <!-- Зростання кількості відгуків -->
-                  <td class="py-4 px-3 font-mono text-xs text-center whitespace-nowrap">
-                    <span *ngIf="item.reviewsGrowth && item.reviewsGrowth > 0" class="text-indigo-400">+{{ item.reviewsGrowth }}</span>
-                    <span *ngIf="!item.reviewsGrowth" class="text-slate-600">—</span>
-                  </td>
-                  
                   <td class="py-4 px-3 whitespace-nowrap">
                     <span 
                       [class.text-emerald-400]="item.inStock !== false"
@@ -686,7 +659,7 @@
                 </tr>
 
                 <tr *ngIf="filteredProducts.length === 0">
-                  <td colspan="16" class="py-12 text-center text-slate-500 font-semibold">
+                  <td colspan="15" class="py-12 text-center text-slate-500 font-semibold">
                     Жодного товару не знайдено за вказаними фільтрами.
                   </td>
                 </tr>
