@@ -46,7 +46,7 @@ export class DashboardComponent implements OnInit {
   // Filters
   searchQuery = '';
   minPrice = 0;
-  maxPrice = 10000;
+  maxPrice: number | null = null;
   minRating = 0;
   statusFilter = 'all';
   stockFilter = 'all';
@@ -336,7 +336,7 @@ export class DashboardComponent implements OnInit {
   applyFilters() {
     this.filteredProducts = this.products.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(this.searchQuery.toLowerCase());
-      const matchesPrice = p.price >= this.minPrice && p.price <= this.maxPrice;
+      const matchesPrice = p.price >= (this.minPrice || 0) && (this.maxPrice === null || this.maxPrice === undefined || p.price <= this.maxPrice);
       const matchesRating = p.rating >= this.minRating;
       const matchesStatus = this.statusFilter === 'all' || p.aiStatus === this.statusFilter;
       
@@ -410,10 +410,10 @@ export class DashboardComponent implements OnInit {
     this.applyFilters();
   }
 
-  resetFilters() {
+   resetFilters() {
     this.searchQuery = '';
     this.minPrice = 0;
-    this.maxPrice = 10000;
+    this.maxPrice = null;
     this.minRating = 0;
     this.statusFilter = 'all';
     this.stockFilter = 'all';
