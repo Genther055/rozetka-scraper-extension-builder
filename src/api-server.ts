@@ -89,10 +89,17 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
   }
   console.log(`[API PORT 4000] Received batch of ${newItems.length} items. Current total in products.json: ${products.length}`);
 
+  const getProductId = (link: string) => {
+    const match = link.match(/\/p(\d+)/) || link.match(/p-(\d+)/) || link.match(/p(\d+)/);
+    return match ? match[1] : '';
+  };
+
   const getItemKey = (p: any) => {
     const pLink = p.link ? p.link.split('?')[0].split('#')[0] : '';
+    const pId = getProductId(pLink);
+    if (pId) return pId;
     const pName = (p.name || '').trim().toLowerCase();
-    return pLink ? pLink : pName;
+    return pName;
   };
 
   newItems.forEach((item: any) => {
@@ -173,6 +180,16 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
     } catch (e) {
       console.error('Error processing scraped product item inside api-server:', e, item);
     }
+  });
+
+  // Дедуплікуємо вхідний масив перед збереженням
+  const seenIds = new Set<string>();
+  products = products.filter((p: any) => {
+    if (!p) return false;
+    const key = getItemKey(p);
+    if (seenIds.has(key)) return false;
+    seenIds.add(key);
+    return true;
   });
 
   // Рахуємо кількість товарів у поточній категорії для зворотного зв'язку
