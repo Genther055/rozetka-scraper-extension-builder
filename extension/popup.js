@@ -38,17 +38,6 @@ function updateProgress(percent, count, actionMsg, totalEstimated, syncedCount) 
     if (actionMsg) {
         statusText.innerText = actionMsg;
     }
-
-    const syncContainer = document.getElementById('sync-container');
-    const syncText = document.getElementById('sync-text');
-    if (syncContainer && syncText) {
-        if (syncedCount !== undefined && syncedCount > 0) {
-            syncContainer.style.display = 'flex';
-            syncText.innerHTML = `Синхронізовано з платформою: <strong>${syncedCount}</strong> шт.`;
-        } else {
-            syncContainer.style.display = 'none';
-        }
-    }
 }
 
 // Відновлення стану з chrome.storage
