@@ -327,7 +327,7 @@ export class DashboardComponent implements OnInit {
       this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
     } else {
       this.sortColumn = column;
-      this.sortDirection = column === 'price' || column === 'rating' || column === 'reviews' || column === 'lqs' ? 'desc' : 'asc';
+      this.sortDirection = column === 'price' || column === 'oldPrice' || column === 'discount' || column === 'rating' || column === 'reviews' || column === 'lqs' ? 'desc' : 'asc';
     }
     this.applyFilters();
     this.cdr.markForCheck();
@@ -370,6 +370,12 @@ export class DashboardComponent implements OnInit {
         } else if (this.sortColumn === 'price') {
           valA = a.price || 0;
           valB = b.price || 0;
+        } else if (this.sortColumn === 'oldPrice') {
+          valA = a.oldPrice || a.price || 0;
+          valB = b.oldPrice || b.price || 0;
+        } else if (this.sortColumn === 'discount') {
+          valA = a.discount || 0;
+          valB = b.discount || 0;
         } else if (this.sortColumn === 'rating') {
           valA = a.rating || 0;
           valB = b.rating || 0;

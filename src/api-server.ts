@@ -72,6 +72,8 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
       const itemPrice = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
       const itemReviews = typeof item.reviews === 'number' ? item.reviews : parseInt(item.reviews) || 0;
       const itemRating = typeof item.rating === 'number' ? item.rating : parseFloat(item.rating) || 5.0;
+      const itemOldPrice = typeof item.oldPrice === 'number' ? item.oldPrice : (parseFloat(item.oldPrice) || itemPrice);
+      const itemDiscount = typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0);
 
       const itemKey = getItemKey({ ...item, link: normalizedLink });
       const exists = products.some(p => p && getItemKey(p) === itemKey);
@@ -80,6 +82,8 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
         products.push({
           name: item.name || 'Товар без назви',
           price: itemPrice,
+          oldPrice: itemOldPrice,
+          discount: itemDiscount,
           rating: itemRating,
           reviews: itemReviews,
           inStock: item.inStock !== false,
@@ -104,6 +108,8 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
           products[index].reviewsGrowth = itemReviews - oldReviews;
 
           products[index].price = itemPrice;
+          products[index].oldPrice = itemOldPrice;
+          products[index].discount = itemDiscount;
           products[index].reviews = itemReviews;
           products[index].rating = itemRating;
           products[index].name = item.name || products[index].name;

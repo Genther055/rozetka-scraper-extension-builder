@@ -454,11 +454,27 @@
                   
                   <th class="py-4 px-3">Характеристики</th>
                   
+                  <th (click)="sortBy('oldPrice')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                    <div class="flex items-center gap-1">
+                      <span>Стара ціна</span>
+                      <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'oldPrice'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                      <span class="material-icons text-xs text-slate-600" *ngIf="sortColumn !== 'oldPrice'">unfold_more</span>
+                    </div>
+                  </th>
+                  
                   <th (click)="sortBy('price')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
                     <div class="flex items-center gap-1">
-                      <span>Ціна</span>
+                      <span>Ціна зі знижкою</span>
                       <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'price'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
                       <span class="material-icons text-xs text-slate-600" *ngIf="sortColumn !== 'price'">unfold_more</span>
+                    </div>
+                  </th>
+                  
+                  <th (click)="sortBy('discount')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                    <div class="flex items-center gap-1">
+                      <span>Знижка</span>
+                      <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'discount'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                      <span class="material-icons text-xs text-slate-600" *ngIf="sortColumn !== 'discount'">unfold_more</span>
                     </div>
                   </th>
                   
@@ -569,14 +585,22 @@
                     </div>
                     <span *ngIf="!item.specs" class="text-slate-500 italic">Стандартні</span>
                   </td>
-                  <td class="py-4 px-3 font-mono whitespace-nowrap text-xs">
-                    <div class="flex flex-col">
-                      <div class="flex items-center gap-1.5">
-                        <span class="text-emerald-400 font-bold text-sm">{{ item.price }} ₴</span>
-                        <span *ngIf="item.discount" class="px-1 py-0.5 text-[9px] font-extrabold bg-rose-950/50 text-rose-400 border border-rose-900/30 rounded-md">-{{ item.discount }}%</span>
-                      </div>
-                      <span *ngIf="item.oldPrice && item.oldPrice > item.price" class="text-[10px] text-slate-500 line-through leading-tight">{{ item.oldPrice }} ₴</span>
-                    </div>
+                  <!-- Стара ціна -->
+                  <td class="py-4 px-3 font-mono text-xs whitespace-nowrap text-slate-500 line-through">
+                    {{ item.oldPrice && item.oldPrice > item.price ? item.oldPrice + ' ₴' : '—' }}
+                  </td>
+                  
+                  <!-- Ціна зі знижкою -->
+                  <td class="py-4 px-3 font-mono text-emerald-400 font-bold text-sm whitespace-nowrap">
+                    {{ item.price }} ₴
+                  </td>
+                  
+                  <!-- Знижка -->
+                  <td class="py-4 px-3 font-mono text-xs whitespace-nowrap">
+                    <span *ngIf="item.discount" class="px-1.5 py-0.5 text-[10px] font-extrabold bg-rose-950/50 text-rose-400 border border-rose-900/30 rounded-md">
+                      -{{ item.discount }}%
+                    </span>
+                    <span *ngIf="!item.discount" class="text-slate-500">—</span>
                   </td>
                   <td class="py-4 px-3 whitespace-nowrap">
                     <div class="flex items-center gap-1">
@@ -662,7 +686,7 @@
                 </tr>
 
                 <tr *ngIf="filteredProducts.length === 0">
-                  <td colspan="14" class="py-12 text-center text-slate-500 font-semibold">
+                  <td colspan="16" class="py-12 text-center text-slate-500 font-semibold">
                     Жодного товару не знайдено за вказаними фільтрами.
                   </td>
                 </tr>
