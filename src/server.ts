@@ -134,6 +134,19 @@ app.post('/api/products', (req, res) => {
   if (!Array.isArray(newItems)) {
     newItems = [];
   }
+
+  const getProductId = (link: string) => {
+    const match = link.match(/\/p(\d+)/) || link.match(/p-(\d+)/) || link.match(/p(\d+)/);
+    return match ? match[1] : '';
+  };
+
+  const getItemKey = (p: any) => {
+    const pLink = p.link ? p.link.split('?')[0].split('#')[0] : '';
+    const pId = getProductId(pLink);
+    if (pId) return pId;
+    const pName = (p.name || '').trim().toLowerCase();
+    return pName;
+  };
   
   newItems.forEach((item: any) => {
     if (!item || typeof item !== 'object') return;
@@ -147,12 +160,8 @@ app.post('/api/products', (req, res) => {
       const itemOldPrice = typeof item.oldPrice === 'number' ? item.oldPrice : (parseFloat(item.oldPrice) || itemPrice);
       const itemDiscount = typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0);
 
-      const exists = products.some(p => {
-        if (!p || typeof p !== 'object') return false;
-        if (!p || typeof p !== 'object') return false;
-        const pLink = p.link ? p.link.split('?')[0].split('#')[0] : '';
-        return pLink === normalizedLink;
-      });
+      const itemKey = getItemKey({ ...item, link: normalizedLink });
+      const exists = products.some(p => p && getItemKey(p) === itemKey);
       
       if (!exists) {
         products.push({
@@ -182,12 +191,7 @@ app.post('/api/products', (req, res) => {
           resolveSellerInServerBackground(productId, normalizedLink);
         }
       } else {
-        const index = products.findIndex(p => {
-          if (!p || typeof p !== 'object') return false;
-          if (!p || typeof p !== 'object') return false;
-          const pLink = p.link ? p.link.split('?')[0].split('#')[0] : '';
-          return pLink === normalizedLink;
-        });
+        const index = products.findIndex(p => p && getItemKey(p) === itemKey);
         if (index !== -1) {
           const oldPrice = products[index].price || 0;
           const oldReviews = products[index].reviews || 0;
@@ -222,6 +226,16 @@ app.post('/api/products', (req, res) => {
     } catch (e) {
       console.error('Error processing scraped product item:', e, item);
     }
+  });
+
+  // Дедуплікуємо вхідний масив перед збереженням
+  const seenIds = new Set<string>();
+  products = products.filter((p: any) => {
+    if (!p) return false;
+    const key = getItemKey(p);
+    if (seenIds.has(key)) return false;
+    seenIds.add(key);
+    return true;
   });
 
   // Рахуємо кількість товарів у поточній категорії для зворотного зв'язку
