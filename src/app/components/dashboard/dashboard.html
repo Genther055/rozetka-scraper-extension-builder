@@ -167,58 +167,75 @@
       </div>
 
       <!-- Stats Grid (Hidden if no products) -->
-      <!-- Stats Grid (5 Cards: Зібрано товарів, Середня ціна, Середній рейтинг, В наявності, К-ть продавців) -->
-      <section *ngIf="products.length > 0" class="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6">
+      <!-- Stats Grid (5 Deterministic Cards: Обсяг вибірки, Цінові орієнтири, Складські залишки, Концентрація CR3, Бар'єр входу) -->
+      <section *ngIf="products.length > 0 && analyticsSummary" class="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6">
+        <!-- 1. Обсяг вибірки -->
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
-            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Зібрано товарів</p>
-            <p class="text-3xl font-extrabold text-white mt-1">{{ totalItems }}</p>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Обсяг вибірки</p>
+            <p class="text-3xl font-extrabold text-white mt-1">{{ analyticsSummary.kpi.totalProducts }} <span class="text-xs font-bold text-slate-400">тов.</span></p>
+            <p class="text-xs text-indigo-400/90 font-mono font-semibold mt-0.5">{{ analyticsSummary.kpi.uniqueSellersCount }} унікальних продавців</p>
           </div>
           <div class="w-12 h-12 bg-indigo-950/50 border border-indigo-500/20 text-indigo-300 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/10">
             <span class="material-icons">inventory_2</span>
           </div>
         </div>
 
+        <!-- 2. Цінові орієнтири -->
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
-            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Середня ціна</p>
-            <p class="text-3xl font-extrabold text-emerald-400 mt-1">{{ avgPrice }} ₴</p>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Цінові орієнтири</p>
+            <p class="text-xl font-extrabold text-emerald-400 mt-1 font-mono">Мед: {{ analyticsSummary.kpi.medianPrice | number }} ₴</p>
+            <p class="text-xs text-slate-300 font-mono font-semibold mt-0.5">Сер: {{ analyticsSummary.kpi.avgPrice | number }} ₴</p>
           </div>
           <div class="w-12 h-12 bg-emerald-950/50 border border-emerald-500/20 text-emerald-300 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/10">
             <span class="material-icons">payments</span>
           </div>
         </div>
 
-        <div class="p-6 premium-card flex items-center justify-between transition-all">
-          <div>
-            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Середній рейтинг</p>
-            <p class="text-3xl font-extrabold text-amber-400 mt-1">{{ avgRating > 0 ? (avgRating + ' / 5.0') : '—' }}</p>
-          </div>
-          <div class="w-12 h-12 bg-amber-950/50 border border-amber-500/20 text-amber-300 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/10">
-            <span class="material-icons">grade</span>
-          </div>
-        </div>
-
-        <!-- NEW: В наявності card -->
+        <!-- 3. Складські залишки -->
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
             <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">В наявності</p>
-            <p class="text-3xl font-extrabold text-teal-300 mt-1">{{ inStockCount }}</p>
-            <p class="text-[11px] text-teal-400/80 font-mono font-semibold mt-0.5">{{ inStockPct }}% каталогу</p>
+            <p class="text-3xl font-extrabold text-teal-300 mt-1">{{ analyticsSummary.kpi.inStockPercentage }}%</p>
+            <p class="text-xs text-teal-400/90 font-mono font-semibold mt-0.5">{{ analyticsSummary.kpi.inStockCount }} шт на складі</p>
           </div>
           <div class="w-12 h-12 bg-teal-950/50 border border-teal-500/20 text-teal-300 rounded-xl flex items-center justify-center shadow-lg shadow-teal-500/10">
             <span class="material-icons">check_circle</span>
           </div>
         </div>
 
-        <!-- Renamed: К-ть продавців card -->
+        <!-- 4. Індекс концентрації (CR3) -->
+        <div class="p-6 premium-card flex items-center justify-between transition-all">
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Концентрація (CR3)</p>
+            <p class="text-3xl font-extrabold text-violet-300 mt-1">CR3: {{ analyticsSummary.kpi.cr3 }}%</p>
+            <p class="text-xs font-mono font-semibold mt-0.5" 
+               [class.text-emerald-400]="analyticsSummary.kpi.cr3Level === 'LOW'"
+               [class.text-amber-400]="analyticsSummary.kpi.cr3Level === 'MEDIUM'"
+               [class.text-rose-400]="analyticsSummary.kpi.cr3Level === 'HIGH'">
+              {{ analyticsSummary.kpi.cr3Level === 'LOW' ? 'Низька' : analyticsSummary.kpi.cr3Level === 'MEDIUM' ? 'Помірна' : 'Висока' }} (HHI: {{ analyticsSummary.kpi.hhi }})
+            </p>
+          </div>
+          <div class="w-12 h-12 bg-violet-950/50 border border-violet-500/20 text-violet-300 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/10">
+            <span class="material-icons">pie_chart</span>
+          </div>
+        </div>
+
+        <!-- 5. Бар'єр входу -->
         <div class="p-6 premium-card flex items-center justify-between transition-all col-span-2 lg:col-span-1">
           <div>
-            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">К-ть продавців</p>
-            <p class="text-3xl font-extrabold text-indigo-300 mt-1">{{ sellersCount }}</p>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Бар'єр входу</p>
+            <p class="text-2xl font-extrabold mt-1"
+               [class.text-emerald-400]="analyticsSummary.kpi.entryBarrier.level === 'LOW'"
+               [class.text-amber-400]="analyticsSummary.kpi.entryBarrier.level === 'MEDIUM'"
+               [class.text-rose-400]="analyticsSummary.kpi.entryBarrier.level === 'HIGH'">
+              {{ analyticsSummary.kpi.entryBarrier.level === 'LOW' ? 'Низький' : analyticsSummary.kpi.entryBarrier.level === 'MEDIUM' ? 'Середній' : 'Високий' }}
+            </p>
+            <p class="text-xs text-slate-400 font-mono font-semibold mt-0.5">Медіана топ-10: {{ analyticsSummary.kpi.entryBarrier.medianTop10Reviews }} відг.</p>
           </div>
-          <div class="w-12 h-12 bg-indigo-950/50 border border-indigo-500/20 text-indigo-300 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/10">
-            <span class="material-icons">storefront</span>
+          <div class="w-12 h-12 bg-amber-950/50 border border-amber-500/20 text-amber-300 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/10">
+            <span class="material-icons">shield</span>
           </div>
         </div>
       </section>
@@ -250,244 +267,233 @@
         </div>
       </div>
 
-      <!-- TAB 1: OVERVIEW -->
-      <div *ngIf="activeTab === 'overview' && products.length > 0" class="space-y-6 animate-fadeIn">
-        <!-- Distribution Charts -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div class="p-6 premium-card space-y-4 transition-all">
-            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Розподіл цін у ніші</h3>
-            <div class="space-y-3">
-              <div>
-                <div class="flex justify-between text-xs text-slate-450 mb-1">
-                  <span>Бюджетний сегмент (&lt; 1000 ₴)</span>
-                  <span>{{ (products.filter(p => p.price < 1000).length / totalItems * 100) | number:'1.0-0' }}%</span>
-                </div>
-                <div class="w-full h-2 bg-black/40 border border-white/5 rounded-full overflow-hidden">
-                  <div class="h-full bg-emerald-550 rounded-full shadow-lg shadow-emerald-500/20" [style.width.%]="(products.filter(p => p.price < 1000).length / totalItems * 100)"></div>
-                </div>
-              </div>
-              <div>
-                <div class="flex justify-between text-xs text-slate-450 mb-1">
-                  <span>Середній сегмент (1000 ₴ - 2500 ₴)</span>
-                  <span>{{ (products.filter(p => p.price >= 1000 && p.price <= 2500).length / totalItems * 100) | number:'1.0-0' }}%</span>
-                </div>
-                <div class="w-full h-2 bg-black/40 border border-white/5 rounded-full overflow-hidden">
-                  <div class="h-full bg-indigo-500 rounded-full shadow-lg shadow-indigo-500/20" [style.width.%]="(products.filter(p => p.price >= 1000 && p.price <= 2500).length / totalItems * 100)"></div>
+      <!-- TAB 1: OVERVIEW (Deterministic Niche Analytics Module) -->
+      <div *ngIf="activeTab === 'overview' && products.length > 0 && analyticsSummary" class="space-y-6 animate-fadeIn">
+        
+        <!-- Central Grid: Price & Demand Distribution (8 cols) + Niche Structure (4 cols) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+          
+          <!-- Left (8 cols): РОЗПОДІЛ ЦІН ТА ПОПИТУ У НІШІ -->
+          <div class="lg:col-span-8 p-6 premium-card flex flex-col justify-between space-y-5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+              <div class="flex items-center gap-2">
+                <span class="material-icons text-indigo-400 text-lg">bar_chart</span>
+                <div>
+                  <h3 class="text-sm font-bold text-white uppercase tracking-wider">Розподіл цін та попиту у ніші</h3>
+                  <p class="text-xs text-slate-400">Співвідношення пропозиції (кількість SKU) та ринкового попиту (сума відгуків)</p>
                 </div>
               </div>
-              <div>
-                <div class="flex justify-between text-xs text-slate-450 mb-1">
-                  <span>Преміум сегмент (&gt; 2500 ₴)</span>
-                  <span>{{ (products.filter(p => p.price > 2500).length / totalItems * 100) | number:'1.0-0' }}%</span>
+
+              <!-- Visual Legend -->
+              <div class="flex items-center gap-4 text-xs font-semibold">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded-md bg-indigo-500 shadow-sm"></span>
+                  <span class="text-slate-300">Пропозиція (Товари)</span>
                 </div>
-                <div class="w-full h-2 bg-black/40 border border-white/5 rounded-full overflow-hidden">
-                  <div class="h-full bg-rose-500 rounded-full shadow-lg shadow-rose-500/20" [style.width.%]="(products.filter(p => p.price > 2500).length / totalItems * 100)"></div>
+                <div class="flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded-md bg-emerald-400 shadow-sm"></span>
+                  <span class="text-slate-300">Попит (Відгуки)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dynamic Bins List (7 intervals) -->
+            <div class="space-y-3.5">
+              <div *ngFor="let bin of analyticsSummary.priceDistribution" class="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2 hover:border-slate-700 transition-colors">
+                <!-- Bin Header Info -->
+                <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div class="flex items-center gap-2">
+                    <span class="font-mono font-extrabold text-white text-sm bg-slate-900 px-2.5 py-0.5 rounded-lg border border-slate-750">
+                      {{ bin.rangeLabel }}
+                    </span>
+                    <span *ngIf="bin.isSweetSpot" class="px-2.5 py-0.5 text-[11px] font-black bg-amber-500 text-slate-950 rounded-full shadow-lg shadow-amber-500/30 flex items-center gap-1">
+                      ★ SWEET SPOT (Ціновий оптимум)
+                    </span>
+                  </div>
+
+                  <div class="flex items-center gap-3 font-mono text-xs">
+                    <span class="text-indigo-300">
+                      <b class="text-white">{{ bin.productsCount }}</b> тов. ({{ bin.productsShare }}%)
+                    </span>
+                    <span class="text-slate-500">|</span>
+                    <span class="text-emerald-400">
+                      <b class="text-white">{{ bin.reviewsSum }}</b> відг. ({{ bin.reviewsShare }}%)
+                    </span>
+                    <span class="text-slate-500">|</span>
+                    <span class="text-slate-400 font-semibold">
+                      Віддача: <b class="text-amber-400">{{ bin.demandSupplyRatio }}</b> в/SKU
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Dual Progress Bars -->
+                <div class="space-y-1">
+                  <!-- Supply Bar (Products) -->
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 w-16 shrink-0">Товари</span>
+                    <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
+                      <div class="h-full bg-indigo-500 rounded-full transition-all duration-500 shadow-sm" [style.width.%]="bin.productsShare"></div>
+                    </div>
+                    <span class="text-[11px] font-mono text-indigo-300 w-10 text-right shrink-0">{{ bin.productsShare }}%</span>
+                  </div>
+
+                  <!-- Demand Bar (Reviews) -->
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 w-16 shrink-0">Відгуки</span>
+                    <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
+                      <div class="h-full bg-emerald-400 rounded-full transition-all duration-500 shadow-sm" [style.width.%]="bin.reviewsShare"></div>
+                    </div>
+                    <span class="text-[11px] font-mono text-emerald-400 w-10 text-right shrink-0">{{ bin.reviewsShare }}%</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="p-6 premium-card space-y-4 transition-all">
-            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Рейтинги задоволеності</h3>
-            <div class="space-y-3">
-              <div>
-                <div class="flex justify-between text-xs text-slate-450 mb-1">
-                  <span>Висока оцінка (4.5 - 5.0)</span>
-                  <span>{{ (products.filter(p => p.rating >= 4.5).length / totalItems * 100) | number:'1.0-0' }}%</span>
+          <!-- Right (4 cols): СТРУКТУРА ТА МОНОПОЛІЗАЦІЯ НІШІ -->
+          <div class="lg:col-span-4 p-6 premium-card flex flex-col justify-between space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+              <div class="flex items-center gap-2">
+                <span class="material-icons text-amber-400 text-lg">domain</span>
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider">Структура ніші</h3>
+              </div>
+              <span class="text-xs text-indigo-300 font-semibold bg-indigo-950/60 border border-indigo-500/30 px-2.5 py-0.5 rounded-full">
+                Детермінована модель
+              </span>
+            </div>
+
+            <!-- Card 1: Vendor vs 3P Split -->
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Rozetka vs 3P Селери</span>
+                <span class="material-icons text-indigo-400 text-sm">store</span>
+              </div>
+              
+              <!-- Split Bars -->
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-xs font-mono">
+                  <span class="text-emerald-400 font-bold">Rozetka: {{ analyticsSummary.kpi.vendorSplit.rozetkaShare }}% ({{ analyticsSummary.kpi.vendorSplit.rozetkaCount }} тов.)</span>
+                  <span class="text-indigo-300 font-bold">3P: {{ analyticsSummary.kpi.vendorSplit.thirdPartyShare }}% ({{ analyticsSummary.kpi.vendorSplit.thirdPartyCount }} тов.)</span>
                 </div>
-                <div class="w-full h-2 bg-black/40 border border-white/5 rounded-full overflow-hidden">
-                  <div class="h-full bg-amber-500 rounded-full shadow-lg shadow-amber-500/20" [style.width.%]="(products.filter(p => p.rating >= 4.5).length / totalItems * 100)"></div>
+                <div class="w-full h-3 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+                  <div class="bg-emerald-500 h-full transition-all duration-500" [style.width.%]="analyticsSummary.kpi.vendorSplit.rozetkaShare" title="Rozetka"></div>
+                  <div class="bg-indigo-500 h-full transition-all duration-500" [style.width.%]="analyticsSummary.kpi.vendorSplit.thirdPartyShare" title="3P Селери"></div>
                 </div>
               </div>
-              <div>
-                <div class="flex justify-between text-xs text-slate-450 mb-1">
-                  <span>Середня оцінка (3.0 - 4.4)</span>
-                  <span>{{ (products.filter(p => p.rating >= 3.0 && p.rating < 4.5).length / totalItems * 100) | number:'1.0-0' }}%</span>
-                </div>
-                <div class="w-full h-2 bg-black/40 border border-white/5 rounded-full overflow-hidden">
-                  <div class="h-full bg-indigo-400/70 rounded-full shadow-lg shadow-indigo-400/20" [style.width.%]="(products.filter(p => p.rating >= 3.0 && p.rating < 4.5).length / totalItems * 100)"></div>
-                </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">
+                {{ analyticsSummary.kpi.vendorSplit.rozetkaShare > 30 ? 'Маркетплейс активно контролює нішу власним стоком.' : 'Ніша відкрита для зовнішніх продавців (3P маркетплейс домінує).' }}
+              </p>
+            </div>
+
+            <!-- Card 2: HHI & Monopolization -->
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Індекс HHI (Герфіндаля)</span>
+                <span class="material-icons text-violet-400 text-sm">analytics</span>
               </div>
-              <div>
-                <div class="flex justify-between text-xs text-slate-450 mb-1">
-                  <span>Низька оцінка / Без оцінки (&lt; 3.0)</span>
-                  <span>{{ (products.filter(p => p.rating < 3.0).length / totalItems * 100) | number:'1.0-0' }}%</span>
-                </div>
-                <div class="w-full h-2 bg-black/40 border border-white/5 rounded-full overflow-hidden">
-                  <div class="h-full bg-slate-700 rounded-full shadow-lg shadow-slate-600/20" [style.width.%]="(products.filter(p => p.rating < 3.0).length / totalItems * 100)"></div>
-                </div>
+              <div class="flex items-baseline gap-2">
+                <span class="text-3xl font-black font-mono text-white">{{ analyticsSummary.kpi.hhi }}</span>
+                <span class="text-xs font-bold px-2.5 py-1 rounded-lg uppercase"
+                      [class.bg-emerald-950]="analyticsSummary.kpi.hhiLevel === 'LOW'"
+                      [class.text-emerald-300]="analyticsSummary.kpi.hhiLevel === 'LOW'"
+                      [class.border-emerald-700]="analyticsSummary.kpi.hhiLevel === 'LOW'"
+                      [class.bg-amber-950]="analyticsSummary.kpi.hhiLevel === 'MODERATE'"
+                      [class.text-amber-300]="analyticsSummary.kpi.hhiLevel === 'MODERATE'"
+                      [class.border-amber-700]="analyticsSummary.kpi.hhiLevel === 'MODERATE'"
+                      [class.bg-rose-950]="analyticsSummary.kpi.hhiLevel === 'HIGH'"
+                      [class.text-rose-300]="analyticsSummary.kpi.hhiLevel === 'HIGH'"
+                      [class.border-rose-700]="analyticsSummary.kpi.hhiLevel === 'HIGH'">
+                  {{ analyticsSummary.kpi.hhiLevel === 'LOW' ? 'Низька концентрація' : analyticsSummary.kpi.hhiLevel === 'MODERATE' ? 'Помірна концентрація' : 'Висока монополізація' }}
+                </span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">
+                {{ analyticsSummary.kpi.hhi < 1500 ? 'Здорова конкуренція, частки розподілені рівномірно.' : analyticsSummary.kpi.hhi <= 2500 ? 'Присутні помітні лідери, але вхід відкритий.' : 'Ринок сильно монополізований кількома великими селерами.' }}
+              </p>
+            </div>
+
+            <!-- Card 3: Top-3 Concentration (CR3) -->
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Концентрація Топ-3 (CR3)</span>
+                <span class="text-xs font-mono font-bold text-violet-300">{{ analyticsSummary.kpi.cr3 }}%</span>
+              </div>
+              <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                <div class="bg-violet-500 h-full rounded-full transition-all duration-500" [style.width.%]="analyticsSummary.kpi.cr3"></div>
+              </div>
+              <div class="flex flex-wrap gap-1.5 pt-1">
+                <span *ngFor="let s of analyticsSummary.sellersTable.slice(0, 3)" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 px-2 py-0.5 rounded-md font-mono">
+                  {{ s.sellerName }}: <b>{{ s.marketShare }}%</b>
+                </span>
               </div>
             </div>
+
           </div>
+
         </div>
 
-        <!-- EXTENDED SELLER & NICHE ANALYTICS SECTION -->
-        <div class="space-y-6 pt-2">
-          
-          <!-- Top Row: Market Share Pie Chart & Niche Leader Highlights -->
-          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-            
-            <!-- Left (5 cols): Detailed Market Share Pie/Donut Chart -->
-            <div class="lg:col-span-5 p-6 premium-card flex flex-col justify-between space-y-4">
-              <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
-                <div class="flex items-center gap-2">
-                  <span class="material-icons text-indigo-400 text-lg">donut_large</span>
-                  <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider">Розподіл часток ринку</h3>
-                </div>
-                <span class="text-xs text-slate-400 font-mono font-semibold">{{ sellersCount }} продавців</span>
-              </div>
-
-              <!-- SVG Donut Chart + Detailed Segment Legend -->
-              <div class="flex flex-col sm:flex-row items-center justify-center gap-6 py-2">
-                <div class="relative w-44 h-44 shrink-0">
-                  <svg class="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                    <!-- Background Circle -->
-                    <circle cx="50" cy="50" r="40" fill="transparent" stroke="#1e293b" stroke-width="14"></circle>
-                    <!-- Segment Circles -->
-                    <circle 
-                      *ngFor="let seg of sellerPieSegments" 
-                      cx="50" 
-                      cy="50" 
-                      r="40" 
-                      fill="transparent" 
-                      [attr.stroke]="seg.color" 
-                      stroke-width="14"
-                      [attr.stroke-dasharray]="seg.strokeDasharray"
-                      [attr.stroke-dashoffset]="seg.strokeDashoffset"
-                      class="transition-all duration-500 hover:opacity-80 cursor-pointer"
-                    >
-                      <title>{{ seg.name }}: {{ seg.productCount }} товарів ({{ seg.pct }}%)</title>
-                    </circle>
-                  </svg>
-
-                  <!-- Central Text Inside Donut -->
-                  <div class="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-                    <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Всього товарів</span>
-                    <span class="text-xl font-extrabold text-white font-mono">{{ totalItems }}</span>
-                    <span class="text-[10px] text-indigo-400 font-mono font-semibold mt-0.5">100% ринку</span>
-                  </div>
-                </div>
-
-                <!-- Detailed Color Legend with progress bars -->
-                <div class="space-y-1.5 flex-1 w-full text-xs max-h-52 overflow-y-auto pr-1">
-                  <div *ngFor="let seg of sellerPieSegments" class="flex flex-col gap-1 p-1.5 rounded-lg hover:bg-slate-900/60 transition-colors">
-                    <div class="flex items-center justify-between gap-2 min-w-0">
-                      <div class="flex items-center gap-2 min-w-0">
-                        <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" [style.backgroundColor]="seg.color"></span>
-                        <span class="text-slate-300 font-medium truncate text-xs" [title]="seg.name">{{ seg.name }}</span>
-                      </div>
-                      <div class="flex items-center gap-2 shrink-0 font-mono">
-                        <span class="text-slate-400 text-[11px]">{{ seg.productCount }} шт</span>
-                        <span class="font-bold text-white bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800 text-[11px]">{{ seg.pct }}%</span>
-                      </div>
-                    </div>
-                    <!-- Mini progress bar -->
-                    <div class="w-full h-1 bg-slate-800/80 rounded-full overflow-hidden">
-                      <div class="h-full rounded-full transition-all duration-500" [style.width.%]="seg.pct" [style.backgroundColor]="seg.color"></div>
-                    </div>
-                  </div>
-                </div>
+        <!-- Bottom: Deterministic Sellers Analytics Table -->
+        <div class="p-6 premium-card space-y-5">
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+            <div class="flex items-center gap-2">
+              <span class="material-icons text-indigo-400 text-lg">leaderboard</span>
+              <div>
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider">Аналітика продавців</h3>
+                <p class="text-xs text-slate-400">Детальний розрахунок часток, медіанних цін, відгуків та складської наявності</p>
               </div>
             </div>
 
-            <!-- Right (7 cols): Niche Leaders & Trust Stats -->
-            <div class="lg:col-span-7 p-6 premium-card flex flex-col justify-between space-y-4">
-              <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
-                <div class="flex items-center gap-2">
-                  <span class="material-icons text-amber-400 text-lg">emoji_events</span>
-                  <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider">Лідери ніші</h3>
-                </div>
-                <span class="text-xs text-indigo-300 font-semibold bg-indigo-950/60 border border-indigo-500/30 px-2.5 py-0.5 rounded-full">
-                  Аналітика активності
-                </span>
-              </div>
-
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <!-- Leader by Assortment -->
-                <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2 flex flex-col justify-between">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Лідер асортименту</span>
-                    <span class="material-icons text-indigo-400 text-sm">inventory_2</span>
-                  </div>
-                  <div>
-                    <p class="text-sm font-bold text-white truncate" [title]="topSellerByAssortment?.name">
-                      {{ topSellerByAssortment?.name || 'Немає' }}
-                    </p>
-                    <p class="text-xs text-indigo-300 font-mono font-bold mt-1">
-                      {{ topSellerByAssortment?.productCount || 0 }} товарів ({{ topSellerByAssortment?.marketSharePct || 0 }}%)
-                    </p>
-                  </div>
-                  <div class="text-[11px] text-slate-400 pt-1 border-t border-slate-900">
-                    Сер. чек: <span class="text-slate-200 font-semibold font-mono">{{ topSellerByAssortment?.avgPrice || 0 }} ₴</span>
-                  </div>
-                </div>
-
-                <!-- Leader by Reviews (Customer Trust & Sales Volume) -->
-                <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2 flex flex-col justify-between">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Лідер за відгуками</span>
-                    <span class="material-icons text-emerald-400 text-sm">forum</span>
-                  </div>
-                  <div>
-                    <p class="text-sm font-bold text-white truncate" [title]="topSellerByReviews?.name">
-                      {{ topSellerByReviews?.name || 'Немає' }}
-                    </p>
-                    <p class="text-xs text-emerald-400 font-mono font-bold mt-1 flex items-center gap-1">
-                      <span>{{ topSellerByReviews?.totalReviews || 0 }} відгуків</span>
-                    </p>
-                  </div>
-                  <div class="text-[11px] text-slate-400 pt-1 border-t border-slate-900">
-                    Асортимент: <span class="text-slate-200 font-semibold font-mono">{{ topSellerByReviews?.productCount || 0 }} шт</span>
-                  </div>
-                </div>
-
-                <!-- Leader by Rating (Quality & Satisfaction) -->
-                <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2 flex flex-col justify-between">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Найвищий рейтинг</span>
-                    <span class="material-icons text-amber-400 text-sm">star</span>
-                  </div>
-                  <div>
-                    <p class="text-sm font-bold text-white truncate" [title]="topSellerByRating?.name">
-                      {{ topSellerByRating?.name || 'Немає' }}
-                    </p>
-                    <p class="text-xs text-amber-400 font-mono font-bold mt-1 flex items-center gap-1">
-                      <span>★ {{ topSellerByRating?.avgRating || 0 }} / 5.0</span>
-                    </p>
-                  </div>
-                  <div class="text-[11px] text-slate-400 pt-1 border-t border-slate-900">
-                    Наявність: <span class="text-emerald-400 font-semibold font-mono">{{ topSellerByRating?.inStockPct || 100 }}%</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Quick Niche Summary Footnote -->
-              <div class="p-3 bg-indigo-950/20 border border-indigo-500/20 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span class="text-slate-300 font-medium flex items-center gap-1.5">
-                  <span class="material-icons text-indigo-400 text-sm">insights</span>
-                  Всього в ніші конкурують <b>{{ sellersCount }} продавців</b> з асортиментом у <b>{{ totalItems }} товарів</b>
-                </span>
-                <span class="text-slate-400 font-mono text-[11px]">
-                  Сума відгуків ніші: <b class="text-indigo-300">{{ calculateTotalNicheReviews() | number }}</b>
-                </span>
-              </div>
-            </div>
-
-          </div>
-
-          <!-- Bottom: Full Top Sellers Leaderboard Table with Search and Sort -->
-          <div class="p-6 premium-card space-y-4">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
-              <div class="flex items-center gap-2">
-                <span class="material-icons text-indigo-400 text-lg">leaderboard</span>
-                <div>
-                  <h3 class="text-sm font-bold text-white uppercase tracking-wider">Рейтинг та аналітика продавців</h3>
-                  <p class="text-xs text-slate-400">Порівняння асортименту, цін, кількості відгуків та репутації</p>
-                </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <!-- Quick Filter Chips -->
+              <div class="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                <button 
+                  (click)="setSellerQuickFilter('all')"
+                  [class.bg-indigo-600]="sellerQuickFilter === 'all'"
+                  [class.text-white]="sellerQuickFilter === 'all'"
+                  [class.text-slate-400]="sellerQuickFilter !== 'all'"
+                  class="px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer hover:text-white"
+                >
+                  Всі
+                </button>
+                <button 
+                  (click)="setSellerQuickFilter('3p')"
+                  [class.bg-indigo-600]="sellerQuickFilter === '3p'"
+                  [class.text-white]="sellerQuickFilter === '3p'"
+                  [class.text-slate-400]="sellerQuickFilter !== '3p'"
+                  class="px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer hover:text-white"
+                >
+                  Тільки 3P
+                </button>
+                <button 
+                  (click)="setSellerQuickFilter('inStock')"
+                  [class.bg-indigo-600]="sellerQuickFilter === 'inStock'"
+                  [class.text-white]="sellerQuickFilter === 'inStock'"
+                  [class.text-slate-400]="sellerQuickFilter !== 'inStock'"
+                  class="px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer hover:text-white"
+                >
+                  Тільки в наявності
+                </button>
+                <button 
+                  (click)="setSellerQuickFilter('noReviews')"
+                  [class.bg-indigo-600]="sellerQuickFilter === 'noReviews'"
+                  [class.text-white]="sellerQuickFilter === 'noReviews'"
+                  [class.text-slate-400]="sellerQuickFilter !== 'noReviews'"
+                  class="px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer hover:text-white"
+                >
+                  Без відгуків
+                </button>
+                <button 
+                  (click)="setSellerQuickFilter('top20')"
+                  [class.bg-indigo-600]="sellerQuickFilter === 'top20'"
+                  [class.text-white]="sellerQuickFilter === 'top20'"
+                  [class.text-slate-400]="sellerQuickFilter !== 'top20'"
+                  class="px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer hover:text-white"
+                >
+                  Топ-20% асортименту
+                </button>
               </div>
 
               <!-- Search in Sellers -->
-              <div class="relative w-full sm:w-64">
+              <div class="relative w-full sm:w-56">
                 <span class="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">search</span>
                 <input 
                   type="text" 
@@ -497,119 +503,131 @@
                 />
               </div>
             </div>
-
-            <!-- Sellers Table -->
-            <div class="overflow-x-auto">
-              <table class="w-full border-collapse text-left text-sm">
-                <thead>
-                  <tr class="border-b border-slate-800 bg-slate-950/60 text-xs text-slate-300 font-extrabold uppercase tracking-wider">
-                    <th class="py-3 px-3 text-center w-12">#</th>
-                    <th class="py-3 px-4">Продавець</th>
-                    
-                    <th (click)="sortSellersBy('productCount')" class="py-3 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
-                      <div class="flex items-center gap-1">
-                        <span>Товарів (% ринку)</span>
-                        <span class="material-icons text-sm text-indigo-400" *ngIf="sellerSortColumn === 'productCount'">{{ sellerSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                        <span class="material-icons text-sm text-slate-600" *ngIf="sellerSortColumn !== 'productCount'">unfold_more</span>
-                      </div>
-                    </th>
-
-                    <th (click)="sortSellersBy('totalReviews')" class="py-3 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
-                      <div class="flex items-center gap-1">
-                        <span>Сума відгуків 💬</span>
-                        <span class="material-icons text-sm text-indigo-400" *ngIf="sellerSortColumn === 'totalReviews'">{{ sellerSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                        <span class="material-icons text-sm text-slate-600" *ngIf="sellerSortColumn !== 'totalReviews'">unfold_more</span>
-                      </div>
-                    </th>
-
-                    <th (click)="sortSellersBy('avgRating')" class="py-3 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
-                      <div class="flex items-center gap-1">
-                        <span>Сер. рейтинг ⭐</span>
-                        <span class="material-icons text-sm text-indigo-400" *ngIf="sellerSortColumn === 'avgRating'">{{ sellerSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                        <span class="material-icons text-sm text-slate-600" *ngIf="sellerSortColumn !== 'avgRating'">unfold_more</span>
-                      </div>
-                    </th>
-
-                    <th (click)="sortSellersBy('avgPrice')" class="py-3 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
-                      <div class="flex items-center gap-1">
-                        <span>Сер. ціна ₴</span>
-                        <span class="material-icons text-sm text-indigo-400" *ngIf="sellerSortColumn === 'avgPrice'">{{ sellerSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                        <span class="material-icons text-sm text-slate-600" *ngIf="sellerSortColumn !== 'avgPrice'">unfold_more</span>
-                      </div>
-                    </th>
-
-                    <th class="py-3 px-3 whitespace-nowrap">Діапазон цін</th>
-                    <th class="py-3 px-3 whitespace-nowrap text-center">Наявність</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-800/60 text-slate-300">
-                  <tr *ngFor="let s of getFilteredSellerStats(); let i = index" class="hover:bg-slate-850/40 transition-colors">
-                    <td class="py-3.5 px-3 text-center font-mono text-xs text-slate-500 font-semibold">{{ i + 1 }}</td>
-                    
-                    <td class="py-3.5 px-4 font-semibold text-white">
-                      <div class="flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" [style.backgroundColor]="s.color"></span>
-                        <span class="text-sm font-bold text-white">{{ s.name }}</span>
-                      </div>
-                    </td>
-
-                    <td class="py-3.5 px-3 whitespace-nowrap font-mono">
-                      <div class="flex items-center gap-2">
-                        <span class="text-sm font-bold text-indigo-300">{{ s.productCount }} шт</span>
-                        <span class="text-xs text-slate-400 font-semibold bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
-                          {{ s.marketSharePct }}%
-                        </span>
-                      </div>
-                    </td>
-
-                    <td class="py-3.5 px-3 whitespace-nowrap font-mono">
-                      <span [class.text-emerald-400]="s.totalReviews > 0" [class.text-slate-500]="s.totalReviews === 0" class="text-sm font-bold">
-                        {{ s.totalReviews > 0 ? (s.totalReviews | number) : '0' }}
-                      </span>
-                    </td>
-
-                    <td class="py-3.5 px-3 whitespace-nowrap">
-                      <div class="flex items-center gap-1" *ngIf="s.avgRating > 0">
-                        <span class="material-icons text-amber-400 text-sm">star</span>
-                        <span class="text-sm font-bold text-slate-200">{{ s.avgRating }}</span>
-                      </div>
-                      <span *ngIf="s.avgRating === 0" class="text-xs text-slate-500 italic">немає</span>
-                    </td>
-
-                    <td class="py-3.5 px-3 whitespace-nowrap font-mono text-sm font-extrabold text-emerald-400">
-                      {{ s.avgPrice | number }} ₴
-                    </td>
-
-                    <td class="py-3.5 px-3 whitespace-nowrap font-mono text-xs text-slate-400">
-                      {{ s.minPrice | number }} – {{ s.maxPrice | number }} ₴
-                    </td>
-
-                    <td class="py-3.5 px-3 whitespace-nowrap text-center">
-                      <span 
-                        [class.text-emerald-400]="s.inStockPct >= 80"
-                        [class.bg-emerald-950/40]="s.inStockPct >= 80"
-                        [class.text-amber-400]="s.inStockPct < 80 && s.inStockPct > 0"
-                        [class.bg-amber-950/40]="s.inStockPct < 80 && s.inStockPct > 0"
-                        [class.text-rose-400]="s.inStockPct === 0"
-                        [class.bg-rose-950/40]="s.inStockPct === 0"
-                        class="px-2.5 py-1 text-xs font-bold rounded-lg font-mono border border-transparent"
-                      >
-                        {{ s.inStockPct }}%
-                      </span>
-                    </td>
-                  </tr>
-
-                  <tr *ngIf="getFilteredSellerStats().length === 0">
-                    <td colspan="8" class="py-8 text-center text-slate-500 font-semibold text-xs">
-                      Продавців не знайдено за запитом «{{ sellerSearchQuery }}».
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
           </div>
 
+          <!-- Sellers Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-left text-sm">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-950/60 text-xs text-slate-300 font-extrabold uppercase tracking-wider">
+                  <th class="py-3 px-3 text-center w-12">#</th>
+                  <th class="py-3 px-4">Продавець</th>
+                  
+                  <th (click)="sortSellerAnalyticsBy('productsCount')" class="py-3 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
+                    <div class="flex items-center gap-1">
+                      <span>Асортимент (% ніші)</span>
+                      <span class="material-icons text-sm text-indigo-400" *ngIf="sellerAnalyticsSortColumn === 'productsCount'">{{ sellerAnalyticsSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                      <span class="material-icons text-sm text-slate-600" *ngIf="sellerAnalyticsSortColumn !== 'productsCount'">unfold_more</span>
+                    </div>
+                  </th>
+
+                  <th (click)="sortSellerAnalyticsBy('reviewsSum')" class="py-3 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
+                    <div class="flex items-center gap-1">
+                      <span>Сума відгуків 💬</span>
+                      <span class="material-icons text-sm text-indigo-400" *ngIf="sellerAnalyticsSortColumn === 'reviewsSum'">{{ sellerAnalyticsSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                      <span class="material-icons text-sm text-slate-600" *ngIf="sellerAnalyticsSortColumn !== 'reviewsSum'">unfold_more</span>
+                    </div>
+                  </th>
+
+                  <th (click)="sortSellerAnalyticsBy('avgReviewsPerProduct')" class="py-3 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
+                    <div class="flex items-center gap-1">
+                      <span>Сер. відгуків / тов.</span>
+                      <span class="material-icons text-sm text-indigo-400" *ngIf="sellerAnalyticsSortColumn === 'avgReviewsPerProduct'">{{ sellerAnalyticsSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                      <span class="material-icons text-sm text-slate-600" *ngIf="sellerAnalyticsSortColumn !== 'avgReviewsPerProduct'">unfold_more</span>
+                    </div>
+                  </th>
+
+                  <th (click)="sortSellerAnalyticsBy('medianPrice')" class="py-3 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
+                    <div class="flex items-center gap-1">
+                      <span>Медіанна ціна ₴</span>
+                      <span class="material-icons text-sm text-indigo-400" *ngIf="sellerAnalyticsSortColumn === 'medianPrice'">{{ sellerAnalyticsSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                      <span class="material-icons text-sm text-slate-600" *ngIf="sellerAnalyticsSortColumn !== 'medianPrice'">unfold_more</span>
+                    </div>
+                  </th>
+
+                  <th (click)="sortSellerAnalyticsBy('inStockRate')" class="py-3 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap text-center">
+                    <div class="flex items-center justify-center gap-1">
+                      <span>% у наявності</span>
+                      <span class="material-icons text-sm text-indigo-400" *ngIf="sellerAnalyticsSortColumn === 'inStockRate'">{{ sellerAnalyticsSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                      <span class="material-icons text-sm text-slate-600" *ngIf="sellerAnalyticsSortColumn !== 'inStockRate'">unfold_more</span>
+                    </div>
+                  </th>
+
+                  <th class="py-3 px-3 whitespace-nowrap text-center">CR3 частка</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                <tr *ngFor="let s of getFilteredSellersTable(); let i = index" class="hover:bg-slate-850/40 transition-colors">
+                  <td class="py-3.5 px-3 text-center font-mono text-xs text-slate-500 font-semibold">{{ s.rank }}</td>
+                  
+                  <td class="py-3.5 px-4 font-semibold text-white">
+                    <div class="flex items-center gap-2">
+                      <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" [style.backgroundColor]="s.color"></span>
+                      <span class="text-sm font-bold text-white">{{ s.sellerName }}</span>
+                      <span *ngIf="s.isRozetka" class="text-[10px] font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-700/60 px-2 py-0.5 rounded-md">
+                        Вендор
+                      </span>
+                      <span *ngIf="!s.isRozetka" class="text-[10px] font-semibold bg-slate-900 text-slate-400 border border-slate-800 px-2 py-0.5 rounded-md">
+                        3P Селер
+                      </span>
+                    </div>
+                  </td>
+
+                  <td class="py-3.5 px-3 whitespace-nowrap font-mono">
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm font-bold text-indigo-300">{{ s.productsCount }} шт</span>
+                      <span class="text-xs text-slate-400 font-semibold bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
+                        {{ s.marketShare }}%
+                      </span>
+                    </div>
+                  </td>
+
+                  <td class="py-3.5 px-3 whitespace-nowrap font-mono">
+                    <span [class.text-emerald-400]="s.reviewsSum > 0" [class.text-slate-500]="s.reviewsSum === 0" class="text-sm font-bold">
+                      {{ s.reviewsSum > 0 ? (s.reviewsSum | number) : '0' }}
+                    </span>
+                  </td>
+
+                  <td class="py-3.5 px-3 whitespace-nowrap font-mono text-sm text-slate-300">
+                    {{ s.avgReviewsPerProduct }}
+                  </td>
+
+                  <td class="py-3.5 px-3 whitespace-nowrap font-mono text-sm font-extrabold text-emerald-400">
+                    {{ s.medianPrice | number }} ₴
+                  </td>
+
+                  <td class="py-3.5 px-3 whitespace-nowrap text-center">
+                    <span 
+                      [class.text-emerald-400]="s.inStockRate >= 80"
+                      [class.bg-emerald-950/40]="s.inStockRate >= 80"
+                      [class.text-amber-400]="s.inStockRate < 80 && s.inStockRate > 0"
+                      [class.bg-amber-950/40]="s.inStockRate < 80 && s.inStockRate > 0"
+                      [class.text-rose-400]="s.inStockRate === 0"
+                      [class.bg-rose-950/40]="s.inStockRate === 0"
+                      class="px-2.5 py-1 text-xs font-bold rounded-lg font-mono border border-transparent inline-block"
+                    >
+                      {{ s.inStockRate }}%
+                    </span>
+                  </td>
+
+                  <td class="py-3.5 px-3 whitespace-nowrap text-center">
+                    <span *ngIf="s.isTop3" class="px-2.5 py-0.5 text-xs font-extrabold bg-violet-950/70 text-violet-300 border border-violet-500/30 rounded-lg">
+                      Топ-3 (#{{ s.rank }})
+                    </span>
+                    <span *ngIf="!s.isTop3" class="text-xs text-slate-600 font-mono">—</span>
+                  </td>
+                </tr>
+
+                <tr *ngIf="getFilteredSellersTable().length === 0">
+                  <td colspan="8" class="py-10 text-center text-slate-500 font-semibold text-xs">
+                    Жодного продавця не знайдено за вказаними фільтрами.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
+
       </div>
 
       <!-- TAB 2: PRODUCT EXPLORER -->

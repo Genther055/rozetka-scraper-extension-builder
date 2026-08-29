@@ -63,6 +63,55 @@ export interface StructuredDescription {
   cleanParagraphs: string[];
 }
 
+export interface AnalyticalSummary {
+  kpi: {
+    totalProducts: number;
+    uniqueSellersCount: number;
+    avgPrice: number;
+    medianPrice: number;
+    inStockCount: number;
+    inStockPercentage: number;
+    cr3: number;
+    cr3Level: 'LOW' | 'MEDIUM' | 'HIGH';
+    hhi: number;
+    hhiLevel: 'LOW' | 'MODERATE' | 'HIGH';
+    entryBarrier: {
+      level: 'LOW' | 'MEDIUM' | 'HIGH';
+      medianTop10Reviews: number;
+    };
+    vendorSplit: {
+      rozetkaCount: number;
+      thirdPartyCount: number;
+      rozetkaShare: number;
+      thirdPartyShare: number;
+    };
+  };
+  priceDistribution: Array<{
+    rangeLabel: string;
+    minPrice: number;
+    maxPrice: number;
+    productsCount: number;
+    productsShare: number;
+    reviewsSum: number;
+    reviewsShare: number;
+    demandSupplyRatio: number;
+    isSweetSpot: boolean;
+  }>;
+  sellersTable: Array<{
+    sellerName: string;
+    isRozetka: boolean;
+    productsCount: number;
+    marketShare: number;
+    reviewsSum: number;
+    avgReviewsPerProduct: number;
+    medianPrice: number;
+    inStockRate: number;
+    color: string;
+    rank: number;
+    isTop3: boolean;
+  }>;
+}
+
 interface Product {
   name: string;
   price: number;
@@ -129,6 +178,12 @@ export class DashboardComponent implements OnInit {
   showSaveSnapshotModal = false;
   newSnapshotTitle = '';
   newSnapshotFolderId: string | null = null;
+
+  // Deterministic Analytics Engine State
+  analyticsSummary: AnalyticalSummary | null = null;
+  sellerQuickFilter: 'all' | '3p' | 'inStock' | 'noReviews' | 'top20' = 'all';
+  sellerAnalyticsSortColumn: 'productsCount' | 'reviewsSum' | 'avgReviewsPerProduct' | 'medianPrice' | 'inStockRate' | 'marketShare' = 'productsCount';
+  sellerAnalyticsSortDirection: 'asc' | 'desc' = 'desc';
 
   // Seller Analytics State
   sellerStats: SellerStat[] = [];
@@ -896,25 +951,28 @@ export class DashboardComponent implements OnInit {
 
   calculateMetrics() {
     this.totalItems = this.products.length;
-    if (this.totalItems > 0) {
-      const sumPrice = this.products.reduce((acc, curr) => acc + curr.price, 0);
-      this.avgPrice = Math.round(sumPrice / this.totalItems);
+    this.analyticsSummary = computeMarketplaceAnalytics(this.products);
 
-      const ratedProducts = this.products.filter(p => (p.reviews || 0) > 0 && (p.rating || 0) > 0);
-      if (ratedProducts.length > 0) {
-        const sumRating = ratedProducts.reduce((acc, curr) => acc + curr.rating, 0);
-        this.avgRating = parseFloat((sumRating / ratedProducts.length).toFixed(1));
-      } else {
-        this.avgRating = 0;
-      }
+    if (this.analyticsSummary) {
+      this.avgPrice = this.analyticsSummary.kpi.avgPrice;
+      this.inStockCount = this.analyticsSummary.kpi.inStockCount;
+      this.inStockPct = this.analyticsSummary.kpi.inStockPercentage;
+      this.sellersCount = this.analyticsSummary.kpi.uniqueSellersCount;
     } else {
       this.avgPrice = 0;
-      this.avgRating = 0.0;
+      this.inStockCount = 0;
+      this.inStockPct = 0;
+      this.sellersCount = 0;
+    }
+
+    const ratedProducts = this.products.filter(p => (p.reviews || 0) > 0 && (p.rating || 0) > 0);
+    if (ratedProducts.length > 0) {
+      const sumRating = ratedProducts.reduce((acc, curr) => acc + curr.rating, 0);
+      this.avgRating = parseFloat((sumRating / ratedProducts.length).toFixed(1));
+    } else {
+      this.avgRating = 0;
     }
     
-    this.inStockCount = this.products.filter(p => p.inStock !== false).length;
-    this.inStockPct = this.totalItems > 0 ? Math.round((this.inStockCount / this.totalItems) * 100) : 0;
-    this.sellersCount = this.totalItems > 0 ? new Set(this.products.map(p => p.seller || 'Rozetka')).size : 0;
     this.aiAlertsCount = this.products.filter(p => p.aiStatus === 'warning' || p.aiStatus === 'suspicious').length;
     this.calculateOpportunityScore();
     this.calculateSellerAnalytics();
@@ -1175,6 +1233,58 @@ export class DashboardComponent implements OnInit {
       this.sellerSortDirection = 'desc';
     }
     this.cdr.markForCheck();
+  }
+
+  setSellerQuickFilter(filter: 'all' | '3p' | 'inStock' | 'noReviews' | 'top20') {
+    this.sellerQuickFilter = filter;
+    this.cdr.markForCheck();
+  }
+
+  sortSellerAnalyticsBy(column: 'productsCount' | 'reviewsSum' | 'avgReviewsPerProduct' | 'medianPrice' | 'inStockRate' | 'marketShare') {
+    if (this.sellerAnalyticsSortColumn === column) {
+      this.sellerAnalyticsSortDirection = this.sellerAnalyticsSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sellerAnalyticsSortColumn = column;
+      this.sellerAnalyticsSortDirection = 'desc';
+    }
+    this.cdr.markForCheck();
+  }
+
+  getFilteredSellersTable() {
+    if (!this.analyticsSummary) return [];
+    let list = [...this.analyticsSummary.sellersTable];
+
+    // Quick Filter Chips
+    if (this.sellerQuickFilter === '3p') {
+      list = list.filter(s => !s.isRozetka);
+    } else if (this.sellerQuickFilter === 'inStock') {
+      list = list.filter(s => s.inStockRate > 0);
+    } else if (this.sellerQuickFilter === 'noReviews') {
+      list = list.filter(s => s.reviewsSum === 0);
+    } else if (this.sellerQuickFilter === 'top20') {
+      const topCount = Math.max(1, Math.ceil(this.analyticsSummary.sellersTable.length * 0.2));
+      list = list.slice(0, topCount);
+    }
+
+    // Search query
+    if (this.sellerSearchQuery && this.sellerSearchQuery.trim()) {
+      const q = this.sellerSearchQuery.toLowerCase().trim();
+      list = list.filter(s => s.sellerName.toLowerCase().includes(q));
+    }
+
+    // Sorting
+    list.sort((a, b) => {
+      let valA = a[this.sellerAnalyticsSortColumn];
+      let valB = b[this.sellerAnalyticsSortColumn];
+      if (valA === valB) return 0;
+      if (this.sellerAnalyticsSortDirection === 'asc') {
+        return valA > valB ? 1 : -1;
+      } else {
+        return valA < valB ? 1 : -1;
+      }
+    });
+
+    return list;
   }
 
   calculateTotalNicheReviews(): number {
@@ -1700,4 +1810,232 @@ export class DashboardComponent implements OnInit {
       return { key: 'Характеристика', val: part.trim() };
     }).filter((item: any) => item.val.length > 0);
   }
+}
+
+export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary {
+  const validProducts = (products || []).filter(p => p && p.price > 0);
+  const n = validProducts.length;
+
+  if (n === 0) {
+    return {
+      kpi: {
+        totalProducts: 0,
+        uniqueSellersCount: 0,
+        avgPrice: 0,
+        medianPrice: 0,
+        inStockCount: 0,
+        inStockPercentage: 0,
+        cr3: 0,
+        cr3Level: 'LOW',
+        hhi: 0,
+        hhiLevel: 'LOW',
+        entryBarrier: {
+          level: 'LOW',
+          medianTop10Reviews: 0
+        },
+        vendorSplit: {
+          rozetkaCount: 0,
+          thirdPartyCount: 0,
+          rozetkaShare: 0,
+          thirdPartyShare: 0
+        }
+      },
+      priceDistribution: [],
+      sellersTable: []
+    };
+  }
+
+  // 1. Сортування цін для медіани та розрахунку середнього
+  const sortedPrices = [...validProducts.map(p => Number(p.price))].sort((a, b) => a - b);
+  const medianPrice = sortedPrices.length % 2 === 0
+    ? (sortedPrices[sortedPrices.length / 2 - 1] + sortedPrices[sortedPrices.length / 2]) / 2
+    : sortedPrices[Math.floor(sortedPrices.length / 2)];
+  
+  const avgPrice = Math.round(sortedPrices.reduce((acc, v) => acc + v, 0) / n);
+
+  // 2. Агрегація за продавцями
+  const sellerColors = [
+    '#6366f1', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b',
+    '#06b6d4', '#3b82f6', '#a855f7', '#14b8a6', '#f43f5e',
+    '#84cc16', '#e11d48', '#64748b'
+  ];
+
+  const sellerMap = new Map<string, {
+    productsCount: number;
+    reviewsSum: number;
+    prices: number[];
+    inStockCount: number;
+    isRozetka: boolean;
+  }>();
+
+  validProducts.forEach(p => {
+    const rawSeller = (p.seller && String(p.seller).trim()) ? String(p.seller).trim() : 'Rozetka';
+    const isRozetka = rawSeller.toLowerCase() === 'rozetka' || rawSeller.toLowerCase().includes('rozetka');
+    const entry = sellerMap.get(rawSeller) || {
+      productsCount: 0,
+      reviewsSum: 0,
+      prices: [],
+      inStockCount: 0,
+      isRozetka
+    };
+    entry.productsCount++;
+    entry.reviewsSum += (p.reviews && p.reviews > 0) ? Number(p.reviews) : 0;
+    entry.prices.push(Number(p.price));
+    if (p.inStock !== false) entry.inStockCount++;
+    sellerMap.set(rawSeller, entry);
+  });
+
+  const sellersList = Array.from(sellerMap.entries()).map(([sellerName, stats]) => {
+    const sortedSellerPrices = [...stats.prices].sort((a, b) => a - b);
+    const sellerMedPrice = sortedSellerPrices.length % 2 === 0
+      ? (sortedSellerPrices[sortedSellerPrices.length / 2 - 1] + sortedSellerPrices[sortedSellerPrices.length / 2]) / 2
+      : sortedSellerPrices[Math.floor(sortedSellerPrices.length / 2)];
+
+    return {
+      sellerName,
+      isRozetka: stats.isRozetka,
+      productsCount: stats.productsCount,
+      marketShare: Number(((stats.productsCount / n) * 100).toFixed(1)),
+      reviewsSum: stats.reviewsSum,
+      avgReviewsPerProduct: Number((stats.reviewsSum / stats.productsCount).toFixed(1)),
+      medianPrice: Math.round(sellerMedPrice),
+      inStockRate: Number(((stats.inStockCount / stats.productsCount) * 100).toFixed(1)),
+      color: '#64748b',
+      rank: 0,
+      isTop3: false
+    };
+  }).sort((a, b) => b.productsCount - a.productsCount);
+
+  // Assign ranks & colors
+  sellersList.forEach((s, idx) => {
+    s.rank = idx + 1;
+    s.isTop3 = idx < 3;
+    s.color = sellerColors[idx % sellerColors.length];
+  });
+
+  // 3. Концентрація ринку (CR3, HHI)
+  const cr3 = Number(sellersList.slice(0, 3).reduce((acc, s) => acc + s.marketShare, 0).toFixed(1));
+  const cr3Level: 'LOW' | 'MEDIUM' | 'HIGH' = cr3 < 40 ? 'LOW' : cr3 <= 70 ? 'MEDIUM' : 'HIGH';
+  
+  const hhi = Math.round(sellersList.reduce((acc, s) => acc + Math.pow(s.marketShare, 2), 0));
+  const hhiLevel: 'LOW' | 'MODERATE' | 'HIGH' = hhi < 1500 ? 'LOW' : hhi <= 2500 ? 'MODERATE' : 'HIGH';
+
+  // 4. Бар'єр входу (топ-10 за відгуками)
+  const sortedByReviews = [...validProducts].sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
+  const top10Reviews = sortedByReviews.slice(0, 10).map(p => p.reviews || 0).sort((a, b) => a - b);
+  const medianTop10Reviews = top10Reviews.length > 0
+    ? top10Reviews[Math.floor(top10Reviews.length / 2)]
+    : 0;
+
+  const entryBarrierLevel: 'LOW' | 'MEDIUM' | 'HIGH' =
+    medianTop10Reviews <= 10 ? 'LOW' : medianTop10Reviews <= 50 ? 'MEDIUM' : 'HIGH';
+
+  // 5. Динамічні корзини цін (7 інтервалів)
+  const minPrice = sortedPrices[0];
+  const maxPrice = sortedPrices[sortedPrices.length - 1];
+  const binsCount = 7;
+  const totalReviews = validProducts.reduce((acc, p) => acc + (p.reviews || 0), 0);
+
+  let priceDistribution: Array<{
+    rangeLabel: string;
+    minPrice: number;
+    maxPrice: number;
+    productsCount: number;
+    productsShare: number;
+    reviewsSum: number;
+    reviewsShare: number;
+    demandSupplyRatio: number;
+    isSweetSpot: boolean;
+  }> = [];
+
+  if (minPrice === maxPrice) {
+    priceDistribution = [{
+      rangeLabel: `${minPrice.toLocaleString('uk-UA')} ₴`,
+      minPrice,
+      maxPrice,
+      productsCount: n,
+      productsShare: 100,
+      reviewsSum: totalReviews,
+      reviewsShare: 100,
+      demandSupplyRatio: totalReviews / n,
+      isSweetSpot: true
+    }];
+  } else {
+    const binStep = (maxPrice - minPrice) / binsCount;
+    const bins = Array.from({ length: binsCount }, (_, idx) => {
+      const min = minPrice + idx * binStep;
+      const max = idx === binsCount - 1 ? maxPrice + 0.01 : min + binStep;
+      return {
+        minPrice: Math.round(min),
+        maxPrice: Math.round(max),
+        products: validProducts.filter(p => p.price >= min && (idx === binsCount - 1 ? p.price <= maxPrice : p.price < max))
+      };
+    });
+
+    let maxEfficiencyRatio = -1;
+    let sweetSpotIndex = -1;
+
+    priceDistribution = bins.map((bin, idx) => {
+      const count = bin.products.length;
+      const reviews = bin.products.reduce((acc, p) => acc + (p.reviews || 0), 0);
+      const ratio = count > 0 ? Number((reviews / count).toFixed(2)) : 0;
+      const reviewsShare = totalReviews > 0 ? Number(((reviews / totalReviews) * 100).toFixed(1)) : 0;
+
+      // Sweet spot: максимальна віддача при вибірці щонайменше 5% товарів та reviews > 0
+      if (count >= n * 0.05 && reviews > 0 && ratio > maxEfficiencyRatio) {
+        maxEfficiencyRatio = ratio;
+        sweetSpotIndex = idx;
+      }
+
+      return {
+        rangeLabel: `${bin.minPrice.toLocaleString('uk-UA')} - ${bin.maxPrice.toLocaleString('uk-UA')} ₴`,
+        minPrice: bin.minPrice,
+        maxPrice: bin.maxPrice,
+        productsCount: count,
+        productsShare: Number(((count / n) * 100).toFixed(1)),
+        reviewsSum: reviews,
+        reviewsShare,
+        demandSupplyRatio: ratio,
+        isSweetSpot: false
+      };
+    });
+
+    if (sweetSpotIndex !== -1) {
+      priceDistribution[sweetSpotIndex].isSweetSpot = true;
+    }
+  }
+
+  // 6. Rozetka vs 3P
+  const inStockCount = validProducts.filter(p => p.inStock !== false).length;
+  const rozetkaCount = validProducts.filter(p => (p.seller || '').toLowerCase().includes('rozetka')).length;
+  const thirdPartyCount = n - rozetkaCount;
+  const rozetkaShare = Number(((rozetkaCount / n) * 100).toFixed(1));
+  const thirdPartyShare = Number((100 - rozetkaShare).toFixed(1));
+
+  return {
+    kpi: {
+      totalProducts: n,
+      uniqueSellersCount: sellersList.length,
+      avgPrice,
+      medianPrice: Math.round(medianPrice),
+      inStockCount,
+      inStockPercentage: Number(((inStockCount / n) * 100).toFixed(1)),
+      cr3,
+      cr3Level,
+      hhi,
+      hhiLevel,
+      entryBarrier: {
+        level: entryBarrierLevel,
+        medianTop10Reviews
+      },
+      vendorSplit: {
+        rozetkaCount,
+        thirdPartyCount,
+        rozetkaShare,
+        thirdPartyShare
+      }
+    },
+    priceDistribution,
+    sellersTable: sellersList
+  };
 }
