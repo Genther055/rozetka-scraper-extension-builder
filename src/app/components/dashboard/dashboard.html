@@ -114,44 +114,46 @@
         <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Збір та інтелектуальний аналіз товарів з Rozetka</p>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2.5">
         <!-- Quick Snapshot Save Button -->
         <button 
           *ngIf="products.length > 0"
           (click)="openSaveSnapshotModal()"
-          class="px-4 py-2 bg-slate-900/90 hover:bg-slate-850 active:bg-slate-950 text-indigo-300 hover:text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-md flex items-center gap-2 border border-indigo-500/30 glow-indigo"
+          class="px-3.5 py-2 bg-slate-900/90 hover:bg-slate-850 active:bg-slate-950 text-indigo-300 hover:text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-md flex items-center gap-1.5 border border-indigo-500/30 glow-indigo"
           title="Зберегти поточний збір як знімок в історію"
         >
           <span class="material-icons text-sm text-indigo-400">camera_alt</span>
-          <span>Зберегти результати скрейпінгу</span>
+          <span class="hidden xl:inline">Зберегти збір</span>
+          <span class="xl:hidden">Зберегти</span>
         </button>
 
         <!-- Download Extension Button -->
         <a 
           href="/tradescout-extension.zip" 
           download="tradescout-extension.zip"
-          class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 flex items-center gap-2 border border-indigo-500/20 glow-indigo"
+          class="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 flex items-center gap-1.5 border border-indigo-500/20 glow-indigo"
           title="Завантажити розширення Chrome"
         >
           <span class="material-icons text-sm">download</span>
-          <span>Завантажити розширення</span>
+          <span class="hidden xl:inline">Розширення</span>
+          <span class="xl:hidden">.zip</span>
         </a>
 
         <!-- Export to Excel Button -->
         <button 
           (click)="exportToExcel()" 
-          class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-lg shadow-emerald-600/30 flex items-center gap-2 border border-emerald-500/20 glow-emerald"
+          class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 border border-emerald-500/20 glow-emerald"
           title="Експортувати у таблицю Excel (.xlsx)"
         >
           <span class="material-icons text-sm">table_view</span>
-          <span>Завантажити EXCEL таблицю</span>
+          <span>Excel</span>
         </button>
 
         <!-- Clear Active Database Button -->
         <button 
           *ngIf="products.length > 0"
           (click)="clearActiveDatabase()" 
-          class="px-4 py-2 bg-rose-950/60 hover:bg-rose-900/90 active:bg-rose-950 text-rose-300 hover:text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-md flex items-center gap-1.5 border border-rose-500/40 hover:border-rose-400/80"
+          class="px-3.5 py-2 bg-rose-950/70 hover:bg-rose-900 active:bg-rose-950 text-rose-300 hover:text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-md flex items-center gap-1.5 border border-rose-500/40 hover:border-rose-400/80"
           title="Очистити робочу базу для нового скрейпінгу (збережені знімки в історії залишаться)"
         >
           <span class="material-icons text-sm text-rose-400">delete_sweep</span>
@@ -181,29 +183,15 @@
       <!-- Stats Grid (5 Deterministic Cards: Обсяг вибірки, Цінові орієнтири, Складські залишки, Концентрація CR3, Бар'єр входу) -->
       <section *ngIf="products.length > 0 && analyticsSummary" class="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6">
         <!-- 1. Обсяг вибірки -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all group">
+        <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
-            <div class="flex items-center gap-2">
-              <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Обсяг вибірки</p>
-              <button 
-                (click)="clearActiveDatabase()"
-                class="text-[10px] text-rose-400/90 hover:text-rose-300 font-bold cursor-pointer transition-colors"
-                title="Очистити базу для нового збору"
-              >
-                • очистити
-              </button>
-            </div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Обсяг вибірки</p>
             <p class="text-3xl font-extrabold text-white mt-1">{{ analyticsSummary.kpi.totalProducts }} <span class="text-xs font-bold text-slate-400">тов.</span></p>
             <p class="text-xs text-indigo-400/90 font-mono font-semibold mt-0.5">{{ analyticsSummary.kpi.uniqueSellersCount }} унікальних продавців</p>
           </div>
-          <button 
-            (click)="clearActiveDatabase()"
-            class="w-12 h-12 bg-indigo-950/50 hover:bg-rose-950/80 border border-indigo-500/20 hover:border-rose-500/50 text-indigo-300 hover:text-rose-300 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/10 cursor-pointer transition-all"
-            title="Очистити робочу базу для нового скрейпінгу"
-          >
-            <span class="material-icons group-hover:hidden">inventory_2</span>
-            <span class="material-icons hidden group-hover:block text-rose-400">delete_sweep</span>
-          </button>
+          <div class="w-12 h-12 bg-indigo-950/50 border border-indigo-500/20 text-indigo-300 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/10">
+            <span class="material-icons">inventory_2</span>
+          </div>
         </div>
 
         <!-- 2. Подвійний ціновий орієнтир -->
