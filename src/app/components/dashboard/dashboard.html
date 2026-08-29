@@ -244,72 +244,7 @@
 
       <!-- TAB 1: OVERVIEW -->
       <div *ngIf="activeTab === 'overview' && products.length > 0" class="space-y-6 animate-fadeIn">
-        <!-- Auto-clear Warning Alert -->
-        <div class="p-4.5 bg-amber-950/20 border border-amber-900/40 rounded-2xl flex items-start gap-3.5 shadow-md shadow-amber-950/10">
-          <span class="material-icons text-amber-500 text-xl shrink-0 mt-0.5 animate-pulse">warning</span>
-          <div class="text-xs text-amber-300 leading-relaxed font-medium">
-            <span class="font-extrabold text-amber-400">🚨 Важливе попередження про збереження даних:</span>
-            Сервер автоматично очищає результати скрапінгу після <span class="font-bold text-white">3 годин</span> неактивності задля оптимізації навантаження. Будь ласка, встигніть завантажити результати в Excel-таблицю (**«Експорт в Excel (.csv)»** у верхньому меню), інакше дані будуть остаточно видалені.
-          </div>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          
-          <!-- Column 1: Opportunity Score -->
-          <div class="p-6 premium-card flex flex-col justify-between transition-all">
-            <div>
-              <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Перспективність ніші</h3>
-              <p class="text-[11px] text-slate-500 leading-relaxed">Оціночний бал ринку за алгоритмом Jungle Scout (1-10).</p>
-            </div>
-            <div class="flex items-center justify-center py-2">
-              <div class="relative w-24 h-24 rounded-full border-4 border-[rgba(139,92,246,0.15)] flex items-center justify-center shadow-lg shadow-indigo-500/5 bg-black/20">
-                <div class="text-center">
-                  <span class="text-3xl font-extrabold text-indigo-400">{{ nicheOpportunityScore }}</span>
-                  <span class="text-[10px] text-slate-500 block font-bold">із 10</span>
-                </div>
-              </div>
-            </div>
-            <div class="text-center text-xs font-bold mt-1">
-              <span *ngIf="nicheOpportunityScore >= 8" class="text-emerald-400">🔥 Відмінна можливість</span>
-              <span *ngIf="nicheOpportunityScore >= 5 && nicheOpportunityScore < 8" class="text-amber-400">⚡ Помірний потенціал</span>
-              <span *ngIf="nicheOpportunityScore < 5" class="text-rose-400">⚠️ Високий ризик</span>
-            </div>
-          </div>
-
-          <!-- Column 2: Competitiveness Card -->
-          <div class="p-6 premium-card flex flex-col justify-between space-y-4 transition-all">
-            <div>
-              <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Конкурентність</h3>
-              <div class="flex items-center gap-3 mt-3">
-                <span [class]="getNicheCompetitiveness().colorClass" class="px-3.5 py-1.5 rounded-full border text-xs font-bold uppercase tracking-wider shadow-inner">
-                  {{ getNicheCompetitiveness().level }}
-                </span>
-              </div>
-              <p class="text-xs text-slate-400 leading-relaxed mt-2.5">
-                {{ getNicheCompetitiveness().desc }}
-              </p>
-            </div>
-            <div class="border-t border-[rgba(139,92,246,0.1)] pt-3 flex justify-between text-[11px] text-slate-500 font-semibold">
-              <span>Домінування Rozetka: <b>{{ (products.filter(p => p.seller && p.seller.toLowerCase() === 'rozetka').length / totalItems * 100) | number:'1.0-0' }}%</b></span>
-            </div>
-          </div>
-
-          <!-- Column 3: Quick Actions / Setup -->
-          <div class="p-6 premium-card flex flex-col justify-between transition-all">
-            <div>
-              <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Очистити базу</h3>
-              <p class="text-xs text-slate-400 mb-4">Ви можете повністю скинути збережену базу даних та почати новий скрейпінг.</p>
-            </div>
-            <button 
-              (click)="clearAllData()" 
-              class="w-full py-2.5 px-4 bg-red-950/30 hover:bg-red-900/20 text-red-400 border border-red-900/40 rounded-full text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-2 glow-amber"
-            >
-              <span class="material-icons text-sm">delete_sweep</span>
-              Видалити всі товари
-            </button>
-          </div>
-        </div>
-
-        <!-- Simulated Charts and visualizations for visual WOW effect -->
+        <!-- Distribution Charts -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div class="p-6 premium-card space-y-4 transition-all">
             <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Розподіл цін у ніші</h3>
