@@ -1405,6 +1405,73 @@
     </div>
   </div>
 
+  <!-- CUSTOM CONFIRMATION MODAL -->
+  <div *ngIf="showConfirmModal" class="fixed inset-0 z-50 bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+    <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/70 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl shadow-black/70 space-y-5 relative">
+      
+      <!-- Icon & Header -->
+      <div class="flex items-start gap-4">
+        <div 
+          [class.bg-indigo-950/60]="confirmActionType === 'primary'"
+          [class.border-indigo-500/30]="confirmActionType === 'primary'"
+          [class.text-indigo-400]="confirmActionType === 'primary'"
+          [class.bg-rose-950/60]="confirmActionType === 'danger'"
+          [class.border-rose-500/30]="confirmActionType === 'danger'"
+          [class.text-rose-400]="confirmActionType === 'danger'"
+          [class.bg-amber-950/60]="confirmActionType === 'warning'"
+          [class.border-amber-500/30]="confirmActionType === 'warning'"
+          [class.text-amber-400]="confirmActionType === 'warning'"
+          class="w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 shadow-lg"
+        >
+          <span class="material-icons text-2xl" *ngIf="confirmActionType === 'primary'">open_in_browser</span>
+          <span class="material-icons text-2xl" *ngIf="confirmActionType === 'danger'">delete_forever</span>
+          <span class="material-icons text-2xl" *ngIf="confirmActionType === 'warning'">help_outline</span>
+        </div>
+
+        <div class="flex-1 min-w-0 pr-6">
+          <h3 class="text-base font-bold text-white leading-tight">
+            {{ confirmTitle }}
+          </h3>
+          <p class="text-xs text-slate-300 font-medium leading-relaxed mt-2 whitespace-pre-line">
+            {{ confirmMessage }}
+          </p>
+        </div>
+
+        <button (click)="closeConfirmDialog()" class="absolute top-5 right-5 text-slate-500 hover:text-white p-1 cursor-pointer transition-colors">
+          <span class="material-icons text-base">close</span>
+        </button>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="border-t border-slate-800/80 pt-4 flex items-center justify-end gap-3">
+        <button 
+          (click)="closeConfirmDialog()" 
+          class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold rounded-full cursor-pointer transition-all border border-slate-800"
+        >
+          Скасувати
+        </button>
+
+        <button 
+          (click)="executeConfirmDialog()" 
+          [class.bg-gradient-to-r]="confirmActionType !== 'danger'"
+          [class.from-indigo-600]="confirmActionType !== 'danger'"
+          [class.to-purple-600]="confirmActionType !== 'danger'"
+          [class.hover:from-indigo-500]="confirmActionType !== 'danger'"
+          [class.hover:to-purple-500]="confirmActionType !== 'danger'"
+          [class.shadow-indigo-500/25]="confirmActionType !== 'danger'"
+          [class.glow-indigo]="confirmActionType !== 'danger'"
+          [class.bg-rose-600]="confirmActionType === 'danger'"
+          [class.hover:bg-rose-500]="confirmActionType === 'danger'"
+          [class.shadow-rose-600/30]="confirmActionType === 'danger'"
+          class="px-6 py-2.5 text-white font-bold text-xs rounded-full shadow-lg transition-all cursor-pointer flex items-center gap-2"
+        >
+          <span>{{ confirmActionText }}</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <!-- FLOATING NOTIFICATION TOAST -->
   <div 
     *ngIf="historySuccessMsg" 

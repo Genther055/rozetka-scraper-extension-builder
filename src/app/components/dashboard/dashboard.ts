@@ -470,32 +470,75 @@ export class DashboardComponent implements OnInit {
     });
   }
 
+  // --- Custom Confirmation Dialog State & Logic ---
+  showConfirmModal = false;
+  confirmTitle = '';
+  confirmMessage = '';
+  confirmActionText = 'Підтвердити';
+  confirmActionType: 'primary' | 'danger' | 'warning' = 'primary';
+  confirmCallback: (() => void) | null = null;
+
+  openConfirmDialog(options: {
+    title: string;
+    message: string;
+    actionText?: string;
+    actionType?: 'primary' | 'danger' | 'warning';
+    onConfirm: () => void;
+  }) {
+    this.confirmTitle = options.title;
+    this.confirmMessage = options.message;
+    this.confirmActionText = options.actionText || 'Підтвердити';
+    this.confirmActionType = options.actionType || 'primary';
+    this.confirmCallback = options.onConfirm;
+    this.showConfirmModal = true;
+    this.cdr.markForCheck();
+  }
+
+  executeConfirmDialog() {
+    if (this.confirmCallback) {
+      this.confirmCallback();
+    }
+    this.closeConfirmDialog();
+  }
+
+  closeConfirmDialog() {
+    this.showConfirmModal = false;
+    this.confirmCallback = null;
+    this.cdr.markForCheck();
+  }
+
   deleteFolder(folder: ScrapingFolder, event?: Event) {
     if (event) event.stopPropagation();
-    if (!confirm(`Ви дійсно бажаєте видалити папку «${folder.name}»? (Збережені збори залишаться в архіві без папки)`)) return;
+    this.openConfirmDialog({
+      title: 'Видалити папку?',
+      message: `Ви дійсно бажаєте видалити папку «${folder.name}»?\nЗбережені збори залишаться в архіві у розділі «Без папки».`,
+      actionText: 'Видалити папку',
+      actionType: 'danger',
+      onConfirm: () => {
+        this.folders = this.folders.filter(f => f.id !== folder.id);
+        this.snapshots.forEach(s => {
+          if (s.folderId === folder.id) s.folderId = null;
+        });
+        if (this.selectedFolderId === folder.id) {
+          this.selectedFolderId = 'all';
+        }
+        this.saveFoldersLocally();
+        this.saveHistoryLocally();
+        this.showNotification('Папку успішно видалено');
+        this.cdr.markForCheck();
 
-    this.folders = this.folders.filter(f => f.id !== folder.id);
-    this.snapshots.forEach(s => {
-      if (s.folderId === folder.id) s.folderId = null;
+        this.http.delete<{ success: boolean }>(`${this.apiUrl}/api/folders/${folder.id}`)
+          .subscribe({
+            next: () => {},
+            error: (err) => console.warn('Server delete error (deleted locally):', err)
+          });
+      }
     });
-    if (this.selectedFolderId === folder.id) {
-      this.selectedFolderId = 'all';
-    }
-    this.saveFoldersLocally();
-    this.saveHistoryLocally();
-    this.showNotification('Папку видалено');
-    this.cdr.markForCheck();
-
-    this.http.delete<{ success: boolean }>(`${this.apiUrl}/api/folders/${folder.id}`)
-      .subscribe({
-        next: () => {},
-        error: (err) => console.warn('Server delete error (deleted locally):', err)
-      });
   }
 
   openSaveSnapshotModal() {
     if (this.products.length === 0) {
-      alert('У поточній базі немає товарів для збереження в знімок.');
+      this.showNotification('У поточній базі немає товарів для збереження в знімок.', true);
       return;
     }
     const cat = this.products[0]?.category || 'Товари';
@@ -538,7 +581,7 @@ export class DashboardComponent implements OnInit {
     this.snapshots.unshift(newSnapshot);
     this.saveHistoryLocally();
     this.showSaveSnapshotModal = false;
-    this.showNotification('Знімок скрейпінгу збережено в архів!');
+    this.showNotification('Результати скрейпінгу збережено в архів!');
     this.cdr.markForCheck();
 
     // Background sync to backend
@@ -554,65 +597,83 @@ export class DashboardComponent implements OnInit {
 
   deleteSnapshot(snapshot: ScrapingSnapshot, event?: Event) {
     if (event) event.stopPropagation();
-    if (!confirm(`Ви дійсно бажаєте видалити цей знімок («${snapshot.title}»)?`)) return;
+    this.openConfirmDialog({
+      title: 'Видалити знімок?',
+      message: `Ви дійсно бажаєте видалити знімок «${snapshot.title}» з історії скрейпінгів?`,
+      actionText: 'Видалити знімок',
+      actionType: 'danger',
+      onConfirm: () => {
+        this.snapshots = this.snapshots.filter(s => s.id !== snapshot.id);
+        if (this.activeSnapshotDetails?.id === snapshot.id) {
+          this.activeSnapshotDetails = null;
+        }
+        this.saveHistoryLocally();
+        this.showNotification('Знімок видалено з історії');
+        this.cdr.markForCheck();
 
-    this.snapshots = this.snapshots.filter(s => s.id !== snapshot.id);
-    if (this.activeSnapshotDetails?.id === snapshot.id) {
-      this.activeSnapshotDetails = null;
-    }
-    this.saveHistoryLocally();
-    this.showNotification('Знімок видалено з історії');
-    this.cdr.markForCheck();
-
-    this.http.delete<{ success: boolean }>(`${this.apiUrl}/api/history/${snapshot.id}`)
-      .subscribe({
-        next: () => {},
-        error: (err) => console.warn('Server delete snapshot error (deleted locally):', err)
-      });
+        this.http.delete<{ success: boolean }>(`${this.apiUrl}/api/history/${snapshot.id}`)
+          .subscribe({
+            next: () => {},
+            error: (err) => console.warn('Server delete snapshot error (deleted locally):', err)
+          });
+      }
+    });
   }
 
   clearAllHistory() {
     if (this.snapshots.length === 0) return;
-    if (!confirm('Ви дійсно бажаєте очистити ВСЮ історію скрейпінгів? Цю дію неможливо скасувати.')) return;
+    this.openConfirmDialog({
+      title: 'Очистити всю історію?',
+      message: 'Ви дійсно бажаєте очистити ВСЮ історію скрейпінгів?\nЦю дію неможливо буде скасувати.',
+      actionText: 'Очистити всю історію',
+      actionType: 'danger',
+      onConfirm: () => {
+        this.snapshots = [];
+        this.activeSnapshotDetails = null;
+        this.saveHistoryLocally();
+        this.showNotification('Всю історію успішно очищено');
+        this.cdr.markForCheck();
 
-    this.snapshots = [];
-    this.activeSnapshotDetails = null;
-    this.saveHistoryLocally();
-    this.showNotification('Всю історію успішно очищено');
-    this.cdr.markForCheck();
-
-    this.http.delete<{ success: boolean }>(`${this.apiUrl}/api/history`)
-      .subscribe({
-        next: () => {},
-        error: (err) => console.warn('Server clear history error (cleared locally):', err)
-      });
+        this.http.delete<{ success: boolean }>(`${this.apiUrl}/api/history`)
+          .subscribe({
+            next: () => {},
+            error: (err) => console.warn('Server clear history error (cleared locally):', err)
+          });
+      }
+    });
   }
 
   restoreSnapshot(snapshot: ScrapingSnapshot) {
-    if (!confirm(`Завантажити знімок «${snapshot.title}» (${snapshot.itemCount} товарів) у робочу область дашборду? Поточна робоча таблиця буде замінена цими даними.`)) return;
+    this.openConfirmDialog({
+      title: 'Завантажити збір у робочу область?',
+      message: `Завантажити знімок «${snapshot.title}» (${snapshot.itemCount} товарів) у робочу область дашборду?\nПоточна робоча таблиця буде замінена цими даними.`,
+      actionText: 'Завантажити на дашборд',
+      actionType: 'primary',
+      onConfirm: () => {
+        // Instant local restore
+        if (snapshot.products && snapshot.products.length > 0) {
+          this.products = JSON.parse(JSON.stringify(snapshot.products));
+          this.applyFilters();
+          this.calculateMetrics();
+          this.showNotification(`Збір «${snapshot.title}» успішно завантажено в робочу область!`);
+          this.activeTab = 'overview';
+          this.cdr.markForCheck();
+        }
 
-    // Instant local restore
-    if (snapshot.products && snapshot.products.length > 0) {
-      this.products = JSON.parse(JSON.stringify(snapshot.products));
-      this.applyFilters();
-      this.calculateMetrics();
-      this.showNotification(`Збір «${snapshot.title}» успішно завантажено в робочу область!`);
-      this.activeTab = 'overview';
-      this.cdr.markForCheck();
-    }
-
-    this.http.post<{ success: boolean, count: number, products: Product[] }>(`${this.apiUrl}/api/history/${snapshot.id}/restore`, {})
-      .subscribe({
-        next: (res) => {
-          if (res.success && res.products) {
-            this.products = res.products;
-            this.applyFilters();
-            this.calculateMetrics();
-            this.cdr.markForCheck();
-          }
-        },
-        error: (err) => console.warn('Server restore error (restored locally):', err)
-      });
+        this.http.post<{ success: boolean, count: number, products: Product[] }>(`${this.apiUrl}/api/history/${snapshot.id}/restore`, {})
+          .subscribe({
+            next: (res) => {
+              if (res.success && res.products) {
+                this.products = res.products;
+                this.applyFilters();
+                this.calculateMetrics();
+                this.cdr.markForCheck();
+              }
+            },
+            error: (err) => console.warn('Server restore error (restored locally):', err)
+          });
+      }
+    });
   }
 
   moveSnapshot(snapshot: ScrapingSnapshot, newFolderId: string | null) {
@@ -706,21 +767,27 @@ export class DashboardComponent implements OnInit {
 
   clearActiveDatabase() {
     if (this.products.length === 0) return;
-    if (!confirm('Видалити всі товари з поточної робочої бази? (Збережені в історії знімки залишаться неушкодженими)')) return;
-
-    this.http.post<{ success: boolean }>(`${this.apiUrl}/api/products/clear`, {})
-      .subscribe({
-        next: (res) => {
-          if (res.success) {
-            this.products = [];
-            this.applyFilters();
-            this.calculateMetrics();
-            this.showNotification('Поточну робочу базу товарів очищено');
-            this.cdr.markForCheck();
-          }
-        },
-        error: (err) => this.showNotification('Помилка очищення бази', true)
-      });
+    this.openConfirmDialog({
+      title: 'Очистити робочу базу?',
+      message: 'Видалити всі товари з поточної робочої таблиці?\nЗбережені в історії знімки та створені папки залишаться неушкодженими.',
+      actionText: 'Очистити робочу базу',
+      actionType: 'danger',
+      onConfirm: () => {
+        this.http.post<{ success: boolean }>(`${this.apiUrl}/api/products/clear`, {})
+          .subscribe({
+            next: (res) => {
+              if (res.success) {
+                this.products = [];
+                this.applyFilters();
+                this.calculateMetrics();
+                this.showNotification('Поточну робочу базу товарів успішно очищено');
+                this.cdr.markForCheck();
+              }
+            },
+            error: () => this.showNotification('Помилка очищення бази', true)
+          });
+      }
+    });
   }
 
   calculateLQS(p: Product): number {
