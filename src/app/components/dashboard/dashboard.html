@@ -1077,97 +1077,116 @@
               </div>
             </div>
 
-            <!-- Snapshots Cards List (Full-Width Responsive Cards) -->
+            <!-- Snapshots Cards List (Spacious High-End Analytics Cards) -->
             <div *ngIf="getFilteredSnapshots().length > 0" class="space-y-4">
               <div 
                 *ngFor="let snap of getFilteredSnapshots()" 
-                class="p-5 premium-card hover:border-indigo-500/40 transition-all flex flex-col xl:flex-row xl:items-center justify-between gap-5 group"
+                class="p-6 premium-card hover:border-indigo-500/50 transition-all flex flex-col justify-between gap-5 group shadow-lg"
               >
-                <!-- Left: Info & Title -->
-                <div class="space-y-2 flex-1 min-w-0">
-                  <div class="flex items-center gap-3">
+                <!-- TOP ROW: Folder Badge, Category, Date, Folder Switcher, and Delete -->
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
+                  <div class="flex flex-wrap items-center gap-3">
+                    <!-- Folder Tag -->
                     <span 
-                      class="px-2.5 py-0.5 text-[10px] font-bold rounded-full border inline-flex items-center gap-1.5"
+                      class="px-3 py-1 text-xs font-bold rounded-full border inline-flex items-center gap-1.5 shadow-sm"
                       [style.borderColor]="getFolderColor(snap.folderId) + '60'"
-                      [style.backgroundColor]="getFolderColor(snap.folderId) + '18'"
+                      [style.backgroundColor]="getFolderColor(snap.folderId) + '20'"
                       [style.color]="getFolderColor(snap.folderId)"
                     >
-                      <span class="w-1.5 h-1.5 rounded-full" [style.backgroundColor]="getFolderColor(snap.folderId)"></span>
-                      {{ getFolderName(snap.folderId) }}
+                      <span class="w-2 h-2 rounded-full shrink-0" [style.backgroundColor]="getFolderColor(snap.folderId)"></span>
+                      <span>{{ getFolderName(snap.folderId) }}</span>
                     </span>
 
-                    <span class="text-[11px] text-slate-400 font-mono flex items-center gap-1">
-                      <span class="material-icons text-[13px] text-slate-500">schedule</span>
-                      {{ snap.scrapedAt | date:'dd.MM.yyyy HH:mm' }}
+                    <!-- Category Tag (if available) -->
+                    <span *ngIf="snap.category" class="px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
+                      {{ snap.category }}
+                    </span>
+
+                    <!-- Date & Time -->
+                    <span class="text-xs text-slate-400 font-mono inline-flex items-center gap-1.5 bg-slate-950/60 px-3 py-1 rounded-lg border border-slate-800/50">
+                      <span class="material-icons text-sm text-indigo-400">event</span>
+                      {{ snap.scrapedAt | date:'dd.MM.yyyy, HH:mm' }}
                     </span>
                   </div>
 
-                  <h4 class="text-sm font-bold text-white leading-snug truncate" [title]="snap.title">
+                  <!-- Folder Selector & Delete -->
+                  <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-xs text-slate-400 font-medium">Папка:</span>
+                      <select 
+                        [ngModel]="snap.folderId || ''" 
+                        (ngModelChange)="moveSnapshot(snap, $event ? $event : null)"
+                        class="bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none cursor-pointer hover:border-slate-700 transition-colors"
+                      >
+                        <option value="">Без папки</option>
+                        <option *ngFor="let f of folders" [value]="f.id">{{ f.name }}</option>
+                      </select>
+                    </div>
+
+                    <button 
+                      (click)="deleteSnapshot(snap, $event)"
+                      class="p-1.5 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer rounded-xl hover:bg-slate-900 border border-transparent hover:border-rose-900/40"
+                      title="Видалити цей знімок"
+                    >
+                      <span class="material-icons text-base">delete</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- MIDDLE ROW: Full Title (without truncation) -->
+                <div>
+                  <h4 class="text-base sm:text-lg font-bold text-white leading-relaxed">
                     {{ snap.title }}
                   </h4>
                 </div>
 
-                <!-- Middle: Stats Row -->
-                <div class="flex items-center gap-2 sm:gap-4 shrink-0 bg-slate-950/60 p-2 sm:p-2.5 rounded-2xl border border-slate-800/60">
-                  <div class="px-3 py-1 text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Товарів</p>
-                    <p class="text-xs font-extrabold text-indigo-300 mt-0.5">{{ snap.itemCount }} шт</p>
-                  </div>
-                  <div class="w-px h-7 bg-slate-800"></div>
-                  <div class="px-3 py-1 text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Сер. ціна</p>
-                    <p class="text-xs font-extrabold text-emerald-400 mt-0.5">{{ snap.avgPrice }} ₴</p>
-                  </div>
-                  <div class="w-px h-7 bg-slate-800"></div>
-                  <div class="px-3 py-1 text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Діапазон цін</p>
-                    <p class="text-[11px] font-bold text-slate-300 mt-0.5 font-mono">{{ snap.minPrice }}-{{ snap.maxPrice }} ₴</p>
-                  </div>
-                </div>
+                <!-- BOTTOM ROW: Comprehensive Analytics Metrics + Action Buttons -->
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-1">
+                  <!-- Metrics Grid -->
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div class="px-4 py-2.5 bg-slate-950/70 rounded-xl border border-slate-800/80 text-left">
+                      <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Зібрано товарів</p>
+                      <p class="text-sm font-extrabold text-indigo-300 mt-0.5">{{ snap.itemCount }} шт</p>
+                    </div>
 
-                <!-- Right: Folder Selector & Actions -->
-                <div class="flex flex-wrap items-center gap-2.5 shrink-0 justify-end">
-                  <!-- Folder selector -->
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-[11px] text-slate-400 font-medium">Папка:</span>
-                    <select 
-                      [ngModel]="snap.folderId || ''" 
-                      (ngModelChange)="moveSnapshot(snap, $event ? $event : null)"
-                      class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none cursor-pointer hover:border-indigo-500/40 transition-colors"
+                    <div class="px-4 py-2.5 bg-slate-950/70 rounded-xl border border-slate-800/80 text-left">
+                      <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Середня ціна</p>
+                      <p class="text-sm font-extrabold text-emerald-400 mt-0.5">{{ snap.avgPrice }} ₴</p>
+                    </div>
+
+                    <div class="px-4 py-2.5 bg-slate-950/70 rounded-xl border border-slate-800/80 text-left">
+                      <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Діапазон цін</p>
+                      <p class="text-sm font-bold text-slate-200 mt-0.5 font-mono">{{ snap.minPrice }} – {{ snap.maxPrice }} ₴</p>
+                    </div>
+
+                    <div class="px-4 py-2.5 bg-slate-950/70 rounded-xl border border-slate-800/80 text-left">
+                      <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Продавців у ніші</p>
+                      <p class="text-sm font-extrabold text-indigo-300 mt-0.5">{{ snap.sellersCount || 1 }}</p>
+                    </div>
+                  </div>
+
+                  <!-- Actions Group -->
+                  <div class="flex items-center gap-3 shrink-0 justify-end">
+                    <!-- Restore to Dashboard -->
+                    <button 
+                      (click)="restoreSnapshot(snap)"
+                      class="px-4 py-2.5 bg-indigo-600/20 hover:bg-indigo-600 active:bg-indigo-700 text-indigo-300 hover:text-white border border-indigo-500/40 hover:border-indigo-500 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-md hover:shadow-indigo-500/20"
+                      title="Завантажити цей збір у головну робочу область дашборду"
                     >
-                      <option value="">Без папки</option>
-                      <option *ngFor="let f of folders" [value]="f.id">{{ f.name }}</option>
-                    </select>
+                      <span class="material-icons text-base">open_in_browser</span>
+                      <span>На дашборд</span>
+                    </button>
+
+                    <!-- Export Snapshot to Excel -->
+                    <button 
+                      (click)="exportSpecificSnapshotToExcel(snap, $event)"
+                      class="px-4 py-2.5 bg-emerald-600/20 hover:bg-emerald-600 active:bg-emerald-700 text-emerald-300 hover:text-white border border-emerald-500/40 hover:border-emerald-500 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-md hover:shadow-emerald-600/20"
+                      title="Експортувати саме цей знімок у Excel (.xlsx)"
+                    >
+                      <span class="material-icons text-base">table_view</span>
+                      <span>Завантажити EXCEL</span>
+                    </button>
                   </div>
-
-                  <!-- Restore button -->
-                  <button 
-                    (click)="restoreSnapshot(snap)"
-                    class="px-3.5 py-2 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 hover:border-indigo-500 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-                    title="Завантажити цей збір у головну робочу область дашборду"
-                  >
-                    <span class="material-icons text-sm">open_in_browser</span>
-                    <span>На дашборд</span>
-                  </button>
-
-                  <!-- Export specific snapshot to Excel -->
-                  <button 
-                    (click)="exportSpecificSnapshotToExcel(snap, $event)"
-                    class="px-3.5 py-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 hover:border-emerald-500 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-                    title="Експортувати саме цей знімок у Excel (.xlsx)"
-                  >
-                    <span class="material-icons text-sm">table_view</span>
-                    <span>Завантажити EXCEL</span>
-                  </button>
-
-                  <!-- Delete button -->
-                  <button 
-                    (click)="deleteSnapshot(snap, $event)"
-                    class="p-2 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer rounded-xl hover:bg-slate-900 border border-transparent hover:border-rose-900/30"
-                    title="Видалити цей знімок"
-                  >
-                    <span class="material-icons text-sm">delete</span>
-                  </button>
                 </div>
 
               </div>
