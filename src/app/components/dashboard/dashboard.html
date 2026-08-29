@@ -661,90 +661,50 @@
           </div>
         </div>
 
-        <!-- Explorer Table -->
+        <!-- Explorer Table (100% Screen Width Responsive Layout) -->
         <div class="premium-card overflow-hidden transition-all">
           <div class="overflow-x-auto">
             <table class="w-full border-collapse text-left">
               <thead>
                 <tr class="border-b border-slate-800 bg-slate-950/60 text-xs text-slate-300 font-extrabold uppercase tracking-wider">
-                  <th class="py-4 px-3 text-center w-12">#</th>
+                  <th class="py-4 px-3 text-center w-10">#</th>
                   
-                  <th (click)="sortBy('name')" class="py-4 px-4 min-w-[220px] cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                  <th (click)="sortBy('name')" class="py-4 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors">
                     <div class="flex items-center gap-1.5">
-                      <span>Назва товару</span>
+                      <span>Товар & Категорія</span>
                       <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'name'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
                       <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'name'">unfold_more</span>
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('category')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
-                    <div class="flex items-center gap-1.5">
-                      <span>Категорія</span>
-                      <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'category'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                      <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'category'">unfold_more</span>
-                    </div>
-                  </th>
+                  <th class="py-4 px-3 min-w-[200px] max-w-[280px]">Характеристики</th>
                   
-                  <th class="py-4 px-4 min-w-[340px]">Характеристики</th>
-                  
-                  <th (click)="sortBy('oldPrice')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
+                  <th (click)="sortBy('price')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap min-w-[120px]">
                     <div class="flex items-center gap-1.5">
-                      <span>Ціна без знижки</span>
-                      <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'oldPrice'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                      <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'oldPrice'">unfold_more</span>
-                    </div>
-                  </th>
-                  
-                  <th (click)="sortBy('price')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
-                    <div class="flex items-center gap-1.5">
-                      <span>Ціна зі знижкою</span>
+                      <span>Ціна</span>
                       <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'price'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
                       <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'price'">unfold_more</span>
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('discount')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
+                  <th (click)="sortBy('rating')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap min-w-[100px]">
                     <div class="flex items-center gap-1.5">
-                      <span>Знижка</span>
-                      <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'discount'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                      <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'discount'">unfold_more</span>
+                      <span>Рейтинг & Відгуки</span>
+                      <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'rating' || sortColumn === 'reviews'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                      <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'rating' && sortColumn !== 'reviews'">unfold_more</span>
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('rating')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
-                    <div class="flex items-center gap-1.5">
-                      <span>Рейтинг</span>
-                      <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'rating'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                      <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'rating'">unfold_more</span>
-                    </div>
-                  </th>
-                  
-                  <th (click)="sortBy('reviews')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
-                    <div class="flex items-center gap-1.5">
-                      <span>Відгуки</span>
-                      <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'reviews'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                      <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'reviews'">unfold_more</span>
-                    </div>
-                  </th>
-                  
-                  <th (click)="sortBy('seller')" class="py-4 px-2 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
+                  <th (click)="sortBy('seller')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap min-w-[110px]">
                     <div class="flex items-center gap-1.5">
                       <span>Продавець</span>
-                      <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'seller'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                      <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'seller'">unfold_more</span>
+                      <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'seller' || sortColumn === 'sellersCount'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                      <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'seller' && sortColumn !== 'sellersCount'">unfold_more</span>
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('sellersCount')" class="py-4 px-2 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap text-center">
+                  <th (click)="sortBy('inStock')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap text-center min-w-[100px]">
                     <div class="flex items-center justify-center gap-1.5">
-                      <span>К-ть прод.</span>
-                      <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'sellersCount'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                      <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'sellersCount'">unfold_more</span>
-                    </div>
-                  </th>
-                  
-                  <th (click)="sortBy('inStock')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
-                    <div class="flex items-center gap-1.5">
                       <span>Наявність</span>
                       <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'inStock'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
                       <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'inStock'">unfold_more</span>
@@ -754,22 +714,27 @@
               </thead>
               <tbody class="divide-y divide-slate-800/70 text-sm text-slate-300">
                 <tr *ngFor="let item of filteredProducts; let i = index" class="hover:bg-slate-850/50 transition-all">
+                  <!-- Index -->
                   <td class="py-4 px-3 text-center font-mono text-sm font-semibold text-slate-400">{{ i + 1 }}</td>
-                  <td class="py-4 px-4 font-semibold text-white max-w-[280px]">
-                    <a [href]="item.link" target="_blank" class="hover:underline flex items-start gap-1.5 hover:text-indigo-300 line-clamp-2 text-sm leading-snug font-medium">
+                  
+                  <!-- Product Title & Category -->
+                  <td class="py-4 px-4">
+                    <a [href]="item.link" target="_blank" class="hover:underline flex items-start gap-1.5 hover:text-indigo-300 line-clamp-2 text-sm leading-snug font-bold text-white">
                       {{ item.name }}
                       <span class="material-icons text-xs mt-0.5 shrink-0 text-slate-400">open_in_new</span>
                     </a>
+                    <span class="inline-block text-xs text-slate-400 mt-1 font-medium bg-slate-950/70 px-2 py-0.5 rounded-md border border-slate-800/60">
+                      {{ item.category || 'Повербанки' }}
+                    </span>
                   </td>
-                  <td class="py-4 px-3 text-sm text-slate-300 font-medium whitespace-nowrap">{{ item.category || 'Повербанки' }}</td>
                   
-                  <!-- Premium Pill Badges for Table Cell (Expanded Width & Crisp Text) -->
-                  <td class="py-4 px-4 min-w-[340px] max-w-[460px]">
-                    <div *ngIf="item.specs" class="flex flex-wrap gap-2 items-center">
+                  <!-- Specs Badges -->
+                  <td class="py-4 px-3 min-w-[200px] max-w-[280px]">
+                    <div *ngIf="item.specs" class="flex flex-wrap gap-1.5 items-center">
                       <span 
                         *ngFor="let badge of getBadgeSpecs(item)" 
                         [class]="badge.style" 
-                        class="px-3 py-1 text-xs font-bold border rounded-xl whitespace-normal break-words shadow-sm"
+                        class="px-2.5 py-1 text-xs font-bold border rounded-xl whitespace-normal break-words shadow-sm"
                       >
                         {{ badge.text }}
                       </span>
@@ -777,57 +742,66 @@
                       <button 
                         *ngIf="getSpecsArray(item).length > getBadgeSpecs(item).length"
                         (click)="openSpecsModal(item)"
-                        class="px-2.5 py-1 text-xs font-bold bg-slate-900/90 hover:bg-slate-800 text-indigo-300 border border-slate-700 hover:border-indigo-500/40 rounded-xl transition-all cursor-pointer shadow-sm"
+                        class="px-2 py-1 text-xs font-bold bg-slate-900/90 hover:bg-slate-800 text-indigo-300 border border-slate-700 hover:border-indigo-500/40 rounded-xl transition-all cursor-pointer shadow-sm"
                       >
                         +{{ getSpecsArray(item).length - getBadgeSpecs(item).length }} ще
                       </button>
                     </div>
-                    <span *ngIf="!item.specs" class="text-slate-500 italic text-sm">Стандартні</span>
+                    <span *ngIf="!item.specs" class="text-slate-500 italic text-xs">Стандартні</span>
                   </td>
-                  <!-- Ціна без знижки -->
-                  <td class="py-4 px-3 font-mono text-sm whitespace-nowrap">
-                    <span [class.line-through]="item.oldPrice && item.oldPrice > item.price" [class.text-slate-500]="item.oldPrice && item.oldPrice > item.price" class="text-slate-400 font-medium">
-                      {{ (item.oldPrice && item.oldPrice > item.price ? item.oldPrice : item.price) }} ₴
-                    </span>
+
+                  <!-- Price & Discount -->
+                  <td class="py-4 px-3 whitespace-nowrap">
+                    <div class="font-mono text-emerald-400 font-extrabold text-base">
+                      {{ item.price }} ₴
+                    </div>
+                    <div class="flex items-center gap-1.5 mt-0.5" *ngIf="item.oldPrice && item.oldPrice > item.price">
+                      <span class="line-through text-xs text-slate-400 font-mono font-medium">
+                        {{ item.oldPrice }} ₴
+                      </span>
+                      <span *ngIf="item.discount" class="px-1.5 py-0.2 text-[10px] font-black bg-rose-950/60 text-rose-300 border border-rose-800/50 rounded-md">
+                        -{{ item.discount }}%
+                      </span>
+                    </div>
                   </td>
                   
-                  <!-- Ціна зі знижкою (Збільшено та виділено) -->
-                  <td class="py-4 px-3 font-mono text-emerald-400 font-extrabold text-base whitespace-nowrap">
-                    {{ item.price }} ₴
-                  </td>
-                  
-                  <!-- Знижка -->
-                  <td class="py-4 px-3 font-mono text-xs whitespace-nowrap">
-                    <span *ngIf="item.discount" class="px-2 py-0.5 text-xs font-black bg-rose-950/60 text-rose-300 border border-rose-800/50 rounded-md">
-                      -{{ item.discount }}%
-                    </span>
-                    <span *ngIf="!item.discount" class="text-slate-500">—</span>
-                  </td>
+                  <!-- Rating & Reviews -->
                   <td class="py-4 px-3 whitespace-nowrap">
                     <div class="flex items-center gap-1.5">
                       <span class="material-icons text-amber-400 text-base">star</span>
-                      <span class="text-sm font-bold text-slate-200">{{ item.rating > 0 ? item.rating : 'немає' }}</span>
+                      <span class="text-sm font-bold text-slate-200">{{ item.rating > 0 ? item.rating : '–' }}</span>
+                    </div>
+                    <div class="text-xs text-slate-400 font-mono mt-0.5">
+                      {{ item.reviews }} відгуків
                     </div>
                   </td>
-                  <td class="py-4 px-3 font-mono text-sm font-semibold text-slate-300 whitespace-nowrap">{{ item.reviews }}</td>
-                  <td class="py-4 px-2 text-sm text-slate-200 whitespace-nowrap font-medium">{{ item.seller || 'Rozetka' }}</td>
-                  <td class="py-4 px-2 font-mono text-center whitespace-nowrap text-sm font-bold text-slate-100">{{ item.sellersCount || 1 }}</td>
-                  
+
+                  <!-- Seller & Sellers Count -->
                   <td class="py-4 px-3 whitespace-nowrap">
+                    <div class="text-sm text-slate-200 font-bold">
+                      {{ item.seller || 'Rozetka' }}
+                    </div>
+                    <div class="text-xs text-slate-400 font-mono mt-0.5">
+                      {{ item.sellersCount || 1 }} продавців
+                    </div>
+                  </td>
+                  
+                  <!-- In Stock Status -->
+                  <td class="py-4 px-3 whitespace-nowrap text-center">
                     <span 
                       [class.text-emerald-400]="item.inStock !== false"
                       [class.bg-emerald-950/30]="item.inStock !== false"
                       [class.text-slate-400]="item.inStock === false"
                       [class.bg-slate-900]="item.inStock === false"
-                      class="px-2.5 py-1 text-xs font-bold rounded-lg uppercase tracking-wider whitespace-nowrap"
+                      class="px-2.5 py-1 text-xs font-bold rounded-lg uppercase tracking-wider whitespace-nowrap border border-transparent"
                     >
-                      {{ item.inStock !== false ? 'в наявності' : 'немає' }}
+                      {{ item.inStock !== false ? 'В наявності' : 'Немає' }}
                     </span>
                   </td>
                 </tr>
 
                 <tr *ngIf="filteredProducts.length === 0">
-                  <td colspan="12" class="py-12 text-center text-slate-400 font-semibold text-sm">
+                  <td colspan="7" class="py-12 text-center text-slate-400 font-semibold text-sm">
                     Жодного товару не знайдено за вказаними фільтрами.
                   </td>
                 </tr>
