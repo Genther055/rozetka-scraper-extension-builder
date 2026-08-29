@@ -345,58 +345,128 @@ export class DashboardComponent implements OnInit {
     return `${diffDays} дн. тому`;
   }
 
-  // --- History & Folders Methods ---
+  // --- History & Folders Local-First Resilient Architecture ---
+  private readonly STORAGE_FOLDERS_KEY = 'tradescout_folders_v1';
+  private readonly STORAGE_HISTORY_KEY = 'tradescout_history_v1';
 
   loadFolders() {
+    // 1. Load from localStorage first for instant responsiveness
+    if (typeof window !== 'undefined') {
+      try {
+        const local = localStorage.getItem(this.STORAGE_FOLDERS_KEY);
+        if (local) {
+          this.folders = JSON.parse(local);
+          this.cdr.markForCheck();
+        }
+      } catch (e) {}
+    }
+
+    // 2. Background sync with backend
     this.http.get<{ success: boolean, folders: ScrapingFolder[] }>(`${this.apiUrl}/api/folders`)
       .subscribe({
         next: (res) => {
-          if (res.success) {
-            this.folders = res.folders || [];
+          if (res.success && res.folders) {
+            const merged = [...this.folders];
+            for (const sf of res.folders) {
+              if (!merged.some(f => f.id === sf.id)) {
+                merged.push(sf);
+              }
+            }
+            this.folders = merged;
+            this.saveFoldersLocally();
             this.cdr.markForCheck();
           }
         },
-        error: (err) => console.error('Failed to load folders:', err)
+        error: (err) => {
+          // If server is building or cold-starting, local data stays perfectly active
+          console.warn('Backend folders sync note:', err.status === 404 ? 'Render backend is updating' : err.message);
+        }
       });
+  }
+
+  saveFoldersLocally() {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(this.STORAGE_FOLDERS_KEY, JSON.stringify(this.folders));
+      } catch (e) {}
+    }
   }
 
   loadHistory() {
     this.historyLoading = true;
+    // 1. Load from localStorage first
+    if (typeof window !== 'undefined') {
+      try {
+        const local = localStorage.getItem(this.STORAGE_HISTORY_KEY);
+        if (local) {
+          this.snapshots = JSON.parse(local);
+          this.historyLoading = false;
+          this.cdr.markForCheck();
+        }
+      } catch (e) {}
+    }
+
+    // 2. Background sync with backend
     this.http.get<{ success: boolean, history: ScrapingSnapshot[] }>(`${this.apiUrl}/api/history`)
       .subscribe({
         next: (res) => {
           this.historyLoading = false;
-          if (res.success) {
-            this.snapshots = res.history || [];
+          if (res.success && res.history) {
+            const merged = [...this.snapshots];
+            for (const sh of res.history) {
+              if (!merged.some(s => s.id === sh.id)) {
+                merged.push(sh);
+              }
+            }
+            this.snapshots = merged;
+            this.saveHistoryLocally();
             this.cdr.markForCheck();
           }
         },
         error: (err) => {
           this.historyLoading = false;
-          console.error('Failed to load history:', err);
+          console.warn('Backend history sync note:', err.status === 404 ? 'Render backend is updating' : err.message);
           this.cdr.markForCheck();
         }
       });
   }
 
+  saveHistoryLocally() {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(this.STORAGE_HISTORY_KEY, JSON.stringify(this.snapshots));
+      } catch (e) {}
+    }
+  }
+
   createFolder() {
     if (!this.newFolderName || !this.newFolderName.trim()) return;
-    this.http.post<{ success: boolean, folder: ScrapingFolder }>(`${this.apiUrl}/api/folders`, {
+
+    const newFld: ScrapingFolder = {
+      id: 'fld_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       name: this.newFolderName.trim(),
-      color: this.newFolderColor,
-      icon: this.newFolderIcon
+      color: this.newFolderColor || '#6366f1',
+      icon: this.newFolderIcon || 'folder',
+      createdAt: new Date().toISOString()
+    };
+
+    // Instant local save
+    this.folders.push(newFld);
+    this.saveFoldersLocally();
+    this.selectedFolderId = newFld.id;
+    this.newFolderName = '';
+    this.showNewFolderModal = false;
+    this.showNotification('Папку успішно створено');
+    this.cdr.markForCheck();
+
+    // Background sync to backend
+    this.http.post<{ success: boolean, folder: ScrapingFolder }>(`${this.apiUrl}/api/folders`, {
+      name: newFld.name,
+      color: newFld.color,
+      icon: newFld.icon
     }).subscribe({
-      next: (res) => {
-        if (res.success && res.folder) {
-          this.folders.push(res.folder);
-          this.selectedFolderId = res.folder.id;
-          this.newFolderName = '';
-          this.showNewFolderModal = false;
-          this.showNotification('Папку успішно створено');
-          this.cdr.markForCheck();
-        }
-      },
-      error: (err) => this.showNotification('Помилка при створенні папки: ' + (err.error?.error || err.message), true)
+      next: () => {},
+      error: (err) => console.warn('Server sync notice for new folder (saved locally):', err)
     });
   }
 
@@ -404,22 +474,22 @@ export class DashboardComponent implements OnInit {
     if (event) event.stopPropagation();
     if (!confirm(`Ви дійсно бажаєте видалити папку «${folder.name}»? (Збережені збори залишаться в архіві без папки)`)) return;
 
+    this.folders = this.folders.filter(f => f.id !== folder.id);
+    this.snapshots.forEach(s => {
+      if (s.folderId === folder.id) s.folderId = null;
+    });
+    if (this.selectedFolderId === folder.id) {
+      this.selectedFolderId = 'all';
+    }
+    this.saveFoldersLocally();
+    this.saveHistoryLocally();
+    this.showNotification('Папку видалено');
+    this.cdr.markForCheck();
+
     this.http.delete<{ success: boolean }>(`${this.apiUrl}/api/folders/${folder.id}`)
       .subscribe({
-        next: (res) => {
-          if (res.success) {
-            this.folders = this.folders.filter(f => f.id !== folder.id);
-            this.snapshots.forEach(s => {
-              if (s.folderId === folder.id) s.folderId = null;
-            });
-            if (this.selectedFolderId === folder.id) {
-              this.selectedFolderId = 'all';
-            }
-            this.showNotification('Папку видалено');
-            this.cdr.markForCheck();
-          }
-        },
-        error: (err) => this.showNotification('Помилка видалення папки', true)
+        next: () => {},
+        error: (err) => console.warn('Server delete error (deleted locally):', err)
       });
   }
 
@@ -439,20 +509,46 @@ export class DashboardComponent implements OnInit {
 
   saveCurrentSnapshot() {
     if (this.products.length === 0) return;
-    this.http.post<{ success: boolean, snapshot: ScrapingSnapshot }>(`${this.apiUrl}/api/history`, {
-      title: this.newSnapshotTitle || undefined,
+
+    const prices = this.products.map(p => p.price || 0).filter(pr => pr > 0);
+    const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
+    const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+    const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
+    const sellers = new Set(this.products.map(p => p.seller || 'Rozetka'));
+    const category = this.products[0]?.category || 'Загальна';
+
+    const now = new Date();
+    const dateFormatted = now.toLocaleDateString('uk-UA') + ' ' + now.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+
+    const newSnapshot: ScrapingSnapshot = {
+      id: 'snap_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      title: this.newSnapshotTitle && this.newSnapshotTitle.trim() ? this.newSnapshotTitle.trim() : `Збір ${category} — ${dateFormatted}`,
       folderId: this.newSnapshotFolderId || null,
-      products: this.products
+      scrapedAt: now.toISOString(),
+      itemCount: this.products.length,
+      category,
+      avgPrice,
+      minPrice,
+      maxPrice,
+      sellersCount: sellers.size,
+      products: JSON.parse(JSON.stringify(this.products))
+    };
+
+    // Instant local save
+    this.snapshots.unshift(newSnapshot);
+    this.saveHistoryLocally();
+    this.showSaveSnapshotModal = false;
+    this.showNotification('Знімок скрейпінгу збережено в архів!');
+    this.cdr.markForCheck();
+
+    // Background sync to backend
+    this.http.post<{ success: boolean, snapshot: ScrapingSnapshot }>(`${this.apiUrl}/api/history`, {
+      title: newSnapshot.title,
+      folderId: newSnapshot.folderId,
+      products: newSnapshot.products
     }).subscribe({
-      next: (res) => {
-        if (res.success && res.snapshot) {
-          this.snapshots.unshift(res.snapshot);
-          this.showSaveSnapshotModal = false;
-          this.showNotification('Знімок скрейпінгу збережено в архів!');
-          this.cdr.markForCheck();
-        }
-      },
-      error: (err) => this.showNotification('Помилка збереження: ' + (err.error?.error || err.message), true)
+      next: () => {},
+      error: (err) => console.warn('Server snapshot sync error (saved locally):', err)
     });
   }
 
@@ -460,19 +556,18 @@ export class DashboardComponent implements OnInit {
     if (event) event.stopPropagation();
     if (!confirm(`Ви дійсно бажаєте видалити цей знімок («${snapshot.title}»)?`)) return;
 
+    this.snapshots = this.snapshots.filter(s => s.id !== snapshot.id);
+    if (this.activeSnapshotDetails?.id === snapshot.id) {
+      this.activeSnapshotDetails = null;
+    }
+    this.saveHistoryLocally();
+    this.showNotification('Знімок видалено з історії');
+    this.cdr.markForCheck();
+
     this.http.delete<{ success: boolean }>(`${this.apiUrl}/api/history/${snapshot.id}`)
       .subscribe({
-        next: (res) => {
-          if (res.success) {
-            this.snapshots = this.snapshots.filter(s => s.id !== snapshot.id);
-            if (this.activeSnapshotDetails?.id === snapshot.id) {
-              this.activeSnapshotDetails = null;
-            }
-            this.showNotification('Знімок видалено з історії');
-            this.cdr.markForCheck();
-          }
-        },
-        error: (err) => this.showNotification('Помилка видалення знімка', true)
+        next: () => {},
+        error: (err) => console.warn('Server delete snapshot error (deleted locally):', err)
       });
   }
 
@@ -480,52 +575,58 @@ export class DashboardComponent implements OnInit {
     if (this.snapshots.length === 0) return;
     if (!confirm('Ви дійсно бажаєте очистити ВСЮ історію скрейпінгів? Цю дію неможливо скасувати.')) return;
 
+    this.snapshots = [];
+    this.activeSnapshotDetails = null;
+    this.saveHistoryLocally();
+    this.showNotification('Всю історію успішно очищено');
+    this.cdr.markForCheck();
+
     this.http.delete<{ success: boolean }>(`${this.apiUrl}/api/history`)
       .subscribe({
-        next: (res) => {
-          if (res.success) {
-            this.snapshots = [];
-            this.activeSnapshotDetails = null;
-            this.showNotification('Всю історію успішно очищено');
-            this.cdr.markForCheck();
-          }
-        },
-        error: (err) => this.showNotification('Помилка очищення історії', true)
+        next: () => {},
+        error: (err) => console.warn('Server clear history error (cleared locally):', err)
       });
   }
 
   restoreSnapshot(snapshot: ScrapingSnapshot) {
     if (!confirm(`Завантажити знімок «${snapshot.title}» (${snapshot.itemCount} товарів) у робочу область дашборду? Поточна робоча таблиця буде замінена цими даними.`)) return;
 
+    // Instant local restore
+    if (snapshot.products && snapshot.products.length > 0) {
+      this.products = JSON.parse(JSON.stringify(snapshot.products));
+      this.applyFilters();
+      this.calculateMetrics();
+      this.showNotification(`Збір «${snapshot.title}» успішно завантажено в робочу область!`);
+      this.activeTab = 'overview';
+      this.cdr.markForCheck();
+    }
+
     this.http.post<{ success: boolean, count: number, products: Product[] }>(`${this.apiUrl}/api/history/${snapshot.id}/restore`, {})
       .subscribe({
         next: (res) => {
-          if (res.success) {
-            this.products = res.products || [];
+          if (res.success && res.products) {
+            this.products = res.products;
             this.applyFilters();
             this.calculateMetrics();
-            this.showNotification(`Збір «${snapshot.title}» успішно завантажено в робочу область!`);
-            this.activeTab = 'overview';
             this.cdr.markForCheck();
           }
         },
-        error: (err) => this.showNotification('Помилка завантаження знімка', true)
+        error: (err) => console.warn('Server restore error (restored locally):', err)
       });
   }
 
   moveSnapshot(snapshot: ScrapingSnapshot, newFolderId: string | null) {
+    snapshot.folderId = newFolderId;
+    this.saveHistoryLocally();
+    this.movingSnapshot = null;
+    this.showNotification('Знімок переміщено');
+    this.cdr.markForCheck();
+
     this.http.put<{ success: boolean, snapshot: ScrapingSnapshot }>(`${this.apiUrl}/api/history/${snapshot.id}`, {
       folderId: newFolderId
     }).subscribe({
-      next: (res) => {
-        if (res.success) {
-          snapshot.folderId = newFolderId;
-          this.movingSnapshot = null;
-          this.showNotification('Знімок переміщено');
-          this.cdr.markForCheck();
-        }
-      },
-      error: (err) => this.showNotification('Помилка переміщення', true)
+      next: () => {},
+      error: (err) => console.warn('Server move snapshot error (moved locally):', err)
     });
   }
 
