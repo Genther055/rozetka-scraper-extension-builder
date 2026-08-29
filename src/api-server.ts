@@ -160,6 +160,7 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], (req, r
           products[index].rating = itemRating;
           products[index].name = item.name || products[index].name;
           products[index].inStock = item.inStock !== false;
+          products[index].scrapedAt = new Date().toISOString();
           if (item.category) products[index].category = item.category;
           if (item.specs) products[index].specs = item.specs;
           if (item.description) products[index].description = item.description;

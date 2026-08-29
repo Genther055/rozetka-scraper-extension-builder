@@ -87,6 +87,12 @@
         <span class="material-icons text-sm">logout</span>
         Вийти з платформи
       </button>
+
+      <!-- Subtle Sidebar Scraping Indicator -->
+      <div *ngIf="getLastScrapedDate()" class="pt-1 text-[10px] text-slate-500 flex items-center justify-center gap-1.5 select-none" [title]="'Останній скрейпінг: ' + getLastScrapedText()">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400/70"></span>
+        <span>Збір: {{ getLastScrapedRelative() }}</span>
+      </div>
     </div>
   </aside>
 
@@ -1025,6 +1031,24 @@
           </div>
         </div>
       </section>
+
+      <!-- Subtle Footer / Last Scrape Timestamp -->
+      <footer class="pt-8 pb-4 border-t border-[rgba(139,92,246,0.08)] flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500 select-none">
+        <div class="flex items-center gap-2">
+          <span class="inline-block w-1.5 h-1.5 rounded-full" [ngClass]="products.length > 0 ? 'bg-emerald-400/80' : 'bg-slate-600'"></span>
+          <span class="text-slate-400 font-medium">Останній скрейпінг:</span>
+          <span class="text-indigo-300 font-semibold tracking-wide">{{ getLastScrapedText() }}</span>
+          <span *ngIf="getLastScrapedRelative()" class="text-[10px] text-slate-400 bg-slate-900/60 border border-slate-800/60 px-2 py-0.5 rounded-full">
+            {{ getLastScrapedRelative() }}
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2 text-slate-500/70 text-[10px]">
+          <span>TradeScout</span>
+          <span>•</span>
+          <span>В базі: {{ products.length }} товарів</span>
+        </div>
+      </footer>
 
     </div>
   </main>

@@ -243,6 +243,54 @@ export class DashboardComponent implements OnInit {
       });
   }
 
+  getLastScrapedDate(): Date | null {
+    if (!this.products || this.products.length === 0) return null;
+    let maxTime = 0;
+    for (const p of this.products) {
+      if (p.scrapedAt) {
+        const t = new Date(p.scrapedAt).getTime();
+        if (!isNaN(t) && t > maxTime) {
+          maxTime = t;
+        }
+      }
+    }
+    return maxTime > 0 ? new Date(maxTime) : null;
+  }
+
+  getLastScrapedText(): string {
+    const d = this.getLastScrapedDate();
+    if (!d) return 'дані ще не збиралися';
+
+    return d.toLocaleString('uk-UA', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  }
+
+  getLastScrapedRelative(): string | null {
+    const d = this.getLastScrapedDate();
+    if (!d) return null;
+
+    const now = Date.now();
+    const diffMs = now - d.getTime();
+    if (diffMs < 0) return 'щойно';
+
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHours = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffSec < 60) return 'щойно';
+    if (diffMin < 60) return `${diffMin} хв тому`;
+    if (diffHours < 24) return `${diffHours} год тому`;
+    if (diffDays === 1) return 'вчора';
+    return `${diffDays} дн. тому`;
+  }
+
   calculateLQS(p: Product): number {
     let score = 0;
     // 1. Оцінка рейтингу
