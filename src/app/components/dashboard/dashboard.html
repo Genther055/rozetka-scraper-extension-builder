@@ -1,15 +1,15 @@
-<div class="min-h-screen bg-[#08070d] text-slate-100 flex font-sans overflow-x-hidden">
+<div class="min-h-screen bg-[#0b0f19] text-slate-100 flex font-sans overflow-x-hidden">
   
   <!-- Sidebar -->
-  <aside class="w-64 bg-[#0d0b14] border-r border-[rgba(139,92,246,0.1)] flex flex-col shrink-0 shadow-xl shadow-black/40">
+  <aside class="w-64 bg-[#0e1424] border-r border-slate-800/80 flex flex-col shrink-0 shadow-xl shadow-black/30">
     <!-- Brand -->
-    <div class="p-6 border-b border-[rgba(139,92,246,0.1)] flex items-center gap-3">
-      <div class="w-10 h-10 bg-gradient-to-br from-[#6366f1] to-[#a855f7] rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+    <div class="p-6 border-b border-slate-800/80 flex items-center gap-3">
+      <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
         <span class="material-icons text-white text-xl">query_stats</span>
       </div>
       <div>
         <h1 class="font-bold text-lg text-white leading-tight">TradeScout</h1>
-        <span class="text-xs text-slate-500 font-bold tracking-wider uppercase">Analytics OS</span>
+        <span class="text-xs text-slate-400 font-bold tracking-wider uppercase">Analytics OS</span>
       </div>
     </div>
 
@@ -72,37 +72,37 @@
     </nav>
 
     <!-- User Profile & Action Footer -->
-    <div class="p-4 border-t border-[rgba(139,92,246,0.1)] bg-slate-950/20 flex flex-col gap-3">
+    <div class="p-4 border-t border-slate-800/80 bg-slate-950/40 flex flex-col gap-3">
       <div class="flex items-center gap-3 px-2">
-        <div class="w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center border border-[rgba(139,92,246,0.15)] text-indigo-300 font-bold">
+        <div class="w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center border border-slate-700 text-indigo-300 font-bold">
           A
         </div>
         <div class="flex-1 min-w-0">
           <p class="text-xs font-semibold text-white truncate">Адміністратор</p>
-          <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">роль: admin</p>
+          <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">роль: admin</p>
         </div>
       </div>
       
       <button 
         (click)="logout()" 
-        class="w-full py-2.5 px-4 bg-slate-900/35 hover:bg-red-950/25 text-slate-400 hover:text-red-400 border border-[rgba(139,92,246,0.06)] hover:border-red-900/30 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-2"
+        class="w-full py-2.5 px-4 bg-slate-900/50 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-800 hover:border-rose-900/50 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-2"
       >
         <span class="material-icons text-sm">logout</span>
         Вийти з платформи
       </button>
 
       <!-- Subtle Sidebar Scraping Indicator -->
-      <div *ngIf="getLastScrapedDate()" class="pt-1 text-[10px] text-slate-500 flex items-center justify-center gap-1.5 select-none" [title]="'Останній скрейпінг: ' + getLastScrapedText()">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400/70"></span>
+      <div *ngIf="getLastScrapedDate()" class="pt-1 text-[10px] text-slate-400 flex items-center justify-center gap-1.5 select-none" [title]="'Останній скрейпінг: ' + getLastScrapedText()">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
         <span>Збір: {{ getLastScrapedRelative() }}</span>
       </div>
     </div>
   </aside>
 
   <!-- Main Content Wrapper -->
-  <main class="flex-1 flex flex-col min-w-0 bg-[#08070d]">
+  <main class="flex-1 flex flex-col min-w-0 bg-[#0b0f19]">
     <!-- Header -->
-    <header class="h-20 bg-[#0d0b14]/50 backdrop-blur-md border-b border-[rgba(139,92,246,0.1)] flex items-center justify-between px-8 z-10 shrink-0 shadow-lg shadow-black/10">
+    <header class="h-20 bg-[#0e1424]/75 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between px-8 z-10 shrink-0 shadow-lg shadow-black/10">
       <div>
         <h2 class="text-xl font-extrabold tracking-tight premium-title">
           <span *ngIf="activeTab === 'overview'">Панель огляду ніші</span>
@@ -111,7 +111,7 @@
           <span *ngIf="activeTab === 'details'">Детальні характеристики & Описи</span>
           <span *ngIf="activeTab === 'history'">Історія скрейпінгів & Папки зборів</span>
         </h2>
-        <p class="text-[10px] text-[#a78bfa]/60 font-bold uppercase tracking-wider mt-1">Збір та інтелектуальний аналіз товарів з Rozetka</p>
+        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Збір та інтелектуальний аналіз товарів з Rozetka</p>
       </div>
 
       <div class="flex items-center gap-3">
@@ -119,11 +119,11 @@
         <button 
           *ngIf="products.length > 0"
           (click)="openSaveSnapshotModal()"
-          class="px-3.5 py-2 bg-slate-900/80 hover:bg-slate-850 active:bg-slate-950 text-indigo-300 hover:text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-md flex items-center gap-1.5 border border-indigo-500/25 glow-indigo"
+          class="px-4 py-2 bg-slate-900/90 hover:bg-slate-850 active:bg-slate-950 text-indigo-300 hover:text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-md flex items-center gap-2 border border-indigo-500/30 glow-indigo"
           title="Зберегти поточний збір як знімок в історію"
         >
           <span class="material-icons text-sm text-indigo-400">camera_alt</span>
-          <span>Зберегти знімок</span>
+          <span>Зберегти результати скрейпінгу</span>
         </button>
 
         <!-- Download Extension Button -->
@@ -134,7 +134,7 @@
           title="Завантажити розширення Chrome"
         >
           <span class="material-icons text-sm">download</span>
-          <span>Розширення (.zip)</span>
+          <span>Завантажити розширення</span>
         </a>
 
         <!-- Export to Excel Button -->
@@ -144,18 +144,12 @@
           title="Експортувати у таблицю Excel (.xlsx)"
         >
           <span class="material-icons text-sm">table_view</span>
-          <span>Excel (.xlsx)</span>
+          <span>Завантажити EXCEL таблицю</span>
         </button>
 
-        <!-- Live status -->
-        <div class="flex items-center gap-2 px-3.5 py-1.5 bg-[#121020] border border-[rgba(139,92,246,0.15)] rounded-full shadow-inner">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-          <span class="text-[10px] font-bold text-indigo-300 uppercase tracking-wide">Порт: {{ getPort() }}</span>
-        </div>
-        
         <button 
           (click)="loadProducts()" 
-          class="p-2 bg-[#121020] hover:bg-slate-900 active:bg-black border border-[rgba(139,92,246,0.15)] hover:border-[rgba(168,85,247,0.3)] rounded-full text-indigo-300 hover:text-white cursor-pointer transition-all flex items-center justify-center"
+          class="p-2 bg-[#141c2e] hover:bg-slate-900 active:bg-black border border-[rgba(148,163,184,0.15)] hover:border-indigo-500/40 rounded-full text-indigo-300 hover:text-white cursor-pointer transition-all flex items-center justify-center shadow-sm"
           title="Оновити дані"
         >
           <span class="material-icons text-lg" [class.animate-spin]="loading">refresh</span>
@@ -176,7 +170,7 @@
       <section *ngIf="products.length > 0" class="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
-            <p class="text-xs text-[#a78bfa]/60 font-bold uppercase tracking-wider">Зібрано товарів</p>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Зібрано товарів</p>
             <p class="text-3xl font-extrabold text-white mt-1">{{ totalItems }}</p>
           </div>
           <div class="w-12 h-12 bg-indigo-950/50 border border-indigo-500/20 text-indigo-300 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/10">
@@ -186,7 +180,7 @@
 
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
-            <p class="text-xs text-[#a78bfa]/60 font-bold uppercase tracking-wider">Середня ціна</p>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Середня ціна</p>
             <p class="text-3xl font-extrabold text-emerald-400 mt-1">{{ avgPrice }} ₴</p>
           </div>
           <div class="w-12 h-12 bg-emerald-950/50 border border-emerald-500/20 text-emerald-300 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/10">
@@ -196,7 +190,7 @@
 
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
-            <p class="text-xs text-[#a78bfa]/60 font-bold uppercase tracking-wider">Середній рейтинг</p>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Середній рейтинг</p>
             <p class="text-3xl font-extrabold text-amber-400 mt-1">{{ avgRating }} / 5.0</p>
           </div>
           <div class="w-12 h-12 bg-amber-950/50 border border-amber-500/20 text-amber-300 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/10">
@@ -206,7 +200,7 @@
 
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
-            <p class="text-xs text-[#a78bfa]/60 font-bold uppercase tracking-wider">Унікальних продавців</p>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Унікальних продавців</p>
             <p class="text-3xl font-extrabold text-indigo-300 mt-1">{{ sellersCount }}</p>
           </div>
           <div class="w-12 h-12 bg-indigo-950/50 border border-indigo-500/20 text-indigo-300 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/10">
@@ -217,7 +211,7 @@
 
       <!-- Empty State if no data has been received -->
       <div *ngIf="products.length === 0 && !loading" class="flex flex-col items-center justify-center p-12 premium-card text-center max-w-2xl mx-auto mt-10">
-        <span class="material-icons text-6xl text-[#a78bfa]/40 mb-4 animate-pulse">settings_input_component</span>
+        <span class="material-icons text-6xl text-indigo-400/50 mb-4 animate-pulse">settings_input_component</span>
         <h3 class="text-xl font-bold text-white mb-2 premium-title">Немає зібраних даних</h3>
         <p class="text-slate-400 text-sm mb-6 max-w-md">
           Для роботи з дашбордом вам знадобиться Chrome-розширення TradeScout. Завантажте його, підключіть до маркетплейсу та почніть аналіз.
@@ -1065,121 +1059,115 @@
             
             <!-- Filter & Search Bar -->
             <div class="p-4 premium-card flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div class="relative w-full sm:w-80">
-                <span class="material-icons absolute left-3 top-2.5 text-sm text-slate-500">search</span>
+              <div class="relative w-full sm:w-96 flex items-center">
+                <span class="material-icons absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">search</span>
                 <input 
                   type="text" 
                   [(ngModel)]="searchHistoryQuery"
                   placeholder="Пошук знімка за назвою або категорією..."
-                  class="w-full bg-slate-950/60 border border-[rgba(139,92,246,0.15)] focus:border-indigo-500 rounded-full pl-9 pr-4 py-1.5 text-xs text-white placeholder-slate-500 outline-none transition-all"
+                  class="w-full bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-full pl-10 pr-4 py-2 text-xs text-white placeholder-slate-400 outline-none transition-all"
                 />
               </div>
 
               <div class="text-xs text-slate-400 flex items-center gap-2">
                 <span>Знайдено зборів:</span>
-                <span class="font-bold text-white bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800">
+                <span class="font-bold text-white bg-slate-900 px-2.5 py-0.5 rounded-full border border-slate-800">
                   {{ getFilteredSnapshots().length }}
                 </span>
               </div>
             </div>
 
-            <!-- Snapshots Cards List -->
-            <div *ngIf="getFilteredSnapshots().length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Snapshots Cards List (Full-Width Responsive Cards) -->
+            <div *ngIf="getFilteredSnapshots().length > 0" class="space-y-4">
               <div 
                 *ngFor="let snap of getFilteredSnapshots()" 
-                class="p-5 premium-card hover:border-indigo-500/40 transition-all flex flex-col justify-between space-y-4 group"
+                class="p-5 premium-card hover:border-indigo-500/40 transition-all flex flex-col xl:flex-row xl:items-center justify-between gap-5 group"
               >
-                <!-- Card Header -->
-                <div class="space-y-2">
-                  <div class="flex items-start justify-between gap-2">
-                    <div>
-                      <span 
-                        class="px-2.5 py-0.5 text-[10px] font-bold rounded-full border inline-flex items-center gap-1"
-                        [style.borderColor]="getFolderColor(snap.folderId) + '50'"
-                        [style.backgroundColor]="getFolderColor(snap.folderId) + '15'"
-                        [style.color]="getFolderColor(snap.folderId)"
-                      >
-                        <span class="w-1.5 h-1.5 rounded-full" [style.backgroundColor]="getFolderColor(snap.folderId)"></span>
-                        {{ getFolderName(snap.folderId) }}
-                      </span>
-                    </div>
+                <!-- Left: Info & Title -->
+                <div class="space-y-2 flex-1 min-w-0">
+                  <div class="flex items-center gap-3">
+                    <span 
+                      class="px-2.5 py-0.5 text-[10px] font-bold rounded-full border inline-flex items-center gap-1.5"
+                      [style.borderColor]="getFolderColor(snap.folderId) + '60'"
+                      [style.backgroundColor]="getFolderColor(snap.folderId) + '18'"
+                      [style.color]="getFolderColor(snap.folderId)"
+                    >
+                      <span class="w-1.5 h-1.5 rounded-full" [style.backgroundColor]="getFolderColor(snap.folderId)"></span>
+                      {{ getFolderName(snap.folderId) }}
+                    </span>
 
-                    <div class="flex items-center gap-1">
-                      <!-- Date Time Badge -->
-                      <span class="text-[11px] text-slate-400 font-mono">
-                        {{ snap.scrapedAt | date:'dd.MM.yyyy HH:mm' }}
-                      </span>
-
-                      <!-- Delete Snapshot -->
-                      <button 
-                        (click)="deleteSnapshot(snap, $event)"
-                        class="p-1 text-slate-600 hover:text-rose-400 transition-colors cursor-pointer rounded-lg hover:bg-slate-900"
-                        title="Видалити цей знімок"
-                      >
-                        <span class="material-icons text-sm">delete</span>
-                      </button>
-                    </div>
+                    <span class="text-[11px] text-slate-400 font-mono flex items-center gap-1">
+                      <span class="material-icons text-[13px] text-slate-500">schedule</span>
+                      {{ snap.scrapedAt | date:'dd.MM.yyyy HH:mm' }}
+                    </span>
                   </div>
 
-                  <!-- Title -->
-                  <h4 class="text-sm font-bold text-white leading-snug line-clamp-2">
+                  <h4 class="text-sm font-bold text-white leading-snug truncate" [title]="snap.title">
                     {{ snap.title }}
                   </h4>
                 </div>
 
-                <!-- Snapshot Metrics Stats -->
-                <div class="grid grid-cols-3 gap-2 py-2 border-y border-slate-800/60 text-center">
-                  <div class="p-2 bg-slate-950/40 rounded-xl border border-slate-800/40">
-                    <p class="text-[10px] text-slate-500 uppercase font-semibold">Товарів</p>
-                    <p class="text-xs font-bold text-indigo-300 mt-0.5">{{ snap.itemCount }} шт</p>
+                <!-- Middle: Stats Row -->
+                <div class="flex items-center gap-2 sm:gap-4 shrink-0 bg-slate-950/60 p-2 sm:p-2.5 rounded-2xl border border-slate-800/60">
+                  <div class="px-3 py-1 text-center">
+                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Товарів</p>
+                    <p class="text-xs font-extrabold text-indigo-300 mt-0.5">{{ snap.itemCount }} шт</p>
                   </div>
-                  <div class="p-2 bg-slate-950/40 rounded-xl border border-slate-800/40">
-                    <p class="text-[10px] text-slate-500 uppercase font-semibold">Сер. ціна</p>
-                    <p class="text-xs font-bold text-emerald-400 mt-0.5">{{ snap.avgPrice }} ₴</p>
+                  <div class="w-px h-7 bg-slate-800"></div>
+                  <div class="px-3 py-1 text-center">
+                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Сер. ціна</p>
+                    <p class="text-xs font-extrabold text-emerald-400 mt-0.5">{{ snap.avgPrice }} ₴</p>
                   </div>
-                  <div class="p-2 bg-slate-950/40 rounded-xl border border-slate-800/40">
-                    <p class="text-[10px] text-slate-500 uppercase font-semibold">Діапазон цін</p>
-                    <p class="text-[11px] font-bold text-slate-300 mt-0.5">{{ snap.minPrice }}-{{ snap.maxPrice }} ₴</p>
+                  <div class="w-px h-7 bg-slate-800"></div>
+                  <div class="px-3 py-1 text-center">
+                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Діапазон цін</p>
+                    <p class="text-[11px] font-bold text-slate-300 mt-0.5 font-mono">{{ snap.minPrice }}-{{ snap.maxPrice }} ₴</p>
                   </div>
                 </div>
 
-                <!-- Folder selector & Action Buttons -->
-                <div class="space-y-2 pt-1">
+                <!-- Right: Folder Selector & Actions -->
+                <div class="flex flex-wrap items-center gap-2.5 shrink-0 justify-end">
                   <!-- Folder selector -->
-                  <div class="flex items-center justify-between text-xs text-slate-400">
-                    <span class="text-[11px] text-slate-500">Папка:</span>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[11px] text-slate-400 font-medium">Папка:</span>
                     <select 
                       [ngModel]="snap.folderId || ''" 
                       (ngModelChange)="moveSnapshot(snap, $event ? $event : null)"
-                      class="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-300 outline-none cursor-pointer hover:border-indigo-500/40 transition-colors"
+                      class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none cursor-pointer hover:border-indigo-500/40 transition-colors"
                     >
                       <option value="">Без папки</option>
                       <option *ngFor="let f of folders" [value]="f.id">{{ f.name }}</option>
                     </select>
                   </div>
 
-                  <!-- Action Buttons -->
-                  <div class="grid grid-cols-2 gap-2 pt-1">
-                    <!-- Restore to Dashboard -->
-                    <button 
-                      (click)="restoreSnapshot(snap)"
-                      class="px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 hover:border-indigo-500 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
-                      title="Завантажити цей збір у головну робочу область дашборду"
-                    >
-                      <span class="material-icons text-sm">open_in_browser</span>
-                      <span>На дашборд</span>
-                    </button>
+                  <!-- Restore button -->
+                  <button 
+                    (click)="restoreSnapshot(snap)"
+                    class="px-3.5 py-2 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 hover:border-indigo-500 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                    title="Завантажити цей збір у головну робочу область дашборду"
+                  >
+                    <span class="material-icons text-sm">open_in_browser</span>
+                    <span>На дашборд</span>
+                  </button>
 
-                    <!-- Export Snapshot to Excel -->
-                    <button 
-                      (click)="exportSpecificSnapshotToExcel(snap, $event)"
-                      class="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 hover:border-emerald-500 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
-                      title="Експортувати саме цей знімок у Excel (.xlsx)"
-                    >
-                      <span class="material-icons text-sm">table_view</span>
-                      <span>Excel (.xlsx)</span>
-                    </button>
-                  </div>
+                  <!-- Export specific snapshot to Excel -->
+                  <button 
+                    (click)="exportSpecificSnapshotToExcel(snap, $event)"
+                    class="px-3.5 py-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 hover:border-emerald-500 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                    title="Експортувати саме цей знімок у Excel (.xlsx)"
+                  >
+                    <span class="material-icons text-sm">table_view</span>
+                    <span>Завантажити EXCEL</span>
+                  </button>
+
+                  <!-- Delete button -->
+                  <button 
+                    (click)="deleteSnapshot(snap, $event)"
+                    class="p-2 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer rounded-xl hover:bg-slate-900 border border-transparent hover:border-rose-900/30"
+                    title="Видалити цей знімок"
+                  >
+                    <span class="material-icons text-sm">delete</span>
+                  </button>
                 </div>
 
               </div>
@@ -1233,8 +1221,8 @@
   </main>
 
   <!-- SLEEK GLASSMORPHISM MODAL FOR FULL SPECS OVERLAY -->
-  <div *ngIf="activeModalProduct" class="fixed inset-0 z-50 bg-[#08070d]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-    <div class="bg-gradient-to-br from-[#121020] to-[#0d0b14] border border-[rgba(139,92,246,0.2)] rounded-3xl p-6 max-w-2xl w-full shadow-2xl shadow-purple-500/10 space-y-6 relative max-h-[85vh] flex flex-col">
+  <div *ngIf="activeModalProduct" class="fixed inset-0 z-50 bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+    <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/60 rounded-3xl p-6 max-w-2xl w-full shadow-2xl shadow-black/50 space-y-6 relative max-h-[85vh] flex flex-col">
       
       <div class="flex items-start justify-between border-b border-slate-800/80 pb-4">
         <div>
@@ -1251,15 +1239,15 @@
 
       <div class="overflow-y-auto space-y-4 pr-1 flex-1">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div *ngFor="let spec of getSpecsArray(activeModalProduct)" class="p-3 bg-black/40 border border-[rgba(139,92,246,0.08)] rounded-xl">
-            <span class="text-[11px] text-slate-500 font-semibold block uppercase">{{ spec.key }}</span>
+          <div *ngFor="let spec of getSpecsArray(activeModalProduct)" class="p-3 bg-slate-950/60 border border-slate-800/60 rounded-xl">
+            <span class="text-[11px] text-slate-400 font-semibold block uppercase">{{ spec.key }}</span>
             <span class="text-xs font-bold text-slate-200 mt-0.5 block">{{ spec.val }}</span>
           </div>
         </div>
 
-        <div *ngIf="activeModalProduct.description" class="p-4 bg-black/45 border border-[rgba(139,92,246,0.12)] rounded-xl space-y-2 mt-4 shadow-inner">
-          <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Опис товару</h4>
-          <p class="text-xs text-slate-350 leading-relaxed whitespace-pre-line max-h-48 overflow-y-auto pr-1">
+        <div *ngIf="activeModalProduct.description" class="p-4 bg-slate-950/60 border border-slate-800/60 rounded-xl space-y-2 mt-4 shadow-inner">
+          <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Опис товару</h4>
+          <p class="text-xs text-slate-300 leading-relaxed whitespace-pre-line max-h-48 overflow-y-auto pr-1">
             {{ activeModalProduct.description }}
           </p>
         </div>
@@ -1275,8 +1263,8 @@
   </div>
 
   <!-- MODAL: CREATE NEW FOLDER -->
-  <div *ngIf="showNewFolderModal" class="fixed inset-0 z-50 bg-[#08070d]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-    <div class="bg-gradient-to-br from-[#121020] to-[#0d0b14] border border-[rgba(139,92,246,0.25)] rounded-3xl p-6 max-w-md w-full shadow-2xl shadow-purple-500/10 space-y-5 relative">
+  <div *ngIf="showNewFolderModal" class="fixed inset-0 z-50 bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+    <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/60 rounded-3xl p-6 max-w-md w-full shadow-2xl shadow-black/50 space-y-5 relative">
       
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
@@ -1295,7 +1283,7 @@
             type="text" 
             [(ngModel)]="newFolderName" 
             placeholder="напр. Повербанки 20000 mAh або Топ Новинки..."
-            class="w-full bg-slate-950 border border-[rgba(139,92,246,0.2)] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-600 outline-none transition-all"
+            class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 outline-none transition-all"
             (keyup.enter)="createFolder()"
           />
         </div>
@@ -1321,7 +1309,7 @@
       <div class="border-t border-slate-800/80 pt-4 flex justify-end gap-2">
         <button 
           (click)="showNewFolderModal = false" 
-          class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white text-xs font-semibold rounded-full cursor-pointer transition-all"
+          class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold rounded-full cursor-pointer transition-all"
         >
           Скасувати
         </button>
@@ -1338,13 +1326,13 @@
   </div>
 
   <!-- MODAL: SAVE CURRENT SNAPSHOT -->
-  <div *ngIf="showSaveSnapshotModal" class="fixed inset-0 z-50 bg-[#08070d]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-    <div class="bg-gradient-to-br from-[#121020] to-[#0d0b14] border border-[rgba(139,92,246,0.25)] rounded-3xl p-6 max-w-md w-full shadow-2xl shadow-purple-500/10 space-y-5 relative">
+  <div *ngIf="showSaveSnapshotModal" class="fixed inset-0 z-50 bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+    <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/60 rounded-3xl p-6 max-w-md w-full shadow-2xl shadow-black/50 space-y-5 relative">
       
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <span class="material-icons text-indigo-400 text-base">camera_alt</span>
-          Зберегти знімок поточного скрейпінгу
+          Зберегти результати скрейпінгу
         </h3>
         <button (click)="showSaveSnapshotModal = false" class="text-slate-500 hover:text-white p-1 cursor-pointer">
           <span class="material-icons text-sm">close</span>
@@ -1358,7 +1346,7 @@
             type="text" 
             [(ngModel)]="newSnapshotTitle" 
             placeholder="Введіть назву для знімка..."
-            class="w-full bg-slate-950 border border-[rgba(139,92,246,0.2)] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-600 outline-none transition-all"
+            class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 outline-none transition-all"
             (keyup.enter)="saveCurrentSnapshot()"
           />
         </div>
@@ -1367,15 +1355,15 @@
           <label class="block text-xs font-semibold text-slate-300 mb-1.5">Призначити в папку</label>
           <select 
             [(ngModel)]="newSnapshotFolderId" 
-            class="w-full bg-slate-950 border border-[rgba(139,92,246,0.2)] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white outline-none transition-all cursor-pointer"
+            class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white outline-none transition-all cursor-pointer"
           >
             <option [ngValue]="null">Без папки (Загальний архів)</option>
             <option *ngFor="let f of folders" [ngValue]="f.id">{{ f.name }}</option>
           </select>
         </div>
 
-        <div class="p-3 bg-indigo-950/20 border border-indigo-500/20 rounded-xl flex items-center justify-between text-xs">
-          <span class="text-slate-400">Товарів у знімку:</span>
+        <div class="p-3 bg-indigo-950/30 border border-indigo-500/25 rounded-xl flex items-center justify-between text-xs">
+          <span class="text-slate-300 font-medium">Товарів у знімку:</span>
           <span class="font-bold text-indigo-300">{{ products.length }} шт</span>
         </div>
       </div>
@@ -1383,7 +1371,7 @@
       <div class="border-t border-slate-800/80 pt-4 flex justify-end gap-2">
         <button 
           (click)="showSaveSnapshotModal = false" 
-          class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white text-xs font-semibold rounded-full cursor-pointer transition-all"
+          class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold rounded-full cursor-pointer transition-all"
         >
           Скасувати
         </button>
@@ -1391,7 +1379,7 @@
           (click)="saveCurrentSnapshot()" 
           class="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-full shadow-lg shadow-indigo-500/25 transition-all cursor-pointer glow-indigo"
         >
-          Зберегти в архів
+          Зберегти результати
         </button>
       </div>
 
@@ -1401,7 +1389,7 @@
   <!-- FLOATING NOTIFICATION TOAST -->
   <div 
     *ngIf="historySuccessMsg" 
-    class="fixed bottom-6 right-6 z-50 bg-[#121020]/95 border border-emerald-500/50 text-emerald-300 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fadeIn text-xs font-bold"
+    class="fixed bottom-6 right-6 z-50 bg-[#141c2e]/95 border border-emerald-500/50 text-emerald-300 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fadeIn text-xs font-bold"
   >
     <span class="material-icons text-emerald-400 text-base">check_circle</span>
     <span>{{ historySuccessMsg }}</span>
@@ -1409,7 +1397,7 @@
 
   <div 
     *ngIf="historyErrorMsg" 
-    class="fixed bottom-6 right-6 z-50 bg-[#121020]/95 border border-rose-500/50 text-rose-300 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fadeIn text-xs font-bold"
+    class="fixed bottom-6 right-6 z-50 bg-[#141c2e]/95 border border-rose-500/50 text-rose-300 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fadeIn text-xs font-bold"
   >
     <span class="material-icons text-rose-400 text-base">error</span>
     <span>{{ historyErrorMsg }}</span>
