@@ -27,6 +27,28 @@ export interface ScrapingSnapshot {
   products?: Product[];
 }
 
+export interface SellerStat {
+  name: string;
+  productCount: number;
+  marketSharePct: number;
+  totalReviews: number;
+  avgRating: number;
+  avgPrice: number;
+  minPrice: number;
+  maxPrice: number;
+  inStockPct: number;
+  color: string;
+}
+
+export interface SellerPieSegment {
+  name: string;
+  productCount: number;
+  pct: number;
+  color: string;
+  strokeDasharray: string;
+  strokeDashoffset: number;
+}
+
 interface Product {
   name: string;
   price: number;
@@ -93,6 +115,16 @@ export class DashboardComponent implements OnInit {
   showSaveSnapshotModal = false;
   newSnapshotTitle = '';
   newSnapshotFolderId: string | null = null;
+
+  // Seller Analytics State
+  sellerStats: SellerStat[] = [];
+  topSellerByAssortment: SellerStat | null = null;
+  topSellerByReviews: SellerStat | null = null;
+  topSellerByRating: SellerStat | null = null;
+  sellerPieSegments: SellerPieSegment[] = [];
+  sellerSortColumn: 'productCount' | 'totalReviews' | 'avgRating' | 'avgPrice' = 'productCount';
+  sellerSortDirection: 'asc' | 'desc' = 'desc';
+  sellerSearchQuery = '';
 
   activeSnapshotDetails: ScrapingSnapshot | null = null;
   movingSnapshot: ScrapingSnapshot | null = null;
@@ -867,6 +899,174 @@ export class DashboardComponent implements OnInit {
     this.sellersCount = this.totalItems > 0 ? new Set(this.products.map(p => p.seller || 'Rozetka')).size : 0;
     this.aiAlertsCount = this.products.filter(p => p.aiStatus === 'warning' || p.aiStatus === 'suspicious').length;
     this.calculateOpportunityScore();
+    this.calculateSellerAnalytics();
+  }
+
+  calculateSellerAnalytics() {
+    if (!this.products || this.products.length === 0) {
+      this.sellerStats = [];
+      this.sellerPieSegments = [];
+      this.topSellerByAssortment = null;
+      this.topSellerByReviews = null;
+      this.topSellerByRating = null;
+      return;
+    }
+
+    const sellerMap = new Map<string, {
+      count: number;
+      prices: number[];
+      ratings: number[];
+      reviews: number;
+      inStockCount: number;
+    }>();
+
+    for (const p of this.products) {
+      const seller = (p.seller && p.seller.trim()) ? p.seller.trim() : 'Rozetka';
+      if (!sellerMap.has(seller)) {
+        sellerMap.set(seller, {
+          count: 0,
+          prices: [],
+          ratings: [],
+          reviews: 0,
+          inStockCount: 0
+        });
+      }
+      const data = sellerMap.get(seller)!;
+      data.count++;
+      if (p.price && p.price > 0) data.prices.push(p.price);
+      if (p.rating && p.rating > 0) data.ratings.push(p.rating);
+      if (p.reviews && p.reviews > 0) data.reviews += p.reviews;
+      if (p.inStock !== false) data.inStockCount++;
+    }
+
+    const colors = [
+      '#6366f1', // Indigo
+      '#8b5cf6', // Violet
+      '#ec4899', // Pink
+      '#10b981', // Emerald
+      '#f59e0b', // Amber
+      '#06b6d4', // Cyan
+      '#3b82f6', // Blue
+      '#a855f7', // Purple
+      '#64748b'  // Slate
+    ];
+
+    const totalProducts = this.products.length;
+    const stats: SellerStat[] = [];
+
+    sellerMap.forEach((data, name) => {
+      const avgPrice = data.prices.length > 0 ? Math.round(data.prices.reduce((a, b) => a + b, 0) / data.prices.length) : 0;
+      const minPrice = data.prices.length > 0 ? Math.min(...data.prices) : 0;
+      const maxPrice = data.prices.length > 0 ? Math.max(...data.prices) : 0;
+      const avgRating = data.ratings.length > 0 ? +(data.ratings.reduce((a, b) => a + b, 0) / data.ratings.length).toFixed(1) : 0;
+      const inStockPct = Math.round((data.inStockCount / data.count) * 100);
+      const marketSharePct = +((data.count / totalProducts) * 100).toFixed(1);
+
+      stats.push({
+        name,
+        productCount: data.count,
+        marketSharePct,
+        totalReviews: data.reviews,
+        avgRating,
+        avgPrice,
+        minPrice,
+        maxPrice,
+        inStockPct,
+        color: '#64748b'
+      });
+    });
+
+    // Sort by product count descending
+    stats.sort((a, b) => b.productCount - a.productCount);
+
+    // Assign colors to top sellers
+    stats.forEach((s, idx) => {
+      s.color = colors[idx % colors.length];
+    });
+
+    this.sellerStats = stats;
+
+    // Leaders
+    this.topSellerByAssortment = stats.length > 0 ? stats[0] : null;
+    
+    // Top by reviews
+    const sortedByReviews = [...stats].sort((a, b) => b.totalReviews - a.totalReviews);
+    this.topSellerByReviews = sortedByReviews.length > 0 && sortedByReviews[0].totalReviews > 0 ? sortedByReviews[0] : null;
+
+    // Top by rating
+    const sortedByRating = [...stats].filter(s => s.avgRating > 0).sort((a, b) => b.avgRating - a.avgRating || b.totalReviews - a.totalReviews);
+    this.topSellerByRating = sortedByRating.length > 0 ? sortedByRating[0] : null;
+
+    // Calculate SVG Donut chart segments (Top 5 + others)
+    const top5 = stats.slice(0, 5);
+    const othersCount = stats.slice(5).reduce((acc, s) => acc + s.productCount, 0);
+
+    const pieData: { name: string; count: number; color: string }[] = top5.map((s, idx) => ({
+      name: s.name,
+      count: s.productCount,
+      color: colors[idx]
+    }));
+
+    if (othersCount > 0) {
+      pieData.push({
+        name: 'Інші (' + (stats.length - 5) + ' прод.)',
+        count: othersCount,
+        color: '#475569'
+      });
+    }
+
+    // Circumference for r=40 is 2 * PI * 40 = ~251.327
+    const circumference = 2 * Math.PI * 40;
+    let accumulatedPct = 0;
+
+    this.sellerPieSegments = pieData.map(item => {
+      const pct = +(item.count / totalProducts * 100).toFixed(1);
+      const dashLength = (pct / 100) * circumference;
+      const spaceLength = circumference - dashLength;
+      const offset = - (accumulatedPct / 100) * circumference;
+      accumulatedPct += pct;
+
+      return {
+        name: item.name,
+        productCount: item.count,
+        pct,
+        color: item.color,
+        strokeDasharray: `${dashLength} ${spaceLength}`,
+        strokeDashoffset: offset
+      };
+    });
+  }
+
+  getFilteredSellerStats(): SellerStat[] {
+    let list = [...this.sellerStats];
+    if (this.sellerSearchQuery && this.sellerSearchQuery.trim()) {
+      const q = this.sellerSearchQuery.toLowerCase().trim();
+      list = list.filter(s => s.name.toLowerCase().includes(q));
+    }
+
+    list.sort((a, b) => {
+      let valA = a[this.sellerSortColumn];
+      let valB = b[this.sellerSortColumn];
+      if (valA === valB) return 0;
+      return this.sellerSortDirection === 'asc' ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
+    });
+
+    return list;
+  }
+
+  sortSellersBy(column: 'productCount' | 'totalReviews' | 'avgRating' | 'avgPrice') {
+    if (this.sellerSortColumn === column) {
+      this.sellerSortDirection = this.sellerSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sellerSortColumn = column;
+      this.sellerSortDirection = 'desc';
+    }
+    this.cdr.markForCheck();
+  }
+
+  calculateTotalNicheReviews(): number {
+    if (!this.products) return 0;
+    return this.products.reduce((acc, curr) => acc + (curr.reviews || 0), 0);
   }
 
   // Sorting State
