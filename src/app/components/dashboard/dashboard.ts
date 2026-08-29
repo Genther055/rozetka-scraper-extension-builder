@@ -69,17 +69,31 @@ export interface AnalyticalSummary {
     uniqueSellersCount: number;
     avgPrice: number;
     medianPrice: number;
+    minPrice: number;
+    maxPrice: number;
+    p95Price: number;
+    priceSkewPct: number;
     inStockCount: number;
     inStockPercentage: number;
     activeSkusCount: number;
     activeSkusPercentage: number;
+    inactiveSkusCount: number;
+    inactiveSkusPercentage: number;
+    activeSkusInStockCount: number;
+    activeSkusInStockRate: number;
+    avgReviewsPerActiveSku: number;
     cr3: number;
     cr3Level: 'LOW' | 'MEDIUM' | 'HIGH';
+    top3Sellers: Array<{ name: string; share: number; count: number; isRozetka: boolean }>;
     hhi: number;
     hhiLevel: 'LOW' | 'MODERATE' | 'HIGH';
     entryBarrier: {
       level: 'LOW' | 'MEDIUM' | 'HIGH';
       medianTop10Reviews: number;
+      top10ReviewsMax: number;
+      top10ReviewsMin: number;
+      top10ReviewsAvg: number;
+      top10ProductsCount: number;
     };
     vendorSplit: {
       rozetkaCount: number;
@@ -1878,17 +1892,31 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
         uniqueSellersCount: 0,
         avgPrice: 0,
         medianPrice: 0,
+        minPrice: 0,
+        maxPrice: 0,
+        p95Price: 0,
+        priceSkewPct: 0,
         inStockCount: 0,
         inStockPercentage: 0,
         activeSkusCount: 0,
         activeSkusPercentage: 0,
+        inactiveSkusCount: 0,
+        inactiveSkusPercentage: 0,
+        activeSkusInStockCount: 0,
+        activeSkusInStockRate: 0,
+        avgReviewsPerActiveSku: 0,
         cr3: 0,
         cr3Level: 'LOW',
+        top3Sellers: [],
         hhi: 0,
         hhiLevel: 'LOW',
         entryBarrier: {
           level: 'LOW',
-          medianTop10Reviews: 0
+          medianTop10Reviews: 0,
+          top10ReviewsMax: 0,
+          top10ReviewsMin: 0,
+          top10ReviewsAvg: 0,
+          top10ProductsCount: 0
         },
         vendorSplit: {
           rozetkaCount: 0,
@@ -1904,11 +1932,16 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
 
   // 1. Сортування цін для медіани та розрахунку середнього
   const sortedPrices = [...validProducts.map(p => Number(p.price))].sort((a, b) => a - b);
+  const minPrice = sortedPrices[0];
+  const maxPrice = sortedPrices[sortedPrices.length - 1];
   const medianPrice = sortedPrices.length % 2 === 0
     ? (sortedPrices[sortedPrices.length / 2 - 1] + sortedPrices[sortedPrices.length / 2]) / 2
     : sortedPrices[Math.floor(sortedPrices.length / 2)];
   
   const avgPrice = Math.round(sortedPrices.reduce((acc, v) => acc + v, 0) / n);
+  const p95Index = Math.floor(0.95 * (n - 1));
+  const p95Price = sortedPrices[p95Index];
+  const priceSkewPct = medianPrice > 0 ? Number((((avgPrice - medianPrice) / medianPrice) * 100).toFixed(1)) : 0;
 
   // 2. Агрегація за продавцями
   const sellerColors = [
@@ -1971,7 +2004,13 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
   });
 
   // 3. Концентрація ринку (CR3, HHI)
-  const cr3 = Number(sellersList.slice(0, 3).reduce((acc, s) => acc + s.marketShare, 0).toFixed(1));
+  const top3Sellers = sellersList.slice(0, 3).map(s => ({
+    name: s.sellerName,
+    share: s.marketShare,
+    count: s.productsCount,
+    isRozetka: s.isRozetka
+  }));
+  const cr3 = Number(top3Sellers.reduce((acc, s) => acc + s.share, 0).toFixed(1));
   const cr3Level: 'LOW' | 'MEDIUM' | 'HIGH' = cr3 < 40 ? 'LOW' : cr3 <= 70 ? 'MEDIUM' : 'HIGH';
   
   const hhi = Math.round(sellersList.reduce((acc, s) => acc + Math.pow(s.marketShare, 2), 0));
@@ -1979,19 +2018,19 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
 
   // 4. Бар'єр входу (топ-10 за відгуками)
   const sortedByReviews = [...validProducts].sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
-  const top10Reviews = sortedByReviews.slice(0, 10).map(p => p.reviews || 0).sort((a, b) => a - b);
+  const top10Products = sortedByReviews.slice(0, 10);
+  const top10Reviews = top10Products.map(p => p.reviews || 0).sort((a, b) => a - b);
   const medianTop10Reviews = top10Reviews.length > 0
     ? top10Reviews[Math.floor(top10Reviews.length / 2)]
     : 0;
+  const top10ReviewsMax = top10Reviews.length > 0 ? top10Reviews[top10Reviews.length - 1] : 0;
+  const top10ReviewsMin = top10Reviews.length > 0 ? top10Reviews[0] : 0;
+  const top10ReviewsAvg = top10Reviews.length > 0 ? Math.round(top10Reviews.reduce((a, b) => a + b, 0) / top10Reviews.length) : 0;
 
   const entryBarrierLevel: 'LOW' | 'MEDIUM' | 'HIGH' =
-    medianTop10Reviews <= 10 ? 'LOW' : medianTop10Reviews <= 50 ? 'MEDIUM' : 'HIGH';
+    medianTop10Reviews <= 15 ? 'LOW' : medianTop10Reviews <= 100 ? 'MEDIUM' : 'HIGH';
 
   // 5. Динамічні корзини цін з відсіканням аномальних цін (P95 Outlier Clipping)
-  const minPrice = sortedPrices[0];
-  const maxPrice = sortedPrices[sortedPrices.length - 1];
-  const p95Index = Math.floor(0.95 * (n - 1));
-  const p95Price = sortedPrices[p95Index];
   const totalReviews = validProducts.reduce((acc, p) => acc + (p.reviews || 0), 0);
 
   let priceDistribution: Array<{
@@ -2084,8 +2123,16 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
 
   // 6. Rozetka vs 3P & Active SKUs
   const inStockCount = validProducts.filter(p => p.inStock !== false).length;
-  const activeSkusCount = validProducts.filter(p => (p.reviews || 0) > 0).length;
+  const activeProducts = validProducts.filter(p => (p.reviews || 0) > 0);
+  const activeSkusCount = activeProducts.length;
   const activeSkusPercentage = Number(((activeSkusCount / n) * 100).toFixed(1));
+  const inactiveSkusCount = n - activeSkusCount;
+  const inactiveSkusPercentage = Number(((inactiveSkusCount / n) * 100).toFixed(1));
+  const activeSkusInStockCount = activeProducts.filter(p => p.inStock !== false).length;
+  const activeSkusInStockRate = activeSkusCount > 0 ? Number(((activeSkusInStockCount / activeSkusCount) * 100).toFixed(1)) : 0;
+  const activeReviewsSum = activeProducts.reduce((acc, p) => acc + (p.reviews || 0), 0);
+  const avgReviewsPerActiveSku = activeSkusCount > 0 ? Number((activeReviewsSum / activeSkusCount).toFixed(1)) : 0;
+
   const rozetkaCount = validProducts.filter(p => (p.seller || '').toLowerCase().includes('rozetka')).length;
   const thirdPartyCount = n - rozetkaCount;
   const rozetkaShare = Number(((rozetkaCount / n) * 100).toFixed(1));
@@ -2097,17 +2144,31 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       uniqueSellersCount: sellersList.length,
       avgPrice,
       medianPrice: Math.round(medianPrice),
+      minPrice,
+      maxPrice,
+      p95Price,
+      priceSkewPct,
       inStockCount,
       inStockPercentage: Number(((inStockCount / n) * 100).toFixed(1)),
       activeSkusCount,
       activeSkusPercentage,
+      inactiveSkusCount,
+      inactiveSkusPercentage,
+      activeSkusInStockCount,
+      activeSkusInStockRate,
+      avgReviewsPerActiveSku,
       cr3,
       cr3Level,
+      top3Sellers,
       hhi,
       hhiLevel,
       entryBarrier: {
         level: entryBarrierLevel,
-        medianTop10Reviews
+        medianTop10Reviews,
+        top10ReviewsMax,
+        top10ReviewsMin,
+        top10ReviewsAvg,
+        top10ProductsCount: top10Products.length
       },
       vendorSplit: {
         rozetkaCount,

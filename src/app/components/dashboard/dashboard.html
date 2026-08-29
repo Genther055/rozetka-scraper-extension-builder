@@ -194,34 +194,158 @@
           </div>
         </div>
 
-        <!-- 2. Подвійний ціновий орієнтир -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all">
+        <!-- 2. Подвійний ціновий орієнтир (з графіком співвідношення цін при наведенні) -->
+        <div class="p-6 premium-card flex items-center justify-between transition-all relative group/price cursor-help">
           <div>
-            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Цінові орієнтири</p>
+            <div class="flex items-center gap-1.5">
+              <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Цінові орієнтири</p>
+              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/price:text-white group-hover/price:bg-emerald-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors">?</span>
+            </div>
             <p class="text-xl font-extrabold text-emerald-400 mt-1 font-mono">Сер: {{ analyticsSummary.kpi.avgPrice | number }} ₴</p>
             <p class="text-xs text-slate-300 font-mono font-semibold mt-0.5">Медіана (P50): {{ analyticsSummary.kpi.medianPrice | number }} ₴</p>
           </div>
           <div class="w-12 h-12 bg-emerald-950/50 border border-emerald-500/20 text-emerald-300 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/10">
             <span class="material-icons">payments</span>
           </div>
+
+          <!-- Hover Popover: Графік співвідношення цін та детальна статистика -->
+          <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-emerald-500/40 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-40 opacity-0 pointer-events-none group-hover/price:opacity-100 group-hover/price:pointer-events-auto transition-all duration-200 backdrop-blur-md">
+            <div class="font-bold text-white border-b border-slate-800 pb-2 mb-2.5 flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="material-icons text-base text-emerald-400">stacked_line_chart</span>
+                <span>Співвідношення та спектр цін</span>
+              </div>
+              <span class="text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800/60">
+                P50 vs Сер. vs P95
+              </span>
+            </div>
+
+            <!-- Visual Price Spectrum / Scale -->
+            <div class="space-y-1 mb-3">
+              <div class="flex justify-between text-[10px] font-mono text-slate-400">
+                <span>Мін: {{ analyticsSummary.kpi.minPrice | number }} ₴</span>
+                <span class="text-indigo-300 font-bold">P50: {{ analyticsSummary.kpi.medianPrice | number }} ₴</span>
+                <span class="text-emerald-400 font-bold">Сер: {{ analyticsSummary.kpi.avgPrice | number }} ₴</span>
+                <span>P95: {{ analyticsSummary.kpi.p95Price | number }} ₴</span>
+              </div>
+              <!-- Gradient bar representing price span -->
+              <div class="h-3.5 w-full bg-slate-900 rounded-full overflow-hidden relative border border-slate-800 flex">
+                <div class="bg-indigo-500/60 h-full w-[45%]" title="Нижній сегмент до медіани (50% товарів)"></div>
+                <div class="bg-emerald-500/80 h-full w-[35%]" title="Середній сегмент (P50 - P95)"></div>
+                <div class="bg-amber-500/90 h-full w-[20%]" title="Преміум хвіст (> P95)"></div>
+              </div>
+              <div class="flex justify-between text-[9px] text-slate-500">
+                <span>Бюджетний сегмент</span>
+                <span>Медіанне ядро</span>
+                <span>Преміум / Викиди</span>
+              </div>
+            </div>
+
+            <!-- Detailed points breakdown -->
+            <div class="grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 mb-2.5">
+              <div class="flex justify-between">
+                <span class="text-slate-400">Медіана (P50):</span>
+                <b class="text-indigo-300">{{ analyticsSummary.kpi.medianPrice | number }} ₴</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Середня (Avg):</span>
+                <b class="text-emerald-400">{{ analyticsSummary.kpi.avgPrice | number }} ₴</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">95-й перцентиль:</span>
+                <b class="text-amber-400">{{ analyticsSummary.kpi.p95Price | number }} ₴</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Діапазон:</span>
+                <b class="text-slate-200">{{ analyticsSummary.kpi.minPrice | number }} - {{ analyticsSummary.kpi.maxPrice | number }} ₴</b>
+              </div>
+            </div>
+
+            <p class="text-[11px] text-slate-300 leading-relaxed">
+              <span *ngIf="analyticsSummary.kpi.priceSkewPct > 15" class="text-amber-300">
+                ⚠️ Середня ціна вища за медіану на <b>{{ analyticsSummary.kpi.priceSkewPct }}%</b> — у ніші присутні дорогі преміум-товари, які зміщують середнє арифметичне.
+              </span>
+              <span *ngIf="analyticsSummary.kpi.priceSkewPct <= 15 && analyticsSummary.kpi.priceSkewPct >= -15" class="text-emerald-300">
+                ✓ Ціни розподілені рівномірно (середня близька до медіани), без різких перекосів.
+              </span>
+              <span *ngIf="analyticsSummary.kpi.priceSkewPct < -15" class="text-indigo-300">
+                ℹ️ Медіанна ціна вища за середню — основа пропозиції зосереджена у верхньому діапазоні.
+              </span>
+            </p>
+          </div>
         </div>
 
         <!-- 3. Оцінка життєздатності ніші (Частка активних SKU) -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all">
+        <div class="p-6 premium-card flex items-center justify-between transition-all relative group/sku cursor-help">
           <div>
-            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Активність SKU</p>
+            <div class="flex items-center gap-1.5">
+              <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Активність SKU</p>
+              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/sku:text-white group-hover/sku:bg-teal-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors">?</span>
+            </div>
             <p class="text-3xl font-extrabold text-teal-300 mt-1">{{ analyticsSummary.kpi.activeSkusPercentage }}%</p>
             <p class="text-xs text-teal-400/90 font-mono font-semibold mt-0.5">{{ analyticsSummary.kpi.activeSkusCount }} шт з відгуками ({{ analyticsSummary.kpi.inStockPercentage }}% в наявності)</p>
           </div>
           <div class="w-12 h-12 bg-teal-950/50 border border-teal-500/20 text-teal-300 rounded-xl flex items-center justify-center shadow-lg shadow-teal-500/10">
             <span class="material-icons">trending_up</span>
           </div>
+
+          <!-- Hover Popover: Обширні дані життєздатності ніші -->
+          <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-teal-500/40 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-40 opacity-0 pointer-events-none group-hover/sku:opacity-100 group-hover/sku:pointer-events-auto transition-all duration-200 backdrop-blur-md">
+            <div class="font-bold text-white border-b border-slate-800 pb-2 mb-2.5 flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="material-icons text-base text-teal-400">insights</span>
+                <span>Життєздатність асортименту ніші</span>
+              </div>
+              <span class="text-[10px] font-mono font-bold bg-teal-950 text-teal-300 px-2 py-0.5 rounded border border-teal-800/60">
+                Аналіз конверсії
+              </span>
+            </div>
+
+            <!-- Active vs Inactive SKU split bar -->
+            <div class="space-y-1 mb-3">
+              <div class="flex justify-between text-[11px] font-mono">
+                <span class="text-emerald-400 font-bold">Активні (з відгуками): {{ analyticsSummary.kpi.activeSkusCount }} тов. ({{ analyticsSummary.kpi.activeSkusPercentage }}%)</span>
+                <span class="text-slate-400">0 відгуків: {{ analyticsSummary.kpi.inactiveSkusCount }} тов.</span>
+              </div>
+              <div class="h-3 w-full bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+                <div class="bg-teal-500 h-full transition-all" [style.width.%]="analyticsSummary.kpi.activeSkusPercentage" title="Активні товари"></div>
+                <div class="bg-slate-700 h-full transition-all" [style.width.%]="analyticsSummary.kpi.inactiveSkusPercentage" title="Товари без відгуків"></div>
+              </div>
+            </div>
+
+            <!-- Metrics list -->
+            <div class="space-y-1.5 text-[11px] bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 mb-2.5 font-mono">
+              <div class="flex justify-between">
+                <span class="text-slate-400">Всього товарів у вибірці:</span>
+                <b class="text-white">{{ analyticsSummary.kpi.totalProducts }} шт</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Товарів із реальними замовленнями/відгуками:</span>
+                <b class="text-teal-300">{{ analyticsSummary.kpi.activeSkusCount }} шт ({{ analyticsSummary.kpi.activeSkusPercentage }}%)</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Складська наявність активних товарів:</span>
+                <b class="text-emerald-400">{{ analyticsSummary.kpi.activeSkusInStockRate }}% ({{ analyticsSummary.kpi.activeSkusInStockCount }} шт)</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Сер. кількість відгуків на активний SKU:</span>
+                <b class="text-amber-400">{{ analyticsSummary.kpi.avgReviewsPerActiveSku }} відг./тов.</b>
+              </div>
+            </div>
+
+            <p class="text-[11px] text-slate-300 leading-relaxed">
+              {{ analyticsSummary.kpi.activeSkusPercentage >= 20 ? '🔥 Висока купівельна динаміка: значна частина товарів у ніші реально продається та генерує відгуки.' : '💡 Більшість товарів (0 відгуків) є "сплячими". Це відкриває вікно можливостей для селера, який запустить товар із якісним лістингом та першими відгуками.' }}
+            </p>
+          </div>
         </div>
 
         <!-- 4. Індекс концентрації (CR3) -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all">
+        <div class="p-6 premium-card flex items-center justify-between transition-all relative group/cr3 cursor-help">
           <div>
-            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Концентрація (CR3)</p>
+            <div class="flex items-center gap-1.5">
+              <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Концентрація (CR3)</p>
+              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/cr3:text-white group-hover/cr3:bg-violet-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors">?</span>
+            </div>
             <p class="text-3xl font-extrabold text-violet-300 mt-1">CR3: {{ analyticsSummary.kpi.cr3 }}%</p>
             <p class="text-xs font-mono font-semibold mt-0.5" 
                [class.text-emerald-400]="analyticsSummary.kpi.cr3Level === 'LOW'"
@@ -233,12 +357,67 @@
           <div class="w-12 h-12 bg-violet-950/50 border border-violet-500/20 text-violet-300 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/10">
             <span class="material-icons">pie_chart</span>
           </div>
+
+          <!-- Hover Popover: Що таке CR3 та розкладка Топ-3 селерів -->
+          <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-violet-500/40 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-40 opacity-0 pointer-events-none group-hover/cr3:opacity-100 group-hover/cr3:pointer-events-auto transition-all duration-200 backdrop-blur-md">
+            <div class="font-bold text-white border-b border-slate-800 pb-2 mb-2.5 flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="material-icons text-base text-violet-400">pie_chart</span>
+                <span>Індекс концентрації CR3</span>
+              </div>
+              <span class="text-[10px] font-mono font-bold bg-violet-950 text-violet-300 px-2 py-0.5 rounded border border-violet-800/60">
+                CR3 = S₁ + S₂ + S₃
+              </span>
+            </div>
+
+            <p class="text-[11px] text-slate-300 leading-relaxed mb-2.5">
+              <b>CR3 (Concentration Ratio 3)</b> — сумарна частка ринку <b>3 найбільших продавців</b> у ніші. Показує, чи ринок контролюється вузьким колом лідерів.
+            </p>
+
+            <!-- Breakdown of top-3 sellers -->
+            <div class="space-y-1.5 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 mb-2.5">
+              <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Внесок Топ-3 селерів:</div>
+              <div *ngFor="let s of analyticsSummary.kpi.top3Sellers; let i = index" class="flex justify-between items-center text-[11px] font-mono">
+                <div class="flex items-center gap-1.5 truncate max-w-[200px]">
+                  <span class="text-slate-500 font-bold">#{{ i + 1 }}</span>
+                  <span class="text-white font-semibold truncate">{{ s.name }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-slate-400">{{ s.count }} тов.</span>
+                  <b class="text-violet-300">{{ s.share }}%</b>
+                </div>
+              </div>
+              <div class="border-t border-slate-800 pt-1.5 flex justify-between text-xs font-mono font-extrabold text-white">
+                <span>Разом Топ-3:</span>
+                <span class="text-violet-400">{{ analyticsSummary.kpi.cr3 }}% ніші</span>
+              </div>
+            </div>
+
+            <!-- Interpretation -->
+            <div class="space-y-1 text-[10px]">
+              <div class="flex items-center gap-1.5 text-emerald-400">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span><b>&lt; 40%</b> — Низька концентрація (вільна здорова конкуренція)</span>
+              </div>
+              <div class="flex items-center gap-1.5 text-amber-400">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                <span><b>40% - 70%</b> — Помірна концентрація (олігополія лідерів)</span>
+              </div>
+              <div class="flex items-center gap-1.5 text-rose-400">
+                <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+                <span><b>&gt; 70%</b> — Висока монополія (лідери тримають всю нішу)</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 5. Бар'єр входу -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all col-span-2 lg:col-span-1">
+        <div class="p-6 premium-card flex items-center justify-between transition-all col-span-2 lg:col-span-1 relative group/barrier cursor-help">
           <div>
-            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Бар'єр входу</p>
+            <div class="flex items-center gap-1.5">
+              <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Бар'єр входу</p>
+              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/barrier:text-white group-hover/barrier:bg-amber-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors">?</span>
+            </div>
             <p class="text-2xl font-extrabold mt-1"
                [class.text-emerald-400]="analyticsSummary.kpi.entryBarrier.level === 'LOW'"
                [class.text-amber-400]="analyticsSummary.kpi.entryBarrier.level === 'MEDIUM'"
@@ -249,6 +428,59 @@
           </div>
           <div class="w-12 h-12 bg-amber-950/50 border border-amber-500/20 text-amber-300 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/10">
             <span class="material-icons">shield</span>
+          </div>
+
+          <!-- Hover Popover: Як визначається бар'єр входу та статистика Топ-10 -->
+          <div class="absolute right-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-amber-500/40 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-40 opacity-0 pointer-events-none group-hover/barrier:opacity-100 group-hover/barrier:pointer-events-auto transition-all duration-200 backdrop-blur-md">
+            <div class="font-bold text-white border-b border-slate-800 pb-2 mb-2.5 flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="material-icons text-base text-amber-400">shield</span>
+                <span>Як розраховується бар'єр входу?</span>
+              </div>
+              <span class="text-[10px] font-mono font-bold bg-amber-950 text-amber-300 px-2 py-0.5 rounded border border-amber-800/60">
+                Медіана Топ-10
+              </span>
+            </div>
+
+            <p class="text-[11px] text-slate-300 leading-relaxed mb-2.5">
+              <b>Бар'єр входу</b> відображає кількість соціального доказу (відгуків), яку потрібно зібрати новому товару, щоб на рівних конкурувати з топ-10 лідерами видачі Rozetka.
+            </p>
+
+            <!-- Top-10 Reviews Statistics -->
+            <div class="grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 mb-2.5">
+              <div class="flex justify-between">
+                <span class="text-slate-400">Медіана Топ-10:</span>
+                <b class="text-amber-400">{{ analyticsSummary.kpi.entryBarrier.medianTop10Reviews }} відг.</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Сер. у Топ-10:</span>
+                <b class="text-amber-300">{{ analyticsSummary.kpi.entryBarrier.top10ReviewsAvg }} відг.</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Максимум (№1):</span>
+                <b class="text-white">{{ analyticsSummary.kpi.entryBarrier.top10ReviewsMax }} відг.</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Мінімум у Топ-10:</span>
+                <b class="text-slate-300">{{ analyticsSummary.kpi.entryBarrier.top10ReviewsMin }} відг.</b>
+              </div>
+            </div>
+
+            <!-- Grade Criteria -->
+            <div class="space-y-1 text-[10px] pt-1">
+              <div class="flex items-center gap-1.5 text-emerald-400">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span><b>&le; 15 відг.</b> — <b>Низький:</b> легкий вхід навіть без великої бази відгуків.</span>
+              </div>
+              <div class="flex items-center gap-1.5 text-amber-400">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                <span><b>16 - 100 відг.</b> — <b>Середній:</b> потрібно зібрати 15+ відгуків для завоювання довіри.</span>
+              </div>
+              <div class="flex items-center gap-1.5 text-rose-400">
+                <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+                <span><b>&gt; 100 відг.</b> — <b>Високий:</b> лідери мають сотні відгуків, вхід вимагає великого рекламного бюджету.</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
