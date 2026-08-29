@@ -493,14 +493,6 @@
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('lqs')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
-                    <div class="flex items-center gap-1">
-                      <span>LQS</span>
-                      <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'lqs'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                      <span class="material-icons text-xs text-slate-600" *ngIf="sortColumn !== 'lqs'">unfold_more</span>
-                    </div>
-                  </th>
-                  
                   <th (click)="sortBy('reviews')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
                     <div class="flex items-center gap-1">
                       <span>Відгуки</span>
@@ -592,19 +584,6 @@
                       <span class="material-icons text-amber-500 text-sm">star</span>
                       <span>{{ item.rating > 0 ? item.rating : 'немає' }}</span>
                     </div>
-                  </td>
-                  <td class="py-4 px-3">
-                    <span 
-                      [class.text-emerald-400]="calculateLQS(item) >= 8"
-                      [class.bg-emerald-950/30]="calculateLQS(item) >= 8"
-                      [class.text-amber-400]="calculateLQS(item) >= 5 && calculateLQS(item) < 8"
-                      [class.bg-amber-950/30]="calculateLQS(item) >= 5 && calculateLQS(item) < 8"
-                      [class.text-rose-400]="calculateLQS(item) < 5"
-                      [class.bg-rose-950/30]="calculateLQS(item) < 5"
-                      class="px-2 py-0.5 text-xs font-bold rounded-lg uppercase tracking-wider whitespace-nowrap"
-                    >
-                      {{ calculateLQS(item) }} / 10
-                    </span>
                   </td>
                   <td class="py-4 px-3 font-mono whitespace-nowrap">{{ item.reviews }}</td>
                   <td class="py-4 px-3 text-xs text-slate-400 whitespace-nowrap">{{ item.seller || 'Rozetka' }}</td>
