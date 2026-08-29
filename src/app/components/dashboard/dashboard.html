@@ -167,7 +167,8 @@
       </div>
 
       <!-- Stats Grid (Hidden if no products) -->
-      <section *ngIf="products.length > 0" class="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <!-- Stats Grid (5 Cards: Зібрано товарів, Середня ціна, Середній рейтинг, В наявності, К-ть продавців) -->
+      <section *ngIf="products.length > 0" class="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6">
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
             <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Зібрано товарів</p>
@@ -198,9 +199,22 @@
           </div>
         </div>
 
+        <!-- NEW: В наявності card -->
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
-            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Унікальних продавців</p>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">В наявності</p>
+            <p class="text-3xl font-extrabold text-teal-300 mt-1">{{ inStockCount }}</p>
+            <p class="text-[11px] text-teal-400/80 font-mono font-semibold mt-0.5">{{ inStockPct }}% каталогу</p>
+          </div>
+          <div class="w-12 h-12 bg-teal-950/50 border border-teal-500/20 text-teal-300 rounded-xl flex items-center justify-center shadow-lg shadow-teal-500/10">
+            <span class="material-icons">check_circle</span>
+          </div>
+        </div>
+
+        <!-- Renamed: К-ть продавців card -->
+        <div class="p-6 premium-card flex items-center justify-between transition-all col-span-2 lg:col-span-1">
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">К-ть продавців</p>
             <p class="text-3xl font-extrabold text-indigo-300 mt-1">{{ sellersCount }}</p>
           </div>
           <div class="w-12 h-12 bg-indigo-950/50 border border-indigo-500/20 text-indigo-300 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/10">

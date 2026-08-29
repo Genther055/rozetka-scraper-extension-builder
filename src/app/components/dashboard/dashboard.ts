@@ -272,6 +272,8 @@ export class DashboardComponent implements OnInit {
   totalItems = 0;
   avgPrice = 0;
   avgRating = 0.0;
+  inStockCount = 0;
+  inStockPct = 0;
   sellersCount = 0;
   aiAlertsCount = 0;
   nicheOpportunityScore = 0; // Оцінка ніші від 1 до 10
@@ -910,6 +912,8 @@ export class DashboardComponent implements OnInit {
       this.avgRating = 0.0;
     }
     
+    this.inStockCount = this.products.filter(p => p.inStock !== false).length;
+    this.inStockPct = this.totalItems > 0 ? Math.round((this.inStockCount / this.totalItems) * 100) : 0;
     this.sellersCount = this.totalItems > 0 ? new Set(this.products.map(p => p.seller || 'Rozetka')).size : 0;
     this.aiAlertsCount = this.products.filter(p => p.aiStatus === 'warning' || p.aiStatus === 'suspicious').length;
     this.calculateOpportunityScore();
