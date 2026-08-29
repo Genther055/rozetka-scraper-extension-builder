@@ -313,7 +313,7 @@
           <!-- Top Row: Market Share Pie Chart & Niche Leader Highlights -->
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
             
-            <!-- Left (5 cols): Market Share Pie/Donut Chart -->
+            <!-- Left (5 cols): Detailed Market Share Pie/Donut Chart -->
             <div class="lg:col-span-5 p-6 premium-card flex flex-col justify-between space-y-4">
               <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
                 <div class="flex items-center gap-2">
@@ -323,9 +323,9 @@
                 <span class="text-xs text-slate-400 font-mono font-semibold">{{ sellersCount }} продавців</span>
               </div>
 
-              <!-- SVG Donut Chart + Central Stats -->
+              <!-- SVG Donut Chart + Detailed Segment Legend -->
               <div class="flex flex-col sm:flex-row items-center justify-center gap-6 py-2">
-                <div class="relative w-40 h-40 shrink-0">
+                <div class="relative w-44 h-44 shrink-0">
                   <svg class="w-full h-full -rotate-90" viewBox="0 0 100 100">
                     <!-- Background Circle -->
                     <circle cx="50" cy="50" r="40" fill="transparent" stroke="#1e293b" stroke-width="14"></circle>
@@ -348,33 +348,40 @@
 
                   <!-- Central Text Inside Donut -->
                   <div class="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-                    <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Товарів</span>
-                    <span class="text-lg font-extrabold text-white font-mono">{{ totalItems }}</span>
+                    <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Всього товарів</span>
+                    <span class="text-xl font-extrabold text-white font-mono">{{ totalItems }}</span>
+                    <span class="text-[10px] text-indigo-400 font-mono font-semibold mt-0.5">100% ринку</span>
                   </div>
                 </div>
 
-                <!-- Color Legend -->
-                <div class="space-y-2 flex-1 w-full text-xs">
-                  <div *ngFor="let seg of sellerPieSegments" class="flex items-center justify-between gap-2 p-1.5 rounded-lg hover:bg-slate-900/60 transition-colors">
-                    <div class="flex items-center gap-2 min-w-0">
-                      <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" [style.backgroundColor]="seg.color"></span>
-                      <span class="text-slate-300 font-medium truncate" [title]="seg.name">{{ seg.name }}</span>
+                <!-- Detailed Color Legend with progress bars -->
+                <div class="space-y-1.5 flex-1 w-full text-xs max-h-52 overflow-y-auto pr-1">
+                  <div *ngFor="let seg of sellerPieSegments" class="flex flex-col gap-1 p-1.5 rounded-lg hover:bg-slate-900/60 transition-colors">
+                    <div class="flex items-center justify-between gap-2 min-w-0">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" [style.backgroundColor]="seg.color"></span>
+                        <span class="text-slate-300 font-medium truncate text-xs" [title]="seg.name">{{ seg.name }}</span>
+                      </div>
+                      <div class="flex items-center gap-2 shrink-0 font-mono">
+                        <span class="text-slate-400 text-[11px]">{{ seg.productCount }} шт</span>
+                        <span class="font-bold text-white bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800 text-[11px]">{{ seg.pct }}%</span>
+                      </div>
                     </div>
-                    <div class="flex items-center gap-2 shrink-0 font-mono">
-                      <span class="text-slate-400 text-[11px]">{{ seg.productCount }} шт</span>
-                      <span class="font-bold text-white bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800 text-[11px]">{{ seg.pct }}%</span>
+                    <!-- Mini progress bar -->
+                    <div class="w-full h-1 bg-slate-800/80 rounded-full overflow-hidden">
+                      <div class="h-full rounded-full transition-all duration-500" [style.width.%]="seg.pct" [style.backgroundColor]="seg.color"></div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Right (7 cols): Key Niche Leaders & Trust Stats -->
+            <!-- Right (7 cols): Niche Leaders & Trust Stats -->
             <div class="lg:col-span-7 p-6 premium-card flex flex-col justify-between space-y-4">
               <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
                 <div class="flex items-center gap-2">
                   <span class="material-icons text-amber-400 text-lg">emoji_events</span>
-                  <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider">Ключові лідери ніші</h3>
+                  <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider">Лідери ніші</h3>
                 </div>
                 <span class="text-xs text-indigo-300 font-semibold bg-indigo-950/60 border border-indigo-500/30 px-2.5 py-0.5 rounded-full">
                   Аналітика активності
@@ -669,17 +676,25 @@
                 <tr class="border-b border-slate-800 bg-slate-950/60 text-xs text-slate-300 font-extrabold uppercase tracking-wider">
                   <th class="py-4 px-3 text-center w-12">#</th>
                   
-                  <th (click)="sortBy('name')" class="py-4 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                  <th (click)="sortBy('name')" class="py-4 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors min-w-[200px]">
                     <div class="flex items-center gap-1.5">
-                      <span>Товар & Категорія</span>
+                      <span>Назва товару</span>
                       <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'name'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
                       <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'name'">unfold_more</span>
                     </div>
                   </th>
+
+                  <th (click)="sortBy('category')" class="py-4 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap min-w-[130px]">
+                    <div class="flex items-center gap-1.5">
+                      <span>Категорія</span>
+                      <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'category'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                      <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'category'">unfold_more</span>
+                    </div>
+                  </th>
                   
-                  <th class="py-4 px-4 min-w-[240px]">Характеристики</th>
+                  <th class="py-4 px-4 min-w-[220px]">Характеристики</th>
                   
-                  <th (click)="sortBy('price')" class="py-4 px-5 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap min-w-[160px]">
+                  <th (click)="sortBy('price')" class="py-4 px-5 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap min-w-[150px]">
                     <div class="flex items-center gap-1.5">
                       <span>Ціна</span>
                       <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'price'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
@@ -687,7 +702,7 @@
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('rating')" class="py-4 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap min-w-[130px]">
+                  <th (click)="sortBy('rating')" class="py-4 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap min-w-[120px]">
                     <div class="flex items-center gap-1.5">
                       <span>Рейтинг & Відгуки</span>
                       <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'rating' || sortColumn === 'reviews'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
@@ -695,7 +710,7 @@
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('seller')" class="py-4 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap min-w-[140px]">
+                  <th (click)="sortBy('seller')" class="py-4 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap min-w-[130px]">
                     <div class="flex items-center gap-1.5">
                       <span>Продавець</span>
                       <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'seller' || sortColumn === 'sellersCount'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
@@ -717,19 +732,23 @@
                   <!-- Index -->
                   <td class="py-4 px-3 text-center font-mono text-sm font-semibold text-slate-400">{{ i + 1 }}</td>
                   
-                  <!-- Product Title & Category -->
-                  <td class="py-4 px-4">
+                  <!-- Product Title -->
+                  <td class="py-4 px-4 min-w-[200px]">
                     <a [href]="item.link" target="_blank" class="hover:underline flex items-start gap-1.5 hover:text-indigo-300 line-clamp-2 text-sm leading-snug font-bold text-white">
                       {{ item.name }}
                       <span class="material-icons text-xs mt-0.5 shrink-0 text-slate-400">open_in_new</span>
                     </a>
-                    <span class="inline-block text-xs text-slate-400 mt-1 font-medium bg-slate-950/70 px-2 py-0.5 rounded-md border border-slate-800/60">
+                  </td>
+
+                  <!-- Dedicated Category Column -->
+                  <td class="py-4 px-4 whitespace-nowrap min-w-[130px]">
+                    <span class="inline-block text-xs font-semibold text-slate-300 bg-slate-900/90 border border-slate-700/60 px-2.5 py-1 rounded-lg shadow-sm">
                       {{ item.category || 'Повербанки' }}
                     </span>
                   </td>
                   
                   <!-- Specs Badges -->
-                  <td class="py-4 px-4 min-w-[240px]">
+                  <td class="py-4 px-4 min-w-[220px]">
                     <div *ngIf="item.specs" class="flex flex-wrap gap-1.5 items-center">
                       <span 
                         *ngFor="let badge of getBadgeSpecs(item)" 
@@ -751,7 +770,7 @@
                   </td>
 
                   <!-- Price & Discount (Expanded Width & Prominent Values) -->
-                  <td class="py-4 px-5 whitespace-nowrap min-w-[160px]">
+                  <td class="py-4 px-5 whitespace-nowrap min-w-[150px]">
                     <div class="font-mono text-emerald-400 font-extrabold text-base">
                       {{ item.price }} ₴
                     </div>
@@ -766,7 +785,7 @@
                   </td>
                   
                   <!-- Rating & Reviews -->
-                  <td class="py-4 px-4 whitespace-nowrap min-w-[130px]">
+                  <td class="py-4 px-4 whitespace-nowrap min-w-[120px]">
                     <div class="flex items-center gap-1.5">
                       <span class="material-icons text-amber-400 text-base">star</span>
                       <span class="text-sm font-bold text-slate-200">{{ item.rating > 0 ? item.rating : '–' }}</span>
@@ -777,7 +796,7 @@
                   </td>
 
                   <!-- Seller (Clean name, redundant '1 продавців' removed) -->
-                  <td class="py-4 px-4 whitespace-nowrap min-w-[140px]">
+                  <td class="py-4 px-4 whitespace-nowrap min-w-[130px]">
                     <div class="text-sm text-slate-200 font-bold">
                       {{ item.seller || 'Rozetka' }}
                     </div>
@@ -801,7 +820,7 @@
                 </tr>
 
                 <tr *ngIf="filteredProducts.length === 0">
-                  <td colspan="7" class="py-12 text-center text-slate-400 font-semibold text-sm">
+                  <td colspan="8" class="py-12 text-center text-slate-400 font-semibold text-sm">
                     Жодного товару не знайдено за вказаними фільтрами.
                   </td>
                 </tr>
@@ -1095,32 +1114,62 @@
               </div>
             </div>
 
-            <!-- Full Description Box with Collapse/Expand -->
-            <div>
-              <div class="flex items-center justify-between mb-3">
-                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                  <span class="material-icons text-sm text-indigo-400">description</span>
-                  Опис Товару від Продавця
+            <!-- Structured Description & Features Extraction -->
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <span class="material-icons text-sm text-indigo-400">insights</span>
+                  Структурована вижимка та особливості
                 </h4>
                 <button 
                   *ngIf="p.description && p.description.length > 180"
                   (click)="toggleDesc(p.link)"
                   class="text-xs font-bold text-indigo-300 hover:text-white transition-all flex items-center gap-1 cursor-pointer bg-slate-900/60 hover:bg-slate-950 px-3.5 py-1.5 rounded-full border border-[rgba(139,92,246,0.15)] shadow-md"
                 >
-                  <span>{{ isDescExpanded(p.link) ? 'Приховати опис' : 'Читати весь опис' }}</span>
+                  <span>{{ isDescExpanded(p.link) ? 'Приховати повний опис' : 'Показати повний оригінальний опис' }}</span>
                   <span class="material-icons text-sm">{{ isDescExpanded(p.link) ? 'expand_less' : 'expand_more' }}</span>
                 </button>
               </div>
 
-              <!-- Description Box -->
-              <div *ngIf="p.description">
-                <!-- Collapsed view: truncated to 3 lines with clean text -->
-                <div *ngIf="!isDescExpanded(p.link)" class="p-4 bg-black/35 border border-[rgba(139,92,246,0.1)] rounded-xl text-xs text-slate-300 leading-relaxed line-clamp-3">
-                  {{ p.description }}
+              <!-- Feature Highlights Badges -->
+              <div *ngIf="p.description && getStructuredDescription(p.description).keyFeatures.length > 0" class="flex flex-wrap gap-2">
+                <div 
+                  *ngFor="let feat of getStructuredDescription(p.description).keyFeatures"
+                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold shadow-sm"
+                  [class]="feat.color"
+                >
+                  <span class="material-icons text-sm">{{ feat.icon }}</span>
+                  <span>{{ feat.title }}</span>
                 </div>
+              </div>
 
-                <!-- Expanded view: full scrollable text -->
-                <div *ngIf="isDescExpanded(p.link)" class="p-4 bg-black/35 border border-[rgba(139,92,246,0.1)] rounded-xl text-xs text-slate-300 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-line">
+              <!-- Structured Key Bullet Points (if extracted) -->
+              <div *ngIf="p.description && getStructuredDescription(p.description).bulletPoints.length > 0" class="p-4 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2">
+                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <span class="material-icons text-xs text-indigo-400">format_list_bulleted</span>
+                  Виділені пункти та переваги:
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div *ngFor="let bullet of getStructuredDescription(p.description).bulletPoints" class="flex items-start gap-2 text-xs text-slate-200 bg-slate-900/40 p-2.5 rounded-lg border border-slate-800/50">
+                    <span class="material-icons text-xs text-emerald-400 mt-0.5 shrink-0">check_circle</span>
+                    <span class="leading-relaxed">{{ bullet }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Summary Paragraph / Collapsed View -->
+              <div *ngIf="p.description && !isDescExpanded(p.link)" class="p-4 bg-black/35 border border-[rgba(139,92,246,0.1)] rounded-xl text-xs text-slate-300 leading-relaxed">
+                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Короткий огляд товару:</p>
+                <p class="leading-relaxed text-slate-300">{{ getStructuredDescription(p.description).summary }}</p>
+              </div>
+
+              <!-- Full Original Description (Expanded view) -->
+              <div *ngIf="p.description && isDescExpanded(p.link)" class="p-4 bg-black/35 border border-[rgba(139,92,246,0.1)] rounded-xl text-xs text-slate-300 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-line">
+                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Повний текст опису від продавця:</p>
+                <div *ngFor="let para of getStructuredDescription(p.description).cleanParagraphs" class="mb-3 last:mb-0 text-slate-300 leading-relaxed">
+                  {{ para }}
+                </div>
+                <div *ngIf="getStructuredDescription(p.description).cleanParagraphs.length === 0">
                   {{ p.description }}
                 </div>
               </div>

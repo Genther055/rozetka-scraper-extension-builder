@@ -47,6 +47,20 @@ export interface SellerPieSegment {
   color: string;
   strokeDasharray: string;
   strokeDashoffset: number;
+  cumulativePct?: number;
+}
+
+export interface ExtractedFeature {
+  title: string;
+  icon: string;
+  color: string;
+}
+
+export interface StructuredDescription {
+  summary: string;
+  keyFeatures: ExtractedFeature[];
+  bulletPoints: string[];
+  cleanParagraphs: string[];
 }
 
 interface Product {
@@ -948,6 +962,10 @@ export class DashboardComponent implements OnInit {
       '#06b6d4', // Cyan
       '#3b82f6', // Blue
       '#a855f7', // Purple
+      '#14b8a6', // Teal
+      '#f43f5e', // Rose
+      '#84cc16', // Lime
+      '#e11d48', // Crimson
       '#64748b'  // Slate
     ];
 
@@ -997,19 +1015,20 @@ export class DashboardComponent implements OnInit {
     const sortedByRating = [...stats].filter(s => s.avgRating > 0).sort((a, b) => b.avgRating - a.avgRating || b.totalReviews - a.totalReviews);
     this.topSellerByRating = sortedByRating.length > 0 ? sortedByRating[0] : null;
 
-    // Calculate SVG Donut chart segments (Top 5 + others)
-    const top5 = stats.slice(0, 5);
-    const othersCount = stats.slice(5).reduce((acc, s) => acc + s.productCount, 0);
+    // Calculate detailed SVG Donut chart segments (Top 8 sellers + Others)
+    const topCount = Math.min(8, stats.length);
+    const topSellers = stats.slice(0, topCount);
+    const othersCount = stats.slice(topCount).reduce((acc, s) => acc + s.productCount, 0);
 
-    const pieData: { name: string; count: number; color: string }[] = top5.map((s, idx) => ({
+    const pieData: { name: string; count: number; color: string }[] = topSellers.map((s, idx) => ({
       name: s.name,
       count: s.productCount,
-      color: colors[idx]
+      color: colors[idx % colors.length]
     }));
 
     if (othersCount > 0) {
       pieData.push({
-        name: 'Інші (' + (stats.length - 5) + ' прод.)',
+        name: 'Інші продавці (' + (stats.length - topCount) + ')',
         count: othersCount,
         color: '#475569'
       });
@@ -1032,9 +1051,99 @@ export class DashboardComponent implements OnInit {
         pct,
         color: item.color,
         strokeDasharray: `${dashLength} ${spaceLength}`,
-        strokeDashoffset: offset
+        strokeDashoffset: offset,
+        cumulativePct: +accumulatedPct.toFixed(1)
       };
     });
+  }
+
+  private structuredDescCache = new Map<string, StructuredDescription>();
+
+  getStructuredDescription(desc: string | undefined): StructuredDescription {
+    if (!desc || !desc.trim()) {
+      return {
+        summary: '',
+        keyFeatures: [],
+        bulletPoints: [],
+        cleanParagraphs: []
+      };
+    }
+
+    const cacheKey = desc.slice(0, 100) + desc.length;
+    if (this.structuredDescCache.has(cacheKey)) {
+      return this.structuredDescCache.get(cacheKey)!;
+    }
+
+    // 1. Clean HTML tags
+    let clean = desc
+      .replace(/<br\s*[\/]?>/gi, '\n')
+      .replace(/<\/(p|div|li|tr|h\d)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/\r\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    // 2. Extract Key Features by logical matching
+    const keyFeatures: ExtractedFeature[] = [];
+    const lower = clean.toLowerCase();
+
+    if (/quick\s*charge|power\s*delivery|\bpd\b|\bqc\b|швидк[а-я]* зарядк/i.test(lower)) {
+      keyFeatures.push({ title: 'Швидка зарядка (PD / Quick Charge)', icon: 'bolt', color: 'text-amber-400 bg-amber-950/40 border-amber-800/40' });
+    }
+    if (/\b\d+\s*(?:w|вт)\b/i.test(lower)) {
+      const m = clean.match(/\b(\d+\s*(?:W|Вт))\b/i);
+      const pText = m ? m[1] : 'Висока потужність';
+      keyFeatures.push({ title: `Потужність: ${pText}`, icon: 'electric_meter', color: 'text-purple-400 bg-purple-950/40 border-purple-800/40' });
+    }
+    if (/\b\d{4,6}\s*(?:mah|маг|мА·год|мАг)\b/i.test(lower)) {
+      const m = clean.match(/\b(\d+[\d\s]*(?:mah|маг|мА·год|мАг))\b/i);
+      const cText = m ? m[1] : 'Висока ємність';
+      keyFeatures.push({ title: `Ємність: ${cText}`, icon: 'battery_charging_full', color: 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40' });
+    }
+    if (/magsafe|бездрот[а-я]*|wireless/i.test(lower)) {
+      keyFeatures.push({ title: 'MagSafe / Бездротова зарядка', icon: 'sensors', color: 'text-cyan-400 bg-cyan-950/40 border-cyan-800/40' });
+    }
+    if (/дисплей|індикатор|екран|led/i.test(lower)) {
+      keyFeatures.push({ title: 'LED / Цифровий дисплей', icon: 'smart_display', color: 'text-indigo-400 bg-indigo-950/40 border-indigo-800/40' });
+    }
+    if (/захист|безпек|overheat|short-circuit|перегрів/i.test(lower)) {
+      keyFeatures.push({ title: 'Багаторівневий захист', icon: 'shield', color: 'text-rose-400 bg-rose-950/40 border-rose-800/40' });
+    }
+    if (/алюмін|металев|корпус|компактн|легк/i.test(lower)) {
+      keyFeatures.push({ title: 'Преміум корпус / Компактність', icon: 'diamond', color: 'text-slate-300 bg-slate-900 border-slate-700/60' });
+    }
+
+    // 3. Extract Bullet Points / List items
+    const lines = clean.split('\n').map(l => l.trim()).filter(Boolean);
+    const bulletPoints: string[] = [];
+    const cleanParagraphs: string[] = [];
+
+    for (const line of lines) {
+      if (/^[\u2022\u2023\u25E6\u2043\u2219\*\-\+\✓\✔\–\—\•]\s*/.test(line) || /^\d+[\.\)]\s+/.test(line)) {
+        const cleanedLine = line.replace(/^[\u2022\u2023\u25E6\u2043\u2219\*\-\+\✓\✔\–\—\•\d\.\)]+\s*/, '').trim();
+        if (cleanedLine.length > 5) {
+          bulletPoints.push(cleanedLine);
+        }
+      } else if (line.length > 20) {
+        cleanParagraphs.push(line);
+      }
+    }
+
+    const summary = cleanParagraphs.length > 0 ? cleanParagraphs[0] : (bulletPoints.length > 0 ? bulletPoints[0] : clean.slice(0, 160));
+
+    const res: StructuredDescription = {
+      summary,
+      keyFeatures,
+      bulletPoints,
+      cleanParagraphs
+    };
+
+    this.structuredDescCache.set(cacheKey, res);
+    return res;
   }
 
   getFilteredSellerStats(): SellerStat[] {
