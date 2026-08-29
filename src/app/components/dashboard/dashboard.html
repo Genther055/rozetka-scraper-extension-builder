@@ -394,7 +394,7 @@
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('category')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                  <th (click)="sortBy('category')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
                     <div class="flex items-center gap-1">
                       <span>Категорія</span>
                       <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'category'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
@@ -402,9 +402,9 @@
                     </div>
                   </th>
                   
-                  <th class="py-4 px-3">Характеристики</th>
+                  <th class="py-4 px-4 min-w-[340px]">Характеристики</th>
                   
-                  <th (click)="sortBy('oldPrice')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                  <th (click)="sortBy('oldPrice')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
                     <div class="flex items-center gap-1">
                       <span>Ціна без знижки</span>
                       <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'oldPrice'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
@@ -412,7 +412,7 @@
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('price')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                  <th (click)="sortBy('price')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
                     <div class="flex items-center gap-1">
                       <span>Ціна зі знижкою</span>
                       <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'price'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
@@ -420,7 +420,7 @@
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('discount')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                  <th (click)="sortBy('discount')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
                     <div class="flex items-center gap-1">
                       <span>Знижка</span>
                       <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'discount'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
@@ -428,7 +428,7 @@
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('rating')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                  <th (click)="sortBy('rating')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
                     <div class="flex items-center gap-1">
                       <span>Рейтинг</span>
                       <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'rating'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
@@ -436,7 +436,7 @@
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('reviews')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                  <th (click)="sortBy('reviews')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
                     <div class="flex items-center gap-1">
                       <span>Відгуки</span>
                       <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'reviews'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
@@ -444,7 +444,7 @@
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('seller')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                  <th (click)="sortBy('seller')" class="py-4 px-2 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
                     <div class="flex items-center gap-1">
                       <span>Продавець</span>
                       <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'seller'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
@@ -452,17 +452,15 @@
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('sellersCount')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
-                    <div class="flex items-center gap-1">
+                  <th (click)="sortBy('sellersCount')" class="py-4 px-2 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap text-center">
+                    <div class="flex items-center justify-center gap-1">
                       <span>К-ть прод.</span>
                       <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'sellersCount'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
                       <span class="material-icons text-xs text-slate-600" *ngIf="sortColumn !== 'sellersCount'">unfold_more</span>
                     </div>
                   </th>
                   
-
-                  
-                  <th (click)="sortBy('inStock')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                  <th (click)="sortBy('inStock')" class="py-4 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap">
                     <div class="flex items-center gap-1">
                       <span>Наявність</span>
                       <span class="material-icons text-xs text-indigo-400" *ngIf="sortColumn === 'inStock'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
@@ -482,13 +480,13 @@
                   </td>
                   <td class="py-4 px-3 text-xs text-slate-400 whitespace-nowrap">{{ item.category || 'Повербанки' }}</td>
                   
-                  <!-- Premium Pill Badges for Table Cell -->
-                  <td class="py-4 px-3 text-xs max-w-[280px]">
-                    <div *ngIf="item.specs" class="flex flex-wrap gap-1.5 items-center">
+                  <!-- Premium Pill Badges for Table Cell (Expanded Width & Crisp Text) -->
+                  <td class="py-4 px-4 min-w-[320px] max-w-[450px]">
+                    <div *ngIf="item.specs" class="flex flex-wrap gap-2 items-center">
                       <span 
                         *ngFor="let badge of getBadgeSpecs(item)" 
                         [class]="badge.style" 
-                        class="px-2 py-0.5 text-[11px] font-semibold border rounded-lg whitespace-normal break-words shadow-sm"
+                        class="px-2.5 py-1 text-xs font-semibold border rounded-xl whitespace-normal break-words shadow-sm"
                       >
                         {{ badge.text }}
                       </span>
@@ -496,12 +494,12 @@
                       <button 
                         *ngIf="getSpecsArray(item).length > getBadgeSpecs(item).length"
                         (click)="openSpecsModal(item)"
-                        class="px-2 py-0.5 text-[10px] font-bold bg-slate-950/60 hover:bg-slate-900 text-indigo-350 border border-slate-850 hover:border-indigo-500/30 rounded-full transition-all cursor-pointer shadow-sm"
+                        class="px-2.5 py-1 text-xs font-bold bg-slate-900/90 hover:bg-slate-800 text-indigo-300 border border-slate-700 hover:border-indigo-500/40 rounded-xl transition-all cursor-pointer shadow-sm"
                       >
                         +{{ getSpecsArray(item).length - getBadgeSpecs(item).length }} ще
                       </button>
                     </div>
-                    <span *ngIf="!item.specs" class="text-slate-500 italic">Стандартні</span>
+                    <span *ngIf="!item.specs" class="text-slate-500 italic text-xs">Стандартні</span>
                   </td>
                   <!-- Ціна без знижки -->
                   <td class="py-4 px-3 font-mono text-xs whitespace-nowrap">
@@ -529,8 +527,8 @@
                     </div>
                   </td>
                   <td class="py-4 px-3 font-mono whitespace-nowrap">{{ item.reviews }}</td>
-                  <td class="py-4 px-3 text-xs text-slate-400 whitespace-nowrap">{{ item.seller || 'Rozetka' }}</td>
-                  <td class="py-4 px-3 font-mono text-center whitespace-nowrap">{{ item.sellersCount || 1 }}</td>
+                  <td class="py-4 px-2 text-xs text-slate-300 whitespace-nowrap font-medium">{{ item.seller || 'Rozetka' }}</td>
+                  <td class="py-4 px-2 font-mono text-center whitespace-nowrap text-xs font-bold text-slate-200">{{ item.sellersCount || 1 }}</td>
                   
                   <td class="py-4 px-3 whitespace-nowrap">
                     <span 
@@ -546,7 +544,7 @@
                 </tr>
 
                 <tr *ngIf="filteredProducts.length === 0">
-                  <td colspan="13" class="py-12 text-center text-slate-500 font-semibold">
+                  <td colspan="12" class="py-12 text-center text-slate-500 font-semibold">
                     Жодного товару не знайдено за вказаними фільтрами.
                   </td>
                 </tr>

@@ -133,6 +133,15 @@ export class DashboardComponent implements OnInit {
   getBadgeSpecs(product: any): { text: string; style: string }[] {
     if (!product) return [];
     const badges: { text: string; style: string }[] = [];
+
+    const cleanBadgeText = (str: string, maxLen = 28) => {
+      if (!str) return '';
+      let t = str.trim();
+      if (t.includes(':')) {
+        t = t.slice(t.indexOf(':') + 1).trim();
+      }
+      return t.length > maxLen ? t.slice(0, maxLen - 2) + '...' : t;
+    };
     
     // Спершу витягуємо ключові характеристики зі структурованого об'єкта
     if (product.detailedSpecsMap && Object.keys(product.detailedSpecsMap).length > 0) {
@@ -142,22 +151,22 @@ export class DashboardComponent implements OnInit {
       if (capacityKey) {
         const val = map[capacityKey];
         const match = val.match(/\d+[\d\s]*(?:mah|мАг)/i);
-        const text = match ? match[0] : (val.length > 20 ? val.slice(0, 18) + '...' : val);
-        badges.push({ text, style: 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60' });
+        const text = match ? match[0] : cleanBadgeText(val);
+        badges.push({ text, style: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60' });
       }
       
       const powerKey = Object.keys(map).find(k => /потужність|power| W| Вт/i.test(k));
       if (powerKey) {
         const val = map[powerKey];
         const match = val.match(/\d+(?:\.\d+)?\s*(?:W|Вт)/i);
-        const text = match ? match[0] : (val.length > 20 ? val.slice(0, 18) + '...' : val);
-        badges.push({ text, style: 'bg-purple-950/80 text-purple-300 border-purple-800/60' });
+        const text = match ? match[0] : cleanBadgeText(val);
+        badges.push({ text, style: 'bg-purple-950/80 text-purple-300 border-purple-700/60' });
       }
       
       const techKey = Object.keys(map).find(k => /magsafe|quickcharge|qc|pd|бездрот|ліхтарик/i.test(k));
       if (techKey) {
         const val = map[techKey];
-        badges.push({ text: val.length > 20 ? val.slice(0, 18) + '...' : val, style: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/60' });
+        badges.push({ text: cleanBadgeText(val), style: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60' });
       }
       
       if (badges.length < 3) {
@@ -166,8 +175,7 @@ export class DashboardComponent implements OnInit {
           if (badges.length >= 3) break;
           const val = map[k];
           if (val) {
-            const text = val.length > 20 ? val.slice(0, 18) + '...' : val;
-            badges.push({ text, style: 'bg-slate-800/80 text-slate-300 border-slate-700/60' });
+            badges.push({ text: cleanBadgeText(val), style: 'bg-slate-900 text-slate-200 border-slate-700/70' });
           }
         }
       }
@@ -179,27 +187,21 @@ export class DashboardComponent implements OnInit {
     if (!specsStr) return [];
     const parts = specsStr.split(';').map((s: any) => s.trim()).filter(Boolean);
 
-    const getPartVal = (str: string) => {
-      const idx = str.indexOf(':');
-      return idx !== -1 ? str.slice(idx + 1).trim() : str.trim();
-    };
-
     for (const part of parts) {
       if (/mah|мАг/i.test(part)) {
         const match = part.match(/\d+[\d\s]*(?:mah|мАг)/i);
-        const text = match ? match[0] : (part.length > 20 ? part.slice(0, 18) + '...' : part);
-        badges.push({ text, style: 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60' });
+        const text = match ? match[0] : cleanBadgeText(part);
+        badges.push({ text, style: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60' });
       } else if (/\d+\s*W|\b\d+\s*Вт\b/i.test(part)) {
         const match = part.match(/\d+(?:\.\d+)?\s*(?:W|Вт)/i);
-        const text = match ? match[0] : (part.length > 20 ? part.slice(0, 18) + '...' : part);
-        badges.push({ text, style: 'bg-purple-950/80 text-purple-300 border-purple-800/60' });
+        const text = match ? match[0] : cleanBadgeText(part);
+        badges.push({ text, style: 'bg-purple-950/80 text-purple-300 border-purple-700/60' });
       } else if (/magsafe|quickcharge|qc|pd|бездрот|ліхтарик/i.test(part)) {
-        const val = getPartVal(part);
-        badges.push({ text: val.length > 20 ? val.slice(0, 18) + '...' : val, style: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/60' });
+        badges.push({ text: cleanBadgeText(part), style: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60' });
       } else if (badges.length < 3) {
-        const val = getPartVal(part);
-        if (val.length > 0) {
-          badges.push({ text: val.length > 20 ? val.slice(0, 18) + '...' : val, style: 'bg-slate-800/80 text-slate-300 border-slate-700/60' });
+        const t = cleanBadgeText(part);
+        if (t.length > 0) {
+          badges.push({ text: t, style: 'bg-slate-900 text-slate-200 border-slate-700/70' });
         }
       }
     }
