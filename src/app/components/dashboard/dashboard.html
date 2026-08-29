@@ -181,7 +181,7 @@
 
       <!-- Stats Grid (Hidden if no products) -->
       <!-- Stats Grid (5 Deterministic Cards: Обсяг вибірки, Цінові орієнтири, Складські залишки, Концентрація CR3, Бар'єр входу) -->
-      <section *ngIf="products.length > 0 && analyticsSummary" class="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6">
+      <section *ngIf="products.length > 0 && analyticsSummary" class="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6 relative z-30">
         <!-- 1. Обсяг вибірки -->
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
@@ -195,7 +195,7 @@
         </div>
 
         <!-- 2. Подвійний ціновий орієнтир (з графіком співвідношення цін при наведенні) -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all relative group/price cursor-help">
+        <div class="p-6 premium-card flex items-center justify-between transition-all relative group/price hover:z-50 cursor-help">
           <div>
             <div class="flex items-center gap-1.5">
               <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Цінові орієнтири</p>
@@ -209,7 +209,7 @@
           </div>
 
           <!-- Hover Popover: Графік співвідношення цін та детальна статистика -->
-          <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-emerald-500/40 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-40 opacity-0 pointer-events-none group-hover/price:opacity-100 group-hover/price:pointer-events-auto transition-all duration-200 backdrop-blur-md">
+          <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-emerald-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/price:opacity-100 group-hover/price:pointer-events-auto transition-all duration-200 backdrop-blur-md ring-1 ring-slate-700/80">
             <div class="font-bold text-white border-b border-slate-800 pb-2 mb-2.5 flex items-center justify-between">
               <div class="flex items-center gap-1.5">
                 <span class="material-icons text-base text-emerald-400">stacked_line_chart</span>
@@ -276,7 +276,7 @@
         </div>
 
         <!-- 3. Оцінка життєздатності ніші (Частка активних SKU) -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all relative group/sku cursor-help">
+        <div class="p-6 premium-card flex items-center justify-between transition-all relative group/sku hover:z-50 cursor-help">
           <div>
             <div class="flex items-center gap-1.5">
               <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Активність SKU</p>
@@ -290,7 +290,7 @@
           </div>
 
           <!-- Hover Popover: Обширні дані життєздатності ніші -->
-          <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-teal-500/40 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-40 opacity-0 pointer-events-none group-hover/sku:opacity-100 group-hover/sku:pointer-events-auto transition-all duration-200 backdrop-blur-md">
+          <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-teal-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/sku:opacity-100 group-hover/sku:pointer-events-auto transition-all duration-200 backdrop-blur-md ring-1 ring-slate-700/80">
             <div class="font-bold text-white border-b border-slate-800 pb-2 mb-2.5 flex items-center justify-between">
               <div class="flex items-center gap-1.5">
                 <span class="material-icons text-base text-teal-400">insights</span>
@@ -340,7 +340,7 @@
         </div>
 
         <!-- 4. Індекс концентрації (CR3) -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all relative group/cr3 cursor-help">
+        <div class="p-6 premium-card flex items-center justify-between transition-all relative group/cr3 hover:z-50 cursor-help">
           <div>
             <div class="flex items-center gap-1.5">
               <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Концентрація (CR3)</p>
@@ -359,7 +359,7 @@
           </div>
 
           <!-- Hover Popover: Що таке CR3 та розкладка Топ-3 селерів -->
-          <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-violet-500/40 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-40 opacity-0 pointer-events-none group-hover/cr3:opacity-100 group-hover/cr3:pointer-events-auto transition-all duration-200 backdrop-blur-md">
+          <div class="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-violet-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/cr3:opacity-100 group-hover/cr3:pointer-events-auto transition-all duration-200 backdrop-blur-md ring-1 ring-slate-700/80">
             <div class="font-bold text-white border-b border-slate-800 pb-2 mb-2.5 flex items-center justify-between">
               <div class="flex items-center gap-1.5">
                 <span class="material-icons text-base text-violet-400">pie_chart</span>
@@ -412,7 +412,7 @@
         </div>
 
         <!-- 5. Бар'єр входу -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all col-span-2 lg:col-span-1 relative group/barrier cursor-help">
+        <div class="p-6 premium-card flex items-center justify-between transition-all col-span-2 lg:col-span-1 relative group/barrier hover:z-50 cursor-help">
           <div>
             <div class="flex items-center gap-1.5">
               <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Бар'єр входу</p>
@@ -431,7 +431,7 @@
           </div>
 
           <!-- Hover Popover: Як визначається бар'єр входу та статистика Топ-10 -->
-          <div class="absolute right-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-amber-500/40 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-40 opacity-0 pointer-events-none group-hover/barrier:opacity-100 group-hover/barrier:pointer-events-auto transition-all duration-200 backdrop-blur-md">
+          <div class="absolute right-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-amber-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/barrier:opacity-100 group-hover/barrier:pointer-events-auto transition-all duration-200 backdrop-blur-md ring-1 ring-slate-700/80">
             <div class="font-bold text-white border-b border-slate-800 pb-2 mb-2.5 flex items-center justify-between">
               <div class="flex items-center gap-1.5">
                 <span class="material-icons text-base text-amber-400">shield</span>
@@ -513,7 +513,7 @@
       </div>
 
       <!-- TAB 1: OVERVIEW (Deterministic Niche Analytics Module) -->
-      <div *ngIf="activeTab === 'overview' && products.length > 0 && analyticsSummary" class="space-y-6 animate-fadeIn">
+      <div *ngIf="activeTab === 'overview' && products.length > 0 && analyticsSummary" class="space-y-6 animate-fadeIn relative z-10">
         
         <!-- Central Grid: Price & Demand Distribution (8 cols) + Niche Structure (4 cols) -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
@@ -593,7 +593,7 @@
           </div>
 
           <!-- Right (4 cols): СТРУКТУРА ТА МОНОПОЛІЗАЦІЯ НІШІ -->
-          <div class="lg:col-span-4 p-6 premium-card flex flex-col justify-between space-y-4">
+          <div class="lg:col-span-4 p-6 premium-card flex flex-col justify-between space-y-4 relative z-20">
             <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
               <div class="flex items-center gap-2">
                 <span class="material-icons text-amber-400 text-lg">domain</span>
@@ -605,7 +605,7 @@
             </div>
 
             <!-- Card 1: Rozetka (1P) vs 3P Селери -->
-            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3 relative group/split">
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3 relative group/split hover:z-40">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
                   <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Rozetka (1P) vs 3P Селери</span>
@@ -615,7 +615,7 @@
                     <span class="w-4 h-4 rounded-full bg-slate-900 text-slate-400 hover:text-white text-[10px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">
                       ?
                     </span>
-                    <div class="absolute left-0 bottom-full mb-2 w-64 p-3 bg-[#0f172a] border border-indigo-500/40 rounded-2xl shadow-2xl text-xs text-slate-200 z-30 opacity-0 pointer-events-none group-hover/split:opacity-100 group-hover/split:pointer-events-auto transition-all duration-200">
+                    <div class="absolute left-0 bottom-full mb-2 w-64 p-3 bg-[#0f172a] border border-indigo-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/split:opacity-100 group-hover/split:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80">
                       <p class="font-bold text-white mb-1">Що таке 1P та 3P?</p>
                       <ul class="space-y-1 text-[11px] text-slate-300">
                         <li>• <b class="text-emerald-400">1P (First Party):</b> Товари, які Rozetka купує та продає безпосередньо зі своїх складів.</li>
@@ -645,7 +645,7 @@
             </div>
 
             <!-- Card 2: HHI & Monopolization -->
-            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3 relative group/hhi">
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3 relative group/hhi hover:z-40">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
                   <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Індекс HHI (Герфіндаля)</span>
@@ -656,7 +656,7 @@
                       ?
                     </span>
                     <!-- Popover Tooltip -->
-                    <div class="absolute left-0 bottom-full mb-2 w-72 p-3.5 bg-[#0f172a] border border-indigo-500/40 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-30 opacity-0 pointer-events-none group-hover/hhi:opacity-100 group-hover/hhi:pointer-events-auto transition-all duration-200">
+                    <div class="absolute left-0 bottom-full mb-2 w-72 p-3.5 bg-[#0f172a] border border-indigo-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/hhi:opacity-100 group-hover/hhi:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80">
                       <div class="font-bold text-white border-b border-slate-800 pb-1.5 mb-2 flex items-center gap-1.5">
                         <span class="material-icons text-sm text-indigo-400">functions</span>
                         <span>Що таке індекс HHI?</span>
