@@ -373,9 +373,26 @@
             </div>
 
             <!-- Card 1: Rozetka (1P) vs 3P Селери -->
-            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3 relative group/split">
               <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Rozetka (1P) vs 3P Селери</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Rozetka (1P) vs 3P Селери</span>
+                  
+                  <!-- Info popover for 1P/3P -->
+                  <div class="relative inline-block">
+                    <span class="w-4 h-4 rounded-full bg-slate-900 text-slate-400 hover:text-white text-[10px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">
+                      ?
+                    </span>
+                    <div class="absolute left-0 bottom-full mb-2 w-64 p-3 bg-[#0f172a] border border-indigo-500/40 rounded-2xl shadow-2xl text-xs text-slate-200 z-30 opacity-0 pointer-events-none group-hover/split:opacity-100 group-hover/split:pointer-events-auto transition-all duration-200">
+                      <p class="font-bold text-white mb-1">Що таке 1P та 3P?</p>
+                      <ul class="space-y-1 text-[11px] text-slate-300">
+                        <li>• <b class="text-emerald-400">1P (First Party):</b> Товари, які Rozetka купує та продає безпосередньо зі своїх складів.</li>
+                        <li>• <b class="text-indigo-400">3P (Third Party):</b> Товари сторонніх незалежних підприємців на маркетплейсі.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
                 <span class="material-icons text-indigo-400 text-sm">store</span>
               </div>
               
@@ -396,11 +413,55 @@
             </div>
 
             <!-- Card 2: HHI & Monopolization -->
-            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3 relative group/hhi">
               <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Індекс HHI (Герфіндаля)</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Індекс HHI (Герфіндаля)</span>
+                  
+                  <!-- Interactive Info / Formula Popover Tooltip -->
+                  <div class="relative inline-block">
+                    <span class="w-4 h-4 rounded-full bg-slate-900 hover:bg-indigo-600 text-slate-400 hover:text-white text-[10px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">
+                      ?
+                    </span>
+                    <!-- Popover Tooltip -->
+                    <div class="absolute left-0 bottom-full mb-2 w-72 p-3.5 bg-[#0f172a] border border-indigo-500/40 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-30 opacity-0 pointer-events-none group-hover/hhi:opacity-100 group-hover/hhi:pointer-events-auto transition-all duration-200">
+                      <div class="font-bold text-white border-b border-slate-800 pb-1.5 mb-2 flex items-center gap-1.5">
+                        <span class="material-icons text-sm text-indigo-400">functions</span>
+                        <span>Що таке індекс HHI?</span>
+                      </div>
+                      <p class="text-[11px] text-slate-300 leading-relaxed">
+                        <b>Індекс Герфіндаля-Гіршмана (HHI)</b> — загальноприйнятий в економіці індикатор рівня монополізації ринку або ніші.
+                      </p>
+                      
+                      <div class="my-2 p-2 bg-slate-950 rounded-xl border border-slate-800 font-mono text-[11px] text-indigo-300">
+                        <b>Формула:</b> HHI = &Sigma; (Частка<sub>i</sub>%)²
+                        <div class="text-[10px] text-slate-400 mt-0.5">
+                          (Сума квадратів відсоткових часток ринку всіх продавців)
+                        </div>
+                      </div>
+
+                      <div class="space-y-1 text-[10px] pt-1">
+                        <div class="flex items-center gap-1.5 text-emerald-400">
+                          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                          <span><b>&lt; 1500</b> — Вільна конкуренція (легкий вхід)</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-amber-400">
+                          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                          <span><b>1500 - 2500</b> — Помірна концентрація</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-rose-400">
+                          <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+                          <span><b>&gt; 2500</b> — Висока монополія (важкий вхід)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <span class="material-icons text-violet-400 text-sm">analytics</span>
               </div>
+
+              <!-- Value & Badge -->
               <div class="flex items-baseline gap-2">
                 <span class="text-3xl font-black font-mono text-white">{{ analyticsSummary.kpi.hhi }}</span>
                 <span class="text-xs font-bold px-2.5 py-1 rounded-lg uppercase"
@@ -416,8 +477,16 @@
                   {{ analyticsSummary.kpi.hhiLevel === 'LOW' ? 'Висока конкуренція' : analyticsSummary.kpi.hhiLevel === 'MODERATE' ? 'Помірна концентрація' : 'Монополізація' }}
                 </span>
               </div>
+
+              <!-- Inline Formula badge -->
+              <div class="flex items-center gap-1.5 text-[11px] font-mono bg-slate-900/90 border border-slate-800 px-2.5 py-1 rounded-xl text-slate-400">
+                <span class="text-indigo-400 font-bold">HHI = &Sigma;(S<sub>i</sub>%)²</span>
+                <span class="text-slate-600">|</span>
+                <span class="text-[10px] text-slate-400 truncate">розрахунок часток {{ analyticsSummary.kpi.uniqueSellersCount }} продавців</span>
+              </div>
+
               <p class="text-[11px] text-slate-400 leading-relaxed">
-                {{ analyticsSummary.kpi.hhi < 1500 ? 'Здорова конкуренція, ринкові частки розподілені рівномірно.' : analyticsSummary.kpi.hhi <= 2500 ? 'Присутні помітні лідери, але вхід залишається відкритим.' : 'Ринок сильно монополізований кількома ключовими гравцями.' }}
+                {{ analyticsSummary.kpi.hhi < 1500 ? 'Здорова конкуренція, ринкові частки розподілені рівномірно (комфортний вхід для нових товарів).' : analyticsSummary.kpi.hhi <= 2500 ? 'Присутні помітні лідери, але ринок відкритий для нових селерів.' : 'Ринок сильно монополізований кількома гігантами (високий бар\'єр входу).' }}
               </p>
             </div>
 
