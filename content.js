@@ -379,11 +379,14 @@ if (window.self !== window.top) {
                     const reviews = reviewsText ? parseInt(reviewsText.replace(/\D/g, '')) || 0 : 0;
 
                     const starsEl = item.querySelector('.stars_rating, [data-testid="stars-rating"], .goods-tile__stars svg');
-                    let rating = 5.0;
-                    if (starsEl) {
-                        const style = starsEl.getAttribute('style') || '';
-                        const match = style.match(/width:\s*calc\(([\d.]+)%/);
-                        if (match) rating = parseFloat(((parseFloat(match[1]) || 100) / 20).toFixed(1));
+                    let rating = 0;
+                    if (reviews > 0) {
+                        rating = 5.0;
+                        if (starsEl) {
+                            const style = starsEl.getAttribute('style') || '';
+                            const match = style.match(/width:\s*calc\(([\d.]+)%/);
+                            if (match) rating = parseFloat(((parseFloat(match[1]) || 100) / 20).toFixed(1));
+                        }
                     }
 
                     const itemText = item.innerText || '';

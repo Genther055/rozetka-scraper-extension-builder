@@ -900,7 +900,7 @@ export class DashboardComponent implements OnInit {
       const sumPrice = this.products.reduce((acc, curr) => acc + curr.price, 0);
       this.avgPrice = Math.round(sumPrice / this.totalItems);
 
-      const ratedProducts = this.products.filter(p => p.rating > 0);
+      const ratedProducts = this.products.filter(p => (p.reviews || 0) > 0 && (p.rating || 0) > 0);
       if (ratedProducts.length > 0) {
         const sumRating = ratedProducts.reduce((acc, curr) => acc + curr.rating, 0);
         this.avgRating = parseFloat((sumRating / ratedProducts.length).toFixed(1));
@@ -952,7 +952,7 @@ export class DashboardComponent implements OnInit {
       const data = sellerMap.get(seller)!;
       data.count++;
       if (p.price && p.price > 0) data.prices.push(p.price);
-      if (p.rating && p.rating > 0) data.ratings.push(p.rating);
+      if (p.reviews && p.reviews > 0 && p.rating && p.rating > 0) data.ratings.push(p.rating);
       if (p.reviews && p.reviews > 0) data.reviews += p.reviews;
       if (p.inStock !== false) data.inStockCount++;
     }
@@ -1241,8 +1241,8 @@ export class DashboardComponent implements OnInit {
           valA = a.discount || 0;
           valB = b.discount || 0;
         } else if (this.sortColumn === 'rating') {
-          valA = a.rating || 0;
-          valB = b.rating || 0;
+          valA = (a.reviews && a.reviews > 0) ? (a.rating || 0) : 0;
+          valB = (b.reviews && b.reviews > 0) ? (b.rating || 0) : 0;
         } else if (this.sortColumn === 'reviews') {
           valA = a.reviews || 0;
           valB = b.reviews || 0;
