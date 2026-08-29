@@ -585,6 +585,59 @@ export class DashboardComponent implements OnInit {
   confirmActionType: 'primary' | 'danger' | 'warning' = 'primary';
   confirmCallback: (() => void) | null = null;
 
+  // --- Drilldown Products Modal State & Logic ---
+  showDrilldownModal = false;
+  drilldownTitle = '';
+  drilldownSubtitle = '';
+  drilldownProducts: Product[] = [];
+  drilldownSearchQuery = '';
+
+  openSellerProductsModal(sellerName: string) {
+    const rawSeller = (sellerName || '').trim();
+    const isRozetka = rawSeller.toLowerCase() === 'rozetka' || rawSeller.toLowerCase().includes('rozetka');
+    
+    const matchedProducts = this.products.filter(p => {
+      const pSeller = (p.seller && String(p.seller).trim()) ? String(p.seller).trim() : 'Rozetka';
+      if (isRozetka) {
+        return pSeller.toLowerCase() === 'rozetka' || pSeller.toLowerCase().includes('rozetka');
+      }
+      return pSeller.toLowerCase() === rawSeller.toLowerCase();
+    });
+
+    this.drilldownTitle = `Товари продавця: ${sellerName}`;
+    this.drilldownSubtitle = `${matchedProducts.length} товарів у вибірці (${((matchedProducts.length / Math.max(1, this.products.length)) * 100).toFixed(1)}% ніші)`;
+    this.drilldownProducts = matchedProducts;
+    this.drilldownSearchQuery = '';
+    this.showDrilldownModal = true;
+    this.cdr.markForCheck();
+  }
+
+  openPriceBinProductsModal(bin: { rangeLabel: string; minPrice: number; maxPrice: number }) {
+    const matchedProducts = this.products.filter(p => {
+      const price = Number(p.price) || 0;
+      return price >= bin.minPrice && price <= bin.maxPrice;
+    });
+
+    this.drilldownTitle = `Товари в діапазоні: ${bin.rangeLabel}`;
+    this.drilldownSubtitle = `${matchedProducts.length} товарів (${((matchedProducts.length / Math.max(1, this.products.length)) * 100).toFixed(1)}% ніші)`;
+    this.drilldownProducts = matchedProducts;
+    this.drilldownSearchQuery = '';
+    this.showDrilldownModal = true;
+    this.cdr.markForCheck();
+  }
+
+  getFilteredDrilldownProducts(): Product[] {
+    if (!this.drilldownSearchQuery || !this.drilldownSearchQuery.trim()) {
+      return this.drilldownProducts;
+    }
+    const q = this.drilldownSearchQuery.toLowerCase().trim();
+    return this.drilldownProducts.filter(p => 
+      (p.name && p.name.toLowerCase().includes(q)) ||
+      (p.category && p.category.toLowerCase().includes(q)) ||
+      (p.seller && p.seller.toLowerCase().includes(q))
+    );
+  }
+
   openConfirmDialog(options: {
     title: string;
     message: string;
