@@ -181,27 +181,27 @@
           </div>
         </div>
 
-        <!-- 2. Цінові орієнтири -->
+        <!-- 2. Подвійний ціновий орієнтир -->
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
             <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Цінові орієнтири</p>
-            <p class="text-xl font-extrabold text-emerald-400 mt-1 font-mono">Мед: {{ analyticsSummary.kpi.medianPrice | number }} ₴</p>
-            <p class="text-xs text-slate-300 font-mono font-semibold mt-0.5">Сер: {{ analyticsSummary.kpi.avgPrice | number }} ₴</p>
+            <p class="text-xl font-extrabold text-emerald-400 mt-1 font-mono">Сер: {{ analyticsSummary.kpi.avgPrice | number }} ₴</p>
+            <p class="text-xs text-slate-300 font-mono font-semibold mt-0.5">Медіана (P50): {{ analyticsSummary.kpi.medianPrice | number }} ₴</p>
           </div>
           <div class="w-12 h-12 bg-emerald-950/50 border border-emerald-500/20 text-emerald-300 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/10">
             <span class="material-icons">payments</span>
           </div>
         </div>
 
-        <!-- 3. Складські залишки -->
+        <!-- 3. Оцінка життєздатності ніші (Частка активних SKU) -->
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
-            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">В наявності</p>
-            <p class="text-3xl font-extrabold text-teal-300 mt-1">{{ analyticsSummary.kpi.inStockPercentage }}%</p>
-            <p class="text-xs text-teal-400/90 font-mono font-semibold mt-0.5">{{ analyticsSummary.kpi.inStockCount }} шт на складі</p>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Активність SKU</p>
+            <p class="text-3xl font-extrabold text-teal-300 mt-1">{{ analyticsSummary.kpi.activeSkusPercentage }}%</p>
+            <p class="text-xs text-teal-400/90 font-mono font-semibold mt-0.5">{{ analyticsSummary.kpi.activeSkusCount }} шт з відгуками ({{ analyticsSummary.kpi.inStockPercentage }}% в наявності)</p>
           </div>
           <div class="w-12 h-12 bg-teal-950/50 border border-teal-500/20 text-teal-300 rounded-xl flex items-center justify-center shadow-lg shadow-teal-500/10">
-            <span class="material-icons">check_circle</span>
+            <span class="material-icons">trending_up</span>
           </div>
         </div>
 
@@ -284,7 +284,7 @@
                 </div>
               </div>
 
-              <!-- Visual Legend -->
+              <!-- Visual Legend (Single shared legend) -->
               <div class="flex items-center gap-4 text-xs font-semibold">
                 <div class="flex items-center gap-1.5">
                   <span class="w-3 h-3 rounded-md bg-indigo-500 shadow-sm"></span>
@@ -297,9 +297,9 @@
               </div>
             </div>
 
-            <!-- Dynamic Bins List (7 intervals) -->
+            <!-- Dynamic Bins List (P95 Outlier-clipped intervals) -->
             <div class="space-y-3.5">
-              <div *ngFor="let bin of analyticsSummary.priceDistribution" class="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2 hover:border-slate-700 transition-colors">
+              <div *ngFor="let bin of analyticsSummary.priceDistribution" class="p-3.5 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2.5 hover:border-slate-700 transition-colors">
                 <!-- Bin Header Info -->
                 <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div class="flex items-center gap-2">
@@ -307,7 +307,7 @@
                       {{ bin.rangeLabel }}
                     </span>
                     <span *ngIf="bin.isSweetSpot" class="px-2.5 py-0.5 text-[11px] font-black bg-amber-500 text-slate-950 rounded-full shadow-lg shadow-amber-500/30 flex items-center gap-1">
-                      ★ SWEET SPOT (Ціновий оптимум)
+                      ★ Ціновий оптимум (Sweet Spot)
                     </span>
                   </div>
 
@@ -326,24 +326,16 @@
                   </div>
                 </div>
 
-                <!-- Dual Progress Bars -->
-                <div class="space-y-1">
+                <!-- Dual Progress Bars (Clean Layout without duplicate text prefixes) -->
+                <div class="space-y-1.5 pt-0.5">
                   <!-- Supply Bar (Products) -->
-                  <div class="flex items-center gap-2">
-                    <span class="text-[10px] uppercase font-bold text-slate-400 w-16 shrink-0">Товари</span>
-                    <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
-                      <div class="h-full bg-indigo-500 rounded-full transition-all duration-500 shadow-sm" [style.width.%]="bin.productsShare"></div>
-                    </div>
-                    <span class="text-[11px] font-mono text-indigo-300 w-10 text-right shrink-0">{{ bin.productsShare }}%</span>
+                  <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
+                    <div class="h-full bg-indigo-500 rounded-full transition-all duration-500 shadow-sm" [style.width.%]="bin.productsShare" [title]="'Пропозиція: ' + bin.productsShare + '% (' + bin.productsCount + ' тов.)'"></div>
                   </div>
 
                   <!-- Demand Bar (Reviews) -->
-                  <div class="flex items-center gap-2">
-                    <span class="text-[10px] uppercase font-bold text-slate-400 w-16 shrink-0">Відгуки</span>
-                    <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
-                      <div class="h-full bg-emerald-400 rounded-full transition-all duration-500 shadow-sm" [style.width.%]="bin.reviewsShare"></div>
-                    </div>
-                    <span class="text-[11px] font-mono text-emerald-400 w-10 text-right shrink-0">{{ bin.reviewsShare }}%</span>
+                  <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
+                    <div class="h-full bg-emerald-400 rounded-full transition-all duration-500 shadow-sm" [style.width.%]="bin.reviewsShare" [title]="'Попит: ' + bin.reviewsShare + '% (' + bin.reviewsSum + ' відг.)'"></div>
                   </div>
                 </div>
               </div>
@@ -362,26 +354,26 @@
               </span>
             </div>
 
-            <!-- Card 1: Vendor vs 3P Split -->
+            <!-- Card 1: Rozetka (1P) vs 3P Селери -->
             <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
               <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Rozetka vs 3P Селери</span>
+                <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Rozetka (1P) vs 3P Селери</span>
                 <span class="material-icons text-indigo-400 text-sm">store</span>
               </div>
               
               <!-- Split Bars -->
               <div class="space-y-1.5">
                 <div class="flex justify-between text-xs font-mono">
-                  <span class="text-emerald-400 font-bold">Rozetka: {{ analyticsSummary.kpi.vendorSplit.rozetkaShare }}% ({{ analyticsSummary.kpi.vendorSplit.rozetkaCount }} тов.)</span>
+                  <span class="text-emerald-400 font-bold">1P (Rozetka): {{ analyticsSummary.kpi.vendorSplit.rozetkaShare }}% ({{ analyticsSummary.kpi.vendorSplit.rozetkaCount }} тов.)</span>
                   <span class="text-indigo-300 font-bold">3P: {{ analyticsSummary.kpi.vendorSplit.thirdPartyShare }}% ({{ analyticsSummary.kpi.vendorSplit.thirdPartyCount }} тов.)</span>
                 </div>
                 <div class="w-full h-3 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
-                  <div class="bg-emerald-500 h-full transition-all duration-500" [style.width.%]="analyticsSummary.kpi.vendorSplit.rozetkaShare" title="Rozetka"></div>
-                  <div class="bg-indigo-500 h-full transition-all duration-500" [style.width.%]="analyticsSummary.kpi.vendorSplit.thirdPartyShare" title="3P Селери"></div>
+                  <div class="bg-emerald-500 h-full transition-all duration-500" [style.width.%]="analyticsSummary.kpi.vendorSplit.rozetkaShare" title="Rozetka (1P)"></div>
+                  <div class="bg-indigo-500 h-full transition-all duration-500" [style.width.%]="analyticsSummary.kpi.vendorSplit.thirdPartyShare" title="Сторонні селери (3P)"></div>
                 </div>
               </div>
               <p class="text-[11px] text-slate-400 leading-relaxed">
-                {{ analyticsSummary.kpi.vendorSplit.rozetkaShare > 30 ? 'Маркетплейс активно контролює нішу власним стоком.' : 'Ніша відкрита для зовнішніх продавців (3P маркетплейс домінує).' }}
+                {{ analyticsSummary.kpi.vendorSplit.rozetkaShare > 30 ? 'Маркетплейс активно контролює нішу власним стоком (1P).' : 'Ніша відкрита для зовнішніх продавців (3P маркетплейс домінує).' }}
               </p>
             </div>
 
@@ -403,27 +395,33 @@
                       [class.bg-rose-950]="analyticsSummary.kpi.hhiLevel === 'HIGH'"
                       [class.text-rose-300]="analyticsSummary.kpi.hhiLevel === 'HIGH'"
                       [class.border-rose-700]="analyticsSummary.kpi.hhiLevel === 'HIGH'">
-                  {{ analyticsSummary.kpi.hhiLevel === 'LOW' ? 'Низька концентрація' : analyticsSummary.kpi.hhiLevel === 'MODERATE' ? 'Помірна концентрація' : 'Висока монополізація' }}
+                  {{ analyticsSummary.kpi.hhiLevel === 'LOW' ? 'Висока конкуренція' : analyticsSummary.kpi.hhiLevel === 'MODERATE' ? 'Помірна концентрація' : 'Монополізація' }}
                 </span>
               </div>
               <p class="text-[11px] text-slate-400 leading-relaxed">
-                {{ analyticsSummary.kpi.hhi < 1500 ? 'Здорова конкуренція, частки розподілені рівномірно.' : analyticsSummary.kpi.hhi <= 2500 ? 'Присутні помітні лідери, але вхід відкритий.' : 'Ринок сильно монополізований кількома великими селерами.' }}
+                {{ analyticsSummary.kpi.hhi < 1500 ? 'Здорова конкуренція, ринкові частки розподілені рівномірно.' : analyticsSummary.kpi.hhi <= 2500 ? 'Присутні помітні лідери, але вхід залишається відкритим.' : 'Ринок сильно монополізований кількома ключовими гравцями.' }}
               </p>
             </div>
 
-            <!-- Card 3: Top-3 Concentration (CR3) -->
-            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2">
+            <!-- Card 3: Ключові гравці ніші (Топ-3 селери) -->
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2.5">
               <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Концентрація Топ-3 (CR3)</span>
-                <span class="text-xs font-mono font-bold text-violet-300">{{ analyticsSummary.kpi.cr3 }}%</span>
+                <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Ключові гравці (Топ-3)</span>
+                <span class="material-icons text-amber-400 text-sm">workspace_premium</span>
               </div>
-              <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-                <div class="bg-violet-500 h-full rounded-full transition-all duration-500" [style.width.%]="analyticsSummary.kpi.cr3"></div>
-              </div>
-              <div class="flex flex-wrap gap-1.5 pt-1">
-                <span *ngFor="let s of analyticsSummary.sellersTable.slice(0, 3)" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 px-2 py-0.5 rounded-md font-mono">
-                  {{ s.sellerName }}: <b>{{ s.marketShare }}%</b>
-                </span>
+              <div class="space-y-1.5">
+                <div *ngFor="let s of analyticsSummary.sellersTable.slice(0, 3)" class="flex items-center justify-between p-2 rounded-xl bg-slate-900/60 border border-slate-800 text-xs">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0" [style.backgroundColor]="s.color"></span>
+                    <span class="font-bold text-white truncate text-xs">{{ s.sellerName }}</span>
+                    <span *ngIf="s.isRozetka" class="text-[9px] font-extrabold bg-emerald-950 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-800/60">1P</span>
+                    <span *ngIf="!s.isRozetka" class="text-[9px] font-semibold bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">3P</span>
+                  </div>
+                  <div class="flex items-center gap-2 shrink-0 font-mono text-xs">
+                    <span class="text-slate-400">{{ s.productsCount }} шт</span>
+                    <span class="font-bold text-indigo-300 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">{{ s.marketShare }}%</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -452,7 +450,7 @@
                   [class.text-slate-400]="sellerQuickFilter !== 'all'"
                   class="px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer hover:text-white"
                 >
-                  Всі
+                  Всі продавці
                 </button>
                 <button 
                   (click)="setSellerQuickFilter('3p')"
@@ -461,7 +459,7 @@
                   [class.text-slate-400]="sellerQuickFilter !== '3p'"
                   class="px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer hover:text-white"
                 >
-                  Тільки 3P
+                  Тільки 3P-селери
                 </button>
                 <button 
                   (click)="setSellerQuickFilter('inStock')"
@@ -479,16 +477,7 @@
                   [class.text-slate-400]="sellerQuickFilter !== 'noReviews'"
                   class="px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer hover:text-white"
                 >
-                  Без відгуків
-                </button>
-                <button 
-                  (click)="setSellerQuickFilter('top20')"
-                  [class.bg-indigo-600]="sellerQuickFilter === 'top20'"
-                  [class.text-white]="sellerQuickFilter === 'top20'"
-                  [class.text-slate-400]="sellerQuickFilter !== 'top20'"
-                  class="px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer hover:text-white"
-                >
-                  Топ-20% асортименту
+                  Товари без відгуків (0)
                 </button>
               </div>
 

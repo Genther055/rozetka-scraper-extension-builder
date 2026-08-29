@@ -71,6 +71,8 @@ export interface AnalyticalSummary {
     medianPrice: number;
     inStockCount: number;
     inStockPercentage: number;
+    activeSkusCount: number;
+    activeSkusPercentage: number;
     cr3: number;
     cr3Level: 'LOW' | 'MEDIUM' | 'HIGH';
     hhi: number;
@@ -1825,6 +1827,8 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
         medianPrice: 0,
         inStockCount: 0,
         inStockPercentage: 0,
+        activeSkusCount: 0,
+        activeSkusPercentage: 0,
         cr3: 0,
         cr3Level: 'LOW',
         hhi: 0,
@@ -1930,10 +1934,11 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
   const entryBarrierLevel: 'LOW' | 'MEDIUM' | 'HIGH' =
     medianTop10Reviews <= 10 ? 'LOW' : medianTop10Reviews <= 50 ? 'MEDIUM' : 'HIGH';
 
-  // 5. Динамічні корзини цін (7 інтервалів)
+  // 5. Динамічні корзини цін з відсіканням аномальних цін (P95 Outlier Clipping)
   const minPrice = sortedPrices[0];
   const maxPrice = sortedPrices[sortedPrices.length - 1];
-  const binsCount = 7;
+  const p95Index = Math.floor(0.95 * (n - 1));
+  const p95Price = sortedPrices[p95Index];
   const totalReviews = validProducts.reduce((acc, p) => acc + (p.reviews || 0), 0);
 
   let priceDistribution: Array<{
@@ -1948,7 +1953,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
     isSweetSpot: boolean;
   }> = [];
 
-  if (minPrice === maxPrice) {
+  if (minPrice >= p95Price || maxPrice === minPrice) {
     priceDistribution = [{
       rangeLabel: `${minPrice.toLocaleString('uk-UA')} ₴`,
       minPrice,
@@ -1961,21 +1966,40 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       isSweetSpot: true
     }];
   } else {
-    const binStep = (maxPrice - minPrice) / binsCount;
-    const bins = Array.from({ length: binsCount }, (_, idx) => {
-      const min = minPrice + idx * binStep;
-      const max = idx === binsCount - 1 ? maxPrice + 0.01 : min + binStep;
-      return {
-        minPrice: Math.round(min),
-        maxPrice: Math.round(max),
-        products: validProducts.filter(p => p.price >= min && (idx === binsCount - 1 ? p.price <= maxPrice : p.price < max))
-      };
-    });
+    // 5 інтервалів для діапазону [minPrice, p95Price]
+    const coreBinsCount = 5;
+    const coreStep = (p95Price - minPrice) / coreBinsCount;
+    const rawBins: Array<{ min: number; max: number; label: string; products: any[] }> = [];
+
+    for (let idx = 0; idx < coreBinsCount; idx++) {
+      const bMin = minPrice + idx * coreStep;
+      const bMax = idx === coreBinsCount - 1 ? p95Price : bMin + coreStep;
+      const bProducts = validProducts.filter(p => p.price >= bMin && (idx === coreBinsCount - 1 ? p.price <= p95Price : p.price < bMax));
+      rawBins.push({
+        min: Math.round(bMin),
+        max: Math.round(bMax),
+        label: `${Math.round(bMin).toLocaleString('uk-UA')} - ${Math.round(bMax).toLocaleString('uk-UA')} ₴`,
+        products: bProducts
+      });
+    }
+
+    // Фінальний діапазон для екстремально дорогих товарів > P95
+    if (maxPrice > p95Price) {
+      const outlierProducts = validProducts.filter(p => p.price > p95Price);
+      if (outlierProducts.length > 0) {
+        rawBins.push({
+          min: Math.round(p95Price),
+          max: Math.round(maxPrice),
+          label: `Понад ${Math.round(p95Price).toLocaleString('uk-UA')} ₴`,
+          products: outlierProducts
+        });
+      }
+    }
 
     let maxEfficiencyRatio = -1;
     let sweetSpotIndex = -1;
 
-    priceDistribution = bins.map((bin, idx) => {
+    priceDistribution = rawBins.map((bin, idx) => {
       const count = bin.products.length;
       const reviews = bin.products.reduce((acc, p) => acc + (p.reviews || 0), 0);
       const ratio = count > 0 ? Number((reviews / count).toFixed(2)) : 0;
@@ -1988,9 +2012,9 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       }
 
       return {
-        rangeLabel: `${bin.minPrice.toLocaleString('uk-UA')} - ${bin.maxPrice.toLocaleString('uk-UA')} ₴`,
-        minPrice: bin.minPrice,
-        maxPrice: bin.maxPrice,
+        rangeLabel: bin.label,
+        minPrice: bin.min,
+        maxPrice: bin.max,
         productsCount: count,
         productsShare: Number(((count / n) * 100).toFixed(1)),
         reviewsSum: reviews,
@@ -2005,8 +2029,10 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
     }
   }
 
-  // 6. Rozetka vs 3P
+  // 6. Rozetka vs 3P & Active SKUs
   const inStockCount = validProducts.filter(p => p.inStock !== false).length;
+  const activeSkusCount = validProducts.filter(p => (p.reviews || 0) > 0).length;
+  const activeSkusPercentage = Number(((activeSkusCount / n) * 100).toFixed(1));
   const rozetkaCount = validProducts.filter(p => (p.seller || '').toLowerCase().includes('rozetka')).length;
   const thirdPartyCount = n - rozetkaCount;
   const rozetkaShare = Number(((rozetkaCount / n) * 100).toFixed(1));
@@ -2020,6 +2046,8 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       medianPrice: Math.round(medianPrice),
       inStockCount,
       inStockPercentage: Number(((inStockCount / n) * 100).toFixed(1)),
+      activeSkusCount,
+      activeSkusPercentage,
       cr3,
       cr3Level,
       hhi,
