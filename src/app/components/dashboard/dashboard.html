@@ -46,16 +46,6 @@
       </button>
 
       <button 
-        (click)="activeTab = 'tracker'" 
-        [class.premium-menu-btn-active]="activeTab === 'tracker'"
-        [class.premium-menu-btn-inactive]="activeTab !== 'tracker'"
-        class="premium-menu-btn"
-      >
-        <span class="material-icons text-lg">psychology</span>
-        ШІ-Аудитор
-      </button>
-
-      <button 
         (click)="activeTab = 'details'" 
         [class.premium-menu-btn-active]="activeTab === 'details'"
         [class.premium-menu-btn-inactive]="activeTab !== 'details'"
@@ -118,7 +108,6 @@
           <span *ngIf="activeTab === 'overview'">Панель огляду ніші</span>
           <span *ngIf="activeTab === 'explorer'">Пошук та аналіз товарів</span>
           <span *ngIf="activeTab === 'demand'">Оцінка ринкового попиту</span>
-          <span *ngIf="activeTab === 'tracker'">ШІ-Аудит характеристик</span>
           <span *ngIf="activeTab === 'details'">Детальні характеристики & Описи</span>
           <span *ngIf="activeTab === 'history'">Історія скрейпінгів & Папки зборів</span>
         </h2>
@@ -217,11 +206,11 @@
 
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
-            <p class="text-xs text-[#a78bfa]/60 font-bold uppercase tracking-wider">AI Аномалії</p>
-            <p class="text-3xl font-extrabold text-rose-400 mt-1">{{ aiAlertsCount }}</p>
+            <p class="text-xs text-[#a78bfa]/60 font-bold uppercase tracking-wider">Унікальних продавців</p>
+            <p class="text-3xl font-extrabold text-indigo-300 mt-1">{{ sellersCount }}</p>
           </div>
-          <div class="w-12 h-12 bg-rose-950/50 border border-rose-500/20 text-rose-300 rounded-xl flex items-center justify-center shadow-lg shadow-rose-500/10">
-            <span class="material-icons">report_problem</span>
+          <div class="w-12 h-12 bg-indigo-950/50 border border-indigo-500/20 text-indigo-300 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/10">
+            <span class="material-icons">storefront</span>
           </div>
         </div>
       </section>
@@ -836,82 +825,7 @@
         </div>
       </div>
 
-      <!-- TAB 4: AI AUDITOR -->
-      <div *ngIf="activeTab === 'tracker' && products.length > 0" class="space-y-6 animate-fadeIn">
-        <div class="p-6 premium-card">
-          <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Інтелектуальний ШІ-Аудит характеристик (TradeScout AI)</h3>
-          <p class="text-sm text-slate-350 leading-relaxed max-w-3xl font-medium">
-            Кожна картка товару містить ризик неправильно введених параметрів від сторонніх продавців. Натиснувши кнопку <b>«AI Аудит»</b>, 
-            наша аналітична платформа завантажить детальну сторінку товару, зчитає характеристики та порівняє їх із назвою за допомогою інтегрованого ШІ-агента.
-          </p>
-        </div>
-
-        <div class="space-y-4">
-          <div *ngFor="let item of products" class="p-6 premium-card space-y-4 transition-all">
-            <div class="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h4 class="font-bold text-white text-base hover:text-indigo-400">
-                  <a [href]="item.link" target="_blank">{{ item.name }}</a>
-                </h4>
-                <div class="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                  <span>Ціна: <b class="text-emerald-400 font-mono">{{ item.price }} ₴</b></span>
-                  <span>Оцінка: <b class="text-amber-500 font-mono">{{ item.rating }}</b></span>
-                  <span>Відгуки: <b class="text-slate-300 font-mono">{{ item.reviews }}</b></span>
-                </div>
-              </div>
-
-              <div class="flex items-center gap-3">
-                <span 
-                  [class.text-slate-400]="item.aiStatus === 'pending'"
-                  [class.bg-slate-950]="item.aiStatus === 'pending'"
-                  [class.text-emerald-400]="item.aiStatus === 'ok'"
-                  [class.bg-emerald-950/30]="item.aiStatus === 'ok'"
-                  [class.text-amber-400]="item.aiStatus === 'warning'"
-                  [class.bg-amber-950/30]="item.aiStatus === 'warning'"
-                  [class.text-red-400]="item.aiStatus === 'suspicious'"
-                  [class.bg-red-950/30]="item.aiStatus === 'suspicious'"
-                  class="px-3 py-1.5 text-xs font-bold rounded-full uppercase tracking-wider"
-                >
-                  Статус: 
-                  <span *ngIf="item.aiStatus === 'pending'">очікує аналізу</span>
-                  <span *ngIf="item.aiStatus === 'ok'">перевірено (ок)</span>
-                  <span *ngIf="item.aiStatus === 'warning'">увага / попередження</span>
-                  <span *ngIf="item.aiStatus === 'suspicious'">аномалія / підозріло</span>
-                </span>
-
-                <button 
-                  (click)="auditProduct(item)"
-                  [disabled]="item.isAuditing"
-                  class="px-4.5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-full text-xs font-bold cursor-pointer disabled:opacity-55 transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 glow-indigo"
-                >
-                  <span class="material-icons text-sm" *ngIf="!item.isAuditing">psychology</span>
-                  <span *ngIf="!item.isAuditing">Почати аудит</span>
-                  
-                  <span *ngIf="item.isAuditing" class="w-3.5 h-3.5 border-2 border-indigo-300/30 border-t-white rounded-full animate-spin"></span>
-                  <span *ngIf="item.isAuditing">Аналіз...</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- AI Verdict details -->
-            <div *ngIf="item.aiVerdict" class="p-4 bg-black/45 border border-[rgba(139,92,246,0.15)] rounded-xl space-y-2 shadow-inner">
-              <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-400">
-                <span class="material-icons text-sm">auto_awesome</span>
-                Вердикт штучного інтелекту:
-              </div>
-              <p class="text-sm text-slate-350 leading-relaxed font-medium">
-                {{ item.aiVerdict }}
-              </p>
-            </div>
-            
-            <div *ngIf="!item.aiVerdict && !item.isAuditing" class="text-xs text-slate-500 italic">
-              Товар ще не проходив інтелектуальний аудит. Натисніть кнопку вище, щоб проаналізувати його характеристики.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- TAB 5: DETAILS & DESCRIPTION SPECS VIEW -->
+      <!-- DETAILS & DESCRIPTION SPECS VIEW -->
       <section *ngIf="activeTab === 'details'" class="space-y-6">
         <div class="flex items-center justify-between">
           <div>

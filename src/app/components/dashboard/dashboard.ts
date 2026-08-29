@@ -64,7 +64,7 @@ export class DashboardComponent implements OnInit {
   filteredProducts: Product[] = [];
   
   // Navigation & Tabs
-  activeTab: 'overview' | 'explorer' | 'demand' | 'tracker' | 'details' | 'history' = 'overview';
+  activeTab: 'overview' | 'explorer' | 'demand' | 'details' | 'history' = 'overview';
 
   // Filters
   searchQuery = '';
@@ -224,6 +224,7 @@ export class DashboardComponent implements OnInit {
   totalItems = 0;
   avgPrice = 0;
   avgRating = 0.0;
+  sellersCount = 0;
   aiAlertsCount = 0;
   nicheOpportunityScore = 0; // Оцінка ніші від 1 до 10
 
@@ -693,6 +694,7 @@ export class DashboardComponent implements OnInit {
       this.avgRating = 0.0;
     }
     
+    this.sellersCount = this.totalItems > 0 ? new Set(this.products.map(p => p.seller || 'Rozetka')).size : 0;
     this.aiAlertsCount = this.products.filter(p => p.aiStatus === 'warning' || p.aiStatus === 'suspicious').length;
     this.calculateOpportunityScore();
   }
