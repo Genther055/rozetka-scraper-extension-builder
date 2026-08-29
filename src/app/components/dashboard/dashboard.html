@@ -65,6 +65,19 @@
         Деталі & Описи
       </button>
 
+      <button 
+        (click)="activeTab = 'history'" 
+        [class.premium-menu-btn-active]="activeTab === 'history'"
+        [class.premium-menu-btn-inactive]="activeTab !== 'history'"
+        class="premium-menu-btn"
+      >
+        <span class="material-icons text-lg">folder_special</span>
+        <span>Історія & Папки</span>
+        <span *ngIf="snapshots.length > 0" class="ml-auto text-[10px] font-bold bg-indigo-950/80 border border-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full">
+          {{ snapshots.length }}
+        </span>
+      </button>
+
 
     </nav>
 
@@ -107,30 +120,42 @@
           <span *ngIf="activeTab === 'demand'">Оцінка ринкового попиту</span>
           <span *ngIf="activeTab === 'tracker'">ШІ-Аудит характеристик</span>
           <span *ngIf="activeTab === 'details'">Детальні характеристики & Описи</span>
+          <span *ngIf="activeTab === 'history'">Історія скрейпінгів & Папки зборів</span>
         </h2>
         <p class="text-[10px] text-[#a78bfa]/60 font-bold uppercase tracking-wider mt-1">Збір та інтелектуальний аналіз товарів з Rozetka</p>
       </div>
 
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-3">
+        <!-- Quick Snapshot Save Button -->
+        <button 
+          *ngIf="products.length > 0"
+          (click)="openSaveSnapshotModal()"
+          class="px-3.5 py-2 bg-slate-900/80 hover:bg-slate-850 active:bg-slate-950 text-indigo-300 hover:text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-md flex items-center gap-1.5 border border-indigo-500/25 glow-indigo"
+          title="Зберегти поточний збір як знімок в історію"
+        >
+          <span class="material-icons text-sm text-indigo-400">camera_alt</span>
+          <span>Зберегти знімок</span>
+        </button>
+
         <!-- Download Extension Button -->
         <a 
           href="/tradescout-extension.zip" 
           download="tradescout-extension.zip"
-          class="px-4.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 flex items-center gap-2 border border-indigo-500/20 glow-indigo"
+          class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 flex items-center gap-2 border border-indigo-500/20 glow-indigo"
           title="Завантажити розширення Chrome"
         >
           <span class="material-icons text-sm">download</span>
-          Завантажити розширення (.zip)
+          <span>Розширення (.zip)</span>
         </a>
 
         <!-- Export to Excel Button -->
         <button 
           (click)="exportToExcel()" 
-          class="px-4.5 py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-lg shadow-emerald-600/30 flex items-center gap-2 border border-emerald-500/20 glow-emerald"
+          class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-lg shadow-emerald-600/30 flex items-center gap-2 border border-emerald-500/20 glow-emerald"
           title="Експортувати у таблицю Excel (.xlsx)"
         >
           <span class="material-icons text-sm">table_view</span>
-          Експорт в Excel (.xlsx)
+          <span>Excel (.xlsx)</span>
         </button>
 
         <!-- Live status -->
@@ -1011,6 +1036,332 @@
         </div>
       </section>
 
+      <!-- SECTION: HISTORY & FOLDERS ARCHIVE -->
+      <section *ngIf="activeTab === 'history'" class="space-y-6 animate-fadeIn">
+        
+        <!-- Header / Control Toolbar -->
+        <div class="p-6 premium-card flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div>
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <span class="material-icons text-indigo-400">folder_special</span>
+              Історія скрейпінгів & Папки зборів
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">
+              Зберігайте знімки аналітики за категоріями, групуйте у папки та відновлюйте для дослідження й порівняння.
+            </p>
+          </div>
+
+          <!-- Quick Controls -->
+          <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-start lg:justify-end">
+            
+            <!-- Incognito / Auto-Save Toggle -->
+            <button 
+              (click)="toggleAutoSaveHistory()"
+              [class.bg-emerald-950/40]="autoSaveHistory"
+              [class.border-emerald-500/40]="autoSaveHistory"
+              [class.text-emerald-300]="autoSaveHistory"
+              [class.bg-slate-900/60]="!autoSaveHistory"
+              [class.border-slate-800]="!autoSaveHistory"
+              [class.text-slate-400]="!autoSaveHistory"
+              class="px-3.5 py-2 rounded-full border text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all shadow-sm"
+              [title]="autoSaveHistory ? 'Автозбереження скрейпінгів увімкнено (клікніть щоб вимкнути)' : 'Режим інкогніто: скрейпінги не записуються автоматично в історію'"
+            >
+              <span class="material-icons text-sm" [class.text-emerald-400]="autoSaveHistory">{{ autoSaveHistory ? 'cloud_done' : 'cloud_off' }}</span>
+              <span>{{ autoSaveHistory ? 'Автозбереження: УВІМК' : 'Режим Інкогніто (без запису)' }}</span>
+            </button>
+
+            <!-- Save Snapshot Button -->
+            <button 
+              (click)="openSaveSnapshotModal()"
+              [disabled]="products.length === 0"
+              class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-full shadow-lg shadow-indigo-500/20 flex items-center gap-1.5 transition-all cursor-pointer glow-indigo"
+            >
+              <span class="material-icons text-sm">camera_alt</span>
+              <span>Зберегти знімок ({{ products.length }})</span>
+            </button>
+
+            <!-- Clear Active DB -->
+            <button 
+              *ngIf="products.length > 0"
+              (click)="clearActiveDatabase()"
+              class="px-3.5 py-2 bg-slate-900/60 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-slate-800 hover:border-rose-800/40 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+              title="Очистити робочу таблицю товарів (знімки в історії залишаться)"
+            >
+              <span class="material-icons text-sm">cleaning_services</span>
+              <span>Очистити робочу базу</span>
+            </button>
+
+            <!-- Clear All History -->
+            <button 
+              *ngIf="snapshots.length > 0"
+              (click)="clearAllHistory()"
+              class="px-3.5 py-2 bg-slate-900/60 hover:bg-red-950/40 text-slate-400 hover:text-red-400 border border-slate-800 hover:border-red-800/40 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+              title="Повністю очистити історію скрейпінгів"
+            >
+              <span class="material-icons text-sm">delete_sweep</span>
+              <span>Очистити історію</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Layout: 2 Columns (Folders Sidebar + Snapshots Grid) -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+          <!-- Left Column: Folders List -->
+          <div class="lg:col-span-1 space-y-4">
+            <div class="p-5 premium-card space-y-4">
+              <div class="flex items-center justify-between border-b border-slate-800/60 pb-3">
+                <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <span class="material-icons text-indigo-400 text-sm">folder</span>
+                  Папки зборів
+                </h4>
+                <button 
+                  (click)="showNewFolderModal = true"
+                  class="p-1.5 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white rounded-lg transition-all cursor-pointer flex items-center justify-center border border-indigo-500/30"
+                  title="Створити нову папку"
+                >
+                  <span class="material-icons text-xs">add</span>
+                </button>
+              </div>
+
+              <!-- Folder Pills -->
+              <div class="space-y-1.5">
+                <!-- All Snapshots -->
+                <button 
+                  (click)="selectedFolderId = 'all'"
+                  [class.bg-indigo-600/20]="selectedFolderId === 'all'"
+                  [class.text-white]="selectedFolderId === 'all'"
+                  [class.border-indigo-500/40]="selectedFolderId === 'all'"
+                  [class.text-slate-400]="selectedFolderId !== 'all'"
+                  [class.border-transparent]="selectedFolderId !== 'all'"
+                  class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-between border hover:bg-slate-800/40"
+                >
+                  <div class="flex items-center gap-2">
+                    <span class="material-icons text-sm text-indigo-400">all_inbox</span>
+                    <span>Всі збережені збори</span>
+                  </div>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
+                    {{ getFolderSnapshotsCount('all') }}
+                  </span>
+                </button>
+
+                <!-- Unassigned Snapshots -->
+                <button 
+                  (click)="selectedFolderId = 'unassigned'"
+                  [class.bg-indigo-600/20]="selectedFolderId === 'unassigned'"
+                  [class.text-white]="selectedFolderId === 'unassigned'"
+                  [class.border-indigo-500/40]="selectedFolderId === 'unassigned'"
+                  [class.text-slate-400]="selectedFolderId !== 'unassigned'"
+                  [class.border-transparent]="selectedFolderId !== 'unassigned'"
+                  class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-between border hover:bg-slate-800/40"
+                >
+                  <div class="flex items-center gap-2">
+                    <span class="material-icons text-sm text-slate-400">folder_open</span>
+                    <span>Без папки</span>
+                  </div>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
+                    {{ getFolderSnapshotsCount('unassigned') }}
+                  </span>
+                </button>
+
+                <!-- User Folders -->
+                <div *ngFor="let folder of folders" class="group relative flex items-center">
+                  <button 
+                    (click)="selectedFolderId = folder.id"
+                    [class.bg-indigo-600/20]="selectedFolderId === folder.id"
+                    [class.text-white]="selectedFolderId === folder.id"
+                    [class.border-indigo-500/40]="selectedFolderId === folder.id"
+                    [class.text-slate-400]="selectedFolderId !== folder.id"
+                    [class.border-transparent]="selectedFolderId !== folder.id"
+                    class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-between border hover:bg-slate-800/40 pr-8"
+                  >
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="w-2.5 h-2.5 rounded-full shrink-0" [style.backgroundColor]="folder.color || '#6366f1'"></span>
+                      <span class="truncate">{{ folder.name }}</span>
+                    </div>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 shrink-0">
+                      {{ getFolderSnapshotsCount(folder.id) }}
+                    </span>
+                  </button>
+
+                  <!-- Delete Folder Action -->
+                  <button 
+                    (click)="deleteFolder(folder, $event)"
+                    class="absolute right-2 text-slate-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 cursor-pointer"
+                    title="Видалити папку"
+                  >
+                    <span class="material-icons text-[14px]">delete</span>
+                  </button>
+                </div>
+
+                <!-- Empty folders state -->
+                <div *ngIf="folders.length === 0" class="py-4 text-center text-slate-600 text-xs italic">
+                  Папок ще немає. Створіть першу папку для організації зборів!
+                </div>
+              </div>
+
+              <!-- New Folder Trigger Button -->
+              <button 
+                (click)="showNewFolderModal = true"
+                class="w-full py-2.5 bg-slate-900/50 hover:bg-indigo-950/30 text-indigo-300 hover:text-white border border-dashed border-indigo-500/30 hover:border-indigo-500/60 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <span class="material-icons text-sm">create_new_folder</span>
+                <span>+ Нова папка</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Right Column: Snapshots Grid -->
+          <div class="lg:col-span-3 space-y-4">
+            
+            <!-- Filter & Search Bar -->
+            <div class="p-4 premium-card flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div class="relative w-full sm:w-80">
+                <span class="material-icons absolute left-3 top-2.5 text-sm text-slate-500">search</span>
+                <input 
+                  type="text" 
+                  [(ngModel)]="searchHistoryQuery"
+                  placeholder="Пошук знімка за назвою або категорією..."
+                  class="w-full bg-slate-950/60 border border-[rgba(139,92,246,0.15)] focus:border-indigo-500 rounded-full pl-9 pr-4 py-1.5 text-xs text-white placeholder-slate-500 outline-none transition-all"
+                />
+              </div>
+
+              <div class="text-xs text-slate-400 flex items-center gap-2">
+                <span>Знайдено зборів:</span>
+                <span class="font-bold text-white bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800">
+                  {{ getFilteredSnapshots().length }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Snapshots Cards List -->
+            <div *ngIf="getFilteredSnapshots().length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div 
+                *ngFor="let snap of getFilteredSnapshots()" 
+                class="p-5 premium-card hover:border-indigo-500/40 transition-all flex flex-col justify-between space-y-4 group"
+              >
+                <!-- Card Header -->
+                <div class="space-y-2">
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <span 
+                        class="px-2.5 py-0.5 text-[10px] font-bold rounded-full border inline-flex items-center gap-1"
+                        [style.borderColor]="getFolderColor(snap.folderId) + '50'"
+                        [style.backgroundColor]="getFolderColor(snap.folderId) + '15'"
+                        [style.color]="getFolderColor(snap.folderId)"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full" [style.backgroundColor]="getFolderColor(snap.folderId)"></span>
+                        {{ getFolderName(snap.folderId) }}
+                      </span>
+                    </div>
+
+                    <div class="flex items-center gap-1">
+                      <!-- Date Time Badge -->
+                      <span class="text-[11px] text-slate-400 font-mono">
+                        {{ snap.scrapedAt | date:'dd.MM.yyyy HH:mm' }}
+                      </span>
+
+                      <!-- Delete Snapshot -->
+                      <button 
+                        (click)="deleteSnapshot(snap, $event)"
+                        class="p-1 text-slate-600 hover:text-rose-400 transition-colors cursor-pointer rounded-lg hover:bg-slate-900"
+                        title="Видалити цей знімок"
+                      >
+                        <span class="material-icons text-sm">delete</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Title -->
+                  <h4 class="text-sm font-bold text-white leading-snug line-clamp-2">
+                    {{ snap.title }}
+                  </h4>
+                </div>
+
+                <!-- Snapshot Metrics Stats -->
+                <div class="grid grid-cols-3 gap-2 py-2 border-y border-slate-800/60 text-center">
+                  <div class="p-2 bg-slate-950/40 rounded-xl border border-slate-800/40">
+                    <p class="text-[10px] text-slate-500 uppercase font-semibold">Товарів</p>
+                    <p class="text-xs font-bold text-indigo-300 mt-0.5">{{ snap.itemCount }} шт</p>
+                  </div>
+                  <div class="p-2 bg-slate-950/40 rounded-xl border border-slate-800/40">
+                    <p class="text-[10px] text-slate-500 uppercase font-semibold">Сер. ціна</p>
+                    <p class="text-xs font-bold text-emerald-400 mt-0.5">{{ snap.avgPrice }} ₴</p>
+                  </div>
+                  <div class="p-2 bg-slate-950/40 rounded-xl border border-slate-800/40">
+                    <p class="text-[10px] text-slate-500 uppercase font-semibold">Діапазон цін</p>
+                    <p class="text-[11px] font-bold text-slate-300 mt-0.5">{{ snap.minPrice }}-{{ snap.maxPrice }} ₴</p>
+                  </div>
+                </div>
+
+                <!-- Folder selector & Action Buttons -->
+                <div class="space-y-2 pt-1">
+                  <!-- Folder selector -->
+                  <div class="flex items-center justify-between text-xs text-slate-400">
+                    <span class="text-[11px] text-slate-500">Папка:</span>
+                    <select 
+                      [ngModel]="snap.folderId || ''" 
+                      (ngModelChange)="moveSnapshot(snap, $event ? $event : null)"
+                      class="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-300 outline-none cursor-pointer hover:border-indigo-500/40 transition-colors"
+                    >
+                      <option value="">Без папки</option>
+                      <option *ngFor="let f of folders" [value]="f.id">{{ f.name }}</option>
+                    </select>
+                  </div>
+
+                  <!-- Action Buttons -->
+                  <div class="grid grid-cols-2 gap-2 pt-1">
+                    <!-- Restore to Dashboard -->
+                    <button 
+                      (click)="restoreSnapshot(snap)"
+                      class="px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 hover:border-indigo-500 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                      title="Завантажити цей збір у головну робочу область дашборду"
+                    >
+                      <span class="material-icons text-sm">open_in_browser</span>
+                      <span>На дашборд</span>
+                    </button>
+
+                    <!-- Export Snapshot to Excel -->
+                    <button 
+                      (click)="exportSpecificSnapshotToExcel(snap, $event)"
+                      class="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 hover:border-emerald-500 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                      title="Експортувати саме цей знімок у Excel (.xlsx)"
+                    >
+                      <span class="material-icons text-sm">table_view</span>
+                      <span>Excel (.xlsx)</span>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Empty Snapshots State -->
+            <div *ngIf="getFilteredSnapshots().length === 0" class="p-12 premium-card text-center space-y-4">
+              <div class="w-14 h-14 bg-indigo-950/40 border border-indigo-500/20 rounded-2xl flex items-center justify-center mx-auto text-indigo-400 shadow-lg">
+                <span class="material-icons text-2xl">folder_off</span>
+              </div>
+              <div class="space-y-1">
+                <h4 class="text-sm font-bold text-white">У цій вибірці немає збережених зборів</h4>
+                <p class="text-xs text-slate-400 max-w-md mx-auto">
+                  Збережіть поточні товари за допомогою кнопки «📸 Зберегти знімок» або запустіть новий скрапінг у розширенні.
+                </p>
+              </div>
+              <button 
+                *ngIf="products.length > 0"
+                (click)="openSaveSnapshotModal()"
+                class="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-full shadow-lg shadow-indigo-500/20 cursor-pointer glow-indigo"
+              >
+                Зберегти поточні товари як перший знімок
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
       <!-- Subtle Footer / Last Scrape Timestamp -->
       <footer class="pt-8 pb-4 border-t border-[rgba(139,92,246,0.08)] flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500 select-none">
         <div class="flex items-center gap-2">
@@ -1072,6 +1423,147 @@
       </div>
 
     </div>
+  </div>
+
+  <!-- MODAL: CREATE NEW FOLDER -->
+  <div *ngIf="showNewFolderModal" class="fixed inset-0 z-50 bg-[#08070d]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+    <div class="bg-gradient-to-br from-[#121020] to-[#0d0b14] border border-[rgba(139,92,246,0.25)] rounded-3xl p-6 max-w-md w-full shadow-2xl shadow-purple-500/10 space-y-5 relative">
+      
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span class="material-icons text-indigo-400 text-base">create_new_folder</span>
+          Створити нову папку для зборів
+        </h3>
+        <button (click)="showNewFolderModal = false" class="text-slate-500 hover:text-white p-1 cursor-pointer">
+          <span class="material-icons text-sm">close</span>
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Назва папки</label>
+          <input 
+            type="text" 
+            [(ngModel)]="newFolderName" 
+            placeholder="напр. Повербанки 20000 mAh або Топ Новинки..."
+            class="w-full bg-slate-950 border border-[rgba(139,92,246,0.2)] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-600 outline-none transition-all"
+            (keyup.enter)="createFolder()"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-2">Колір мітки</label>
+          <div class="flex items-center gap-3">
+            <button 
+              *ngFor="let col of ['#6366f1', '#a855f7', '#ec4899', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']"
+              (click)="newFolderColor = col"
+              class="w-7 h-7 rounded-full border-2 transition-all cursor-pointer flex items-center justify-center"
+              [style.backgroundColor]="col"
+              [class.border-white]="newFolderColor === col"
+              [class.border-transparent]="newFolderColor !== col"
+              [class.scale-110]="newFolderColor === col"
+            >
+              <span *ngIf="newFolderColor === col" class="material-icons text-white text-[12px]">check</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t border-slate-800/80 pt-4 flex justify-end gap-2">
+        <button 
+          (click)="showNewFolderModal = false" 
+          class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white text-xs font-semibold rounded-full cursor-pointer transition-all"
+        >
+          Скасувати
+        </button>
+        <button 
+          (click)="createFolder()" 
+          [disabled]="!newFolderName.trim()"
+          class="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-full shadow-lg shadow-indigo-500/25 transition-all cursor-pointer glow-indigo"
+        >
+          Створити
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: SAVE CURRENT SNAPSHOT -->
+  <div *ngIf="showSaveSnapshotModal" class="fixed inset-0 z-50 bg-[#08070d]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+    <div class="bg-gradient-to-br from-[#121020] to-[#0d0b14] border border-[rgba(139,92,246,0.25)] rounded-3xl p-6 max-w-md w-full shadow-2xl shadow-purple-500/10 space-y-5 relative">
+      
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span class="material-icons text-indigo-400 text-base">camera_alt</span>
+          Зберегти знімок поточного скрейпінгу
+        </h3>
+        <button (click)="showSaveSnapshotModal = false" class="text-slate-500 hover:text-white p-1 cursor-pointer">
+          <span class="material-icons text-sm">close</span>
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Назва збору</label>
+          <input 
+            type="text" 
+            [(ngModel)]="newSnapshotTitle" 
+            placeholder="Введіть назву для знімка..."
+            class="w-full bg-slate-950 border border-[rgba(139,92,246,0.2)] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-600 outline-none transition-all"
+            (keyup.enter)="saveCurrentSnapshot()"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Призначити в папку</label>
+          <select 
+            [(ngModel)]="newSnapshotFolderId" 
+            class="w-full bg-slate-950 border border-[rgba(139,92,246,0.2)] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white outline-none transition-all cursor-pointer"
+          >
+            <option [ngValue]="null">Без папки (Загальний архів)</option>
+            <option *ngFor="let f of folders" [ngValue]="f.id">{{ f.name }}</option>
+          </select>
+        </div>
+
+        <div class="p-3 bg-indigo-950/20 border border-indigo-500/20 rounded-xl flex items-center justify-between text-xs">
+          <span class="text-slate-400">Товарів у знімку:</span>
+          <span class="font-bold text-indigo-300">{{ products.length }} шт</span>
+        </div>
+      </div>
+
+      <div class="border-t border-slate-800/80 pt-4 flex justify-end gap-2">
+        <button 
+          (click)="showSaveSnapshotModal = false" 
+          class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white text-xs font-semibold rounded-full cursor-pointer transition-all"
+        >
+          Скасувати
+        </button>
+        <button 
+          (click)="saveCurrentSnapshot()" 
+          class="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-full shadow-lg shadow-indigo-500/25 transition-all cursor-pointer glow-indigo"
+        >
+          Зберегти в архів
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FLOATING NOTIFICATION TOAST -->
+  <div 
+    *ngIf="historySuccessMsg" 
+    class="fixed bottom-6 right-6 z-50 bg-[#121020]/95 border border-emerald-500/50 text-emerald-300 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fadeIn text-xs font-bold"
+  >
+    <span class="material-icons text-emerald-400 text-base">check_circle</span>
+    <span>{{ historySuccessMsg }}</span>
+  </div>
+
+  <div 
+    *ngIf="historyErrorMsg" 
+    class="fixed bottom-6 right-6 z-50 bg-[#121020]/95 border border-rose-500/50 text-rose-300 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fadeIn text-xs font-bold"
+  >
+    <span class="material-icons text-rose-400 text-base">error</span>
+    <span>{{ historyErrorMsg }}</span>
   </div>
 
 </div>

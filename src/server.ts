@@ -12,6 +12,8 @@ import { GoogleGenAI } from '@google/genai';
 const browserDistFolder = join(import.meta.dirname, '../browser');
 const dataDir = join(import.meta.dirname, '../data');
 const dataFilePath = join(dataDir, 'products.json');
+const historyFilePath = join(dataDir, 'history.json');
+const foldersFilePath = join(dataDir, 'folders.json');
 
 // Ensure data folder exists
 if (!existsSync(dataDir)) {
@@ -26,6 +28,65 @@ if (existsSync(dataFilePath)) {
     products = JSON.parse(raw);
   } catch (e) {
     console.error('Error loading products.json:', e);
+  }
+}
+
+// Load initial history & folders
+interface ScrapingFolder {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+  createdAt: string;
+}
+
+interface ScrapingSnapshot {
+  id: string;
+  title: string;
+  folderId: string | null;
+  scrapedAt: string;
+  itemCount: number;
+  category: string;
+  avgPrice: number;
+  minPrice: number;
+  maxPrice: number;
+  sellersCount: number;
+  products: any[];
+}
+
+let history: ScrapingSnapshot[] = [];
+if (existsSync(historyFilePath)) {
+  try {
+    const raw = readFileSync(historyFilePath, 'utf-8');
+    history = JSON.parse(raw);
+  } catch (e) {
+    console.error('Error loading history.json:', e);
+  }
+}
+
+let folders: ScrapingFolder[] = [];
+if (existsSync(foldersFilePath)) {
+  try {
+    const raw = readFileSync(foldersFilePath, 'utf-8');
+    folders = JSON.parse(raw);
+  } catch (e) {
+    console.error('Error loading folders.json:', e);
+  }
+}
+
+function saveHistory() {
+  try {
+    writeFileSync(historyFilePath, JSON.stringify(history, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Error saving history.json:', e);
+  }
+}
+
+function saveFolders() {
+  try {
+    writeFileSync(foldersFilePath, JSON.stringify(folders, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Error saving folders.json:', e);
   }
 }
 
@@ -261,6 +322,159 @@ app.post('/api/products/clear', (req, res) => {
   products = [];
   try {
     writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// --- History & Snapshots Endpoints ---
+app.get('/api/history', (req, res) => {
+  res.json({ success: true, history });
+});
+
+app.post('/api/history', (req, res) => {
+  try {
+    const { title, folderId, products: customProducts } = req.body || {};
+    const itemsToSave = customProducts && Array.isArray(customProducts) ? customProducts : products;
+
+    if (!itemsToSave || itemsToSave.length === 0) {
+      res.status(400).json({ success: false, error: 'Немає товарів для збереження в знімок' });
+      return;
+    }
+
+    const prices = itemsToSave.map((p: any) => p.price || 0).filter((pr: number) => pr > 0);
+    const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length) : 0;
+    const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+    const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
+    const sellers = new Set(itemsToSave.map((p: any) => p.seller || 'Rozetka'));
+    const category = itemsToSave[0]?.category || 'Загальна';
+
+    const now = new Date();
+    const dateFormatted = now.toLocaleDateString('uk-UA') + ' ' + now.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+
+    const newSnapshot: ScrapingSnapshot = {
+      id: 'snap_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      title: title && title.trim() ? title.trim() : `Збір ${category} — ${dateFormatted}`,
+      folderId: folderId || null,
+      scrapedAt: now.toISOString(),
+      itemCount: itemsToSave.length,
+      category,
+      avgPrice,
+      minPrice,
+      maxPrice,
+      sellersCount: sellers.size,
+      products: JSON.parse(JSON.stringify(itemsToSave))
+    };
+
+    history.unshift(newSnapshot);
+    saveHistory();
+
+    res.json({ success: true, snapshot: newSnapshot });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/history/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, folderId } = req.body || {};
+    const snapshot = history.find(s => s.id === id);
+    if (!snapshot) {
+      res.status(404).json({ success: false, error: 'Знімок не знайдено' });
+      return;
+    }
+
+    if (title !== undefined) snapshot.title = title.trim();
+    if (folderId !== undefined) snapshot.folderId = folderId;
+
+    saveHistory();
+    res.json({ success: true, snapshot });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/history/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    history = history.filter(s => s.id !== id);
+    saveHistory();
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/history', (req, res) => {
+  try {
+    history = [];
+    saveHistory();
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/history/:id/restore', (req, res) => {
+  try {
+    const { id } = req.params;
+    const snapshot = history.find(s => s.id === id);
+    if (!snapshot || !snapshot.products) {
+      res.status(404).json({ success: false, error: 'Знімок не знайдено або він порожній' });
+      return;
+    }
+
+    products = JSON.parse(JSON.stringify(snapshot.products));
+    writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
+    res.json({ success: true, count: products.length, products });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// --- Folders Endpoints ---
+app.get('/api/folders', (req, res) => {
+  res.json({ success: true, folders });
+});
+
+app.post('/api/folders', (req, res) => {
+  try {
+    const { name, icon, color } = req.body || {};
+    if (!name || !name.trim()) {
+      res.status(400).json({ success: false, error: 'Вкажіть назву папки' });
+      return;
+    }
+
+    const newFolder: ScrapingFolder = {
+      id: 'fld_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      name: name.trim(),
+      icon: icon || 'folder',
+      color: color || '#6366f1',
+      createdAt: new Date().toISOString()
+    };
+
+    folders.push(newFolder);
+    saveFolders();
+    res.json({ success: true, folder: newFolder });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/folders/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    folders = folders.filter(f => f.id !== id);
+    saveFolders();
+
+    // Reassign snapshots in this folder to null (unassigned)
+    history.forEach(s => {
+      if (s.folderId === id) s.folderId = null;
+    });
+    saveHistory();
+
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });

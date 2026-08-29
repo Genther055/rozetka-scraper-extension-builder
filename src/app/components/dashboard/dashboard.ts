@@ -5,6 +5,28 @@ import {FormsModule} from '@angular/forms';
 import {CommonModule} from '@angular/common';
 import * as ExcelJS from 'exceljs';
 
+export interface ScrapingFolder {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+  createdAt: string;
+}
+
+export interface ScrapingSnapshot {
+  id: string;
+  title: string;
+  folderId: string | null;
+  scrapedAt: string;
+  itemCount: number;
+  category: string;
+  avgPrice: number;
+  minPrice: number;
+  maxPrice: number;
+  sellersCount: number;
+  products?: Product[];
+}
+
 interface Product {
   name: string;
   price: number;
@@ -42,7 +64,7 @@ export class DashboardComponent implements OnInit {
   filteredProducts: Product[] = [];
   
   // Navigation & Tabs
-  activeTab: 'overview' | 'explorer' | 'demand' | 'tracker' | 'details' = 'overview';
+  activeTab: 'overview' | 'explorer' | 'demand' | 'tracker' | 'details' | 'history' = 'overview';
 
   // Filters
   searchQuery = '';
@@ -51,6 +73,29 @@ export class DashboardComponent implements OnInit {
   minRating = 0;
   statusFilter = 'all';
   stockFilter = 'all';
+
+  // History & Folders State
+  folders: ScrapingFolder[] = [];
+  snapshots: ScrapingSnapshot[] = [];
+  selectedFolderId: string | null = 'all'; // 'all', 'unassigned', or folder.id
+  searchHistoryQuery = '';
+  autoSaveHistory = true;
+  historyLoading = false;
+  historySuccessMsg = '';
+  historyErrorMsg = '';
+
+  // Modal / Creation States
+  showNewFolderModal = false;
+  newFolderName = '';
+  newFolderColor = '#6366f1';
+  newFolderIcon = 'folder';
+
+  showSaveSnapshotModal = false;
+  newSnapshotTitle = '';
+  newSnapshotFolderId: string | null = null;
+
+  activeSnapshotDetails: ScrapingSnapshot | null = null;
+  movingSnapshot: ScrapingSnapshot | null = null;
 
   // Collapsible Details State
   expandedDescMap: Record<string, boolean> = {};
@@ -209,7 +254,15 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit() {
     if (typeof window !== 'undefined') {
+      const savedAuto = localStorage.getItem('tradescout_auto_save_history');
+      if (savedAuto !== null) {
+        this.autoSaveHistory = savedAuto === 'true';
+      }
+
       this.loadProducts();
+      this.loadFolders();
+      this.loadHistory();
+
       this.autoRefreshTimer = setInterval(() => {
         this.loadProducts(true);
       }, 3000);
@@ -289,6 +342,283 @@ export class DashboardComponent implements OnInit {
     if (diffHours < 24) return `${diffHours} год тому`;
     if (diffDays === 1) return 'вчора';
     return `${diffDays} дн. тому`;
+  }
+
+  // --- History & Folders Methods ---
+
+  loadFolders() {
+    this.http.get<{ success: boolean, folders: ScrapingFolder[] }>(`${this.apiUrl}/api/folders`)
+      .subscribe({
+        next: (res) => {
+          if (res.success) {
+            this.folders = res.folders || [];
+            this.cdr.markForCheck();
+          }
+        },
+        error: (err) => console.error('Failed to load folders:', err)
+      });
+  }
+
+  loadHistory() {
+    this.historyLoading = true;
+    this.http.get<{ success: boolean, history: ScrapingSnapshot[] }>(`${this.apiUrl}/api/history`)
+      .subscribe({
+        next: (res) => {
+          this.historyLoading = false;
+          if (res.success) {
+            this.snapshots = res.history || [];
+            this.cdr.markForCheck();
+          }
+        },
+        error: (err) => {
+          this.historyLoading = false;
+          console.error('Failed to load history:', err);
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
+  createFolder() {
+    if (!this.newFolderName || !this.newFolderName.trim()) return;
+    this.http.post<{ success: boolean, folder: ScrapingFolder }>(`${this.apiUrl}/api/folders`, {
+      name: this.newFolderName.trim(),
+      color: this.newFolderColor,
+      icon: this.newFolderIcon
+    }).subscribe({
+      next: (res) => {
+        if (res.success && res.folder) {
+          this.folders.push(res.folder);
+          this.selectedFolderId = res.folder.id;
+          this.newFolderName = '';
+          this.showNewFolderModal = false;
+          this.showNotification('Папку успішно створено');
+          this.cdr.markForCheck();
+        }
+      },
+      error: (err) => this.showNotification('Помилка при створенні папки: ' + (err.error?.error || err.message), true)
+    });
+  }
+
+  deleteFolder(folder: ScrapingFolder, event?: Event) {
+    if (event) event.stopPropagation();
+    if (!confirm(`Ви дійсно бажаєте видалити папку «${folder.name}»? (Збережені збори залишаться в архіві без папки)`)) return;
+
+    this.http.delete<{ success: boolean }>(`${this.apiUrl}/api/folders/${folder.id}`)
+      .subscribe({
+        next: (res) => {
+          if (res.success) {
+            this.folders = this.folders.filter(f => f.id !== folder.id);
+            this.snapshots.forEach(s => {
+              if (s.folderId === folder.id) s.folderId = null;
+            });
+            if (this.selectedFolderId === folder.id) {
+              this.selectedFolderId = 'all';
+            }
+            this.showNotification('Папку видалено');
+            this.cdr.markForCheck();
+          }
+        },
+        error: (err) => this.showNotification('Помилка видалення папки', true)
+      });
+  }
+
+  openSaveSnapshotModal() {
+    if (this.products.length === 0) {
+      alert('У поточній базі немає товарів для збереження в знімок.');
+      return;
+    }
+    const cat = this.products[0]?.category || 'Товари';
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString('uk-UA') + ' ' + now.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+    this.newSnapshotTitle = `Збір ${cat} (${this.products.length} шт) — ${formattedDate}`;
+    this.newSnapshotFolderId = this.selectedFolderId !== 'all' && this.selectedFolderId !== 'unassigned' ? this.selectedFolderId : null;
+    this.showSaveSnapshotModal = true;
+    this.cdr.markForCheck();
+  }
+
+  saveCurrentSnapshot() {
+    if (this.products.length === 0) return;
+    this.http.post<{ success: boolean, snapshot: ScrapingSnapshot }>(`${this.apiUrl}/api/history`, {
+      title: this.newSnapshotTitle || undefined,
+      folderId: this.newSnapshotFolderId || null,
+      products: this.products
+    }).subscribe({
+      next: (res) => {
+        if (res.success && res.snapshot) {
+          this.snapshots.unshift(res.snapshot);
+          this.showSaveSnapshotModal = false;
+          this.showNotification('Знімок скрейпінгу збережено в архів!');
+          this.cdr.markForCheck();
+        }
+      },
+      error: (err) => this.showNotification('Помилка збереження: ' + (err.error?.error || err.message), true)
+    });
+  }
+
+  deleteSnapshot(snapshot: ScrapingSnapshot, event?: Event) {
+    if (event) event.stopPropagation();
+    if (!confirm(`Ви дійсно бажаєте видалити цей знімок («${snapshot.title}»)?`)) return;
+
+    this.http.delete<{ success: boolean }>(`${this.apiUrl}/api/history/${snapshot.id}`)
+      .subscribe({
+        next: (res) => {
+          if (res.success) {
+            this.snapshots = this.snapshots.filter(s => s.id !== snapshot.id);
+            if (this.activeSnapshotDetails?.id === snapshot.id) {
+              this.activeSnapshotDetails = null;
+            }
+            this.showNotification('Знімок видалено з історії');
+            this.cdr.markForCheck();
+          }
+        },
+        error: (err) => this.showNotification('Помилка видалення знімка', true)
+      });
+  }
+
+  clearAllHistory() {
+    if (this.snapshots.length === 0) return;
+    if (!confirm('Ви дійсно бажаєте очистити ВСЮ історію скрейпінгів? Цю дію неможливо скасувати.')) return;
+
+    this.http.delete<{ success: boolean }>(`${this.apiUrl}/api/history`)
+      .subscribe({
+        next: (res) => {
+          if (res.success) {
+            this.snapshots = [];
+            this.activeSnapshotDetails = null;
+            this.showNotification('Всю історію успішно очищено');
+            this.cdr.markForCheck();
+          }
+        },
+        error: (err) => this.showNotification('Помилка очищення історії', true)
+      });
+  }
+
+  restoreSnapshot(snapshot: ScrapingSnapshot) {
+    if (!confirm(`Завантажити знімок «${snapshot.title}» (${snapshot.itemCount} товарів) у робочу область дашборду? Поточна робоча таблиця буде замінена цими даними.`)) return;
+
+    this.http.post<{ success: boolean, count: number, products: Product[] }>(`${this.apiUrl}/api/history/${snapshot.id}/restore`, {})
+      .subscribe({
+        next: (res) => {
+          if (res.success) {
+            this.products = res.products || [];
+            this.applyFilters();
+            this.calculateMetrics();
+            this.showNotification(`Збір «${snapshot.title}» успішно завантажено в робочу область!`);
+            this.activeTab = 'overview';
+            this.cdr.markForCheck();
+          }
+        },
+        error: (err) => this.showNotification('Помилка завантаження знімка', true)
+      });
+  }
+
+  moveSnapshot(snapshot: ScrapingSnapshot, newFolderId: string | null) {
+    this.http.put<{ success: boolean, snapshot: ScrapingSnapshot }>(`${this.apiUrl}/api/history/${snapshot.id}`, {
+      folderId: newFolderId
+    }).subscribe({
+      next: (res) => {
+        if (res.success) {
+          snapshot.folderId = newFolderId;
+          this.movingSnapshot = null;
+          this.showNotification('Знімок переміщено');
+          this.cdr.markForCheck();
+        }
+      },
+      error: (err) => this.showNotification('Помилка переміщення', true)
+    });
+  }
+
+  async exportSpecificSnapshotToExcel(snapshot: ScrapingSnapshot, event?: Event) {
+    if (event) event.stopPropagation();
+    if (!snapshot.products || snapshot.products.length === 0) return;
+    
+    // Temporarily point filteredProducts to snapshot products and export
+    const tempFiltered = this.filteredProducts;
+    this.filteredProducts = snapshot.products;
+    await this.exportToExcel();
+    this.filteredProducts = tempFiltered;
+  }
+
+  getFilteredSnapshots(): ScrapingSnapshot[] {
+    return this.snapshots.filter(s => {
+      // Filter by folder
+      if (this.selectedFolderId === 'unassigned') {
+        if (s.folderId !== null) return false;
+      } else if (this.selectedFolderId !== 'all') {
+        if (s.folderId !== this.selectedFolderId) return false;
+      }
+
+      // Filter by search query
+      if (this.searchHistoryQuery && this.searchHistoryQuery.trim()) {
+        const q = this.searchHistoryQuery.toLowerCase().trim();
+        const matchTitle = (s.title || '').toLowerCase().includes(q);
+        const matchCat = (s.category || '').toLowerCase().includes(q);
+        if (!matchTitle && !matchCat) return false;
+      }
+
+      return true;
+    });
+  }
+
+  getFolderSnapshotsCount(folderId: string | null): number {
+    if (folderId === 'all') return this.snapshots.length;
+    if (folderId === 'unassigned') return this.snapshots.filter(s => s.folderId === null).length;
+    return this.snapshots.filter(s => s.folderId === folderId).length;
+  }
+
+  getFolderName(folderId: string | null): string {
+    if (!folderId) return 'Без папки';
+    const folder = this.folders.find(f => f.id === folderId);
+    return folder ? folder.name : 'Без папки';
+  }
+
+  getFolderColor(folderId: string | null): string {
+    if (!folderId) return '#64748b';
+    const folder = this.folders.find(f => f.id === folderId);
+    return folder?.color || '#6366f1';
+  }
+
+  toggleAutoSaveHistory() {
+    this.autoSaveHistory = !this.autoSaveHistory;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('tradescout_auto_save_history', String(this.autoSaveHistory));
+    }
+    this.showNotification(this.autoSaveHistory ? 'Автозбереження скрейпінгів увімкнено' : 'Автозбереження скрейпінгів вимкнено (режим інкогніто)');
+  }
+
+  showNotification(msg: string, isError = false) {
+    if (isError) {
+      this.historyErrorMsg = msg;
+      this.historySuccessMsg = '';
+    } else {
+      this.historySuccessMsg = msg;
+      this.historyErrorMsg = '';
+    }
+    setTimeout(() => {
+      this.historySuccessMsg = '';
+      this.historyErrorMsg = '';
+      this.cdr.markForCheck();
+    }, 4500);
+    this.cdr.markForCheck();
+  }
+
+  clearActiveDatabase() {
+    if (this.products.length === 0) return;
+    if (!confirm('Видалити всі товари з поточної робочої бази? (Збережені в історії знімки залишаться неушкодженими)')) return;
+
+    this.http.post<{ success: boolean }>(`${this.apiUrl}/api/products/clear`, {})
+      .subscribe({
+        next: (res) => {
+          if (res.success) {
+            this.products = [];
+            this.applyFilters();
+            this.calculateMetrics();
+            this.showNotification('Поточну робочу базу товарів очищено');
+            this.cdr.markForCheck();
+          }
+        },
+        error: (err) => this.showNotification('Помилка очищення бази', true)
+      });
   }
 
   calculateLQS(p: Product): number {
