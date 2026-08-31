@@ -14,8 +14,10 @@ if (!existsSync(dataDir)) {
 let products: any[] = [];
 if (existsSync(dataFilePath)) {
   try {
-    const raw = readFileSync(dataFilePath, 'utf-8');
-    products = JSON.parse(raw);
+    const raw = readFileSync(dataFilePath, 'utf-8').replace(/^\uFEFF/, '').trim();
+    if (raw) {
+      products = JSON.parse(raw);
+    }
   } catch (e) {
     console.error('Error loading products.json:', e);
   }

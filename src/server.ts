@@ -10,7 +10,9 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { GoogleGenAI } from '@google/genai';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
-const dataDir = join(import.meta.dirname, '../data');
+const dataDir = existsSync(join(process.cwd(), 'data')) 
+  ? join(process.cwd(), 'data') 
+  : join(import.meta.dirname, '../data');
 const dataFilePath = join(dataDir, 'products.json');
 const historyFilePath = join(dataDir, 'history.json');
 const foldersFilePath = join(dataDir, 'folders.json');
@@ -24,8 +26,10 @@ if (!existsSync(dataDir)) {
 let products: any[] = [];
 if (existsSync(dataFilePath)) {
   try {
-    const raw = readFileSync(dataFilePath, 'utf-8');
-    products = JSON.parse(raw);
+    const raw = readFileSync(dataFilePath, 'utf-8').replace(/^\uFEFF/, '').trim();
+    if (raw) {
+      products = JSON.parse(raw);
+    }
   } catch (e) {
     console.error('Error loading products.json:', e);
   }
