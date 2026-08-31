@@ -63,6 +63,27 @@ export interface StructuredDescription {
   cleanParagraphs: string[];
 }
 
+export interface SpecValueStat {
+  specValue: string;
+  productsCount: number;
+  productsShare: number;
+  reviewsSum: number;
+  reviewsShare: number;
+  avgPrice: number;
+  medianPrice: number;
+  demandSupplyRatio: number;
+  isTopDemand: boolean;
+  isTopEfficiency: boolean;
+  products: any[];
+}
+
+export interface SpecCategoryAnalysis {
+  specKey: string;
+  totalProductsWithSpec: number;
+  coveragePct: number;
+  values: SpecValueStat[];
+}
+
 export interface AnalyticalSummary {
   kpi: {
     totalProducts: number;
@@ -126,6 +147,7 @@ export interface AnalyticalSummary {
     rank: number;
     isTop3: boolean;
   }>;
+  specAnalytics: SpecCategoryAnalysis[];
 }
 
 interface Product {
@@ -184,6 +206,19 @@ export class DashboardComponent implements OnInit {
   historyLoading = false;
   historySuccessMsg = '';
   historyErrorMsg = '';
+
+  // Spec Analytics State
+  selectedSpecCategoryIndex = 0;
+
+  // Comparison Module State
+  selectedSnapshotIdsForComparison: string[] = [];
+  showComparisonModal = false;
+  comparisonResult: {
+    snapshotA: ScrapingSnapshot;
+    snapshotB: ScrapingSnapshot;
+    analyticsA: AnalyticalSummary;
+    analyticsB: AnalyticalSummary;
+  } | null = null;
 
   // Modal / Creation States
   showNewFolderModal = false;
@@ -247,6 +282,62 @@ export class DashboardComponent implements OnInit {
     return !!this.expandedSpecsMap[link];
   }
 
+  openSpecValueProductsModal(specKey: string, valStat: SpecValueStat) {
+    this.drilldownTitle = `${specKey}: ${valStat.specValue}`;
+    this.drilldownSubtitle = `${valStat.productsCount} товарів (${valStat.productsShare}% пропозиції, ${valStat.reviewsShare}% попиту ніші)`;
+    this.drilldownProducts = valStat.products || [];
+    this.drilldownSearchQuery = '';
+    this.showDrilldownModal = true;
+    this.cdr.markForCheck();
+  }
+
+  toggleSnapshotComparison(snapshot: ScrapingSnapshot, event?: Event) {
+    if (event) event.stopPropagation();
+    const idx = this.selectedSnapshotIdsForComparison.indexOf(snapshot.id);
+    if (idx !== -1) {
+      this.selectedSnapshotIdsForComparison.splice(idx, 1);
+    } else {
+      if (this.selectedSnapshotIdsForComparison.length >= 2) {
+        this.selectedSnapshotIdsForComparison.shift();
+      }
+      this.selectedSnapshotIdsForComparison.push(snapshot.id);
+    }
+    this.cdr.markForCheck();
+  }
+
+  isSnapshotSelectedForComparison(id: string): boolean {
+    return this.selectedSnapshotIdsForComparison.includes(id);
+  }
+
+  clearComparisonSelection() {
+    this.selectedSnapshotIdsForComparison = [];
+    this.cdr.markForCheck();
+  }
+
+  openComparisonModal() {
+    if (this.selectedSnapshotIdsForComparison.length !== 2) return;
+    const sA = this.snapshots.find(s => s.id === this.selectedSnapshotIdsForComparison[0]);
+    const sB = this.snapshots.find(s => s.id === this.selectedSnapshotIdsForComparison[1]);
+    if (!sA || !sB) return;
+
+    const anA = computeMarketplaceAnalytics(sA.products || []);
+    const anB = computeMarketplaceAnalytics(sB.products || []);
+
+    this.comparisonResult = {
+      snapshotA: sA,
+      snapshotB: sB,
+      analyticsA: anA,
+      analyticsB: anB
+    };
+    this.showComparisonModal = true;
+    this.cdr.markForCheck();
+  }
+
+  closeComparisonModal() {
+    this.showComparisonModal = false;
+    this.cdr.markForCheck();
+  }
+
   getBadgeSpecs(product: any): { text: string; style: string }[] {
     if (!product) return [];
     const badges: { text: string; style: string }[] = [];
@@ -260,7 +351,7 @@ export class DashboardComponent implements OnInit {
       return t.length > maxLen ? t.slice(0, maxLen - 2) + '...' : t;
     };
     
-    // Спершу витягуємо ключові характеристики зі структурованого об'єкта
+    // Спершу витягуємо важливі характеристики зі структурованого об'єкта
     if (product.detailedSpecsMap && Object.keys(product.detailedSpecsMap).length > 0) {
       const map = product.detailedSpecsMap;
       
@@ -1411,11 +1502,25 @@ export class DashboardComponent implements OnInit {
           valA = (a.seller || '').toLowerCase();
           valB = (b.seller || '').toLowerCase();
         } else if (this.sortColumn === 'price') {
-          valA = a.price || 0;
-          valB = b.price || 0;
+          const pA = Number(a.price) || 0;
+          const pB = Number(b.price) || 0;
+          if (this.sortDirection === 'asc') {
+            valA = pA <= 0 ? 999999999 : pA;
+            valB = pB <= 0 ? 999999999 : pB;
+          } else {
+            valA = pA;
+            valB = pB;
+          }
         } else if (this.sortColumn === 'oldPrice') {
-          valA = a.oldPrice || a.price || 0;
-          valB = b.oldPrice || b.price || 0;
+          const pA = Number(a.oldPrice || a.price) || 0;
+          const pB = Number(b.oldPrice || b.price) || 0;
+          if (this.sortDirection === 'asc') {
+            valA = pA <= 0 ? 999999999 : pA;
+            valB = pB <= 0 ? 999999999 : pB;
+          } else {
+            valA = pA;
+            valB = pB;
+          }
         } else if (this.sortColumn === 'discount') {
           valA = a.discount || 0;
           valB = b.discount || 0;
@@ -1881,6 +1986,109 @@ export class DashboardComponent implements OnInit {
   }
 }
 
+export function computeSpecDistribution(products: any[], totalProductsCount: number): SpecCategoryAnalysis[] {
+  if (!products || products.length === 0 || totalProductsCount === 0) return [];
+  
+  const keyFrequency = new Map<string, number>();
+  const keyToValues = new Map<string, Map<string, { products: any[]; reviewsSum: number; prices: number[] }>>();
+
+  products.forEach(p => {
+    if (p && p.detailedSpecsMap && typeof p.detailedSpecsMap === 'object') {
+      for (const [rawKey, rawVal] of Object.entries(p.detailedSpecsMap)) {
+        if (!rawKey || !rawVal || typeof rawVal !== 'string') continue;
+        const normKey = rawKey.trim();
+        if (normKey.length < 2) continue;
+
+        const lowKey = normKey.toLowerCase();
+        if (lowKey === 'гарантія' || lowKey === 'країна реєстрації бренду' || lowKey === 'країна-виробник товару') {
+          continue;
+        }
+
+        keyFrequency.set(normKey, (keyFrequency.get(normKey) || 0) + 1);
+
+        let valuesMap = keyToValues.get(normKey);
+        if (!valuesMap) {
+          valuesMap = new Map();
+          keyToValues.set(normKey, valuesMap);
+        }
+
+        let cleanVal = String(rawVal).trim();
+        if (cleanVal.length > 55) cleanVal = cleanVal.slice(0, 52) + '...';
+
+        let valEntry = valuesMap.get(cleanVal);
+        if (!valEntry) {
+          valEntry = { products: [], reviewsSum: 0, prices: [] };
+          valuesMap.set(cleanVal, valEntry);
+        }
+        valEntry.products.push(p);
+        valEntry.reviewsSum += (Number(p.reviews) || 0);
+        if (Number(p.price) > 0) valEntry.prices.push(Number(p.price));
+      }
+    }
+  });
+
+  const candidateKeys = Array.from(keyFrequency.entries())
+    .filter(([_, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1]);
+
+  const categories: SpecCategoryAnalysis[] = [];
+
+  candidateKeys.slice(0, 8).forEach(([specKey, count]) => {
+    const valuesMap = keyToValues.get(specKey);
+    if (!valuesMap || valuesMap.size === 0) return;
+
+    const totalCategoryReviews = Array.from(valuesMap.values()).reduce((acc, v) => acc + v.reviewsSum, 0);
+
+    const valuesList: SpecValueStat[] = Array.from(valuesMap.entries()).map(([specValue, data]) => {
+      const pCount = data.products.length;
+      const rSum = data.reviewsSum;
+      const sortedP = [...data.prices].sort((a, b) => a - b);
+      const avgP = sortedP.length > 0 ? Math.round(sortedP.reduce((a, b) => a + b, 0) / sortedP.length) : 0;
+      const medP = sortedP.length > 0 ? (sortedP.length % 2 === 0 ? Math.round((sortedP[sortedP.length/2 - 1] + sortedP[sortedP.length/2]) / 2) : sortedP[Math.floor(sortedP.length/2)]) : 0;
+      const ratio = pCount > 0 ? Number((rSum / pCount).toFixed(1)) : 0;
+
+      return {
+        specValue,
+        productsCount: pCount,
+        productsShare: Number(((pCount / totalProductsCount) * 100).toFixed(1)),
+        reviewsSum: rSum,
+        reviewsShare: totalCategoryReviews > 0 ? Number(((rSum / totalCategoryReviews) * 100).toFixed(1)) : 0,
+        avgPrice: avgP,
+        medianPrice: medP,
+        demandSupplyRatio: ratio,
+        isTopDemand: false,
+        isTopEfficiency: false,
+        products: data.products
+      };
+    }).sort((a, b) => b.reviewsSum - a.reviewsSum || b.productsCount - a.productsCount);
+
+    if (valuesList.length > 0) {
+      valuesList[0].isTopDemand = true;
+
+      let maxRatio = -1;
+      let topEffIdx = -1;
+      valuesList.forEach((v, idx) => {
+        if (v.productsCount >= 2 && v.reviewsSum > 0 && v.demandSupplyRatio > maxRatio) {
+          maxRatio = v.demandSupplyRatio;
+          topEffIdx = idx;
+        }
+      });
+      if (topEffIdx !== -1) {
+        valuesList[topEffIdx].isTopEfficiency = true;
+      }
+
+      categories.push({
+        specKey,
+        totalProductsWithSpec: count,
+        coveragePct: Number(((count / totalProductsCount) * 100).toFixed(1)),
+        values: valuesList
+      });
+    }
+  });
+
+  return categories;
+}
+
 export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary {
   const allProducts = products || [];
   const rawTotalCount = allProducts.length;
@@ -1928,7 +2136,8 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
         }
       },
       priceDistribution: [],
-      sellersTable: []
+      sellersTable: [],
+      specAnalytics: []
     };
   }
 
@@ -2062,7 +2271,6 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       isSweetSpot: true
     }];
   } else {
-    // 5 інтервалів для діапазону [minPrice, p95Price]
     const coreBinsCount = 5;
     const coreStep = (p95Price - minPrice) / coreBinsCount;
     const rawBins: Array<{ min: number; max: number; label: string; products: any[] }> = [];
@@ -2079,7 +2287,6 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       });
     }
 
-    // Фінальний діапазон для екстремально дорогих товарів > P95
     if (maxPrice > p95Price) {
       const outlierProducts = validProducts.filter(p => p.price > p95Price);
       if (outlierProducts.length > 0) {
@@ -2101,7 +2308,6 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       const ratio = count > 0 ? Number((reviews / count).toFixed(2)) : 0;
       const reviewsShare = totalReviews > 0 ? Number(((reviews / totalReviews) * 100).toFixed(1)) : 0;
 
-      // Sweet spot: максимальна віддача при вибірці щонайменше 5% товарів та reviews > 0
       if (count >= n * 0.05 && reviews > 0 && ratio > maxEfficiencyRatio) {
         maxEfficiencyRatio = ratio;
         sweetSpotIndex = idx;
@@ -2141,6 +2347,9 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
   const thirdPartyCount = rawTotalCount - rozetkaCount;
   const rozetkaShare = Number(((rozetkaCount / rawTotalCount) * 100).toFixed(1));
   const thirdPartyShare = Number((100 - rozetkaShare).toFixed(1));
+
+  // 7. Автоматичний зріз за характеристиками
+  const specAnalytics = computeSpecDistribution(allProducts, rawTotalCount);
 
   return {
     kpi: {
@@ -2182,6 +2391,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       }
     },
     priceDistribution,
-    sellersTable: sellersList
+    sellersTable: sellersList,
+    specAnalytics
   };
 }

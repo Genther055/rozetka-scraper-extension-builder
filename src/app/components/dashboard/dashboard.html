@@ -722,10 +722,10 @@
               </p>
             </div>
 
-            <!-- Card 3: Ключові гравці ніші (Топ-3 селери) -->
+            <!-- Card 3: Лідери ринку ніші (Топ-3 селери) -->
             <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2.5">
               <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Ключові гравці (Топ-3)</span>
+                <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Лідери ринку (Топ-3)</span>
                 <span class="material-icons text-amber-400 text-sm">workspace_premium</span>
               </div>
               <div class="space-y-1.5">
@@ -749,6 +749,101 @@
 
           </div>
 
+        </div>
+
+        <!-- Spec & Variations Demand Breakdown (Розподіл попиту за характеристиками та конфігураціями) -->
+        <div *ngIf="analyticsSummary.specAnalytics && analyticsSummary.specAnalytics.length > 0" class="p-6 premium-card space-y-5">
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+            <div class="flex items-center gap-2">
+              <span class="material-icons text-purple-400 text-lg">tune</span>
+              <div>
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider">Розподіл попиту за характеристиками</h3>
+                <p class="text-xs text-slate-400">Аналіз часток асортименту, відгуків та цін для різних модифікацій товару в ніші</p>
+              </div>
+            </div>
+
+            <!-- Spec Category Selector Tabs -->
+            <div class="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <button 
+                *ngFor="let specCat of analyticsSummary.specAnalytics; let idx = index"
+                (click)="selectedSpecCategoryIndex = idx"
+                [class.bg-purple-600]="selectedSpecCategoryIndex === idx"
+                [class.text-white]="selectedSpecCategoryIndex === idx"
+                [class.text-slate-400]="selectedSpecCategoryIndex !== idx"
+                class="px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer hover:text-white flex items-center gap-1.5"
+              >
+                <span>{{ specCat.specKey }}</span>
+                <span class="text-[10px] px-1.5 py-0.2 rounded-md bg-black/40 text-slate-300 font-mono">{{ specCat.coveragePct }}%</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Active Spec Category Content -->
+          <div *ngIf="analyticsSummary.specAnalytics[selectedSpecCategoryIndex] as activeSpec" class="space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              <div 
+                *ngFor="let valStat of activeSpec.values"
+                (click)="openSpecValueProductsModal(activeSpec.specKey, valStat)"
+                class="p-4 rounded-2xl bg-slate-950/80 hover:bg-slate-900/90 border border-slate-800/90 hover:border-purple-500/50 transition-all cursor-pointer group space-y-3 relative overflow-hidden shadow-md"
+              >
+                <!-- Top: Value Name & Badges -->
+                <div class="flex items-start justify-between gap-2">
+                  <div class="space-y-0.5">
+                    <span class="text-sm font-black text-white group-hover:text-purple-300 transition-colors">
+                      {{ valStat.specValue }}
+                    </span>
+                    <p class="text-[11px] text-slate-400 font-mono">
+                      Сер. ціна: <span class="font-bold text-emerald-400">{{ valStat.avgPrice | number }} ₴</span>
+                    </p>
+                  </div>
+
+                  <div class="flex flex-col items-end gap-1 shrink-0">
+                    <span *ngIf="valStat.isTopDemand" class="px-2 py-0.5 text-[10px] font-black bg-amber-500/20 text-amber-300 rounded-md border border-amber-500/40 uppercase tracking-wider flex items-center gap-1">
+                      <span class="material-icons text-[12px]">local_fire_department</span>
+                      Лідер попиту
+                    </span>
+                    <span *ngIf="valStat.isTopEfficiency" class="px-2 py-0.5 text-[10px] font-black bg-purple-500/20 text-purple-300 rounded-md border border-purple-500/40 uppercase tracking-wider flex items-center gap-1">
+                      <span class="material-icons text-[12px]">bolt</span>
+                      Висока віддача
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Progress Bars: Supply vs Demand -->
+                <div class="space-y-2 pt-1">
+                  <!-- Supply Bar (Асортимент) -->
+                  <div>
+                    <div class="flex items-center justify-between text-[11px] font-medium text-slate-400 mb-1">
+                      <span>Асортимент (Пропозиція):</span>
+                      <span class="font-bold text-slate-200 font-mono">{{ valStat.productsCount }} шт ({{ valStat.productsShare }}%)</span>
+                    </div>
+                    <div class="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                      <div class="h-full bg-slate-600 rounded-full transition-all" [style.width.%]="valStat.productsShare"></div>
+                    </div>
+                  </div>
+
+                  <!-- Demand Bar (Попит / Відгуки) -->
+                  <div>
+                    <div class="flex items-center justify-between text-[11px] font-medium text-slate-400 mb-1">
+                      <span class="text-purple-300">Попит (Відгуки):</span>
+                      <span class="font-bold text-purple-300 font-mono">{{ valStat.reviewsSum | number }} відг. ({{ valStat.reviewsShare }}%)</span>
+                    </div>
+                    <div class="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                      <div class="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all" [style.width.%]="valStat.reviewsShare"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Footer: Demand-Supply Ratio -->
+                <div class="pt-2 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Віддача на 1 SKU:</span>
+                  <span class="font-mono font-bold text-indigo-300 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800">
+                    {{ valStat.demandSupplyRatio }} відг/SKU
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Bottom: Deterministic Sellers Analytics Table -->
@@ -1123,12 +1218,16 @@
 
                   <!-- Price & Discount (Expanded Width & Prominent Values) -->
                   <td class="py-4 px-5 whitespace-nowrap min-w-[150px]">
-                    <div class="font-mono text-emerald-400 font-extrabold text-base">
-                      {{ item.price }} ₴
+                    <div *ngIf="item.price && item.price > 0" class="font-mono text-emerald-400 font-extrabold text-base">
+                      {{ item.price | number }} ₴
                     </div>
-                    <div class="flex items-center gap-2 mt-1" *ngIf="item.oldPrice && item.oldPrice > item.price">
+                    <div *ngIf="!item.price || item.price <= 0" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-slate-900/80 text-slate-400 rounded-lg border border-slate-700/60 font-mono">
+                      <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      <span>Архів / Немає ціни</span>
+                    </div>
+                    <div class="flex items-center gap-2 mt-1" *ngIf="item.price > 0 && item.oldPrice && item.oldPrice > item.price">
                       <span class="line-through text-xs text-slate-400 font-mono font-medium">
-                        {{ item.oldPrice }} ₴
+                        {{ item.oldPrice | number }} ₴
                       </span>
                       <span *ngIf="item.discount" class="px-1.5 py-0.5 text-[10px] font-black bg-rose-950/60 text-rose-300 border border-rose-800/50 rounded-md">
                         -{{ item.discount }}%
@@ -1423,7 +1522,11 @@
                 </div>
               </div>
               <div class="text-right">
-                <p class="text-2xl font-extrabold text-white">{{ p.price }} ₴</p>
+                <p *ngIf="p.price && p.price > 0" class="text-2xl font-extrabold text-white">{{ p.price | number }} ₴</p>
+                <div *ngIf="!p.price || p.price <= 0" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-900/80 text-slate-400 rounded-xl border border-slate-700 font-mono">
+                  <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+                  <span>Архів / Немає ціни</span>
+                </div>
                 <p class="text-xs text-amber-400 mt-1" *ngIf="p.reviews && p.reviews > 0 && p.rating && p.rating > 0">★ {{ p.rating }} ({{ p.reviews }} відгуків)</p>
                 <p class="text-xs text-slate-500 mt-1" *ngIf="!p.reviews || p.reviews === 0 || !p.rating || p.rating === 0">— (0 відгуків)</p>
               </div>
@@ -1826,7 +1929,24 @@
                   </div>
 
                   <!-- Actions Group -->
-                  <div class="flex items-center gap-3 shrink-0 justify-end">
+                  <div class="flex items-center gap-2.5 shrink-0 justify-end flex-wrap">
+                    <!-- Compare Button -->
+                    <button 
+                      (click)="toggleSnapshotComparison(snap, $event)"
+                      class="px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer shadow-md"
+                      [class.bg-purple-600]="isSnapshotSelectedForComparison(snap.id)"
+                      [class.text-white]="isSnapshotSelectedForComparison(snap.id)"
+                      [class.border-purple-500]="isSnapshotSelectedForComparison(snap.id)"
+                      [class.bg-slate-900]="!isSnapshotSelectedForComparison(snap.id)"
+                      [class.text-purple-300]="!isSnapshotSelectedForComparison(snap.id)"
+                      [class.border-purple-500/30]="!isSnapshotSelectedForComparison(snap.id)"
+                      [class.hover:border-purple-500/60]="!isSnapshotSelectedForComparison(snap.id)"
+                      title="Додати збір до порівняння ніш"
+                    >
+                      <span class="material-icons text-base">{{ isSnapshotSelectedForComparison(snap.id) ? 'check_box' : 'compare_arrows' }}</span>
+                      <span>{{ isSnapshotSelectedForComparison(snap.id) ? 'Обрано' : 'Порівняти' }}</span>
+                    </button>
+
                     <!-- Restore to Dashboard -->
                     <button 
                       (click)="restoreSnapshot(snap)"
@@ -2208,8 +2328,9 @@
 
               <td class="py-3 px-3 whitespace-nowrap font-mono">
                 <div class="flex flex-col">
-                  <span class="text-sm font-extrabold text-emerald-400">{{ p.price | number }} ₴</span>
-                  <span *ngIf="p.oldPrice && p.oldPrice > p.price" class="text-[10px] text-slate-500 line-through">
+                  <span *ngIf="p.price && p.price > 0" class="text-sm font-extrabold text-emerald-400">{{ p.price | number }} ₴</span>
+                  <span *ngIf="!p.price || p.price <= 0" class="px-2 py-0.5 text-[11px] font-semibold bg-slate-800 text-slate-400 rounded-md border border-slate-700 font-mono">Архів</span>
+                  <span *ngIf="p.price > 0 && p.oldPrice && p.oldPrice > p.price" class="text-[10px] text-slate-500 line-through">
                     {{ p.oldPrice | number }} ₴
                   </span>
                 </div>
@@ -2287,6 +2408,244 @@
   >
     <span class="material-icons text-rose-400 text-base">error</span>
     <span>{{ historyErrorMsg }}</span>
+  </div>
+
+  <!-- FLOATING COMPARISON BAR -->
+  <div 
+    *ngIf="selectedSnapshotIdsForComparison.length > 0 && activeTab === 'history'"
+    class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#0f172a]/95 backdrop-blur-xl border border-purple-500/60 p-3 sm:px-6 rounded-2xl shadow-2xl shadow-black/90 flex items-center gap-4 animate-slideUp"
+  >
+    <div class="flex items-center gap-2.5 text-xs">
+      <span class="w-6 h-6 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center text-xs shadow-md">
+        {{ selectedSnapshotIdsForComparison.length }}
+      </span>
+      <span class="text-slate-200 font-semibold">
+        {{ selectedSnapshotIdsForComparison.length === 1 ? 'Оберіть 2-й збір для порівняння ніш' : 'Обрано 2 збори для порівняльного аналізу' }}
+      </span>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button 
+        (click)="openComparisonModal()"
+        [disabled]="selectedSnapshotIdsForComparison.length !== 2"
+        class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-500/25 transition-all cursor-pointer flex items-center gap-1.5 glow-indigo"
+      >
+        <span class="material-icons text-sm">compare_arrows</span>
+        <span>Порівняти ніші</span>
+      </button>
+      <button 
+        (click)="clearComparisonSelection()"
+        class="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+        title="Скинути вибір"
+      >
+        <span class="material-icons text-sm">close</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: SNAPSHOTS / NICHE COMPARISON -->
+  <div *ngIf="showComparisonModal && comparisonResult" class="fixed inset-0 z-[110] bg-[#0b0f19]/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn overflow-y-auto">
+    <div class="bg-gradient-to-br from-[#131c2e] via-[#0f1626] to-[#0a0f1d] border border-slate-700/80 rounded-3xl p-5 sm:p-7 max-w-5xl w-full shadow-2xl shadow-black/80 space-y-6 relative my-auto max-h-[90vh] overflow-y-auto">
+      
+      <!-- Header -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+            <span class="material-icons text-xl">compare_arrows</span>
+          </div>
+          <div>
+            <h3 class="text-base sm:text-lg font-black text-white">Порівняльний аналіз ніш та зборів</h3>
+            <p class="text-xs text-slate-400">Зіставлення структури ринку, бар'єру входу, цін та монополії Rozetka</p>
+          </div>
+        </div>
+        <button (click)="closeComparisonModal()" class="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer">
+          <span class="material-icons text-lg">close</span>
+        </button>
+      </div>
+
+      <!-- Titles Comparison Header -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Niche A Header Card -->
+        <div class="p-4 rounded-2xl bg-slate-950/80 border border-indigo-500/30 space-y-1.5 relative overflow-hidden">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 text-[10px] font-black bg-indigo-500/20 text-indigo-300 rounded-md border border-indigo-500/40 uppercase">Ніша А</span>
+            <span class="text-xs text-slate-400 font-mono">{{ comparisonResult.snapshotA.scrapedAt | date:'dd.MM.yyyy, HH:mm' }}</span>
+          </div>
+          <h4 class="text-sm sm:text-base font-extrabold text-white line-clamp-2">{{ comparisonResult.snapshotA.title }}</h4>
+          <span class="text-xs font-semibold text-indigo-400">{{ comparisonResult.snapshotA.category || 'Загальна категорія' }}</span>
+        </div>
+
+        <!-- Niche B Header Card -->
+        <div class="p-4 rounded-2xl bg-slate-950/80 border border-purple-500/30 space-y-1.5 relative overflow-hidden">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 text-[10px] font-black bg-purple-500/20 text-purple-300 rounded-md border border-purple-500/40 uppercase">Ніша Б</span>
+            <span class="text-xs text-slate-400 font-mono">{{ comparisonResult.snapshotB.scrapedAt | date:'dd.MM.yyyy, HH:mm' }}</span>
+          </div>
+          <h4 class="text-sm sm:text-base font-extrabold text-white line-clamp-2">{{ comparisonResult.snapshotB.title }}</h4>
+          <span class="text-xs font-semibold text-purple-400">{{ comparisonResult.snapshotB.category || 'Загальна категорія' }}</span>
+        </div>
+      </div>
+
+      <!-- Metric Comparison Table -->
+      <div class="space-y-3">
+        <div class="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900/90 text-slate-400 font-semibold border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-4 w-1/3">Параметр порівняння</th>
+                <th class="py-3 px-4 w-1/3 text-indigo-300 font-bold">Ніша А: {{ comparisonResult.snapshotA.title | slice:0:30 }}...</th>
+                <th class="py-3 px-4 w-1/3 text-purple-300 font-bold">Ніша Б: {{ comparisonResult.snapshotB.title | slice:0:30 }}...</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60 font-mono">
+              <!-- Row 1: Обсяг вибірки -->
+              <tr class="hover:bg-slate-900/40 transition-colors">
+                <td class="py-3 px-4 font-sans font-medium text-slate-300">Асортимент (Обсяг вибірки)</td>
+                <td class="py-3 px-4 text-white font-bold">{{ comparisonResult.analyticsA.kpi.totalProducts }} шт</td>
+                <td class="py-3 px-4 text-white font-bold">{{ comparisonResult.analyticsB.kpi.totalProducts }} шт</td>
+              </tr>
+
+              <!-- Row 2: Середня ціна -->
+              <tr class="hover:bg-slate-900/40 transition-colors">
+                <td class="py-3 px-4 font-sans font-medium text-slate-300">Середня ціна</td>
+                <td class="py-3 px-4 font-bold text-emerald-400">{{ comparisonResult.analyticsA.kpi.avgPrice | number }} ₴</td>
+                <td class="py-3 px-4 font-bold text-emerald-400">{{ comparisonResult.analyticsB.kpi.avgPrice | number }} ₴</td>
+              </tr>
+
+              <!-- Row 3: Медіанна ціна (P50) -->
+              <tr class="hover:bg-slate-900/40 transition-colors">
+                <td class="py-3 px-4 font-sans font-medium text-slate-300">Медіанна ціна (P50)</td>
+                <td class="py-3 px-4 text-slate-200">{{ comparisonResult.analyticsA.kpi.medianPrice | number }} ₴</td>
+                <td class="py-3 px-4 text-slate-200">{{ comparisonResult.analyticsB.kpi.medianPrice | number }} ₴</td>
+              </tr>
+
+              <!-- Row 4: Діапазон цін -->
+              <tr class="hover:bg-slate-900/40 transition-colors">
+                <td class="py-3 px-4 font-sans font-medium text-slate-300">Діапазон цін (Min - Max)</td>
+                <td class="py-3 px-4 text-slate-400">{{ comparisonResult.analyticsA.kpi.minPrice | number }} – {{ comparisonResult.analyticsA.kpi.maxPrice | number }} ₴</td>
+                <td class="py-3 px-4 text-slate-400">{{ comparisonResult.analyticsB.kpi.minPrice | number }} – {{ comparisonResult.analyticsB.kpi.maxPrice | number }} ₴</td>
+              </tr>
+
+              <!-- Row 5: Бар'єр входу -->
+              <tr class="hover:bg-slate-900/40 transition-colors">
+                <td class="py-3 px-4 font-sans font-medium text-slate-300">Бар'єр входу (Медіана відгуків Топ-10)</td>
+                <td class="py-3 px-4">
+                  <span class="px-2 py-0.5 rounded text-[11px] font-bold"
+                        [class.bg-emerald-950]="comparisonResult.analyticsA.kpi.entryBarrier.level === 'LOW'"
+                        [class.text-emerald-300]="comparisonResult.analyticsA.kpi.entryBarrier.level === 'LOW'"
+                        [class.bg-amber-950]="comparisonResult.analyticsA.kpi.entryBarrier.level === 'MEDIUM'"
+                        [class.text-amber-300]="comparisonResult.analyticsA.kpi.entryBarrier.level === 'MEDIUM'"
+                        [class.bg-rose-950]="comparisonResult.analyticsA.kpi.entryBarrier.level === 'HIGH'"
+                        [class.text-rose-300]="comparisonResult.analyticsA.kpi.entryBarrier.level === 'HIGH'">
+                    {{ comparisonResult.analyticsA.kpi.entryBarrier.medianTop10Reviews }} відг. ({{ comparisonResult.analyticsA.kpi.entryBarrier.level === 'LOW' ? 'Легкий' : comparisonResult.analyticsA.kpi.entryBarrier.level === 'MEDIUM' ? 'Помірний' : 'Високий' }})
+                  </span>
+                </td>
+                <td class="py-3 px-4">
+                  <span class="px-2 py-0.5 rounded text-[11px] font-bold"
+                        [class.bg-emerald-950]="comparisonResult.analyticsB.kpi.entryBarrier.level === 'LOW'"
+                        [class.text-emerald-300]="comparisonResult.analyticsB.kpi.entryBarrier.level === 'LOW'"
+                        [class.bg-amber-950]="comparisonResult.analyticsB.kpi.entryBarrier.level === 'MEDIUM'"
+                        [class.text-amber-300]="comparisonResult.analyticsB.kpi.entryBarrier.level === 'MEDIUM'"
+                        [class.bg-rose-950]="comparisonResult.analyticsB.kpi.entryBarrier.level === 'HIGH'"
+                        [class.text-rose-300]="comparisonResult.analyticsB.kpi.entryBarrier.level === 'HIGH'">
+                    {{ comparisonResult.analyticsB.kpi.entryBarrier.medianTop10Reviews }} відг. ({{ comparisonResult.analyticsB.kpi.entryBarrier.level === 'LOW' ? 'Легкий' : comparisonResult.analyticsB.kpi.entryBarrier.level === 'MEDIUM' ? 'Помірний' : 'Високий' }})
+                  </span>
+                </td>
+              </tr>
+
+              <!-- Row 6: Rozetka 1P vs 3P -->
+              <tr class="hover:bg-slate-900/40 transition-colors">
+                <td class="py-3 px-4 font-sans font-medium text-slate-300">Частка Rozetka (1P) vs 3P селери</td>
+                <td class="py-3 px-4">
+                  <span class="text-emerald-400 font-bold">1P: {{ comparisonResult.analyticsA.kpi.vendorSplit.rozetkaShare }}%</span> | 
+                  <span class="text-slate-300">3P: {{ comparisonResult.analyticsA.kpi.vendorSplit.thirdPartyShare }}%</span>
+                </td>
+                <td class="py-3 px-4">
+                  <span class="text-purple-400 font-bold">1P: {{ comparisonResult.analyticsB.kpi.vendorSplit.rozetkaShare }}%</span> | 
+                  <span class="text-slate-300">3P: {{ comparisonResult.analyticsB.kpi.vendorSplit.thirdPartyShare }}%</span>
+                </td>
+              </tr>
+
+              <!-- Row 7: Концентрація ринку CR3 -->
+              <tr class="hover:bg-slate-900/40 transition-colors">
+                <td class="py-3 px-4 font-sans font-medium text-slate-300">Концентрація Топ-3 продавців (CR3)</td>
+                <td class="py-3 px-4 font-bold text-white">{{ comparisonResult.analyticsA.kpi.cr3 }}%</td>
+                <td class="py-3 px-4 font-bold text-white">{{ comparisonResult.analyticsB.kpi.cr3 }}%</td>
+              </tr>
+
+              <!-- Row 8: Індекс HHI -->
+              <tr class="hover:bg-slate-900/40 transition-colors">
+                <td class="py-3 px-4 font-sans font-medium text-slate-300">Рівень монополії (Індекс HHI)</td>
+                <td class="py-3 px-4 text-slate-300">{{ comparisonResult.analyticsA.kpi.hhi }}</td>
+                <td class="py-3 px-4 text-slate-300">{{ comparisonResult.analyticsB.kpi.hhi }}</td>
+              </tr>
+
+              <!-- Row 9: Активність SKU -->
+              <tr class="hover:bg-slate-900/40 transition-colors">
+                <td class="py-3 px-4 font-sans font-medium text-slate-300">Товари з відгуками (% активності)</td>
+                <td class="py-3 px-4 text-indigo-300 font-bold">{{ comparisonResult.analyticsA.kpi.activeSkusPercentage }}% ({{ comparisonResult.analyticsA.kpi.activeSkusCount }} шт)</td>
+                <td class="py-3 px-4 text-purple-300 font-bold">{{ comparisonResult.analyticsB.kpi.activeSkusPercentage }}% ({{ comparisonResult.analyticsB.kpi.activeSkusCount }} шт)</td>
+              </tr>
+
+              <!-- Row 10: Кількість продавців -->
+              <tr class="hover:bg-slate-900/40 transition-colors">
+                <td class="py-3 px-4 font-sans font-medium text-slate-300">Кількість продавців у ніші</td>
+                <td class="py-3 px-4 text-slate-200">{{ comparisonResult.analyticsA.kpi.uniqueSellersCount }}</td>
+                <td class="py-3 px-4 text-slate-200">{{ comparisonResult.analyticsB.kpi.uniqueSellersCount }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Analytical Verdict Card -->
+        <div class="p-4 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-3">
+          <span class="material-icons text-indigo-400 text-lg mt-0.5">insights</span>
+          <div class="space-y-1 text-xs">
+            <h5 class="font-bold text-white uppercase tracking-wider">Аналітичний вердикт порівняння</h5>
+            <p class="text-slate-300 leading-relaxed">
+              <span *ngIf="comparisonResult.analyticsA.kpi.entryBarrier.medianTop10Reviews < comparisonResult.analyticsB.kpi.entryBarrier.medianTop10Reviews">
+                👉 <b>Ніша А</b> має легший бар'єр входу (потрібно менше відгуків для виходу в лідери).
+              </span>
+              <span *ngIf="comparisonResult.analyticsB.kpi.entryBarrier.medianTop10Reviews < comparisonResult.analyticsA.kpi.entryBarrier.medianTop10Reviews">
+                👉 <b>Ніша Б</b> має легший бар'єр входу (потрібно менше відгуків для виходу в лідери).
+              </span>
+              <span *ngIf="comparisonResult.analyticsA.kpi.vendorSplit.thirdPartyShare > comparisonResult.analyticsB.kpi.vendorSplit.thirdPartyShare">
+                В <b>Ніші А</b> менший тиск Rozetka (частка сторонніх 3P селерів становить {{ comparisonResult.analyticsA.kpi.vendorSplit.thirdPartyShare }}%).
+              </span>
+              <span *ngIf="comparisonResult.analyticsB.kpi.vendorSplit.thirdPartyShare > comparisonResult.analyticsA.kpi.vendorSplit.thirdPartyShare">
+                В <b>Ніші Б</b> вільніший ринок для сторонніх підприємців (частка 3P селерів становить {{ comparisonResult.analyticsB.kpi.vendorSplit.thirdPartyShare }}%).
+              </span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer Buttons -->
+      <div class="border-t border-slate-800/80 pt-4 flex flex-wrap items-center justify-between gap-3">
+        <button 
+          (click)="clearComparisonSelection(); closeComparisonModal()" 
+          class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white text-xs font-semibold rounded-xl cursor-pointer transition-all"
+        >
+          Закрити порівняння
+        </button>
+
+        <div class="flex items-center gap-2">
+          <button 
+            (click)="restoreSnapshot(comparisonResult.snapshotA); closeComparisonModal()"
+            class="px-4 py-2 bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 rounded-xl text-xs font-bold transition-all cursor-pointer"
+          >
+            Відкрити Нішу А на дашборді
+          </button>
+          <button 
+            (click)="restoreSnapshot(comparisonResult.snapshotB); closeComparisonModal()"
+            class="px-4 py-2 bg-purple-600/30 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 rounded-xl text-xs font-bold transition-all cursor-pointer"
+          >
+            Відкрити Нішу Б на дашборді
+          </button>
+        </div>
+      </div>
+
+    </div>
   </div>
 
 </div>
