@@ -1882,10 +1882,12 @@ export class DashboardComponent implements OnInit {
 }
 
 export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary {
-  const validProducts = (products || []).filter(p => p && p.price > 0);
+  const allProducts = products || [];
+  const rawTotalCount = allProducts.length;
+  const validProducts = allProducts.filter(p => p && Number(p.price) > 0);
   const n = validProducts.length;
 
-  if (n === 0) {
+  if (rawTotalCount === 0) {
     return {
       kpi: {
         totalProducts: 0,
@@ -1930,20 +1932,20 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
     };
   }
 
-  // 1. Сортування цін для медіани та розрахунку середнього
-  const sortedPrices = [...validProducts.map(p => Number(p.price))].sort((a, b) => a - b);
-  const minPrice = sortedPrices[0];
-  const maxPrice = sortedPrices[sortedPrices.length - 1];
+  // 1. Сортування цін для медіани та розрахунку середнього (серед товарів з активною ціною > 0)
+  const sortedPrices = n > 0 ? [...validProducts.map(p => Number(p.price))].sort((a, b) => a - b) : [0];
+  const minPrice = sortedPrices[0] || 0;
+  const maxPrice = sortedPrices[sortedPrices.length - 1] || 0;
   const medianPrice = sortedPrices.length % 2 === 0
     ? (sortedPrices[sortedPrices.length / 2 - 1] + sortedPrices[sortedPrices.length / 2]) / 2
     : sortedPrices[Math.floor(sortedPrices.length / 2)];
   
-  const avgPrice = Math.round(sortedPrices.reduce((acc, v) => acc + v, 0) / n);
-  const p95Index = Math.floor(0.95 * (n - 1));
-  const p95Price = sortedPrices[p95Index];
+  const avgPrice = n > 0 ? Math.round(sortedPrices.reduce((acc, v) => acc + v, 0) / n) : 0;
+  const p95Index = Math.floor(0.95 * (Math.max(n, 1) - 1));
+  const p95Price = sortedPrices[p95Index] || maxPrice;
   const priceSkewPct = medianPrice > 0 ? Number((((avgPrice - medianPrice) / medianPrice) * 100).toFixed(1)) : 0;
 
-  // 2. Агрегація за продавцями
+  // 2. Агрегація за продавцями (за всіма зібраними товарами)
   const sellerColors = [
     '#6366f1', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b',
     '#06b6d4', '#3b82f6', '#a855f7', '#14b8a6', '#f43f5e',
@@ -1958,7 +1960,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
     isRozetka: boolean;
   }>();
 
-  validProducts.forEach(p => {
+  allProducts.forEach(p => {
     const rawSeller = (p.seller && String(p.seller).trim()) ? String(p.seller).trim() : 'Rozetka';
     const isRozetka = rawSeller.toLowerCase() === 'rozetka' || rawSeller.toLowerCase().includes('rozetka');
     const entry = sellerMap.get(rawSeller) || {
@@ -1970,13 +1972,15 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
     };
     entry.productsCount++;
     entry.reviewsSum += (p.reviews && p.reviews > 0) ? Number(p.reviews) : 0;
-    entry.prices.push(Number(p.price));
+    if (Number(p.price) > 0) {
+      entry.prices.push(Number(p.price));
+    }
     if (p.inStock !== false) entry.inStockCount++;
     sellerMap.set(rawSeller, entry);
   });
 
   const sellersList = Array.from(sellerMap.entries()).map(([sellerName, stats]) => {
-    const sortedSellerPrices = [...stats.prices].sort((a, b) => a - b);
+    const sortedSellerPrices = stats.prices.length > 0 ? [...stats.prices].sort((a, b) => a - b) : [0];
     const sellerMedPrice = sortedSellerPrices.length % 2 === 0
       ? (sortedSellerPrices[sortedSellerPrices.length / 2 - 1] + sortedSellerPrices[sortedSellerPrices.length / 2]) / 2
       : sortedSellerPrices[Math.floor(sortedSellerPrices.length / 2)];
@@ -1985,7 +1989,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       sellerName,
       isRozetka: stats.isRozetka,
       productsCount: stats.productsCount,
-      marketShare: Number(((stats.productsCount / n) * 100).toFixed(1)),
+      marketShare: Number(((stats.productsCount / rawTotalCount) * 100).toFixed(1)),
       reviewsSum: stats.reviewsSum,
       avgReviewsPerProduct: Number((stats.reviewsSum / stats.productsCount).toFixed(1)),
       medianPrice: Math.round(sellerMedPrice),
@@ -2017,7 +2021,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
   const hhiLevel: 'LOW' | 'MODERATE' | 'HIGH' = hhi < 1500 ? 'LOW' : hhi <= 2500 ? 'MODERATE' : 'HIGH';
 
   // 4. Бар'єр входу (топ-10 за відгуками)
-  const sortedByReviews = [...validProducts].sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
+  const sortedByReviews = [...allProducts].sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
   const top10Products = sortedByReviews.slice(0, 10);
   const top10Reviews = top10Products.map(p => p.reviews || 0).sort((a, b) => a - b);
   const medianTop10Reviews = top10Reviews.length > 0
@@ -2045,7 +2049,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
     isSweetSpot: boolean;
   }> = [];
 
-  if (minPrice >= p95Price || maxPrice === minPrice) {
+  if (n === 0 || minPrice >= p95Price || maxPrice === minPrice) {
     priceDistribution = [{
       rangeLabel: `${minPrice.toLocaleString('uk-UA')} ₴`,
       minPrice,
@@ -2054,7 +2058,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       productsShare: 100,
       reviewsSum: totalReviews,
       reviewsShare: 100,
-      demandSupplyRatio: totalReviews / n,
+      demandSupplyRatio: n > 0 ? totalReviews / n : 0,
       isSweetSpot: true
     }];
   } else {
@@ -2122,25 +2126,25 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
   }
 
   // 6. Rozetka vs 3P & Active SKUs
-  const inStockCount = validProducts.filter(p => p.inStock !== false).length;
-  const activeProducts = validProducts.filter(p => (p.reviews || 0) > 0);
+  const inStockCount = allProducts.filter(p => p.inStock !== false).length;
+  const activeProducts = allProducts.filter(p => (p.reviews || 0) > 0);
   const activeSkusCount = activeProducts.length;
-  const activeSkusPercentage = Number(((activeSkusCount / n) * 100).toFixed(1));
-  const inactiveSkusCount = n - activeSkusCount;
-  const inactiveSkusPercentage = Number(((inactiveSkusCount / n) * 100).toFixed(1));
+  const activeSkusPercentage = Number(((activeSkusCount / rawTotalCount) * 100).toFixed(1));
+  const inactiveSkusCount = rawTotalCount - activeSkusCount;
+  const inactiveSkusPercentage = Number(((inactiveSkusCount / rawTotalCount) * 100).toFixed(1));
   const activeSkusInStockCount = activeProducts.filter(p => p.inStock !== false).length;
   const activeSkusInStockRate = activeSkusCount > 0 ? Number(((activeSkusInStockCount / activeSkusCount) * 100).toFixed(1)) : 0;
   const activeReviewsSum = activeProducts.reduce((acc, p) => acc + (p.reviews || 0), 0);
   const avgReviewsPerActiveSku = activeSkusCount > 0 ? Number((activeReviewsSum / activeSkusCount).toFixed(1)) : 0;
 
-  const rozetkaCount = validProducts.filter(p => (p.seller || '').toLowerCase().includes('rozetka')).length;
-  const thirdPartyCount = n - rozetkaCount;
-  const rozetkaShare = Number(((rozetkaCount / n) * 100).toFixed(1));
+  const rozetkaCount = allProducts.filter(p => (p.seller || '').toLowerCase().includes('rozetka')).length;
+  const thirdPartyCount = rawTotalCount - rozetkaCount;
+  const rozetkaShare = Number(((rozetkaCount / rawTotalCount) * 100).toFixed(1));
   const thirdPartyShare = Number((100 - rozetkaShare).toFixed(1));
 
   return {
     kpi: {
-      totalProducts: n,
+      totalProducts: rawTotalCount,
       uniqueSellersCount: sellersList.length,
       avgPrice,
       medianPrice: Math.round(medianPrice),
@@ -2149,7 +2153,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       p95Price,
       priceSkewPct,
       inStockCount,
-      inStockPercentage: Number(((inStockCount / n) * 100).toFixed(1)),
+      inStockPercentage: Number(((inStockCount / rawTotalCount) * 100).toFixed(1)),
       activeSkusCount,
       activeSkusPercentage,
       inactiveSkusCount,
