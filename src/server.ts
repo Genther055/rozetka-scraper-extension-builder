@@ -320,15 +320,24 @@ app.delete('/api/history', async (req, res) => {
 app.post('/api/history/:id/restore', async (req, res) => {
   try {
     const { id } = req.params;
-    const history = await getHistory();
-    const snapshot = history.find(s => s.id === id);
-    if (!snapshot || !snapshot.products) {
+    const { products: bodyProducts } = req.body || {};
+    let productsToRestore = (bodyProducts && Array.isArray(bodyProducts) && bodyProducts.length > 0) ? bodyProducts : null;
+
+    if (!productsToRestore) {
+      const history = await getHistory();
+      const snapshot = history.find(s => s.id === id);
+      if (snapshot && snapshot.products && snapshot.products.length > 0) {
+        productsToRestore = snapshot.products;
+      }
+    }
+
+    if (!productsToRestore || productsToRestore.length === 0) {
       res.status(404).json({ success: false, error: 'Знімок не знайдено або він порожній' });
       return;
     }
 
-    await saveCurrentProducts(snapshot.products);
-    res.json({ success: true, count: snapshot.products.length, products: snapshot.products });
+    await saveCurrentProducts(productsToRestore);
+    res.json({ success: true, count: productsToRestore.length, products: productsToRestore });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

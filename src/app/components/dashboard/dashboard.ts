@@ -494,9 +494,16 @@ export class DashboardComponent implements OnInit {
       .subscribe({
         next: (res) => {
           if (res.success) {
-            this.products = res.products || [];
-            this.applyFilters();
-            this.calculateMetrics();
+            const newProds = res.products || [];
+            // If this is a background auto-refresh and server returned empty array while user has active products on screen,
+            // DO NOT wipe the active products
+            if (silent && newProds.length === 0 && this.products.length > 0) {
+              // Retain active products
+            } else {
+              this.products = newProds;
+              this.applyFilters();
+              this.calculateMetrics();
+            }
           }
           if (!silent) this.loading = false;
           this.cdr.markForCheck();
@@ -925,18 +932,28 @@ export class DashboardComponent implements OnInit {
           this.cdr.markForCheck();
         }
 
-        this.http.post<{ success: boolean, count: number, products: Product[] }>(`${this.apiUrl}/api/history/${snapshot.id}/restore`, {})
-          .subscribe({
-            next: (res) => {
-              if (res.success && res.products) {
-                this.products = res.products;
-                this.applyFilters();
-                this.calculateMetrics();
-                this.cdr.markForCheck();
-              }
-            },
-            error: (err) => console.warn('Server restore error (restored locally):', err)
-          });
+        this.http.post<{ success: boolean, count: number, products: Product[] }>(
+          `${this.apiUrl}/api/history/${snapshot.id}/restore`,
+          { products: snapshot.products || [] }
+        ).subscribe({
+          next: (res) => {
+            if (res.success && res.products && res.products.length > 0) {
+              this.products = res.products;
+              this.applyFilters();
+              this.calculateMetrics();
+              this.cdr.markForCheck();
+            }
+          },
+          error: (err) => {
+            console.warn('Server restore error, syncing directly to /api/products:', err);
+            if (snapshot.products && snapshot.products.length > 0) {
+              this.http.post(`${this.apiUrl}/api/products`, { products: snapshot.products }).subscribe({
+                next: () => {},
+                error: () => {}
+              });
+            }
+          }
+        });
       }
     });
   }
