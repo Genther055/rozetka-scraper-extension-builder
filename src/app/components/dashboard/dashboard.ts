@@ -585,8 +585,22 @@ export class DashboardComponent implements OnInit {
       .subscribe({
         next: (res) => {
           if (res.success && res.folders) {
+            const serverFolders = res.folders || [];
+
+            // Auto-sync missing local folders to Neon DB
+            if (this.folders && this.folders.length > 0) {
+              for (const localFolder of this.folders) {
+                if (!serverFolders.some(f => f.id === localFolder.id)) {
+                  this.http.post(`${this.apiUrl}/api/folders`, localFolder).subscribe({
+                    next: () => console.log('[Sync to Neon DB] Folder migrated:', localFolder.name),
+                    error: () => {}
+                  });
+                }
+              }
+            }
+
             const merged = [...this.folders];
-            for (const sf of res.folders) {
+            for (const sf of serverFolders) {
               if (!merged.some(f => f.id === sf.id)) {
                 merged.push(sf);
               }
@@ -597,7 +611,6 @@ export class DashboardComponent implements OnInit {
           }
         },
         error: (err) => {
-          // If server is building or cold-starting, local data stays perfectly active
           console.warn('Backend folders sync note:', err.status === 404 ? 'Render backend is updating' : err.message);
         }
       });
@@ -631,8 +644,22 @@ export class DashboardComponent implements OnInit {
         next: (res) => {
           this.historyLoading = false;
           if (res.success && res.history) {
+            const serverHistory = res.history || [];
+
+            // Auto-sync missing local snapshots to Neon DB
+            if (this.snapshots && this.snapshots.length > 0) {
+              for (const localSnap of this.snapshots) {
+                if (!serverHistory.some(s => s.id === localSnap.id)) {
+                  this.http.post(`${this.apiUrl}/api/history`, localSnap).subscribe({
+                    next: () => console.log('[Sync to Neon DB] Snapshot migrated:', localSnap.title),
+                    error: () => {}
+                  });
+                }
+              }
+            }
+
             const merged = [...this.snapshots];
-            for (const sh of res.history) {
+            for (const sh of serverHistory) {
               if (!merged.some(s => s.id === sh.id)) {
                 merged.push(sh);
               }

@@ -245,7 +245,7 @@ app.get('/api/history', async (req, res) => {
 
 app.post('/api/history', async (req, res) => {
   try {
-    const { title, folderId, products: customProducts } = req.body || {};
+    const { id, title, folderId, products: customProducts, scrapedAt, category: customCat, itemCount, avgPrice: customAvg, minPrice: customMin, maxPrice: customMax, sellersCount: customSellers } = req.body || {};
     const currentProds = await getCurrentProducts();
     const itemsToSave = customProducts && Array.isArray(customProducts) ? customProducts : currentProds;
 
@@ -255,26 +255,26 @@ app.post('/api/history', async (req, res) => {
     }
 
     const prices = itemsToSave.map((p: any) => p.price || 0).filter((pr: number) => pr > 0);
-    const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length) : 0;
-    const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
-    const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
+    const avgPrice = customAvg !== undefined ? customAvg : (prices.length > 0 ? Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length) : 0);
+    const minPrice = customMin !== undefined ? customMin : (prices.length > 0 ? Math.min(...prices) : 0);
+    const maxPrice = customMax !== undefined ? customMax : (prices.length > 0 ? Math.max(...prices) : 0);
     const sellers = new Set(itemsToSave.map((p: any) => p.seller || 'Rozetka'));
-    const category = itemsToSave[0]?.category || 'Загальна';
+    const category = customCat || itemsToSave[0]?.category || 'Загальна';
 
     const now = new Date();
     const dateFormatted = now.toLocaleDateString('uk-UA') + ' ' + now.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
 
     const newSnapshot: ScrapingSnapshot = {
-      id: 'snap_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      id: id || ('snap_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6)),
       title: title && title.trim() ? title.trim() : `Збір ${category} — ${dateFormatted}`,
       folderId: folderId || null,
-      scrapedAt: now.toISOString(),
-      itemCount: itemsToSave.length,
+      scrapedAt: scrapedAt || now.toISOString(),
+      itemCount: itemCount !== undefined ? itemCount : itemsToSave.length,
       category,
       avgPrice,
       minPrice,
       maxPrice,
-      sellersCount: sellers.size,
+      sellersCount: customSellers !== undefined ? customSellers : sellers.size,
       products: JSON.parse(JSON.stringify(itemsToSave))
     };
 
@@ -366,18 +366,18 @@ app.get('/api/folders', async (req, res) => {
 
 app.post('/api/folders', async (req, res) => {
   try {
-    const { name, icon, color } = req.body || {};
+    const { id, name, icon, color, createdAt } = req.body || {};
     if (!name || !name.trim()) {
       res.status(400).json({ success: false, error: 'Вкажіть назву папки' });
       return;
     }
 
     const newFolder: ScrapingFolder = {
-      id: 'fld_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      id: id || ('fld_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6)),
       name: name.trim(),
       icon: icon || 'folder',
       color: color || '#6366f1',
-      createdAt: new Date().toISOString()
+      createdAt: createdAt || new Date().toISOString()
     };
 
     await saveFolder(newFolder);
