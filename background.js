@@ -1,111 +1,124 @@
-// Background Service Worker for TradeScout Extension
-console.log('TradeScout Background Service Worker initialized.');
+// Background Service Worker for TradeScout Multi-Tab Extension v3.0
+console.log('TradeScout Background Service Worker v3.0 initialized.');
 
 const LOCAL_DASHBOARD_API = 'http://localhost:4000/api/products';
 const LOCAL_IP_API = 'http://127.0.0.1:4000/api/products';
 
+// Helper to get or set tab sessions from storage
+async function getTabSessions() {
+    return new Promise(resolve => {
+        chrome.storage.local.get(['tabSessions'], res => {
+            resolve(res.tabSessions || {});
+        });
+    });
+}
+
+async function updateTabSession(tabId, patch) {
+    const sessions = await getTabSessions();
+    const current = sessions[tabId] || {};
+    sessions[tabId] = { ...current, ...patch, lastUpdated: Date.now() };
+    await new Promise(resolve => {
+        chrome.storage.local.set({ tabSessions: sessions }, resolve);
+    });
+    return sessions[tabId];
+}
+
+async function removeTabSession(tabId) {
+    const sessions = await getTabSessions();
+    if (sessions[tabId]) {
+        delete sessions[tabId];
+        await new Promise(resolve => {
+            chrome.storage.local.set({ tabSessions: sessions }, resolve);
+        });
+    }
+}
+
+// Listen for tab closures so we cleanly stop that tab's session without touching other tabs
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+    console.log(`TradeScout Background: Tab ${tabId} was closed. Cleaning up session.`);
+    await removeTabSession(tabId);
+});
+
+// Main Message Router
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const tabId = message.tabId || (sender && sender.tab ? sender.tab.id : null);
+
+    // 1. Progress updates from a specific tab's content script
+    if (message.action === 'tabProgress' && tabId) {
+        updateTabSession(tabId, {
+            isRunning: true,
+            totalScraped: message.total || 0,
+            currentPage: message.page || 1,
+            statusMsg: message.statusMsg || 'Скрейпінг активний...',
+            percentProgress: message.percent || 0,
+            syncedCount: message.syncedCount || 0,
+            sessionTitle: message.sessionTitle || 'Каталог Rozetka',
+            category: message.category || 'Товари',
+            sessionId: message.sessionId || `session_${tabId}`
+        });
+        sendResponse({ success: true });
+        return true;
+    }
+
+    // 2. Tab scraping completed
+    if (message.action === 'tabFinished' && tabId) {
+        updateTabSession(tabId, {
+            isRunning: false,
+            totalScraped: message.total || 0,
+            percentProgress: 100,
+            statusMsg: `Збір завершено! (${message.total} товарів)`,
+            syncedCount: message.syncedCount || message.total,
+            sessionTitle: message.sessionTitle || 'Каталог Rozetka',
+            category: message.category || 'Товари',
+            finishedAt: Date.now()
+        });
+        sendResponse({ success: true });
+        return true;
+    }
+
+    // 3. Tab error
+    if (message.action === 'tabError' && tabId) {
+        updateTabSession(tabId, {
+            isRunning: false,
+            statusMsg: `Помилка: ${message.message || 'Збій скрапінгу'}`
+        });
+        sendResponse({ success: true });
+        return true;
+    }
+
+    // 4. Send Webhook payload to server (with multi-tab session identification)
     if (message.action === 'sendWebhook') {
         const { webhookUrl, payload } = message;
         const itemCount = payload?.products?.length || 0;
-        console.log(`TradeScout Background: Processing ${itemCount} products...`);
+        console.log(`TradeScout Background: Tab ${tabId} sending ${itemCount} products for "${payload.sessionTitle || 'Каталог'}"...`);
 
-        // 1. Завжди автоматично відправляємо базові товари на локальну платформу (Port 4000)
-        const sendToPlatform = Promise.all([
-            fetch(LOCAL_DASHBOARD_API, {
+        // Send to local dashboard and specified webhook (e.g. Render / n8n)
+        const targets = [];
+        if (webhookUrl) targets.push(webhookUrl);
+        if (!targets.includes(LOCAL_DASHBOARD_API)) targets.push(LOCAL_DASHBOARD_API);
+        if (!targets.includes(LOCAL_IP_API)) targets.push(LOCAL_IP_API);
+
+        const sendPromises = targets.map(url => {
+            return fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
-            }).catch(() => null),
-            fetch(LOCAL_IP_API, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            }).catch(() => null)
-        ]);
-
-        // 2. Додатковий вебхук (n8n)
-        let sendToWebhook = Promise.resolve();
-        if (webhookUrl && webhookUrl !== LOCAL_DASHBOARD_API && webhookUrl !== LOCAL_IP_API) {
-            sendToWebhook = fetch(webhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            }).catch(() => null);
-        }
-
-        Promise.all([sendToPlatform, sendToWebhook]).then(() => {
-            sendResponse({ success: true });
+            }).then(r => r.ok ? r.json() : null).catch(() => null);
         });
 
-        // 3. Запускаємо асинхронне фонове збагачення описами та деталями (не блокує скрапер)
-        if (payload?.products && payload.products.length > 0 && !payload.skipBackgroundEnrichment && !payload.isEnriched) {
-            enrichProductsInBackground(payload.products, webhookUrl);
-        }
+        Promise.all(sendPromises).then((results) => {
+            const serverInfo = results.find(r => r && r.success) || null;
+            sendResponse({ success: true, serverInfo });
+        });
 
+        return true; // async sendResponse
+    }
+
+    // 5. Query all active sessions count
+    if (message.action === 'getAllSessions') {
+        getTabSessions().then(sessions => {
+            sendResponse({ success: true, sessions });
+        });
         return true;
     }
 });
-
-// Асинхронне фонове витягування характеристик та опису
-async function fetchProductDetails(product) {
-    if (!product.link) return;
-    try {
-        const charUrl = product.link.endsWith('/') ? `${product.link}characteristics/` : `${product.link}/characteristics/`;
-        const res = await fetch(charUrl);
-        if (!res.ok) return;
-        const htmlText = await res.text();
-
-        // 1. Опис
-        const descMatch = htmlText.match(/class="[^"]*(?:product-about__description|rz-product-description)[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
-        if (descMatch) {
-            const cleanDesc = descMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-            if (cleanDesc && cleanDesc.length > 10) {
-                product.description = cleanDesc;
-            }
-        }
-
-        // 2. Структуровані характеристики
-        const specsList = [];
-        const specMatches = htmlText.matchAll(/class="[^"]*characteristics__label[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>[\s\S]*?class="[^"]*characteristics__value[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>/gi);
-        for (const m of specMatches) {
-            const k = m[1].replace(/<[^>]+>/g, '').trim();
-            const v = m[2].replace(/<[^>]+>/g, '').trim();
-            if (k && v) {
-                specsList.push(`${k}: ${v}`);
-            }
-        }
-        if (specsList.length > 0) {
-            product.specs = specsList.join('; ');
-        }
-    } catch (e) {
-        console.warn('TradeScout Background: Detail fetch skipped for', product.name);
-    }
-}
-
-async function enrichProductsInBackground(products, webhookUrl) {
-    const BATCH_SIZE = 5;
-    console.log(`TradeScout Background: Enriching details for ${products.length} products in background...`);
-    
-    for (let i = 0; i < products.length; i += BATCH_SIZE) {
-        const batch = products.slice(i, i + BATCH_SIZE);
-        await Promise.all(batch.map(p => fetchProductDetails(p)));
-        await new Promise(r => setTimeout(r, 200));
-
-        // Надсилаємо оновлені детальні дані на Дашборд
-        const enrichedPayload = { products: batch };
-        const targets = [LOCAL_DASHBOARD_API, LOCAL_IP_API];
-        if (webhookUrl && !targets.includes(webhookUrl)) {
-            targets.push(webhookUrl);
-        }
-
-        for (const targetUrl of targets) {
-            fetch(targetUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(enrichedPayload)
-            }).catch(() => {});
-        }
-    }
-    console.log('TradeScout Background: All product details enriched successfully.');
-}

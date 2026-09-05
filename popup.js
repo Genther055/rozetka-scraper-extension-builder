@@ -1,16 +1,21 @@
-// Елементи інтерфейсу
+// TradeScout Popup Script v3.0 (Multi-Tab Aware)
 const btnStart = document.getElementById('btn-start');
 const btnStop = document.getElementById('btn-stop');
 const inputWebhook = document.getElementById('webhook-url');
 const statusText = document.getElementById('status-text');
 const timerText = document.getElementById('timer-text');
+const countText = document.getElementById('count-text');
 const percentText = document.getElementById('percent-text');
 const progressFill = document.getElementById('progress-fill');
+const tabTitleEl = document.getElementById('tab-title');
+const tabBadgeEl = document.getElementById('tab-badge');
+const parallelBadge = document.getElementById('parallel-badge');
+const parallelCountEl = document.getElementById('parallel-count');
 
+let activeTabId = null;
 let timerInterval = null;
 let startTime = null;
 
-// Функція оновлення таймера
 function startTimer(savedStartTime) {
     if (timerInterval) clearInterval(timerInterval);
     startTime = savedStartTime || Date.now();
@@ -30,138 +35,206 @@ function stopTimer() {
     }
 }
 
-function updateProgress(percent, count, actionMsg, totalEstimated, syncedCount) {
+function updateProgress(percent, count, actionMsg) {
     const safePercent = Math.min(100, Math.max(0, Math.round(percent)));
     progressFill.style.width = `${safePercent}%`;
     percentText.innerText = `${safePercent}%`;
+    countText.innerText = `${count || 0} товарів`;
     
     if (actionMsg) {
         statusText.innerText = actionMsg;
     }
 }
 
-// Відновлення стану з chrome.storage
-chrome.storage.local.get(['isRunning', 'webhookUrl', 'totalScraped', 'currentPage', 'startTime', 'statusMsg', 'percentProgress', 'syncedCount'], (state) => {
-    if (state.webhookUrl) {
-        inputWebhook.value = state.webhookUrl;
-    } else {
-        inputWebhook.value = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
-    }
+function updateParallelBadge(allSessions) {
+    if (!allSessions) return;
+    const runningOtherTabs = Object.keys(allSessions).filter(id => {
+        return String(id) !== String(activeTabId) && allSessions[id]?.isRunning;
+    });
 
-    if (state.isRunning) {
-        btnStart.disabled = true;
-        btnStop.disabled = false;
-        inputWebhook.disabled = true;
-        startTimer(state.startTime);
-        updateProgress(state.percentProgress || 10, state.totalScraped || 0, state.statusMsg || 'Скрейпінг активний...', 155, state.syncedCount || 0);
+    if (runningOtherTabs.length > 0) {
+        parallelBadge.style.display = 'flex';
+        parallelCountEl.innerText = runningOtherTabs.length;
     } else {
-        btnStart.disabled = false;
-        btnStop.disabled = true;
-        inputWebhook.disabled = false;
-        stopTimer();
-        if (state.totalScraped) {
-            updateProgress(100, state.totalScraped, 'Збір завершено успішно!', state.totalScraped, state.syncedCount || state.totalScraped);
+        parallelBadge.style.display = 'none';
+    }
+}
+
+// Initialize popup for active tab
+async function initPopup() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) return;
+    activeTabId = tab.id;
+
+    // Set fallback title
+    tabTitleEl.innerText = tab.title ? tab.title.split(/[-–—|]/)[0].trim() : 'Сторінка Rozetka';
+
+    // 1. Load saved webhook URL
+    chrome.storage.local.get(['webhookUrl', 'tabSessions'], (data) => {
+        if (data.webhookUrl) {
+            inputWebhook.value = data.webhookUrl;
         } else {
-            updateProgress(0, 0, 'Очікування запуску...', 0, 0);
+            inputWebhook.value = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
+        }
+
+        const sessions = data.tabSessions || {};
+        const currentSession = sessions[activeTabId];
+
+        updateParallelBadge(sessions);
+
+        if (currentSession) {
+            if (currentSession.sessionTitle) {
+                tabTitleEl.innerText = currentSession.sessionTitle;
+            }
+
+            if (currentSession.isRunning) {
+                btnStart.disabled = true;
+                btnStop.disabled = false;
+                tabBadgeEl.innerText = '● Збирається...';
+                tabBadgeEl.style.color = '#38bdf8';
+                startTimer(currentSession.startTime || Date.now());
+                updateProgress(currentSession.percentProgress || 5, currentSession.totalScraped || 0, currentSession.statusMsg || 'Скрейпінг активний...');
+            } else if (currentSession.finishedAt) {
+                btnStart.disabled = false;
+                btnStop.disabled = true;
+                tabBadgeEl.innerText = '✓ Завершено';
+                tabBadgeEl.style.color = '#10b981';
+                stopTimer();
+                updateProgress(100, currentSession.totalScraped || 0, `Збір завершено! (${currentSession.totalScraped || 0} тов.)`);
+            } else {
+                btnStart.disabled = false;
+                btnStop.disabled = true;
+                tabBadgeEl.innerText = 'Готова до запуску';
+                tabBadgeEl.style.color = '#10b981';
+                stopTimer();
+                updateProgress(0, 0, 'Очікування запуску...');
+            }
+        }
+
+        // Ping content script to verify alive status
+        chrome.tabs.sendMessage(activeTabId, { action: 'PING_TAB_STATUS' }, (res) => {
+            if (chrome.runtime.lastError) {
+                // Script might need injection
+                return;
+            }
+            if (res) {
+                if (res.sessionTitle) tabTitleEl.innerText = res.sessionTitle;
+                if (res.isRunning) {
+                    btnStart.disabled = true;
+                    btnStop.disabled = false;
+                    tabBadgeEl.innerText = '● Збирається...';
+                    tabBadgeEl.style.color = '#38bdf8';
+                }
+            }
+        });
+    });
+}
+
+// React to storage updates from background/content script
+chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.tabSessions) {
+        const sessions = changes.tabSessions.newValue || {};
+        updateParallelBadge(sessions);
+
+        const currentSession = sessions[activeTabId];
+        if (currentSession) {
+            if (currentSession.sessionTitle) {
+                tabTitleEl.innerText = currentSession.sessionTitle;
+            }
+
+            if (currentSession.isRunning) {
+                btnStart.disabled = true;
+                btnStop.disabled = false;
+                tabBadgeEl.innerText = '● Збирається...';
+                tabBadgeEl.style.color = '#38bdf8';
+                if (!timerInterval) startTimer(currentSession.startTime || Date.now());
+                updateProgress(currentSession.percentProgress || 5, currentSession.totalScraped || 0, currentSession.statusMsg);
+            } else {
+                btnStart.disabled = false;
+                btnStop.disabled = true;
+                tabBadgeEl.innerText = currentSession.finishedAt ? '✓ Завершено' : 'Зупинено';
+                tabBadgeEl.style.color = currentSession.finishedAt ? '#10b981' : '#94a3b8';
+                stopTimer();
+                if (currentSession.finishedAt) {
+                    updateProgress(100, currentSession.totalScraped || 0, `Збір завершено! (${currentSession.totalScraped || 0} тов.)`);
+                } else {
+                    updateProgress(0, currentSession.totalScraped || 0, currentSession.statusMsg || 'Скрейпінг зупинено.');
+                }
+            }
         }
     }
 });
 
-// Запуск
+// Start Scraping on THIS Active Tab
 btnStart.addEventListener('click', async () => {
     const webhookUrl = inputWebhook.value.trim();
     if (!webhookUrl) {
-        statusText.innerText = 'Помилка: Вкажіть URL!';
+        statusText.innerText = 'Помилка: Вкажіть URL сервера!';
         return;
     }
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab.url.includes('rozetka.com.ua')) {
-        statusText.innerText = 'Помилка: Відкрийте каталог Rozetka!';
+        statusText.innerText = 'Помилка: Відкрийте сторінку каталогу Rozetka!';
         return;
     }
 
     btnStart.disabled = true;
     btnStop.disabled = false;
-    inputWebhook.disabled = true;
+    tabBadgeEl.innerText = '● Запуск...';
+    tabBadgeEl.style.color = '#38bdf8';
 
     const now = Date.now();
-    await chrome.storage.local.set({
-        isRunning: true,
-        webhookUrl: webhookUrl,
-        totalScraped: 0,
-        currentPage: 1,
-        startTime: now,
-        statusMsg: 'Запуск скрапінгу на сторінці...',
-        percentProgress: 5
-    });
+    chrome.storage.local.set({ webhookUrl });
 
     startTimer(now);
-    updateProgress(5, 0, 'Запуск скрапінгу на сторінці...', 155);
+    updateProgress(5, 0, 'Ініціалізація скрейпінгу...');
 
-    // Прямий запуск content.js без необхідності перезавантаження сторінки
-    chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['content.js']
-    }, () => {
-        if (chrome.runtime.lastError) {
-            console.warn('Fallback reload required:', chrome.runtime.lastError.message);
-            chrome.tabs.reload(tab.id);
-        }
-    });
+    const startCmd = () => {
+        chrome.tabs.sendMessage(tab.id, {
+            action: 'START_TAB_SCRAPE',
+            tabId: tab.id,
+            webhookUrl: webhookUrl,
+            sessionId: `session_${tab.id}_${now}`
+        }, (res) => {
+            if (chrome.runtime.lastError) {
+                console.warn('Direct message failed, executing script first:', chrome.runtime.lastError.message);
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    files: ['content.js']
+                }, () => {
+                    setTimeout(() => {
+                        chrome.tabs.sendMessage(tab.id, {
+                            action: 'START_TAB_SCRAPE',
+                            tabId: tab.id,
+                            webhookUrl: webhookUrl,
+                            sessionId: `session_${tab.id}_${now}`
+                        });
+                    }, 300);
+                });
+            } else if (res && res.sessionTitle) {
+                tabTitleEl.innerText = res.sessionTitle;
+            }
+        });
+    };
+
+    startCmd();
 });
 
-// Зупинка
+// Stop Scraping on THIS Active Tab
 btnStop.addEventListener('click', async () => {
-    await chrome.storage.local.set({ isRunning: false });
+    if (!activeTabId) return;
+
+    chrome.tabs.sendMessage(activeTabId, { action: 'STOP_TAB_SCRAPE' }, () => {
+        if (chrome.runtime.lastError) {}
+    });
+
     btnStart.disabled = false;
     btnStop.disabled = true;
-    inputWebhook.disabled = false;
+    tabBadgeEl.innerText = 'Зупинено';
+    tabBadgeEl.style.color = '#94a3b8';
     stopTimer();
-    updateProgress(0, 0, 'Скрейпінг зупинено.', 0);
+    updateProgress(0, 0, 'Скрейпінг цієї вкладки зупинено.');
 });
 
-// Слухач повідомлень від content.js
-chrome.runtime.onMessage.addListener((message) => {
-    if (message.action === 'progress') {
-        const estimatedTotal = message.estimatedTotal || 155;
-        const percent = Math.min(99, (message.total / estimatedTotal) * 100);
-        const actionStr = message.statusMsg || `Сканування сторінки ${message.page}...`;
-        
-        chrome.storage.local.set({
-            totalScraped: message.total,
-            currentPage: message.page,
-            statusMsg: actionStr,
-            percentProgress: percent,
-            syncedCount: message.syncedCount || 0
-        });
-        
-        updateProgress(percent, message.total, actionStr, estimatedTotal, message.syncedCount || 0);
-    } else if (message.action === 'status') {
-        statusText.innerText = message.statusMsg;
-        if (message.percent !== undefined) {
-            chrome.storage.local.set({
-                percentProgress: message.percent,
-                statusMsg: message.statusMsg,
-                syncedCount: message.syncedCount || 0
-            });
-            updateProgress(message.percent, message.total, message.statusMsg, message.estimatedTotal || 155, message.syncedCount || 0);
-        }
-    } else if (message.action === 'finished') {
-        stopTimer();
-        btnStart.disabled = false;
-        btnStop.disabled = true;
-        inputWebhook.disabled = false;
-        
-        chrome.storage.local.set({ isRunning: false, percentProgress: 100, syncedCount: message.syncedCount || message.total });
-        updateProgress(100, message.total, `Успішно зібрано ${message.total} товарів!`, message.total, message.syncedCount || message.total);
-    } else if (message.action === 'error') {
-        stopTimer();
-        btnStart.disabled = false;
-        btnStop.disabled = true;
-        inputWebhook.disabled = false;
-        
-        chrome.storage.local.set({ isRunning: false });
-        statusText.innerText = `Помилка: ${message.message}`;
-    }
-});
+initPopup();
