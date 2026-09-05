@@ -646,7 +646,7 @@
         return newItems;
     }
 
-    // Main multi-tab isolated scraping runner with resilient pagination and retry logic
+    // Main multi-tab isolated scraping runner with resilient pagination, instant progress, and retry logic
     async function runTabScraper() {
         const meta = getPageMetadata();
         const estimatedTotal = getEstimatedTotalFromPage();
@@ -692,22 +692,12 @@
                     syncedCount: sentLinks.size,
                     sessionTitle: meta.title,
                     category: meta.category,
-                    sessionId: currentSessionId
+                    sessionId: currentSessionId,
+                    startTime: hudStartTime
                 });
 
-                // Background enrich details in small batches of 3
-                const enrichBatch = async (batch) => {
-                    await Promise.all(batch.map(p => fetchDetailForProduct(p)));
-                };
-
-                for (let i = 0; i < newProducts.length; i += 3) {
-                    if (!isTabScrapingActive) break;
-                    await enrichBatch(newProducts.slice(i, i + 3));
-                    await new Promise(r => setTimeout(r, 80));
-                }
-
-                // Send payload tagged with session title and category
-                await sendWebhookPayload({
+                // Immediately send payload tagged with session title and category
+                sendWebhookPayload({
                     products: newProducts,
                     page: pageCount,
                     sessionId: currentSessionId,
@@ -758,8 +748,8 @@
 
                     dispatchSafeClick(actionObj.element);
 
-                    // Wait up to 8s per attempt for new elements to appear
-                    for (let w = 0; w < 16; w++) {
+                    // Wait up to 6s per attempt for new elements to appear
+                    for (let w = 0; w < 12; w++) {
                         if (!isTabScrapingActive) break;
                         await new Promise(r => setTimeout(r, 500));
                         const currentDomCount = document.querySelectorAll(tileSelectors).length;
@@ -779,7 +769,7 @@
                 // If not succeeded yet, scroll down further and wait backoff delay before next attempt
                 if (attempt < maxTransitionAttempts) {
                     await silentBackgroundScroll();
-                    await new Promise(r => setTimeout(r, attempt * 1500));
+                    await new Promise(r => setTimeout(r, attempt * 1000));
                 }
             }
 
@@ -790,7 +780,7 @@
                     console.log(`TradeScout Tab ${currentTabId}: No more pages or end of catalog reached with ${sentLinks.size} items.`);
                     break;
                 }
-                await new Promise(r => setTimeout(r, 1200));
+                await new Promise(r => setTimeout(r, 1000));
             }
         }
 
@@ -814,6 +804,7 @@
                 category: meta.category,
                 sessionId: currentSessionId
             });
+        }
     }
 
     function startScrapingOnThisTab(tabId, customUrl) {
@@ -823,6 +814,7 @@
         currentSessionId = `session_${currentTabId}_${Date.now()}`;
         if (customUrl) webhookEndpoint = customUrl;
         sentLinks.clear();
+        hudStartTime = Date.now();
 
         const meta = getPageMetadata();
         sendTabMessage({
@@ -833,7 +825,8 @@
             statusMsg: `Запуск скрейпінгу: ${meta.title}...`,
             sessionTitle: meta.title,
             category: meta.category,
-            sessionId: currentSessionId
+            sessionId: currentSessionId,
+            startTime: hudStartTime
         });
 
         runTabScraper();

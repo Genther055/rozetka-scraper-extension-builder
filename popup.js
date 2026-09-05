@@ -114,7 +114,13 @@ async function initPopup() {
         // Ping content script to verify alive status
         chrome.tabs.sendMessage(activeTabId, { action: 'PING_TAB_STATUS' }, (res) => {
             if (chrome.runtime.lastError) {
-                // Script might need injection
+                // If content script was not connected, inject it now
+                if (tab.url && tab.url.includes('rozetka.com.ua')) {
+                    chrome.scripting.executeScript({
+                        target: { tabId: activeTabId },
+                        files: ['content.js']
+                    }, () => {});
+                }
                 return;
             }
             if (res) {
@@ -124,6 +130,7 @@ async function initPopup() {
                     btnStop.disabled = false;
                     tabBadgeEl.innerText = '● Збирається...';
                     tabBadgeEl.style.color = '#38bdf8';
+                    updateProgress(Math.min(99, Math.round(((res.totalScraped || 0) / 300) * 100)), res.totalScraped || 0, `Збір активний (${res.totalScraped || 0} тов.)`);
                 }
             }
         });
@@ -174,11 +181,12 @@ btnStart.addEventListener('click', async () => {
     }
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !tab.url.includes('rozetka.com.ua')) {
+    if (!tab || !tab.url || !tab.url.includes('rozetka.com.ua')) {
         statusText.innerText = 'Помилка: Відкрийте сторінку каталогу Rozetka!';
         return;
     }
 
+    activeTabId = tab.id;
     btnStart.disabled = true;
     btnStop.disabled = false;
     tabBadgeEl.innerText = '● Запуск...';
@@ -190,7 +198,7 @@ btnStart.addEventListener('click', async () => {
     startTimer(now);
     updateProgress(5, 0, 'Ініціалізація скрейпінгу...');
 
-    const startCmd = () => {
+    const sendStart = () => {
         chrome.tabs.sendMessage(tab.id, {
             action: 'START_TAB_SCRAPE',
             tabId: tab.id,
@@ -198,20 +206,20 @@ btnStart.addEventListener('click', async () => {
             sessionId: `session_${tab.id}_${now}`
         }, (res) => {
             if (chrome.runtime.lastError) {
-                console.log('Direct message failed, executing script and direct start:', chrome.runtime.lastError.message);
                 chrome.scripting.executeScript({
                     target: { tabId: tab.id },
                     files: ['content.js']
                 }, () => {
-                    chrome.scripting.executeScript({
-                        target: { tabId: tab.id },
-                        func: (tId, wUrl, sId) => {
-                            if (window.__tradeScoutStartScrape) {
-                                window.__tradeScoutStartScrape(tId, wUrl, sId);
-                            }
-                        },
-                        args: [tab.id, webhookUrl, `session_${tab.id}_${now}`]
-                    });
+                    setTimeout(() => {
+                        chrome.tabs.sendMessage(tab.id, {
+                            action: 'START_TAB_SCRAPE',
+                            tabId: tab.id,
+                            webhookUrl: webhookUrl,
+                            sessionId: `session_${tab.id}_${now}`
+                        }, (r) => {
+                            if (r && r.sessionTitle) tabTitleEl.innerText = r.sessionTitle;
+                        });
+                    }, 100);
                 });
             } else if (res && res.sessionTitle) {
                 tabTitleEl.innerText = res.sessionTitle;
@@ -219,7 +227,7 @@ btnStart.addEventListener('click', async () => {
         });
     };
 
-    startCmd();
+    sendStart();
 });
 
 // Stop Scraping on THIS Active Tab
