@@ -1,14 +1,271 @@
-// TradeScout Content Script v3.0 (Multi-Tab & Silent Background Scraper)
+// TradeScout Content Script v3.0 (Multi-Tab, Silent Background Scraper & Live In-Page Floating HUD)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
 
-    console.log('TradeScout Content Script v3.0 loaded in page:', window.location.href);
+    console.log('TradeScout Content Script v3.0 active on:', window.location.href);
 
     let isTabScrapingActive = false;
     let currentSessionId = null;
     let currentTabId = null;
     let webhookEndpoint = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
     const sentLinks = new Set();
+    let hudTimerInterval = null;
+    let hudStartTime = null;
+
+    // --- Floating In-Page HUD Widget ---
+    let hudContainer = null;
+    let hudShadow = null;
+
+    function createOrGetHud() {
+        if (hudContainer && document.body.contains(hudContainer)) {
+            return hudShadow;
+        }
+
+        hudContainer = document.createElement('div');
+        hudContainer.id = 'tradescout-inpage-hud-host';
+        hudContainer.style.position = 'fixed';
+        hudContainer.style.bottom = '20px';
+        hudContainer.style.right = '20px';
+        hudContainer.style.zIndex = '2147483647';
+        hudContainer.style.fontFamily = 'Segoe UI, system-ui, -apple-system, sans-serif';
+
+        hudShadow = hudContainer.attachShadow({ mode: 'open' });
+        hudShadow.innerHTML = `
+            <style>
+                .hud-box {
+                    width: 290px;
+                    background: #0f172a;
+                    border: 1px solid rgba(255, 255, 255, 0.15);
+                    border-radius: 12px;
+                    padding: 12px;
+                    color: #f8fafc;
+                    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.2);
+                    backdrop-filter: blur(12px);
+                    font-size: 12px;
+                    line-height: 1.4;
+                    box-sizing: border-box;
+                    animation: slideUp 0.3s ease-out;
+                }
+                @keyframes slideUp {
+                    from { transform: translateY(20px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+                .hud-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 8px;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                    padding-bottom: 6px;
+                }
+                .hud-brand {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-weight: 800;
+                    font-size: 12px;
+                    color: #ffffff;
+                }
+                .hud-dot {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    background: #10b981;
+                    box-shadow: 0 0 8px #10b981;
+                    animation: pulse 1.5s infinite;
+                }
+                @keyframes pulse {
+                    0%, 100% { opacity: 1; transform: scale(1); }
+                    50% { opacity: 0.5; transform: scale(1.2); }
+                }
+                .hud-title {
+                    font-weight: 700;
+                    color: #38bdf8;
+                    font-size: 12px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    margin-bottom: 6px;
+                }
+                .hud-progress-bg {
+                    width: 100%;
+                    height: 6px;
+                    background: #1e293b;
+                    border-radius: 3px;
+                    overflow: hidden;
+                    margin-bottom: 6px;
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                }
+                .hud-progress-fill {
+                    height: 100%;
+                    width: 0%;
+                    background: linear-gradient(90deg, #10b981, #6366f1);
+                    border-radius: 3px;
+                    transition: width 0.25s ease;
+                }
+                .hud-status-row {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 11px;
+                    color: #94a3b8;
+                    margin-bottom: 8px;
+                    font-weight: 600;
+                }
+                .hud-msg {
+                    font-size: 11px;
+                    color: #cbd5e1;
+                    margin-bottom: 8px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .hud-actions {
+                    display: flex;
+                    gap: 6px;
+                }
+                .hud-btn {
+                    flex: 1;
+                    padding: 5px 8px;
+                    border-radius: 6px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    cursor: pointer;
+                    border: none;
+                    transition: all 0.2s;
+                }
+                .hud-btn-start {
+                    background: #10b981;
+                    color: #fff;
+                }
+                .hud-btn-start:hover { background: #059669; }
+                .hud-btn-stop {
+                    background: #ef4444;
+                    color: #fff;
+                }
+                .hud-btn-stop:hover { background: #dc2626; }
+                .hud-btn-min {
+                    background: #334155;
+                    color: #cbd5e1;
+                    padding: 5px 8px;
+                }
+                .hud-btn-min:hover { background: #475569; }
+                .minimized {
+                    width: auto !important;
+                    padding: 6px 10px !important;
+                }
+            </style>
+            <div class="hud-box" id="hud-box">
+                <div class="hud-header">
+                    <div class="hud-brand">
+                        <div class="hud-dot" id="hud-dot"></div>
+                        <span>TradeScout</span>
+                        <span style="font-size: 9px; color: #10b981; font-weight: bold;">LIVE</span>
+                    </div>
+                    <button class="hud-btn hud-btn-min" id="btn-hud-min" title="Згорнути/Розгорнути">_</button>
+                </div>
+                <div id="hud-body">
+                    <div class="hud-title" id="hud-title">Каталог Rozetka</div>
+                    <div class="hud-progress-bg">
+                        <div class="hud-progress-fill" id="hud-fill"></div>
+                    </div>
+                    <div class="hud-status-row">
+                        <span id="hud-count">0 товарів</span>
+                        <span id="hud-timer">Час: 00:00</span>
+                    </div>
+                    <div class="hud-msg" id="hud-msg">Готовий до збору</div>
+                    <div class="hud-actions">
+                        <button class="hud-btn hud-btn-start" id="btn-hud-start">Запустити збір</button>
+                        <button class="hud-btn hud-btn-stop" id="btn-hud-stop" style="display: none;">Зупинити</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(hudContainer);
+
+        // Bind in-page HUD buttons
+        const btnStart = hudShadow.getElementById('btn-hud-start');
+        const btnStop = hudShadow.getElementById('btn-hud-stop');
+        const btnMin = hudShadow.getElementById('btn-hud-min');
+        const hudBody = hudShadow.getElementById('hud-body');
+        const hudBox = hudShadow.getElementById('hud-box');
+
+        btnMin.addEventListener('click', () => {
+            const isHidden = hudBody.style.display === 'none';
+            hudBody.style.display = isHidden ? 'block' : 'none';
+            if (isHidden) {
+                hudBox.classList.remove('minimized');
+                btnMin.innerText = '_';
+            } else {
+                hudBox.classList.add('minimized');
+                btnMin.innerText = '□';
+            }
+        });
+
+        btnStart.addEventListener('click', () => {
+            startScrapingOnThisTab();
+        });
+
+        btnStop.addEventListener('click', () => {
+            stopScrapingOnThisTab();
+        });
+
+        return hudShadow;
+    }
+
+    function updateHud(state) {
+        const shadow = createOrGetHud();
+        if (!shadow) return;
+
+        const hudTitle = shadow.getElementById('hud-title');
+        const hudFill = shadow.getElementById('hud-fill');
+        const hudCount = shadow.getElementById('hud-count');
+        const hudMsg = shadow.getElementById('hud-msg');
+        const hudDot = shadow.getElementById('hud-dot');
+        const btnStart = shadow.getElementById('btn-hud-start');
+        const btnStop = shadow.getElementById('btn-hud-stop');
+
+        if (state.sessionTitle) hudTitle.innerText = state.sessionTitle;
+        if (state.percent !== undefined) hudFill.style.width = `${Math.min(100, Math.max(0, state.percent))}%`;
+        if (state.total !== undefined) hudCount.innerText = `${state.total} товарів`;
+        if (state.statusMsg) hudMsg.innerText = state.statusMsg;
+
+        if (state.isRunning) {
+            hudDot.style.background = '#10b981';
+            hudDot.style.boxShadow = '0 0 8px #10b981';
+            btnStart.style.display = 'none';
+            btnStop.style.display = 'block';
+        } else {
+            hudDot.style.background = state.finished ? '#10b981' : '#94a3b8';
+            hudDot.style.boxShadow = 'none';
+            btnStart.style.display = 'block';
+            btnStop.style.display = 'none';
+            btnStart.innerText = state.finished ? 'Зібрати повторно' : 'Запустити збір';
+        }
+    }
+
+    function startHudTimer() {
+        if (hudTimerInterval) clearInterval(hudTimerInterval);
+        hudStartTime = Date.now();
+        hudTimerInterval = setInterval(() => {
+            const shadow = createOrGetHud();
+            if (!shadow) return;
+            const timerEl = shadow.getElementById('hud-timer');
+            if (timerEl) {
+                const sec = Math.floor((Date.now() - hudStartTime) / 1000);
+                const m = String(Math.floor(sec / 60)).padStart(2, '0');
+                const s = String(sec % 60).padStart(2, '0');
+                timerEl.innerText = `Час: ${m}:${s}`;
+            }
+        }, 1000);
+    }
+
+    function stopHudTimer() {
+        if (hudTimerInterval) {
+            clearInterval(hudTimerInterval);
+            hudTimerInterval = null;
+        }
+    }
 
     // Helper to send messages safely to background service worker
     function sendTabMessage(msg) {
@@ -146,7 +403,7 @@
         } catch (_) {}
     }
 
-    // Silent headless background scroll (Does not rely on requestAnimationFrame)
+    // Silent background scroll without requestAnimationFrame
     async function silentBackgroundScroll() {
         try {
             const targetY = Math.max(0, document.body.scrollHeight - window.innerHeight);
@@ -155,8 +412,10 @@
         await new Promise(r => setTimeout(r, 600));
     }
 
-    function findShowMoreButton() {
-        const selectors = [
+    // Comprehensive pagination finder for Rozetka
+    function findShowMoreOrNextButton() {
+        // 1. Classic "Show More" button selectors
+        const moreSelectors = [
             'rz-catalog-more button', 
             '.catalog-more button', 
             '.catalog-more__btn', 
@@ -164,23 +423,45 @@
             '.show-more', 
             'a.show-more', 
             '[class*="catalog-more"] button',
-            '[class*="catalog-more"] a'
+            '[class*="catalog-more"] a',
+            '[class*="show-more"]'
         ];
-        for (const sel of selectors) {
+        for (const sel of moreSelectors) {
             try {
                 const btn = document.querySelector(sel);
-                if (btn && !btn.disabled && !btn.classList.contains('button--loading')) {
+                if (btn && !btn.disabled && !btn.classList.contains('button--loading') && btn.offsetParent !== null) {
                     return btn;
                 }
             } catch (e) {}
         }
 
+        // 2. Next Page Link / Direction Button
+        const nextSelectors = [
+            'a.pagination__direction--forward',
+            'a.pagination__direction_type_forward',
+            '[class*="pagination__direction--forward"]',
+            '[class*="pagination__direction_type_forward"]',
+            'a[title*="Наступна"]',
+            'a[title*="Следующая"]',
+            'a[aria-label*="Next"]',
+            'rz-paginator a.pagination__direction:last-child'
+        ];
+        for (const sel of nextSelectors) {
+            try {
+                const btn = document.querySelector(sel);
+                if (btn && !btn.disabled && !btn.classList.contains('disabled')) {
+                    return btn;
+                }
+            } catch (e) {}
+        }
+
+        // 3. Text search
         const allElements = document.querySelectorAll('button, a, div[role="button"], span');
         for (const el of allElements) {
             const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
-            if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more') {
+            if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more' || txt === 'вперед') {
                 if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed')) continue;
-                if (el.disabled || el.classList.contains('button--loading')) continue;
+                if (el.disabled || el.classList.contains('button--loading') || el.classList.contains('disabled')) continue;
                 return el;
             }
         }
@@ -298,6 +579,15 @@
         const estimatedTotal = getEstimatedTotalFromPage();
         console.log(`TradeScout Tab ${currentTabId}: Starting isolated scrape for "${meta.title}"...`);
 
+        startHudTimer();
+        updateHud({
+            sessionTitle: meta.title,
+            percent: 5,
+            total: 0,
+            statusMsg: `Ініціалізація збору: ${meta.title}...`,
+            isRunning: true
+        });
+
         let pageCount = 1;
         let consecutiveNoNew = 0;
         let lastCount = 0;
@@ -308,30 +598,17 @@
             const newProducts = await scrapeCurrentDomItems(meta, pageCount);
             
             if (newProducts.length > 0) {
-                // Background enrich details in small batches of 4
-                const enrichBatch = async (batch) => {
-                    await Promise.all(batch.map(p => fetchDetailForProduct(p)));
-                };
-
-                for (let i = 0; i < newProducts.length; i += 4) {
-                    if (!isTabScrapingActive) break;
-                    await enrichBatch(newProducts.slice(i, i + 4));
-                    await new Promise(r => setTimeout(r, 150));
-                }
-
-                // Send payload tagged with session title and category
-                const serverInfo = await sendWebhookPayload({
-                    products: newProducts,
-                    page: pageCount,
-                    sessionId: currentSessionId,
-                    sessionTitle: meta.title,
-                    category: meta.category,
-                    tabId: currentTabId
-                });
-
-                const syncedCount = serverInfo?.categoryCount || sentLinks.size;
+                // Realtime item-by-item progress update
                 const percent = Math.min(98, Math.round((sentLinks.size / Math.max(1, estimatedTotal)) * 100));
-                const statusMsg = `Зібрано ${sentLinks.size} товарів («${meta.title}»)...`;
+                const statusMsg = `Зібрано ${sentLinks.size}/${estimatedTotal} товарів (стор. ${pageCount})...`;
+
+                updateHud({
+                    sessionTitle: meta.title,
+                    percent,
+                    total: sentLinks.size,
+                    statusMsg,
+                    isRunning: true
+                });
 
                 sendTabMessage({
                     action: 'tabProgress',
@@ -339,10 +616,31 @@
                     page: pageCount,
                     percent,
                     statusMsg,
-                    syncedCount,
+                    syncedCount: sentLinks.size,
                     sessionTitle: meta.title,
                     category: meta.category,
                     sessionId: currentSessionId
+                });
+
+                // Background enrich details in small batches of 3
+                const enrichBatch = async (batch) => {
+                    await Promise.all(batch.map(p => fetchDetailForProduct(p)));
+                };
+
+                for (let i = 0; i < newProducts.length; i += 3) {
+                    if (!isTabScrapingActive) break;
+                    await enrichBatch(newProducts.slice(i, i + 3));
+                    await new Promise(r => setTimeout(r, 120));
+                }
+
+                // Send payload tagged with session title and category
+                await sendWebhookPayload({
+                    products: newProducts,
+                    page: pageCount,
+                    sessionId: currentSessionId,
+                    sessionTitle: meta.title,
+                    category: meta.category,
+                    tabId: currentTabId
                 });
             }
 
@@ -359,14 +657,22 @@
                 consecutiveNoNew++;
             }
 
-            // 3. Show More button or Pagination
-            const showMoreBtn = findShowMoreButton();
-            if (showMoreBtn) {
+            // 3. Show More button or Next Page link
+            const nextBtn = findShowMoreOrNextButton();
+            if (nextBtn) {
                 const prevDomCount = document.querySelectorAll(tileSelectors).length;
                 try {
-                    showMoreBtn.click();
+                    nextBtn.scrollIntoView({ behavior: 'auto', block: 'center' });
+                    nextBtn.click();
+                    nextBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
                 } catch (_) {}
                 pageCount++;
+
+                updateHud({
+                    statusMsg: `Завантаження сторінки ${pageCount}...`,
+                    total: sentLinks.size,
+                    isRunning: true
+                });
 
                 // Wait up to 10s for new elements to appear
                 let loaded = false;
@@ -388,13 +694,23 @@
                     console.log(`TradeScout Tab ${currentTabId}: End of catalog reached.`);
                     break;
                 }
-                await new Promise(r => setTimeout(r, 1200));
+                await new Promise(r => setTimeout(r, 1000));
             }
         }
 
         if (isTabScrapingActive) {
             isTabScrapingActive = false;
+            stopHudTimer();
             console.log(`TradeScout Tab ${currentTabId}: Scrape finished successfully with ${sentLinks.size} items.`);
+            
+            updateHud({
+                percent: 100,
+                total: sentLinks.size,
+                statusMsg: `Збір завершено! Всього ${sentLinks.size} товарів.`,
+                isRunning: false,
+                finished: true
+            });
+
             sendTabMessage({
                 action: 'tabFinished',
                 total: sentLinks.size,
@@ -405,49 +721,74 @@
         }
     }
 
+    function startScrapingOnThisTab(tabId, customUrl) {
+        if (isTabScrapingActive) return;
+        isTabScrapingActive = true;
+        currentTabId = tabId || currentTabId || Date.now();
+        currentSessionId = `session_${currentTabId}_${Date.now()}`;
+        if (customUrl) webhookEndpoint = customUrl;
+        sentLinks.clear();
+
+        const meta = getPageMetadata();
+        sendTabMessage({
+            action: 'tabProgress',
+            total: 0,
+            page: 1,
+            percent: 5,
+            statusMsg: `Запуск скрейпінгу: ${meta.title}...`,
+            sessionTitle: meta.title,
+            category: meta.category,
+            sessionId: currentSessionId
+        });
+
+        runTabScraper();
+    }
+
+    function stopScrapingOnThisTab() {
+        isTabScrapingActive = false;
+        stopHudTimer();
+        const meta = getPageMetadata();
+        
+        updateHud({
+            statusMsg: 'Скрейпінг зупинено.',
+            total: sentLinks.size,
+            isRunning: false
+        });
+
+        sendTabMessage({
+            action: 'tabProgress',
+            total: sentLinks.size,
+            page: 1,
+            percent: 0,
+            statusMsg: 'Скрейпінг зупинено.',
+            sessionTitle: meta.title,
+            category: meta.category,
+            sessionId: currentSessionId
+        });
+    }
+
+    // Auto-create floating HUD on page load so the user always sees it
+    const initialMeta = getPageMetadata();
+    createOrGetHud();
+    updateHud({
+        sessionTitle: initialMeta.title,
+        total: 0,
+        percent: 0,
+        statusMsg: 'Готовий до запуску на цій вкладці',
+        isRunning: false
+    });
+
     // Message listener for popup commands
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'START_TAB_SCRAPE') {
-            if (isTabScrapingActive) {
-                sendResponse({ success: true, alreadyRunning: true });
-                return true;
-            }
-            isTabScrapingActive = true;
-            currentTabId = message.tabId;
-            currentSessionId = message.sessionId || `session_${currentTabId}_${Date.now()}`;
-            webhookEndpoint = message.webhookUrl || webhookEndpoint;
-            sentLinks.clear();
-
+            startScrapingOnThisTab(message.tabId, message.webhookUrl);
             const meta = getPageMetadata();
-            sendTabMessage({
-                action: 'tabProgress',
-                total: 0,
-                page: 1,
-                percent: 5,
-                statusMsg: `Запуск скрейпінгу: ${meta.title}...`,
-                sessionTitle: meta.title,
-                category: meta.category,
-                sessionId: currentSessionId
-            });
-
-            runTabScraper();
             sendResponse({ success: true, sessionTitle: meta.title });
             return true;
         }
 
         if (message.action === 'STOP_TAB_SCRAPE') {
-            isTabScrapingActive = false;
-            const meta = getPageMetadata();
-            sendTabMessage({
-                action: 'tabProgress',
-                total: sentLinks.size,
-                page: 1,
-                percent: 0,
-                statusMsg: 'Скрейпінг зупинено.',
-                sessionTitle: meta.title,
-                category: meta.category,
-                sessionId: currentSessionId
-            });
+            stopScrapingOnThisTab();
             sendResponse({ success: true });
             return true;
         }
