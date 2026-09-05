@@ -778,6 +778,10 @@
         isRunning: false
     });
 
+    // Expose direct window handlers for fail-safe invocation
+    window.__tradeScoutStartScrape = startScrapingOnThisTab;
+    window.__tradeScoutStopScrape = stopScrapingOnThisTab;
+
     // Message listener for popup commands
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'START_TAB_SCRAPE') {

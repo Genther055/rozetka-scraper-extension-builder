@@ -198,19 +198,20 @@ btnStart.addEventListener('click', async () => {
             sessionId: `session_${tab.id}_${now}`
         }, (res) => {
             if (chrome.runtime.lastError) {
-                console.warn('Direct message failed, executing script first:', chrome.runtime.lastError.message);
+                console.log('Direct message failed, executing script and direct start:', chrome.runtime.lastError.message);
                 chrome.scripting.executeScript({
                     target: { tabId: tab.id },
                     files: ['content.js']
                 }, () => {
-                    setTimeout(() => {
-                        chrome.tabs.sendMessage(tab.id, {
-                            action: 'START_TAB_SCRAPE',
-                            tabId: tab.id,
-                            webhookUrl: webhookUrl,
-                            sessionId: `session_${tab.id}_${now}`
-                        });
-                    }, 300);
+                    chrome.scripting.executeScript({
+                        target: { tabId: tab.id },
+                        func: (tId, wUrl, sId) => {
+                            if (window.__tradeScoutStartScrape) {
+                                window.__tradeScoutStartScrape(tId, wUrl, sId);
+                            }
+                        },
+                        args: [tab.id, webhookUrl, `session_${tab.id}_${now}`]
+                    });
                 });
             } else if (res && res.sessionTitle) {
                 tabTitleEl.innerText = res.sessionTitle;
@@ -226,7 +227,16 @@ btnStop.addEventListener('click', async () => {
     if (!activeTabId) return;
 
     chrome.tabs.sendMessage(activeTabId, { action: 'STOP_TAB_SCRAPE' }, () => {
-        if (chrome.runtime.lastError) {}
+        if (chrome.runtime.lastError) {
+            chrome.scripting.executeScript({
+                target: { tabId: activeTabId },
+                func: () => {
+                    if (window.__tradeScoutStopScrape) {
+                        window.__tradeScoutStopScrape();
+                    }
+                }
+            });
+        }
     });
 
     btnStart.disabled = false;
