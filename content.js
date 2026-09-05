@@ -336,50 +336,58 @@
         return false;
     }
 
-    // Detail fetcher for specs and description
+    // Detail fetcher for specs and description with timeout safety
     async function fetchDetailForProduct(product) {
         if (!product.link) return;
         try {
             const charUrl = product.link.endsWith('/') ? `${product.link}characteristics/` : `${product.link}/characteristics/`;
-            const res = await fetch(charUrl);
-            if (!res.ok) return;
-            const htmlText = await res.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(htmlText, 'text/html');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-            const descEl = doc.querySelector('.product-about__description, [class*="description-content"], .rz-product-description, [data-testid="description"]');
-            if (descEl) {
-                const cleanDesc = descEl.innerText.trim();
-                if (cleanDesc && cleanDesc.length > 15) {
-                    product.description = cleanDesc;
+            const res = await fetch(charUrl, { signal: controller.signal }).catch(() => null);
+            clearTimeout(timeoutId);
+            if (res && res.ok) {
+                const htmlText = await res.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlText, 'text/html');
+
+                const descEl = doc.querySelector('.product-about__description, [class*="description-content"], .rz-product-description, [data-testid="description"]');
+                if (descEl) {
+                    const cleanDesc = descEl.innerText.trim();
+                    if (cleanDesc && cleanDesc.length > 15) {
+                        product.description = cleanDesc;
+                    }
                 }
-            }
 
-            const specsList = [];
-            const specsMap = {};
-            const dts = Array.from(doc.querySelectorAll('dt, .characteristics-full__label, [class*="characteristics"] [class*="label"], [class*="characteristics"] [class*="name"]'));
-            dts.forEach(dt => {
-                const dd = dt.nextElementSibling || dt.parentElement.querySelector('dd, .characteristics-full__value, [class*="characteristics"] [class*="value"]');
-                const k = dt.innerText ? dt.innerText.trim() : '';
-                const v = dd && dd.innerText ? dd.innerText.trim() : '';
-                if (k && v && k.length > 1 && v.length > 0) {
-                    specsMap[k] = v;
-                    specsList.push(`${k}: ${v}`);
+                const specsList = [];
+                const specsMap = {};
+                const dts = Array.from(doc.querySelectorAll('dt, .characteristics-full__label, [class*="characteristics"] [class*="label"], [class*="characteristics"] [class*="name"]'));
+                dts.forEach(dt => {
+                    const dd = dt.nextElementSibling || dt.parentElement.querySelector('dd, .characteristics-full__value, [class*="characteristics"] [class*="value"]');
+                    const k = dt.innerText ? dt.innerText.trim() : '';
+                    const v = dd && dd.innerText ? dd.innerText.trim() : '';
+                    if (k && v && k.length > 1 && v.length > 0) {
+                        specsMap[k] = v;
+                        specsList.push(`${k}: ${v}`);
+                    }
+                });
+
+                if (specsList.length > 0) {
+                    product.specs = specsList.join('; ');
+                    product.detailedSpecsMap = specsMap;
                 }
-            });
-
-            if (specsList.length > 0) {
-                product.specs = specsList.join('; ');
-                product.detailedSpecsMap = specsMap;
             }
 
             const productIdMatch = product.link.match(/p(\d+)/);
             const productId = productIdMatch ? productIdMatch[1] : null;
             if (productId) {
                 try {
+                    const apiCtrl = new AbortController();
+                    const apiTimeout = setTimeout(() => apiCtrl.abort(), 3000);
                     const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`;
-                    const apiRes = await fetch(apiUrl);
-                    if (apiRes.ok) {
+                    const apiRes = await fetch(apiUrl, { signal: apiCtrl.signal }).catch(() => null);
+                    clearTimeout(apiTimeout);
+                    if (apiRes && apiRes.ok) {
                         const apiData = await apiRes.json();
                         const apiProduct = apiData.data?.[0];
                         if (apiProduct) {
@@ -412,9 +420,27 @@
         await new Promise(r => setTimeout(r, 600));
     }
 
-    // Comprehensive pagination finder for Rozetka
-    function findShowMoreOrNextButton() {
-        // 1. Classic "Show More" button selectors
+    // Comprehensive pagination finder with retry/recovery support for Rozetka
+    function findPaginationActionElements(currentPage) {
+        // 1. Retry / Error recovery buttons (if Rozetka had a 50x / 502 / network error on page load)
+        const retrySelectors = [
+            'button.retry',
+            'button[class*="retry"]',
+            'a[class*="retry"]',
+            'rz-empty-state button',
+            '.error-state button',
+            '[class*="error"] button'
+        ];
+        for (const sel of retrySelectors) {
+            try {
+                const btn = document.querySelector(sel);
+                if (btn && btn.offsetParent !== null) {
+                    return { type: 'retry', element: btn };
+                }
+            } catch (e) {}
+        }
+
+        // 2. Classic "Show More" / "Показати ще" button selectors
         const moreSelectors = [
             'rz-catalog-more button', 
             '.catalog-more button', 
@@ -424,18 +450,19 @@
             'a.show-more', 
             '[class*="catalog-more"] button',
             '[class*="catalog-more"] a',
-            '[class*="show-more"]'
+            '[class*="show-more"]',
+            'button[data-testid="show-more"]'
         ];
         for (const sel of moreSelectors) {
             try {
                 const btn = document.querySelector(sel);
                 if (btn && !btn.disabled && !btn.classList.contains('button--loading') && btn.offsetParent !== null) {
-                    return btn;
+                    return { type: 'showMore', element: btn };
                 }
             } catch (e) {}
         }
 
-        // 2. Next Page Link / Direction Button
+        // 3. Next Page Link / Direction Forward Button
         const nextSelectors = [
             'a.pagination__direction--forward',
             'a.pagination__direction_type_forward',
@@ -444,28 +471,74 @@
             'a[title*="Наступна"]',
             'a[title*="Следующая"]',
             'a[aria-label*="Next"]',
-            'rz-paginator a.pagination__direction:last-child'
+            'rz-paginator a.pagination__direction:last-child',
+            'a.pagination__direction:last-child'
         ];
         for (const sel of nextSelectors) {
             try {
                 const btn = document.querySelector(sel);
-                if (btn && !btn.disabled && !btn.classList.contains('disabled')) {
-                    return btn;
+                if (btn && !btn.disabled && !btn.classList.contains('disabled') && !btn.classList.contains('pagination__direction--disabled')) {
+                    return { type: 'nextPage', element: btn };
                 }
             } catch (e) {}
         }
 
-        // 3. Text search
+        // 4. Numbered page link for nextPage (currentPage + 1)
+        const nextPageNum = currentPage + 1;
+        const pageNumSelectors = [
+            `a.pagination__link[href*="page=${nextPageNum}"]`,
+            `a.pagination__link[href*="page=${nextPageNum}/"]`,
+            `a.pagination__link[href*=";page=${nextPageNum}"]`,
+            `a.pagination__link`,
+            `[class*="pagination__item"] a`
+        ];
+        for (const sel of pageNumSelectors) {
+            try {
+                const links = document.querySelectorAll(sel);
+                for (const link of links) {
+                    const txt = (link.innerText || link.textContent || '').trim();
+                    const href = link.getAttribute('href') || '';
+                    if (txt === String(nextPageNum) || href.includes(`page=${nextPageNum}`)) {
+                        return { type: 'pageNum', element: link, pageNum: nextPageNum };
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 5. Text-based fallback search
         const allElements = document.querySelectorAll('button, a, div[role="button"], span');
         for (const el of allElements) {
             const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
-            if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more' || txt === 'вперед') {
+            if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more') {
                 if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed')) continue;
                 if (el.disabled || el.classList.contains('button--loading') || el.classList.contains('disabled')) continue;
-                return el;
+                return { type: 'showMore', element: el };
+            }
+            if (txt === 'спробувати ще' || txt === 'повторити' || txt.includes('спробувати знову') || txt.includes('повторити спробу')) {
+                return { type: 'retry', element: el };
             }
         }
+
         return null;
+    }
+
+    function dispatchSafeClick(element) {
+        if (!element) return;
+        try {
+            element.scrollIntoView({ behavior: 'auto', block: 'center' });
+        } catch (_) {}
+
+        try {
+            element.focus();
+            element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
+            element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+            element.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
+            element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+            element.click();
+            element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        } catch (_) {
+            try { element.click(); } catch (__) {}
+        }
     }
 
     async function sendWebhookPayload(payload) {
@@ -573,11 +646,11 @@
         return newItems;
     }
 
-    // Main multi-tab isolated scraping runner
+    // Main multi-tab isolated scraping runner with resilient pagination and retry logic
     async function runTabScraper() {
         const meta = getPageMetadata();
         const estimatedTotal = getEstimatedTotalFromPage();
-        console.log(`TradeScout Tab ${currentTabId}: Starting isolated scrape for "${meta.title}"...`);
+        console.log(`TradeScout Tab ${currentTabId}: Starting resilient scrape for "${meta.title}" (Estimated: ${estimatedTotal})...`);
 
         startHudTimer();
         updateHud({
@@ -594,12 +667,12 @@
         const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
 
         while (isTabScrapingActive) {
-            // 1. Scrape items visible now
+            // 1. Scrape items visible now in DOM
             const newProducts = await scrapeCurrentDomItems(meta, pageCount);
             
             if (newProducts.length > 0) {
                 // Realtime item-by-item progress update
-                const percent = Math.min(98, Math.round((sentLinks.size / Math.max(1, estimatedTotal)) * 100));
+                const percent = Math.min(99, Math.round((sentLinks.size / Math.max(1, estimatedTotal)) * 100));
                 const statusMsg = `Зібрано ${sentLinks.size}/${estimatedTotal} товарів (стор. ${pageCount})...`;
 
                 updateHud({
@@ -630,7 +703,7 @@
                 for (let i = 0; i < newProducts.length; i += 3) {
                     if (!isTabScrapingActive) break;
                     await enrichBatch(newProducts.slice(i, i + 3));
-                    await new Promise(r => setTimeout(r, 120));
+                    await new Promise(r => setTimeout(r, 80));
                 }
 
                 // Send payload tagged with session title and category
@@ -646,7 +719,7 @@
 
             if (!isTabScrapingActive) break;
 
-            // 2. Silent background scroll
+            // 2. Silent background scroll to bottom
             await silentBackgroundScroll();
 
             // Check if new items loaded
@@ -657,44 +730,67 @@
                 consecutiveNoNew++;
             }
 
-            // 3. Show More button or Next Page link
-            const nextBtn = findShowMoreOrNextButton();
-            if (nextBtn) {
+            // 3. Multi-attempt pagination transition with retry for 50x / network errors
+            let pageTransitionSuccess = false;
+            const maxTransitionAttempts = 4;
+
+            for (let attempt = 1; attempt <= maxTransitionAttempts; attempt++) {
+                if (!isTabScrapingActive) break;
+
                 const prevDomCount = document.querySelectorAll(tileSelectors).length;
-                try {
-                    nextBtn.scrollIntoView({ behavior: 'auto', block: 'center' });
-                    nextBtn.click();
-                    nextBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-                } catch (_) {}
-                pageCount++;
+                const actionObj = findPaginationActionElements(pageCount);
 
-                updateHud({
-                    statusMsg: `Завантаження сторінки ${pageCount}...`,
-                    total: sentLinks.size,
-                    isRunning: true
-                });
+                if (actionObj) {
+                    if (actionObj.type === 'retry') {
+                        console.log(`TradeScout Tab ${currentTabId}: Detected Rozetka error/retry button. Clicking to recover...`);
+                        updateHud({
+                            statusMsg: `Відновлення після збою Rozetka (стор. ${pageCount + 1})...`,
+                            total: sentLinks.size,
+                            isRunning: true
+                        });
+                    } else {
+                        updateHud({
+                            statusMsg: `Завантаження стор. ${pageCount + 1} (спроба ${attempt}/${maxTransitionAttempts})...`,
+                            total: sentLinks.size,
+                            isRunning: true
+                        });
+                    }
 
-                // Wait up to 10s for new elements to appear
-                let loaded = false;
-                for (let w = 0; w < 20; w++) {
-                    if (!isTabScrapingActive) break;
-                    await new Promise(r => setTimeout(r, 500));
-                    const currentDomCount = document.querySelectorAll(tileSelectors).length;
-                    if (currentDomCount > prevDomCount) {
-                        loaded = true;
+                    dispatchSafeClick(actionObj.element);
+
+                    // Wait up to 8s per attempt for new elements to appear
+                    for (let w = 0; w < 16; w++) {
+                        if (!isTabScrapingActive) break;
+                        await new Promise(r => setTimeout(r, 500));
+                        const currentDomCount = document.querySelectorAll(tileSelectors).length;
+                        if (currentDomCount > prevDomCount) {
+                            pageTransitionSuccess = true;
+                            break;
+                        }
+                    }
+
+                    if (pageTransitionSuccess) {
+                        pageCount++;
+                        consecutiveNoNew = 0;
                         break;
                     }
                 }
-                if (!loaded && consecutiveNoNew >= 2) {
-                    console.log(`TradeScout Tab ${currentTabId}: No more new items loading. Finishing.`);
-                    break;
+
+                // If not succeeded yet, scroll down further and wait backoff delay before next attempt
+                if (attempt < maxTransitionAttempts) {
+                    await silentBackgroundScroll();
+                    await new Promise(r => setTimeout(r, attempt * 1500));
                 }
-            } else {
+            }
+
+            // If no action elements worked or no new items after all attempts
+            if (!pageTransitionSuccess) {
+                // If we've had 2 full non-productive cycles, conclude scraping
                 if (consecutiveNoNew >= 2) {
-                    console.log(`TradeScout Tab ${currentTabId}: End of catalog reached.`);
+                    console.log(`TradeScout Tab ${currentTabId}: No more pages or end of catalog reached with ${sentLinks.size} items.`);
                     break;
                 }
-                await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 1200));
             }
         }
 
@@ -718,7 +814,6 @@
                 category: meta.category,
                 sessionId: currentSessionId
             });
-        }
     }
 
     function startScrapingOnThisTab(tabId, customUrl) {

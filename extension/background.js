@@ -86,7 +86,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // 4. Send Webhook payload to server (with multi-tab session identification)
+    // 4. Send Webhook payload to server (with multi-tab session identification & auto-retry)
     if (message.action === 'sendWebhook') {
         const { webhookUrl, payload } = message;
         const itemCount = payload?.products?.length || 0;
@@ -98,13 +98,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!targets.includes(LOCAL_DASHBOARD_API)) targets.push(LOCAL_DASHBOARD_API);
         if (!targets.includes(LOCAL_IP_API)) targets.push(LOCAL_IP_API);
 
-        const sendPromises = targets.map(url => {
-            return fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            }).then(r => r.ok ? r.json() : null).catch(() => null);
-        });
+        const postWithRetry = async (url, data, maxRetries = 3) => {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    if (res.ok) {
+                        return await res.json();
+                    }
+                } catch (e) {
+                    // Backoff before retry
+                    if (i < maxRetries - 1) {
+                        await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+                    }
+                }
+            }
+            return null;
+        };
+
+        const sendPromises = targets.map(url => postWithRetry(url, payload));
 
         Promise.all(sendPromises).then((results) => {
             const serverInfo = results.find(r => r && r.success) || null;
