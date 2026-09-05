@@ -1,0 +1,7 @@
+- [x] Оновити шаблон дашборду (src/app/components/dashboard/dashboard.html)
+  - [x] Замінити відображення '—' у колонці "Ціна зі знижкою" на постійне відображення item.price ₴
+- [x] Оновити Excel експорт у контролері (src/app/components/dashboard/dashboard.ts)
+  - [x] Оновити масив baseHeaders
+  - [x] Оновити генерацію HTML рядків для експорту
+- [x] Збірка та верифікація
+  - [x] Перевірити збірку проекту через npm run build

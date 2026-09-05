@@ -9,90 +9,26 @@ import {join} from 'node:path';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { GoogleGenAI } from '@google/genai';
 
+import {
+  initDb,
+  getCurrentProducts,
+  saveCurrentProducts,
+  clearCurrentProducts,
+  getHistory,
+  saveHistorySnapshot,
+  deleteHistorySnapshot,
+  moveHistorySnapshot,
+  getFolders,
+  saveFolder,
+  deleteFolder,
+  ScrapingFolder,
+  ScrapingSnapshot
+} from './db.js';
+
 const browserDistFolder = join(import.meta.dirname, '../browser');
-const dataDir = existsSync(join(process.cwd(), 'data')) 
-  ? join(process.cwd(), 'data') 
-  : join(import.meta.dirname, '../data');
-const dataFilePath = join(dataDir, 'products.json');
-const historyFilePath = join(dataDir, 'history.json');
-const foldersFilePath = join(dataDir, 'folders.json');
 
-// Ensure data folder exists
-if (!existsSync(dataDir)) {
-  mkdirSync(dataDir, { recursive: true });
-}
-
-// Load initial products
-let products: any[] = [];
-if (existsSync(dataFilePath)) {
-  try {
-    const raw = readFileSync(dataFilePath, 'utf-8').replace(/^\uFEFF/, '').trim();
-    if (raw) {
-      products = JSON.parse(raw);
-    }
-  } catch (e) {
-    console.error('Error loading products.json:', e);
-  }
-}
-
-// Load initial history & folders
-interface ScrapingFolder {
-  id: string;
-  name: string;
-  icon?: string;
-  color?: string;
-  createdAt: string;
-}
-
-interface ScrapingSnapshot {
-  id: string;
-  title: string;
-  folderId: string | null;
-  scrapedAt: string;
-  itemCount: number;
-  category: string;
-  avgPrice: number;
-  minPrice: number;
-  maxPrice: number;
-  sellersCount: number;
-  products: any[];
-}
-
-let history: ScrapingSnapshot[] = [];
-if (existsSync(historyFilePath)) {
-  try {
-    const raw = readFileSync(historyFilePath, 'utf-8');
-    history = JSON.parse(raw);
-  } catch (e) {
-    console.error('Error loading history.json:', e);
-  }
-}
-
-let folders: ScrapingFolder[] = [];
-if (existsSync(foldersFilePath)) {
-  try {
-    const raw = readFileSync(foldersFilePath, 'utf-8');
-    folders = JSON.parse(raw);
-  } catch (e) {
-    console.error('Error loading folders.json:', e);
-  }
-}
-
-function saveHistory() {
-  try {
-    writeFileSync(historyFilePath, JSON.stringify(history, null, 2), 'utf-8');
-  } catch (e) {
-    console.error('Error saving history.json:', e);
-  }
-}
-
-function saveFolders() {
-  try {
-    writeFileSync(foldersFilePath, JSON.stringify(folders, null, 2), 'utf-8');
-  } catch (e) {
-    console.error('Error saving folders.json:', e);
-  }
-}
+// Initialize Neon PostgreSQL Database on server launch
+initDb().catch(err => console.error('[Neon DB Startup Error]', err));
 
 const app = express();
 app.use((req, res, next) => {
@@ -128,22 +64,12 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
       const sellerTitle = apiData.data?.[0]?.seller?.title;
       if (sellerTitle) {
         const cleanedSeller = sellerTitle.trim();
-        const dbPath = join(import.meta.dirname, '../data/products.json');
-        if (existsSync(dbPath)) {
-          const raw = readFileSync(dbPath, 'utf-8');
-          const currentProducts = JSON.parse(raw);
-          const index = currentProducts.findIndex((p: any) => p && p.link === normalizedLink);
-          if (index !== -1) {
-            currentProducts[index].seller = cleanedSeller;
-            writeFileSync(dbPath, JSON.stringify(currentProducts, null, 2), 'utf-8');
-            console.log(`[Backend Enriched] Successfully updated seller for ${normalizedLink} -> ${cleanedSeller}`);
-            
-            // Also update the in-memory array in server.ts
-            const memoryIndex = products.findIndex((p: any) => p && p.link === normalizedLink);
-            if (memoryIndex !== -1) {
-              products[memoryIndex].seller = cleanedSeller;
-            }
-          }
+        const currentProducts = await getCurrentProducts();
+        const index = currentProducts.findIndex((p: any) => p && p.link === normalizedLink);
+        if (index !== -1) {
+          currentProducts[index].seller = cleanedSeller;
+          await saveCurrentProducts(currentProducts);
+          console.log(`[Backend Enriched] Successfully updated seller for ${normalizedLink} -> ${cleanedSeller}`);
         }
       }
     }
@@ -152,180 +78,144 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
   }
 }
 
-const lastActivityFilePath = join(dataDir, 'last_activity.json');
-let lastDbUpdateTime = Date.now();
-if (existsSync(lastActivityFilePath)) {
+app.post('/api/products', async (req, res) => {
   try {
-    const raw = readFileSync(lastActivityFilePath, 'utf-8');
-    lastDbUpdateTime = JSON.parse(raw).timestamp || Date.now();
-  } catch (e) {
-    console.error('Error loading last_activity.json:', e);
-  }
-}
-
-function updateLastActivityTime() {
-  lastDbUpdateTime = Date.now();
-  try {
-    writeFileSync(lastActivityFilePath, JSON.stringify({ timestamp: lastDbUpdateTime }), 'utf-8');
-  } catch (e) {
-    console.error('Error saving last_activity.json:', e);
-  }
-}
-
-function checkAndCleanExpiredData() {
-  const threeHoursMs = 3 * 60 * 60 * 1000;
-  if (products.length > 0 && (Date.now() - lastDbUpdateTime > threeHoursMs)) {
-    console.log('[Backend] 3 hours of inactivity reached. Auto-clearing database products.');
-    products = [];
-    try {
-      const dataFilePath = join(join(import.meta.dirname, '../data'), 'products.json');
-      writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
-    } catch (e) {
-      console.error('Failed to write cleared products.json:', e);
+    let newItems = req.body ? (req.body.products || req.body) : [];
+    if (typeof newItems === 'string') {
+      try {
+        const parsed = JSON.parse(newItems);
+        newItems = parsed.products || parsed;
+      } catch (e) {}
     }
-    updateLastActivityTime();
-  }
-}
+    if (!Array.isArray(newItems)) {
+      newItems = [];
+    }
 
-app.post('/api/products', (req, res) => {
-  checkAndCleanExpiredData();
-  let newItems = req.body ? (req.body.products || req.body) : [];
-  if (typeof newItems === 'string') {
-    try {
-      const parsed = JSON.parse(newItems);
-      newItems = parsed.products || parsed;
-    } catch (e) {}
-  }
-  if (!Array.isArray(newItems)) {
-    newItems = [];
-  }
+    const getProductId = (link: string) => {
+      const match = link.match(/\/p(\d+)/) || link.match(/p-(\d+)/) || link.match(/p(\d+)/);
+      return match ? match[1] : '';
+    };
 
-  const getProductId = (link: string) => {
-    const match = link.match(/\/p(\d+)/) || link.match(/p-(\d+)/) || link.match(/p(\d+)/);
-    return match ? match[1] : '';
-  };
+    const getItemKey = (p: any) => {
+      const pLink = p.link ? p.link.split('?')[0].split('#')[0] : '';
+      const pId = getProductId(pLink);
+      if (pId) return pId;
+      const pName = (p.name || '').trim().toLowerCase();
+      return pName;
+    };
 
-  const getItemKey = (p: any) => {
-    const pLink = p.link ? p.link.split('?')[0].split('#')[0] : '';
-    const pId = getProductId(pLink);
-    if (pId) return pId;
-    const pName = (p.name || '').trim().toLowerCase();
-    return pName;
-  };
-  
-  newItems.forEach((item: any) => {
-    if (!item || typeof item !== 'object') return;
-    try {
-      const normalizedLink = item.link ? item.link.split('?')[0].split('#')[0] : '';
-      item.link = normalizedLink;
-      
-      const itemPrice = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
-      const itemReviews = typeof item.reviews === 'number' ? item.reviews : parseInt(item.reviews) || 0;
-      const itemRating = typeof item.rating === 'number' ? item.rating : parseFloat(item.rating) || 5.0;
-      const itemOldPrice = typeof item.oldPrice === 'number' ? item.oldPrice : (parseFloat(item.oldPrice) || itemPrice);
-      const itemDiscount = typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0);
+    let products = await getCurrentProducts();
+    
+    newItems.forEach((item: any) => {
+      if (!item || typeof item !== 'object') return;
+      try {
+        const normalizedLink = item.link ? item.link.split('?')[0].split('#')[0] : '';
+        item.link = normalizedLink;
+        
+        const itemPrice = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+        const itemReviews = typeof item.reviews === 'number' ? item.reviews : parseInt(item.reviews) || 0;
+        const itemRating = typeof item.rating === 'number' ? item.rating : parseFloat(item.rating) || 5.0;
+        const itemOldPrice = typeof item.oldPrice === 'number' ? item.oldPrice : (parseFloat(item.oldPrice) || itemPrice);
+        const itemDiscount = typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0);
 
-      const itemKey = getItemKey({ ...item, link: normalizedLink });
-      const exists = products.some(p => p && getItemKey(p) === itemKey);
-      
-      if (!exists) {
-        products.push({
-          name: item.name || 'Товар без назви',
-          price: itemPrice,
-          oldPrice: itemOldPrice,
-          discount: itemDiscount,
-          rating: itemRating,
-          reviews: itemReviews,
-          inStock: item.inStock !== false,
-          category: item.category || 'Загальна',
-          specs: item.specs || '',
-          description: item.description || '',
-          detailedSpecsMap: item.detailedSpecsMap || {},
-          seller: item.seller || 'Rozetka',
-          sellersCount: item.sellersCount || 1,
-          link: normalizedLink,
-          scrapedAt: new Date().toISOString(),
-          aiStatus: 'pending',
-          aiVerdict: ''
-        });
+        const itemKey = getItemKey({ ...item, link: normalizedLink });
+        const exists = products.some(p => p && getItemKey(p) === itemKey);
+        
+        if (!exists) {
+          products.push({
+            name: item.name || 'Товар без назви',
+            price: itemPrice,
+            oldPrice: itemOldPrice,
+            discount: itemDiscount,
+            rating: itemRating,
+            reviews: itemReviews,
+            inStock: item.inStock !== false,
+            category: item.category || 'Загальна',
+            specs: item.specs || '',
+            description: item.description || '',
+            detailedSpecsMap: item.detailedSpecsMap || {},
+            seller: item.seller || 'Rozetka',
+            sellersCount: item.sellersCount || 1,
+            link: normalizedLink,
+            scrapedAt: new Date().toISOString(),
+            aiStatus: 'pending',
+            aiVerdict: ''
+          });
 
-        // Trigger background seller resolution
-        const productIdMatch = normalizedLink.match(/p(\d+)/);
-        const productId = productIdMatch ? productIdMatch[1] : null;
-        if (productId) {
-          resolveSellerInServerBackground(productId, normalizedLink);
-        }
-      } else {
-        const index = products.findIndex(p => p && getItemKey(p) === itemKey);
-        if (index !== -1) {
-          const oldPrice = products[index].price || 0;
-          const oldReviews = products[index].reviews || 0;
+          const productIdMatch = normalizedLink.match(/p(\d+)/);
+          const productId = productIdMatch ? productIdMatch[1] : null;
+          if (productId) {
+            resolveSellerInServerBackground(productId, normalizedLink);
+          }
+        } else {
+          const index = products.findIndex(p => p && getItemKey(p) === itemKey);
+          if (index !== -1) {
+            const oldPrice = products[index].price || 0;
+            const oldReviews = products[index].reviews || 0;
 
-          products[index].priceChange = itemPrice - oldPrice;
-          products[index].reviewsGrowth = itemReviews - oldReviews;
+            products[index].priceChange = itemPrice - oldPrice;
+            products[index].reviewsGrowth = itemReviews - oldReviews;
 
-          products[index].price = itemPrice;
-          products[index].oldPrice = itemOldPrice;
-          products[index].discount = itemDiscount;
-          products[index].reviews = itemReviews;
-          products[index].rating = itemRating;
-          products[index].name = item.name || products[index].name;
-          products[index].inStock = item.inStock !== false;
-          products[index].scrapedAt = new Date().toISOString();
-          if (item.category) products[index].category = item.category;
-          if (item.specs) products[index].specs = item.specs;
-          if (item.description) products[index].description = item.description;
-          if (item.detailedSpecsMap) products[index].detailedSpecsMap = item.detailedSpecsMap;
-          if (item.seller) products[index].seller = item.seller;
-          if (item.sellersCount) products[index].sellersCount = item.sellersCount;
+            products[index].price = itemPrice;
+            products[index].oldPrice = itemOldPrice;
+            products[index].discount = itemDiscount;
+            products[index].reviews = itemReviews;
+            products[index].rating = itemRating;
+            products[index].name = item.name || products[index].name;
+            products[index].inStock = item.inStock !== false;
+            products[index].scrapedAt = new Date().toISOString();
+            if (item.category) products[index].category = item.category;
+            if (item.specs) products[index].specs = item.specs;
+            if (item.description) products[index].description = item.description;
+            if (item.detailedSpecsMap) products[index].detailedSpecsMap = item.detailedSpecsMap;
+            if (item.seller) products[index].seller = item.seller;
+            if (item.sellersCount) products[index].sellersCount = item.sellersCount;
 
-          // If the seller remains Rozetka, verify it in the background
-          if (products[index].seller === 'Rozetka') {
-            const productIdMatch = normalizedLink.match(/p(\d+)/);
-            const productId = productIdMatch ? productIdMatch[1] : null;
-            if (productId) {
-              resolveSellerInServerBackground(productId, normalizedLink);
+            if (products[index].seller === 'Rozetka') {
+              const productIdMatch = normalizedLink.match(/p(\d+)/);
+              const productId = productIdMatch ? productIdMatch[1] : null;
+              if (productId) {
+                resolveSellerInServerBackground(productId, normalizedLink);
+              }
             }
           }
         }
+      } catch (e) {
+        console.error('Error processing scraped product item:', e, item);
       }
-    } catch (e) {
-      console.error('Error processing scraped product item:', e, item);
-    }
-  });
+    });
 
-  // Дедуплікуємо вхідний масив перед збереженням
-  const seenIds = new Set<string>();
-  products = products.filter((p: any) => {
-    if (!p) return false;
-    const key = getItemKey(p);
-    if (seenIds.has(key)) return false;
-    seenIds.add(key);
-    return true;
-  });
+    const seenIds = new Set<string>();
+    products = products.filter((p: any) => {
+      if (!p) return false;
+      const key = getItemKey(p);
+      if (seenIds.has(key)) return false;
+      seenIds.add(key);
+      return true;
+    });
 
-  // Рахуємо кількість товарів у поточній категорії для зворотного зв'язку
-  const currentCategory = newItems[0]?.category || 'Загальна';
-  const categoryCount = products.filter((p: any) => p && p.category === currentCategory).length;
+    const currentCategory = newItems[0]?.category || 'Загальна';
+    const categoryCount = products.filter((p: any) => p && p.category === currentCategory).length;
 
-  try {
-    updateLastActivityTime();
-    writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
-    res.json({ success: true, count: products.length, categoryCount: categoryCount });
+    await saveCurrentProducts(products);
+    res.json({ success: true, count: products.length, categoryCount });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-app.get('/api/products', (req, res) => {
-  checkAndCleanExpiredData();
-  res.json({ success: true, products });
+app.get('/api/products', async (req, res) => {
+  try {
+    const products = await getCurrentProducts();
+    res.json({ success: true, products });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
-app.post('/api/products/clear', (req, res) => {
-  products = [];
+app.post('/api/products/clear', async (req, res) => {
   try {
-    writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
+    await clearCurrentProducts();
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -333,14 +223,20 @@ app.post('/api/products/clear', (req, res) => {
 });
 
 // --- History & Snapshots Endpoints ---
-app.get('/api/history', (req, res) => {
-  res.json({ success: true, history });
+app.get('/api/history', async (req, res) => {
+  try {
+    const history = await getHistory();
+    res.json({ success: true, history });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
-app.post('/api/history', (req, res) => {
+app.post('/api/history', async (req, res) => {
   try {
     const { title, folderId, products: customProducts } = req.body || {};
-    const itemsToSave = customProducts && Array.isArray(customProducts) ? customProducts : products;
+    const currentProds = await getCurrentProducts();
+    const itemsToSave = customProducts && Array.isArray(customProducts) ? customProducts : currentProds;
 
     if (!itemsToSave || itemsToSave.length === 0) {
       res.status(400).json({ success: false, error: 'Немає товарів для збереження в знімок' });
@@ -371,19 +267,18 @@ app.post('/api/history', (req, res) => {
       products: JSON.parse(JSON.stringify(itemsToSave))
     };
 
-    history.unshift(newSnapshot);
-    saveHistory();
-
+    await saveHistorySnapshot(newSnapshot);
     res.json({ success: true, snapshot: newSnapshot });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-app.put('/api/history/:id', (req, res) => {
+app.put('/api/history/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { title, folderId } = req.body || {};
+    const history = await getHistory();
     const snapshot = history.find(s => s.id === id);
     if (!snapshot) {
       res.status(404).json({ success: false, error: 'Знімок не знайдено' });
@@ -393,57 +288,63 @@ app.put('/api/history/:id', (req, res) => {
     if (title !== undefined) snapshot.title = title.trim();
     if (folderId !== undefined) snapshot.folderId = folderId;
 
-    saveHistory();
+    await saveHistorySnapshot(snapshot);
     res.json({ success: true, snapshot });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-app.delete('/api/history/:id', (req, res) => {
+app.delete('/api/history/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    history = history.filter(s => s.id !== id);
-    saveHistory();
+    await deleteHistorySnapshot(id);
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-app.delete('/api/history', (req, res) => {
+app.delete('/api/history', async (req, res) => {
   try {
-    history = [];
-    saveHistory();
+    const history = await getHistory();
+    for (const s of history) {
+      await deleteHistorySnapshot(s.id);
+    }
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-app.post('/api/history/:id/restore', (req, res) => {
+app.post('/api/history/:id/restore', async (req, res) => {
   try {
     const { id } = req.params;
+    const history = await getHistory();
     const snapshot = history.find(s => s.id === id);
     if (!snapshot || !snapshot.products) {
       res.status(404).json({ success: false, error: 'Знімок не знайдено або він порожній' });
       return;
     }
 
-    products = JSON.parse(JSON.stringify(snapshot.products));
-    writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
-    res.json({ success: true, count: products.length, products });
+    await saveCurrentProducts(snapshot.products);
+    res.json({ success: true, count: snapshot.products.length, products: snapshot.products });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // --- Folders Endpoints ---
-app.get('/api/folders', (req, res) => {
-  res.json({ success: true, folders });
+app.get('/api/folders', async (req, res) => {
+  try {
+    const folders = await getFolders();
+    res.json({ success: true, folders });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
-app.post('/api/folders', (req, res) => {
+app.post('/api/folders', async (req, res) => {
   try {
     const { name, icon, color } = req.body || {};
     if (!name || !name.trim()) {
@@ -459,26 +360,17 @@ app.post('/api/folders', (req, res) => {
       createdAt: new Date().toISOString()
     };
 
-    folders.push(newFolder);
-    saveFolders();
+    await saveFolder(newFolder);
     res.json({ success: true, folder: newFolder });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-app.delete('/api/folders/:id', (req, res) => {
+app.delete('/api/folders/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    folders = folders.filter(f => f.id !== id);
-    saveFolders();
-
-    // Reassign snapshots in this folder to null (unassigned)
-    history.forEach(s => {
-      if (s.folderId === id) s.folderId = null;
-    });
-    saveHistory();
-
+    await deleteFolder(id);
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -533,7 +425,7 @@ function performAlgorithmicAudit(name: string, htmlContent: string, productItem:
   }
   const portsString = ports.length > 0 ? ports.join(', ') : 'USB-A';
 
-  // 4.5. Витягування точного сигналу повторних покупок з плашки Розетки ("12194 покупців придбали цей товар повторно")
+  // 5. Офіційна кількість продажів на Розетці (з бейджа "X покупців придбали цей товар")
   let realSalesCount: number | null = null;
   const salesMatch = htmlContent.match(/(\d+)\s*покупців\s*придбали\s*цей\s*товар/i);
   if (salesMatch) {
@@ -542,7 +434,6 @@ function performAlgorithmicAudit(name: string, htmlContent: string, productItem:
 
   const specs = `${capacity}, ${power}, ${fcString}, ${portsString}`;
 
-  // 5. Визначення вердикту та статусу
   let status: 'ok' | 'warning' | 'suspicious' = 'ok';
   const verdicts: string[] = [];
 
@@ -550,55 +441,21 @@ function performAlgorithmicAudit(name: string, htmlContent: string, productItem:
     verdicts.push(`🔥 Офіційна статистика Розетки: ${realSalesCount} покупців придбали цей товар повторно!`);
   }
 
-  const rating = productItem?.rating || 0;
-  const reviews = productItem?.reviews || 0;
-  const inStock = productItem?.inStock !== false;
-  const seller = productItem?.seller || 'Rozetka';
-
-  // Оцінка рейтингу
-  if (rating > 0 && rating < 4.0) {
+  // Логіка перевірки невідповідностей
+  if (name.toLowerCase().includes('30000') && capacity.includes('20000')) {
     status = 'warning';
-    verdicts.push(`Увага: низький рейтинг товару (${rating}/5.0). Покупці вказують на технічні недоліки.`);
-  } else if (rating >= 4.5) {
-    verdicts.push(`Високий рейтинг (${rating}/5.0) підтверджує якість пристрою.`);
-  } else if (rating === 0) {
-    status = 'suspicious';
-    verdicts.push(`Товар не має оцінок та відгуків покупців.`);
+    verdicts.push('У назві вказано 30000mAh, але в описі знайдено 20000mAh. Можлива неточність.');
   }
 
-  // Оцінка попиту (кількість відгуків)
-  if (reviews > 50) {
-    verdicts.push(`Підтверджений попит: більше 50 відгуків.`);
-  } else if (reviews > 0 && reviews <= 10) {
-    verdicts.push(`Слабкий інтерес покупців: менше 10 відгуків.`);
+  if (power.includes('65W') || power.includes('100W') || power.includes('140W')) {
+    verdicts.push(`⚡ Підтримує зарядку ноутбуків (${power}).`);
   }
 
-  // Оцінка домінування Rozetka
-  if (seller.toLowerCase() === 'rozetka') {
-    if (status === 'ok') {
-      status = 'warning';
-    }
-    verdicts.push(`Продавець — сама Rozetka. Конкурувати за позиції в топі буде складно.`);
-  } else {
-    verdicts.push(`Продається стороннім продавцем (${seller}), що полегшує вихід на ринок.`);
+  if (verdicts.length === 0) {
+    verdicts.push('Характеристики виглядають коректно та відповідають опису.');
   }
 
-  // Перевірка невідповідності характеристик назві
-  const nameCapacityMatch = name.match(/(\d{3,6})\s*(?:mah|маг|мАг)/i);
-  if (nameCapacityMatch && capacityMatch) {
-    const nameCap = parseInt(nameCapacityMatch[1]);
-    const bodyCap = parseInt(capacityMatch[1]);
-    if (Math.abs(nameCap - bodyCap) > 1000) {
-      status = 'suspicious';
-      verdicts.push(`Критична невідповідність! У назві вказано ${nameCap} mAh, але характеристики сторінки зазначають ${bodyCap} mAh.`);
-    }
-  }
-
-  if (!inStock) {
-    verdicts.push(`Немає в наявності.`);
-  }
-
-  const verdict = verdicts.join(' ') || 'Характеристики відповідають опису. Товар стабільний.';
+  const verdict = verdicts.join(' ');
 
   return { status, verdict, specs, realSalesCount };
 }
@@ -609,6 +466,7 @@ app.post('/api/products/analyze', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Product link is required' });
   }
 
+  const products = await getCurrentProducts();
   const productItem = products.find(p => p && p.link === link) || {};
   let htmlContent = '';
   
@@ -675,7 +533,7 @@ ${htmlContent || 'No page content available.'}
         if (parsed.specs) {
           products[prodIndex].specs = parsed.specs;
         }
-        writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
+        await saveCurrentProducts(products);
       }
 
       return res.json({ success: true, status: parsed.status, verdict: parsed.verdict, specs: parsed.specs });
@@ -697,7 +555,7 @@ ${htmlContent || 'No page content available.'}
     if (auditResult.realSalesCount) {
       products[prodIndex].realSalesCount = auditResult.realSalesCount;
     }
-    writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf-8');
+    await saveCurrentProducts(products);
   }
 
   return res.json({
