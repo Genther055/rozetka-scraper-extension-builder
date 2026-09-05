@@ -92,6 +92,7 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
       return pName;
     };
 
+    const { sessionId, sessionTitle } = req.body || {};
     let products = await getCurrentProducts();
 
     newItems.forEach((item: any) => {
@@ -105,6 +106,8 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
         const itemRating = typeof item.rating === 'number' ? item.rating : parseFloat(item.rating) || 5.0;
         const itemOldPrice = typeof item.oldPrice === 'number' ? item.oldPrice : (parseFloat(item.oldPrice) || itemPrice);
         const itemDiscount = typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0);
+        const itemSessionTitle = item.sessionTitle || sessionTitle || '';
+        const itemSessionId = item.sessionId || sessionId || '';
 
         const itemKey = getItemKey({ ...item, link: normalizedLink });
         const exists = products.some(p => p && getItemKey(p) === itemKey);
@@ -119,6 +122,8 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
             reviews: itemReviews,
             inStock: item.inStock !== false,
             category: item.category || 'Загальна',
+            sessionTitle: itemSessionTitle,
+            sessionId: itemSessionId,
             specs: item.specs || '',
             description: item.description || '',
             detailedSpecsMap: item.detailedSpecsMap || {},
@@ -153,6 +158,8 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
             products[index].inStock = item.inStock !== false;
             products[index].scrapedAt = new Date().toISOString();
             if (item.category) products[index].category = item.category;
+            if (itemSessionTitle) products[index].sessionTitle = itemSessionTitle;
+            if (itemSessionId) products[index].sessionId = itemSessionId;
             if (item.specs) products[index].specs = item.specs;
             if (item.description) products[index].description = item.description;
             if (item.detailedSpecsMap) products[index].detailedSpecsMap = item.detailedSpecsMap;
@@ -186,6 +193,44 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
     const categoryCount = products.filter((p: any) => p && p.category === currentCategory).length;
 
     await saveCurrentProducts(products);
+
+    // Auto-update or create snapshot in history for this session in Neon DB
+    const activeTitle = (sessionTitle || newItems[0]?.sessionTitle || currentCategory || '').trim();
+    if (activeTitle && activeTitle !== 'Загальна') {
+      try {
+        const sessionSnapshotId = (sessionId || 'snap_' + activeTitle.toLowerCase().replace(/[^a-z0-9а-яіїєґ]/gi, '_')).substring(0, 100);
+        const sessionProducts = products.filter((p: any) => 
+          (sessionId && p.sessionId === sessionId) || 
+          (p.sessionTitle && p.sessionTitle === activeTitle) ||
+          (p.category && p.category === currentCategory)
+        );
+
+        if (sessionProducts.length > 0) {
+          const prices = sessionProducts.map((p: any) => p.price || 0).filter((pr: number) => pr > 0);
+          const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length) : 0;
+          const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+          const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
+          const sellers = new Set(sessionProducts.map((p: any) => p.seller || 'Rozetka'));
+
+          await saveHistorySnapshot({
+            id: sessionSnapshotId,
+            title: `Збір ${activeTitle}`,
+            folderId: null,
+            scrapedAt: new Date().toISOString(),
+            itemCount: sessionProducts.length,
+            category: currentCategory,
+            avgPrice,
+            minPrice,
+            maxPrice,
+            sellersCount: sellers.size,
+            products: sessionProducts
+          });
+        }
+      } catch (snapErr) {
+        console.warn('Auto-snapshot error for session:', snapErr);
+      }
+    }
+
     res.json({ success: true, count: products.length, categoryCount: categoryCount });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });

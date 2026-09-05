@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Rozetka Scraper to n8n",
-  "version": "2.5",
-  "description": "Scrapes product data from Rozetka and sends it to n8n webhook or local API.",
+  "name": "TradeScout Rozetka Scraper",
+  "version": "3.0",
+  "description": "Multi-tab parallel scraper for Rozetka with headless background processing and automated TradeScout integration.",
   "permissions": [
     "activeTab",
+    "tabs",
     "scripting",
     "storage",
     "notifications"

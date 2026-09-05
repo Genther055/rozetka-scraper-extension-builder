@@ -1,0 +1,32 @@
+[
+  {
+    "id": "snap_test_1",
+    "title": "��� ���������� Anker (356 ��)",
+    "folderId": null,
+    "scrapedAt": "2026-09-05T12:05:07.593Z",
+    "itemCount": 356,
+    "category": "����������",
+    "avgPrice": 1650,
+    "minPrice": 399,
+    "maxPrice": 5999,
+    "sellersCount": 18,
+    "products": [
+      {
+        "link": "https://rozetka.com.ua/p11111",
+        "name": "Anker PowerCore 20000mAh",
+        "price": 1799,
+        "rating": 4.8,
+        "seller": "Anker Official",
+        "reviews": 154
+      },
+      {
+        "link": "https://rozetka.com.ua/p22222",
+        "name": "Baseus Blade 100W Power Bank",
+        "price": 2899,
+        "rating": 4.6,
+        "seller": "Baseus Store",
+        "reviews": 98
+      }
+    ]
+  }
+]

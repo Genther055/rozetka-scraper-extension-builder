@@ -164,6 +164,8 @@ interface Product {
   isAuditing?: boolean;
   inStock?: boolean;
   category?: string;
+  sessionTitle?: string;
+  sessionId?: string;
   specs?: string;
   description?: string;
   seller?: string;
@@ -191,11 +193,44 @@ export class DashboardComponent implements OnInit {
 
   // Filters
   searchQuery = '';
+  selectedSessionTitle = 'all'; // 'all' or specific session title (e.g. 'Повербанки Anker', 'Повербанки Sigma')
   minPrice = 0;
   maxPrice: number | null = null;
   minRating = 0;
   statusFilter = 'all';
   stockFilter = 'all';
+
+  getAvailableSessions(): Array<{ title: string, count: number }> {
+    if (!this.products || this.products.length === 0) return [];
+    const map = new Map<string, number>();
+    for (const p of this.products) {
+      const t = (p.sessionTitle || p.category || 'Загальна').trim();
+      if (t) {
+        map.set(t, (map.get(t) || 0) + 1);
+      }
+    }
+    const result: Array<{ title: string, count: number }> = [];
+    map.forEach((count, title) => {
+      result.push({ title, count });
+    });
+    return result.sort((a, b) => b.count - a.count);
+  }
+
+  selectSession(title: string) {
+    this.selectedSessionTitle = title;
+    this.applyFilters();
+    this.calculateMetrics();
+    this.cdr.markForCheck();
+  }
+
+  getActiveSessionProducts(): Product[] {
+    if (!this.products || this.products.length === 0) return [];
+    if (this.selectedSessionTitle === 'all') return this.products;
+    return this.products.filter(p => 
+      (p.sessionTitle && p.sessionTitle === this.selectedSessionTitle) || 
+      (p.category && p.category === this.selectedSessionTitle)
+    );
+  }
 
   // History & Folders State
   folders: ScrapingFolder[] = [];
@@ -1117,13 +1152,14 @@ export class DashboardComponent implements OnInit {
   }
 
   calculateOpportunityScore() {
-    if (this.products.length === 0) {
+    const activeProducts = this.getActiveSessionProducts();
+    if (activeProducts.length === 0) {
       this.nicheOpportunityScore = 0;
       return;
     }
 
     // 1. Рівень попиту (середня кількість відгуків)
-    const avgReviews = this.products.reduce((acc, p) => acc + p.reviews, 0) / this.products.length;
+    const avgReviews = activeProducts.reduce((acc, p) => acc + p.reviews, 0) / activeProducts.length;
     let demandScore = 0;
     if (avgReviews > 100) demandScore = 4;
     else if (avgReviews > 30) demandScore = 3;
@@ -1131,15 +1167,15 @@ export class DashboardComponent implements OnInit {
     else demandScore = 1;
 
     // 2. Рівень конкуренції (частка Rozetka як продавця)
-    const rozetkaSellers = this.products.filter(p => p.seller && p.seller.toLowerCase() === 'rozetka').length;
-    const rozetkaShare = rozetkaSellers / this.products.length;
+    const rozetkaSellers = activeProducts.filter(p => p.seller && p.seller.toLowerCase() === 'rozetka').length;
+    const rozetkaShare = rozetkaSellers / activeProducts.length;
     let compScore = 0;
     if (rozetkaShare < 0.25) compScore = 3; // мало товарів від Rozetka -> високі шанси для нас
     else if (rozetkaShare < 0.6) compScore = 2;
     else compScore = 1; // Rozetka домінує -> низькі шанси
 
     // 3. Рівень оптимізації конкурентів (середній LQS)
-    const avgLqs = this.products.reduce((acc, p) => acc + this.calculateLQS(p), 0) / this.products.length;
+    const avgLqs = activeProducts.reduce((acc, p) => acc + this.calculateLQS(p), 0) / activeProducts.length;
     let lqsScore = 0;
     if (avgLqs < 5.5) lqsScore = 3; // у конкурентів погано налаштовані картки -> великий потенціал
     else if (avgLqs < 7.5) lqsScore = 2;
@@ -1149,8 +1185,9 @@ export class DashboardComponent implements OnInit {
   }
 
   calculateMetrics() {
-    this.totalItems = this.products.length;
-    this.analyticsSummary = computeMarketplaceAnalytics(this.products);
+    const activeProducts = this.getActiveSessionProducts();
+    this.totalItems = activeProducts.length;
+    this.analyticsSummary = computeMarketplaceAnalytics(activeProducts);
 
     if (this.analyticsSummary) {
       this.avgPrice = this.analyticsSummary.kpi.avgPrice;
@@ -1164,7 +1201,7 @@ export class DashboardComponent implements OnInit {
       this.sellersCount = 0;
     }
 
-    const ratedProducts = this.products.filter(p => (p.reviews || 0) > 0 && (p.rating || 0) > 0);
+    const ratedProducts = activeProducts.filter(p => (p.reviews || 0) > 0 && (p.rating || 0) > 0);
     if (ratedProducts.length > 0) {
       const sumRating = ratedProducts.reduce((acc, curr) => acc + curr.rating, 0);
       this.avgRating = parseFloat((sumRating / ratedProducts.length).toFixed(1));
@@ -1172,13 +1209,14 @@ export class DashboardComponent implements OnInit {
       this.avgRating = 0;
     }
     
-    this.aiAlertsCount = this.products.filter(p => p.aiStatus === 'warning' || p.aiStatus === 'suspicious').length;
+    this.aiAlertsCount = activeProducts.filter(p => p.aiStatus === 'warning' || p.aiStatus === 'suspicious').length;
     this.calculateOpportunityScore();
     this.calculateSellerAnalytics();
   }
 
   calculateSellerAnalytics() {
-    if (!this.products || this.products.length === 0) {
+    const activeProducts = this.getActiveSessionProducts();
+    if (!activeProducts || activeProducts.length === 0) {
       this.sellerStats = [];
       this.sellerPieSegments = [];
       this.topSellerByAssortment = null;
@@ -1195,7 +1233,7 @@ export class DashboardComponent implements OnInit {
       inStockCount: number;
     }>();
 
-    for (const p of this.products) {
+    for (const p of activeProducts) {
       const seller = (p.seller && p.seller.trim()) ? p.seller.trim() : 'Rozetka';
       if (!sellerMap.has(seller)) {
         sellerMap.set(seller, {
@@ -1230,7 +1268,7 @@ export class DashboardComponent implements OnInit {
       '#64748b'  // Slate
     ];
 
-    const totalProducts = this.products.length;
+    const totalProducts = activeProducts.length;
     const stats: SellerStat[] = [];
 
     sellerMap.forEach((data, name) => {
@@ -1487,8 +1525,8 @@ export class DashboardComponent implements OnInit {
   }
 
   calculateTotalNicheReviews(): number {
-    if (!this.products) return 0;
-    return this.products.reduce((acc, curr) => acc + (curr.reviews || 0), 0);
+    const active = this.getActiveSessionProducts();
+    return active.reduce((acc, curr) => acc + (curr.reviews || 0), 0);
   }
 
   // Sorting State
@@ -1507,7 +1545,8 @@ export class DashboardComponent implements OnInit {
   }
 
   applyFilters() {
-    this.filteredProducts = this.products.filter(p => {
+    const baseProducts = this.getActiveSessionProducts();
+    this.filteredProducts = baseProducts.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(this.searchQuery.toLowerCase());
       const matchesPrice = p.price >= (this.minPrice || 0) && (this.maxPrice === null || this.maxPrice === undefined || p.price <= this.maxPrice);
       const matchesRating = p.rating >= this.minRating;

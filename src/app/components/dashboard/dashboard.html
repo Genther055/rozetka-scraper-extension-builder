@@ -179,6 +179,59 @@
         <p class="text-sm text-slate-400 font-semibold">Завантаження аналітики...</p>
       </div>
 
+      <!-- Multi-Session Switcher Bar -->
+      <section *ngIf="products.length > 0 && getAvailableSessions().length > 1" class="bg-[#111827]/80 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-3 px-4 flex flex-wrap items-center justify-between gap-3 shadow-lg shadow-black/20">
+        <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar py-0.5 max-w-full">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider pr-2 border-r border-slate-700/80 shrink-0">
+            <span class="material-icons text-sm text-indigo-400">filter_alt</span>
+            <span>Збори:</span>
+          </div>
+
+          <!-- All Sessions Pill -->
+          <button 
+            (click)="selectSession('all')"
+            [class.bg-gradient-to-r]="selectedSessionTitle === 'all'"
+            [class.from-indigo-600]="selectedSessionTitle === 'all'"
+            [class.to-purple-600]="selectedSessionTitle === 'all'"
+            [class.text-white]="selectedSessionTitle === 'all'"
+            [class.border-indigo-400]="selectedSessionTitle === 'all'"
+            [class.shadow-md]="selectedSessionTitle === 'all'"
+            [class.bg-slate-900]="selectedSessionTitle !== 'all'"
+            [class.text-slate-300]="selectedSessionTitle !== 'all'"
+            [class.border-slate-700]="selectedSessionTitle !== 'all'"
+            class="px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 shrink-0 hover:border-indigo-400/80"
+          >
+            <span>Всі зібрані товари</span>
+            <span class="bg-black/40 px-2 py-0.5 rounded-md text-[11px] font-mono">{{ products.length }}</span>
+          </button>
+
+          <!-- Individual Session Pills -->
+          <button 
+            *ngFor="let s of getAvailableSessions()"
+            (click)="selectSession(s.title)"
+            [class.bg-gradient-to-r]="selectedSessionTitle === s.title"
+            [class.from-indigo-600]="selectedSessionTitle === s.title"
+            [class.to-purple-600]="selectedSessionTitle === s.title"
+            [class.text-white]="selectedSessionTitle === s.title"
+            [class.border-indigo-400]="selectedSessionTitle === s.title"
+            [class.shadow-md]="selectedSessionTitle === s.title"
+            [class.bg-slate-900]="selectedSessionTitle !== s.title"
+            [class.text-slate-300]="selectedSessionTitle !== s.title"
+            [class.border-slate-700]="selectedSessionTitle !== s.title"
+            class="px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 shrink-0 hover:border-indigo-400/80"
+          >
+            <span>{{ s.title }}</span>
+            <span class="bg-black/40 px-2 py-0.5 rounded-md text-[11px] font-mono">{{ s.count }}</span>
+          </button>
+        </div>
+
+        <div *ngIf="selectedSessionTitle !== 'all'" class="text-xs text-indigo-300/90 font-medium flex items-center gap-1.5 shrink-0">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Збір: <strong>{{ selectedSessionTitle }}</strong></span>
+          <button (click)="selectSession('all')" class="ml-1 text-slate-400 hover:text-white underline cursor-pointer text-[11px]">Показати всі</button>
+        </div>
+      </section>
+
       <!-- Stats Grid (Hidden if no products) -->
       <!-- Stats Grid (5 Deterministic Cards: Обсяг вибірки, Цінові орієнтири, Складські залишки, Концентрація CR3, Бар'єр входу) -->
       <section *ngIf="products.length > 0 && analyticsSummary" class="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6 relative z-30">
