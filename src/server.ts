@@ -222,6 +222,17 @@ app.post('/api/products/clear', async (req, res) => {
   }
 });
 
+app.post('/api/products/replace', async (req, res) => {
+  try {
+    const newItems = req.body ? (req.body.products || req.body) : [];
+    const safeItems = Array.isArray(newItems) ? newItems : [];
+    await saveCurrentProducts(safeItems);
+    res.json({ success: true, count: safeItems.length, products: safeItems });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // --- History & Snapshots Endpoints ---
 app.get('/api/history', async (req, res) => {
   try {

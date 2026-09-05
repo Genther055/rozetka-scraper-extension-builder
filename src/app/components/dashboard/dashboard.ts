@@ -922,22 +922,23 @@ export class DashboardComponent implements OnInit {
       actionText: 'Завантажити на дашборд',
       actionType: 'primary',
       onConfirm: () => {
-        // Instant local restore
-        if (snapshot.products && snapshot.products.length > 0) {
-          this.products = JSON.parse(JSON.stringify(snapshot.products));
-          this.applyFilters();
-          this.calculateMetrics();
-          this.showNotification(`Збір «${snapshot.title}» успішно завантажено в робочу область!`);
-          this.activeTab = 'overview';
-          this.cdr.markForCheck();
-        }
+        const snapProducts = snapshot.products ? JSON.parse(JSON.stringify(snapshot.products)) : [];
 
+        // 1. Instant local replacement
+        this.products = snapProducts;
+        this.applyFilters();
+        this.calculateMetrics();
+        this.showNotification(`Збір «${snapshot.title}» успішно завантажено в робочу область!`);
+        this.activeTab = 'overview';
+        this.cdr.markForCheck();
+
+        // 2. Direct server replacement in PostgreSQL
         this.http.post<{ success: boolean, count: number, products: Product[] }>(
-          `${this.apiUrl}/api/history/${snapshot.id}/restore`,
-          { products: snapshot.products || [] }
+          `${this.apiUrl}/api/products/replace`,
+          { products: snapProducts }
         ).subscribe({
           next: (res) => {
-            if (res.success && res.products && res.products.length > 0) {
+            if (res.success && res.products) {
               this.products = res.products;
               this.applyFilters();
               this.calculateMetrics();
@@ -945,13 +946,7 @@ export class DashboardComponent implements OnInit {
             }
           },
           error: (err) => {
-            console.warn('Server restore error, syncing directly to /api/products:', err);
-            if (snapshot.products && snapshot.products.length > 0) {
-              this.http.post(`${this.apiUrl}/api/products`, { products: snapshot.products }).subscribe({
-                next: () => {},
-                error: () => {}
-              });
-            }
+            console.warn('Server replace error (restored in browser memory):', err);
           }
         });
       }
