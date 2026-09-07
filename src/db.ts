@@ -1,7 +1,8 @@
-﻿import pg from 'pg';
+import pg from 'pg';
 const { Pool } = pg;
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import crypto from 'node:crypto';
 
 export interface ScrapingFolder {
   id: string;
@@ -25,6 +26,34 @@ export interface ScrapingSnapshot {
   products: any[];
 }
 
+export interface AppUser {
+  id: string;
+  username: string;
+  passwordHash: string;
+  role: 'admin' | 'analyst';
+  displayName: string;
+  avatarGradient: string;
+  isActive: boolean;
+  createdAt: string;
+  lastLoginAt?: string | null;
+}
+
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+  return `${salt}:${hash}`;
+}
+
+export function verifyPassword(password: string, combinedHash: string): boolean {
+  if (!combinedHash) return false;
+  if (!combinedHash.includes(':')) {
+    return password === combinedHash;
+  }
+  const [salt, originalHash] = combinedHash.split(':');
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+  return hash === originalHash;
+}
+
 const DEFAULT_DATABASE_URL = 'postgresql://neondb_owner:npg_KbeUo8CqvT3Q@ep-quiet-firefly-b2wqehc5-pooler.c-6.eu-central-1.aws.neon.tech/neondb?sslmode=require';
 const connectionString = process.env['DATABASE_URL'] || DEFAULT_DATABASE_URL;
 
@@ -35,6 +64,7 @@ const dataDir = existsSync(join(process.cwd(), 'data'))
 const dataFilePath = join(dataDir, 'products.json');
 const historyFilePath = join(dataDir, 'history.json');
 const foldersFilePath = join(dataDir, 'folders.json');
+const usersFilePath = join(dataDir, 'users.json');
 
 if (!existsSync(dataDir)) {
   try { mkdirSync(dataDir, { recursive: true }); } catch (_) {}
@@ -89,6 +119,18 @@ export async function initDb(): Promise<void> {
           icon VARCHAR(50),
           color VARCHAR(50),
           created_at TIMESTAMP DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS users (
+          id VARCHAR(255) PRIMARY KEY,
+          username VARCHAR(255) UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          role VARCHAR(50) NOT NULL DEFAULT 'analyst',
+          display_name VARCHAR(255),
+          avatar_gradient VARCHAR(255),
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT NOW(),
+          last_login_at TIMESTAMP
         );
       `);
 
@@ -161,6 +203,53 @@ async function autoMigrateLocalData(client: pg.PoolClient) {
           }
         }
       } catch (_) {}
+    }
+
+    // Check users
+    const usersRes = await client.query('SELECT COUNT(*) FROM users');
+    if (parseInt(usersRes.rows[0].count, 10) === 0) {
+      let seedUsers: AppUser[] = [];
+      if (existsSync(usersFilePath)) {
+        try {
+          const raw = readFileSync(usersFilePath, 'utf-8').replace(/^\uFEFF/, '').trim();
+          if (raw) seedUsers = JSON.parse(raw);
+        } catch (_) {}
+      }
+      if (seedUsers.length === 0) {
+        seedUsers = [
+          {
+            id: 'usr_admin',
+            username: 'admin',
+            passwordHash: hashPassword('admin'),
+            role: 'admin',
+            displayName: 'Головний адміністратор',
+            avatarGradient: 'from-indigo-600 to-purple-600',
+            isActive: true,
+            createdAt: new Date().toISOString()
+          },
+          {
+            id: 'usr_analyst',
+            username: 'analyst',
+            passwordHash: hashPassword('analyst123'),
+            role: 'analyst',
+            displayName: 'Аналітик команди',
+            avatarGradient: 'from-cyan-500 to-blue-600',
+            isActive: true,
+            createdAt: new Date().toISOString()
+          }
+        ];
+        try {
+          writeFileSync(usersFilePath, JSON.stringify(seedUsers, null, 2), 'utf-8');
+        } catch (_) {}
+      }
+
+      for (const u of seedUsers) {
+        await client.query(`
+          INSERT INTO users (id, username, password_hash, role, display_name, avatar_gradient, is_active, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          ON CONFLICT (id) DO NOTHING
+        `, [u.id, u.username, u.passwordHash, u.role, u.displayName, u.avatarGradient, u.isActive, u.createdAt]);
+      }
     }
   } catch (err) {
     console.warn('[Neon DB] Auto-migration skipped:', err);
@@ -392,4 +481,234 @@ export async function deleteFolder(id: string): Promise<void> {
       writeFileSync(foldersFilePath, JSON.stringify(list, null, 2), 'utf-8');
     }
   } catch (_) {}
+}
+
+// --- Users CRUD ---
+export async function getUsers(): Promise<AppUser[]> {
+  if (pool && isDbAvailable) {
+    try {
+      const res = await pool.query(`
+        SELECT 
+          id, username, password_hash AS "passwordHash", role,
+          display_name AS "displayName", avatar_gradient AS "avatarGradient",
+          is_active AS "isActive", created_at AS "createdAt",
+          last_login_at AS "lastLoginAt"
+        FROM users
+        ORDER BY created_at ASC
+      `);
+      return res.rows.map(r => ({
+        ...r,
+        createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+        lastLoginAt: r.lastLoginAt ? new Date(r.lastLoginAt).toISOString() : null
+      }));
+    } catch (err) {
+      console.error('[Neon DB] Error reading users:', err);
+    }
+  }
+
+  // Fallback
+  if (existsSync(usersFilePath)) {
+    try {
+      const raw = readFileSync(usersFilePath, 'utf-8').replace(/^\uFEFF/, '').trim();
+      return raw ? JSON.parse(raw) : [];
+    } catch (_) {}
+  }
+  return [];
+}
+
+export async function getUserByUsername(username: string): Promise<AppUser | null> {
+  const clean = username.trim().toLowerCase();
+  if (pool && isDbAvailable) {
+    try {
+      const res = await pool.query(`
+        SELECT 
+          id, username, password_hash AS "passwordHash", role,
+          display_name AS "displayName", avatar_gradient AS "avatarGradient",
+          is_active AS "isActive", created_at AS "createdAt",
+          last_login_at AS "lastLoginAt"
+        FROM users
+        WHERE LOWER(username) = $1
+      `, [clean]);
+      if (res.rows.length > 0) {
+        const r = res.rows[0];
+        return {
+          ...r,
+          createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+          lastLoginAt: r.lastLoginAt ? new Date(r.lastLoginAt).toISOString() : null
+        };
+      }
+      return null;
+    } catch (err) {
+      console.error('[Neon DB] Error finding user by username:', err);
+    }
+  }
+
+  const list = await getUsers();
+  return list.find(u => u.username.toLowerCase() === clean) || null;
+}
+
+export async function getUserById(id: string): Promise<AppUser | null> {
+  if (pool && isDbAvailable) {
+    try {
+      const res = await pool.query(`
+        SELECT 
+          id, username, password_hash AS "passwordHash", role,
+          display_name AS "displayName", avatar_gradient AS "avatarGradient",
+          is_active AS "isActive", created_at AS "createdAt",
+          last_login_at AS "lastLoginAt"
+        FROM users
+        WHERE id = $1
+      `, [id]);
+      if (res.rows.length > 0) {
+        const r = res.rows[0];
+        return {
+          ...r,
+          createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+          lastLoginAt: r.lastLoginAt ? new Date(r.lastLoginAt).toISOString() : null
+        };
+      }
+      return null;
+    } catch (err) {
+      console.error('[Neon DB] Error finding user by id:', err);
+    }
+  }
+
+  const list = await getUsers();
+  return list.find(u => u.id === id) || null;
+}
+
+export async function createUser(data: {
+  username: string;
+  password: string;
+  role: 'admin' | 'analyst';
+  displayName?: string;
+  avatarGradient?: string;
+}): Promise<AppUser> {
+  const newUser: AppUser = {
+    id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    username: data.username.trim().toLowerCase(),
+    passwordHash: hashPassword(data.password),
+    role: data.role || 'analyst',
+    displayName: data.displayName?.trim() || data.username.trim(),
+    avatarGradient: data.avatarGradient || 'from-indigo-600 to-purple-600',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    lastLoginAt: null
+  };
+
+  if (pool && isDbAvailable) {
+    try {
+      await pool.query(`
+        INSERT INTO users (id, username, password_hash, role, display_name, avatar_gradient, is_active, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `, [
+        newUser.id, newUser.username, newUser.passwordHash, newUser.role,
+        newUser.displayName, newUser.avatarGradient, newUser.isActive, newUser.createdAt
+      ]);
+    } catch (err) {
+      console.error('[Neon DB] Error creating user:', err);
+    }
+  }
+
+  try {
+    const list = await getUsers();
+    list.push(newUser);
+    writeFileSync(usersFilePath, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (_) {}
+
+  return newUser;
+}
+
+export async function updateUser(id: string, updates: Partial<AppUser>): Promise<AppUser | null> {
+  const existing = await getUserById(id);
+  if (!existing) return null;
+
+  const updated: AppUser = {
+    ...existing,
+    ...updates,
+    id: existing.id // protect id
+  };
+
+  if (pool && isDbAvailable) {
+    try {
+      await pool.query(`
+        UPDATE users
+        SET display_name = $1, role = $2, avatar_gradient = $3, is_active = $4
+        WHERE id = $5
+      `, [updated.displayName, updated.role, updated.avatarGradient, updated.isActive, id]);
+    } catch (err) {
+      console.error('[Neon DB] Error updating user:', err);
+    }
+  }
+
+  try {
+    const list = await getUsers();
+    const idx = list.findIndex(u => u.id === id);
+    if (idx !== -1) {
+      list[idx] = updated;
+      writeFileSync(usersFilePath, JSON.stringify(list, null, 2), 'utf-8');
+    }
+  } catch (_) {}
+
+  return updated;
+}
+
+export async function updateUserPassword(id: string, newPlainPassword: string): Promise<boolean> {
+  const passwordHash = hashPassword(newPlainPassword);
+  if (pool && isDbAvailable) {
+    try {
+      await pool.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [passwordHash, id]);
+    } catch (err) {
+      console.error('[Neon DB] Error updating user password:', err);
+    }
+  }
+
+  try {
+    const list = await getUsers();
+    const idx = list.findIndex(u => u.id === id);
+    if (idx !== -1) {
+      list[idx].passwordHash = passwordHash;
+      writeFileSync(usersFilePath, JSON.stringify(list, null, 2), 'utf-8');
+    }
+  } catch (_) {}
+
+  return true;
+}
+
+export async function recordUserLogin(id: string): Promise<void> {
+  const now = new Date().toISOString();
+  if (pool && isDbAvailable) {
+    try {
+      await pool.query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [id]);
+    } catch (err) {
+      console.error('[Neon DB] Error updating user last_login:', err);
+    }
+  }
+
+  try {
+    const list = await getUsers();
+    const idx = list.findIndex(u => u.id === id);
+    if (idx !== -1) {
+      list[idx].lastLoginAt = now;
+      writeFileSync(usersFilePath, JSON.stringify(list, null, 2), 'utf-8');
+    }
+  } catch (_) {}
+}
+
+export async function deleteUser(id: string): Promise<boolean> {
+  if (pool && isDbAvailable) {
+    try {
+      await pool.query(`DELETE FROM users WHERE id = $1`, [id]);
+    } catch (err) {
+      console.error('[Neon DB] Error deleting user:', err);
+    }
+  }
+
+  try {
+    let list = await getUsers();
+    list = list.filter(u => u.id !== id);
+    writeFileSync(usersFilePath, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (_) {}
+
+  return true;
 }

@@ -12,8 +12,18 @@ import {
   getFolders,
   saveFolder,
   deleteFolder,
+  getUsers,
+  getUserByUsername,
+  getUserById,
+  createUser,
+  updateUser,
+  updateUserPassword,
+  recordUserLogin,
+  deleteUser,
+  verifyPassword,
   ScrapingFolder,
-  ScrapingSnapshot
+  ScrapingSnapshot,
+  AppUser
 } from './db.js';
 
 // Initialize DB on launch
@@ -641,6 +651,179 @@ app.post('/api/products/analyze', async (req, res) => {
     specs: auditResult.specs,
     realSalesCount: auditResult.realSalesCount
   });
+});
+
+// --- AUTH & USER MANAGEMENT ENDPOINTS ---
+
+// 1. User Login with credentials verification
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: "Будь ласка, введіть логін та пароль" });
+  }
+
+  const user = await getUserByUsername(username);
+  if (!user) {
+    return res.status(401).json({ success: false, error: "Користувача з таким логіном не знайдено" });
+  }
+
+  if (!user.isActive) {
+    return res.status(403).json({ success: false, error: "Цей обліковий запис заблоковано. Зверніться до адміністратора" });
+  }
+
+  const isMatch = verifyPassword(password, user.passwordHash);
+  if (!isMatch) {
+    return res.status(401).json({ success: false, error: "Неправильний пароль. Перевірте введені дані" });
+  }
+
+  await recordUserLogin(user.id);
+
+  return res.json({
+    success: true,
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      displayName: user.displayName,
+      avatarGradient: user.avatarGradient,
+      isActive: user.isActive,
+      lastLoginAt: new Date().toISOString()
+    }
+  });
+});
+
+// 2. Get all users
+app.get('/api/users', async (req, res) => {
+  try {
+    const list = await getUsers();
+    const safeList = list.map(u => ({
+      id: u.id,
+      username: u.username,
+      role: u.role,
+      displayName: u.displayName,
+      avatarGradient: u.avatarGradient,
+      isActive: u.isActive,
+      createdAt: u.createdAt,
+      lastLoginAt: u.lastLoginAt
+    }));
+    return res.json({ success: true, users: safeList });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. Create new user
+app.post('/api/users', async (req, res) => {
+  try {
+    const { username, password, role, displayName, avatarGradient } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ success: false, error: "Логін та пароль обов'язкові" });
+    }
+
+    const cleanUsername = username.trim().toLowerCase();
+    const existing = await getUserByUsername(cleanUsername);
+    if (existing) {
+      return res.status(400).json({ success: false, error: "Користувач з таким логіном вже існує" });
+    }
+
+    const created = await createUser({
+      username: cleanUsername,
+      password: password.trim(),
+      role: role === 'admin' ? 'admin' : 'analyst',
+      displayName: displayName || cleanUsername,
+      avatarGradient: avatarGradient || 'from-indigo-600 to-purple-600'
+    });
+
+    return res.json({
+      success: true,
+      user: {
+        id: created.id,
+        username: created.username,
+        role: created.role,
+        displayName: created.displayName,
+        avatarGradient: created.avatarGradient,
+        isActive: created.isActive,
+        createdAt: created.createdAt,
+        lastLoginAt: created.lastLoginAt
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. Update user details (name, role, avatar, active status)
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { displayName, role, avatarGradient, isActive } = req.body;
+    const updated = await updateUser(id, {
+      displayName,
+      role: role === 'admin' ? 'admin' : 'analyst',
+      avatarGradient,
+      isActive: typeof isActive === 'boolean' ? isActive : true
+    });
+
+    if (!updated) {
+      return res.status(404).json({ success: false, error: "Користувача не знайдено" });
+    }
+
+    return res.json({
+      success: true,
+      user: {
+        id: updated.id,
+        username: updated.username,
+        role: updated.role,
+        displayName: updated.displayName,
+        avatarGradient: updated.avatarGradient,
+        isActive: updated.isActive,
+        createdAt: updated.createdAt,
+        lastLoginAt: updated.lastLoginAt
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Change user password
+app.post('/api/users/:id/password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.trim().length < 3) {
+      return res.status(400).json({ success: false, error: "Пароль має містити щонайменше 3 символи" });
+    }
+
+    const user = await getUserById(id);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "Користувача не знайдено" });
+    }
+
+    await updateUserPassword(id, newPassword.trim());
+    return res.json({ success: true, message: "Пароль успішно змінено" });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Delete user
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const allUsers = await getUsers();
+    const adminCount = allUsers.filter(u => u.role === 'admin' && u.isActive).length;
+    const target = allUsers.find(u => u.id === id);
+
+    if (target?.role === 'admin' && adminCount <= 1) {
+      return res.status(400).json({ success: false, error: "Неможливо видалити останнього активного адміністратора системи" });
+    }
+
+    await deleteUser(id);
+    return res.json({ success: true, message: "Користувача видалено" });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 const PORT = process.env['PORT'] || 4000;

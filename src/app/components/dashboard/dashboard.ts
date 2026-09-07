@@ -196,6 +196,17 @@ export interface CategoryPageBreakdown {
   pages: Array<{ pageNum: number, count: number }>;
 }
 
+export interface TeamUser {
+  id: string;
+  username: string;
+  role: 'admin' | 'analyst';
+  displayName: string;
+  avatarGradient: string;
+  isActive: boolean;
+  createdAt: string;
+  lastLoginAt?: string | null;
+}
+
 export interface UserProfileSettings {
   username: string;
   role: string;
@@ -224,7 +235,28 @@ export class DashboardComponent implements OnInit {
   
   // Navigation & Tabs
   activeTab: 'overview' | 'explorer' | 'demand' | 'details' | 'history' | 'settings' = 'overview';
-  settingsActiveSubTab: 'all' | 'profile' | 'scraping' | 'analytics' | 'storage' = 'all';
+  settingsActiveSubTab: 'all' | 'profile' | 'users' | 'scraping' | 'analytics' | 'storage' = 'all';
+
+  // Team & Users Management State
+  teamUsers: TeamUser[] = [];
+  loadingUsers = false;
+  usersErrorMessage = '';
+
+  showCreateUserModal = false;
+  newUserData = {
+    username: '',
+    password: '',
+    displayName: '',
+    role: 'analyst' as 'admin' | 'analyst',
+    avatarGradient: 'from-cyan-500 to-blue-600'
+  };
+  createUserError = '';
+
+  showChangePasswordModal = false;
+  selectedUserForPasswordChange: TeamUser | null = null;
+  newUserPassword = '';
+  changePasswordError = '';
+  changePasswordSuccess = false;
 
   // User & System Settings State
   readonly STORAGE_USER_SETTINGS_KEY = 'tradescout_user_settings_v1';
@@ -697,6 +729,16 @@ export class DashboardComponent implements OnInit {
   loadUserSettings() {
     if (typeof window !== 'undefined') {
       try {
+        const currentUserRaw = localStorage.getItem('tradescout_current_user');
+        if (currentUserRaw) {
+          const user = JSON.parse(currentUserRaw);
+          if (user) {
+            this.userSettings.username = user.displayName || user.username || 'Адміністратор';
+            this.userSettings.role = user.role === 'admin' ? 'Головний аналітик (Admin)' : 'Аналітик маркетплейсів';
+            this.userSettings.avatarGradient = user.avatarGradient || 'from-indigo-600 to-purple-600';
+            this.userSettings.avatarInitial = (user.displayName || user.username || 'A').charAt(0).toUpperCase();
+          }
+        }
         const local = localStorage.getItem(this.STORAGE_USER_SETTINGS_KEY);
         if (local) {
           const parsed = JSON.parse(local);
@@ -783,6 +825,166 @@ export class DashboardComponent implements OnInit {
     }
   }
 
+  // --- Team & Users Management Methods ---
+  async loadTeamUsers() {
+    this.loadingUsers = true;
+    this.usersErrorMessage = '';
+    try {
+      const res = await fetch(`${this.apiUrl}/api/users`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.users)) {
+          this.teamUsers = data.users;
+        }
+      }
+    } catch (err: any) {
+      this.usersErrorMessage = 'Помилка завантаження користувачів з сервера';
+    } finally {
+      this.loadingUsers = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  openCreateUserModal() {
+    this.newUserData = {
+      username: '',
+      password: '',
+      displayName: '',
+      role: 'analyst',
+      avatarGradient: 'from-cyan-500 to-blue-600'
+    };
+    this.createUserError = '';
+    this.showCreateUserModal = true;
+    this.cdr.markForCheck();
+  }
+
+  closeCreateUserModal() {
+    this.showCreateUserModal = false;
+    this.createUserError = '';
+    this.cdr.markForCheck();
+  }
+
+  async submitCreateUser() {
+    if (!this.newUserData.username.trim() || !this.newUserData.password.trim()) {
+      this.createUserError = "Будь ласка, вкажіть логін та пароль";
+      return;
+    }
+    if (this.newUserData.password.trim().length < 3) {
+      this.createUserError = "Пароль має містити щонайменше 3 символи";
+      return;
+    }
+
+    try {
+      const res = await fetch(`${this.apiUrl}/api/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.newUserData)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.closeCreateUserModal();
+        await this.loadTeamUsers();
+        this.showSettingsSavedToast();
+      } else {
+        this.createUserError = data.error || 'Помилка створення користувача';
+      }
+    } catch (e: any) {
+      this.createUserError = 'Помилка з\'єднання із сервером';
+    }
+    this.cdr.markForCheck();
+  }
+
+  openChangePasswordModal(user: TeamUser) {
+    this.selectedUserForPasswordChange = user;
+    this.newUserPassword = '';
+    this.changePasswordError = '';
+    this.changePasswordSuccess = false;
+    this.showChangePasswordModal = true;
+    this.cdr.markForCheck();
+  }
+
+  closeChangePasswordModal() {
+    this.showChangePasswordModal = false;
+    this.selectedUserForPasswordChange = null;
+    this.newUserPassword = '';
+    this.changePasswordError = '';
+    this.changePasswordSuccess = false;
+    this.cdr.markForCheck();
+  }
+
+  async submitChangePassword() {
+    if (!this.selectedUserForPasswordChange) return;
+    if (!this.newUserPassword || this.newUserPassword.trim().length < 3) {
+      this.changePasswordError = "Пароль має містити щонайменше 3 символи";
+      return;
+    }
+
+    try {
+      const res = await fetch(`${this.apiUrl}/api/users/${this.selectedUserForPasswordChange.id}/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: this.newUserPassword.trim() })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.changePasswordSuccess = true;
+        setTimeout(() => {
+          this.closeChangePasswordModal();
+        }, 1200);
+      } else {
+        this.changePasswordError = data.error || 'Помилка оновлення пароля';
+      }
+    } catch (e: any) {
+      this.changePasswordError = 'Помилка зв\'язку із сервером';
+    }
+    this.cdr.markForCheck();
+  }
+
+  async toggleUserActive(user: TeamUser) {
+    const newStatus = !user.isActive;
+    try {
+      const res = await fetch(`${this.apiUrl}/api/users/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...user, isActive: newStatus })
+      });
+      if (res.ok) {
+        user.isActive = newStatus;
+        this.cdr.markForCheck();
+      }
+    } catch (_) {}
+  }
+
+  async deleteTeamUser(user: TeamUser) {
+    if (!confirm(`Ви впевнені, що бажаєте видалити користувача "${user.displayName || user.username}"?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`${this.apiUrl}/api/users/${user.id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.teamUsers = this.teamUsers.filter(u => u.id !== user.id);
+        this.cdr.markForCheck();
+      } else {
+        alert(data.error || 'Неможливо видалити користувача');
+      }
+    } catch (e: any) {
+      alert('Помилка сервера при видаленні користувача');
+    }
+  }
+
+  formatUserDate(iso: string | null | undefined): string {
+    if (!iso) return 'Ще не заходив';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (_) {
+      return iso;
+    }
+  }
+
   exportSystemBackup() {
     const backupData = {
       version: '1.0.0',
@@ -858,6 +1060,7 @@ export class DashboardComponent implements OnInit {
       this.loadProducts();
       this.loadFolders();
       this.loadHistory();
+      this.loadTeamUsers();
       this.startLiveStatusPolling();
 
       this.autoRefreshTimer = setInterval(() => {

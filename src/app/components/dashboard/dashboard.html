@@ -2401,6 +2401,20 @@
           </button>
 
           <button 
+            (click)="settingsActiveSubTab = 'users'"
+            [class.bg-indigo-600]="settingsActiveSubTab === 'users'"
+            [class.text-white]="settingsActiveSubTab === 'users'"
+            [class.border-indigo-400]="settingsActiveSubTab === 'users'"
+            [class.bg-slate-900]="settingsActiveSubTab !== 'users'"
+            [class.text-slate-300]="settingsActiveSubTab !== 'users'"
+            [class.border-slate-800]="settingsActiveSubTab !== 'users'"
+            class="px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:border-indigo-400/80 flex items-center gap-1.5 shrink-0"
+          >
+            <span class="material-icons text-sm">groups</span>
+            <span>Користувачі та Доступ</span>
+          </button>
+
+          <button 
             (click)="settingsActiveSubTab = 'scraping'"
             [class.bg-indigo-600]="settingsActiveSubTab === 'scraping'"
             [class.text-white]="settingsActiveSubTab === 'scraping'"
@@ -2445,6 +2459,123 @@
 
         <!-- Settings Cards Grid -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <!-- 0. TEAM & USERS MANAGEMENT CARD (Full 2-column span) -->
+          <div *ngIf="settingsActiveSubTab === 'all' || settingsActiveSubTab === 'users'" class="lg:col-span-2 p-6 bg-[#0e1424]/90 backdrop-blur-md border border-indigo-500/30 rounded-3xl space-y-5 shadow-xl">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-indigo-950/80 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-md">
+                  <span class="material-icons text-xl">manage_accounts</span>
+                </div>
+                <div>
+                  <h4 class="text-sm font-extrabold text-white flex items-center gap-2">
+                    <span>Користувачі системи & Контроль доступу</span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      {{ teamUsers.length }} користувачів
+                    </span>
+                  </h4>
+                  <p class="text-xs text-slate-400">Спільний доступ, скидання паролів та налаштування ролей команди в Neon PostgreSQL</p>
+                </div>
+              </div>
+
+              <button 
+                (click)="openCreateUserModal()"
+                class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-500/20 transition-all cursor-pointer glow-indigo flex items-center gap-2 shrink-0 self-start sm:self-auto"
+              >
+                <span class="material-icons text-sm">person_add</span>
+                <span>+ Додати користувача</span>
+              </button>
+            </div>
+
+            <!-- Users Table -->
+            <div class="overflow-x-auto custom-scrollbar">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <th class="py-3 px-3">Користувач</th>
+                    <th class="py-3 px-3">Логін</th>
+                    <th class="py-3 px-3">Роль</th>
+                    <th class="py-3 px-3">Статус</th>
+                    <th class="py-3 px-3">Останній вхід</th>
+                    <th class="py-3 px-3 text-right">Дії</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60">
+                  <tr *ngFor="let u of teamUsers" class="hover:bg-slate-900/40 transition-colors">
+                    <td class="py-3.5 px-3">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-xl bg-gradient-to-tr {{ u.avatarGradient || 'from-indigo-600 to-purple-600' }} flex items-center justify-center text-white font-black text-xs shadow-md shrink-0">
+                          {{ (u.displayName || u.username).charAt(0).toUpperCase() }}
+                        </div>
+                        <div>
+                          <p class="font-bold text-white">{{ u.displayName || u.username }}</p>
+                          <p class="text-[10px] text-slate-500">Створено: {{ formatUserDate(u.createdAt) }}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-3.5 px-3 font-mono text-indigo-300 font-semibold">
+                      @{{ u.username }}
+                    </td>
+                    <td class="py-3.5 px-3">
+                      <span 
+                        [class.bg-purple-950]="u.role === 'admin'"
+                        [class.text-purple-300]="u.role === 'admin'"
+                        [class.border-purple-700]="u.role === 'admin'"
+                        [class.bg-cyan-950]="u.role !== 'admin'"
+                        [class.text-cyan-300]="u.role !== 'admin'"
+                        [class.border-cyan-700]="u.role !== 'admin'"
+                        class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border"
+                      >
+                        {{ u.role === 'admin' ? 'Адміністратор' : 'Аналітик' }}
+                      </span>
+                    </td>
+                    <td class="py-3.5 px-3">
+                      <button 
+                        (click)="toggleUserActive(u)"
+                        [class.bg-emerald-950]="u.isActive"
+                        [class.text-emerald-300]="u.isActive"
+                        [class.border-emerald-700]="u.isActive"
+                        [class.bg-rose-950]="!u.isActive"
+                        [class.text-rose-300]="!u.isActive"
+                        [class.border-rose-700]="!u.isActive"
+                        class="px-2.5 py-0.5 rounded-full text-[10px] font-bold border cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1 inline-flex"
+                        [title]="u.isActive ? 'Клікніть щоб заблокувати' : 'Клікніть щоб активувати'"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full" [class.bg-emerald-400]="u.isActive" [class.bg-rose-400]="!u.isActive"></span>
+                        <span>{{ u.isActive ? 'Активний' : 'Заблокований' }}</span>
+                      </button>
+                    </td>
+                    <td class="py-3.5 px-3 font-mono text-[11px] text-slate-400">
+                      {{ formatUserDate(u.lastLoginAt) }}
+                    </td>
+                    <td class="py-3.5 px-3 text-right">
+                      <div class="flex items-center justify-end gap-2">
+                        <button 
+                          (click)="openChangePasswordModal(u)"
+                          class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-indigo-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                          title="Змінити пароль користувача"
+                        >
+                          <span class="material-icons text-xs">key</span>
+                          <span>Пароль</span>
+                        </button>
+                        <button 
+                          (click)="deleteTeamUser(u)"
+                          class="p-1.5 bg-slate-900 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-800 hover:border-rose-800/60 rounded-lg text-xs transition-all cursor-pointer"
+                          title="Видалити користувача"
+                        >
+                          <span class="material-icons text-xs">delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div *ngIf="teamUsers.length === 0" class="py-8 text-center text-slate-500 text-xs italic">
+                Користувачів ще не додано або триває підвантаження з хмари Neon PostgreSQL...
+              </div>
+            </div>
+          </div>
 
           <!-- 1. USER PROFILE & ACCOUNT CARD -->
           <div *ngIf="settingsActiveSubTab === 'all' || settingsActiveSubTab === 'profile'" class="p-6 bg-[#0e1424]/90 backdrop-blur-md border border-slate-800/80 rounded-3xl space-y-5 shadow-xl">
@@ -3483,6 +3614,189 @@
             Відкрити Нішу Б на дашборді
           </button>
         </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: CREATE NEW TEAM USER -->
+  <div *ngIf="showCreateUserModal" class="fixed inset-0 z-50 bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+    <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-indigo-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl shadow-indigo-950/50 space-y-5 relative">
+      
+      <div class="flex items-center justify-between border-b border-slate-800/80 pb-3.5">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-400">
+            <span class="material-icons text-base">person_add</span>
+          </div>
+          <h3 class="text-base font-extrabold text-white">Додати користувача</h3>
+        </div>
+        <button (click)="closeCreateUserModal()" class="text-slate-400 hover:text-white cursor-pointer p-1">
+          <span class="material-icons text-lg">close</span>
+        </button>
+      </div>
+
+      <div *ngIf="createUserError" class="p-3 bg-rose-950/70 border border-rose-600/60 rounded-xl text-rose-300 text-xs font-semibold">
+        {{ createUserError }}
+      </div>
+
+      <div class="space-y-3.5 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Логін (для входу)</label>
+          <input 
+            type="text" 
+            [(ngModel)]="newUserData.username"
+            placeholder="наприклад: alex_analyst" 
+            class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-white placeholder-slate-500 outline-none transition-all"
+          />
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Початковий пароль</label>
+          <input 
+            type="password" 
+            [(ngModel)]="newUserData.password"
+            placeholder="Введіть надійний пароль" 
+            class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-white placeholder-slate-500 outline-none transition-all"
+          />
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Відображуване ім'я</label>
+          <input 
+            type="text" 
+            [(ngModel)]="newUserData.displayName"
+            placeholder="наприклад: Олексій (Аналітик)" 
+            class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-white placeholder-slate-500 outline-none transition-all"
+          />
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Роль у системі</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button 
+              type="button"
+              (click)="newUserData.role = 'analyst'"
+              [class.bg-indigo-600]="newUserData.role === 'analyst'"
+              [class.text-white]="newUserData.role === 'analyst'"
+              [class.border-indigo-400]="newUserData.role === 'analyst'"
+              [class.bg-slate-950]="newUserData.role !== 'analyst'"
+              [class.text-slate-400]="newUserData.role !== 'analyst'"
+              [class.border-slate-800]="newUserData.role !== 'analyst'"
+              class="p-2 rounded-xl border text-center font-bold transition-all cursor-pointer"
+            >
+              Аналітик
+            </button>
+
+            <button 
+              type="button"
+              (click)="newUserData.role = 'admin'"
+              [class.bg-purple-600]="newUserData.role === 'admin'"
+              [class.text-white]="newUserData.role === 'admin'"
+              [class.border-purple-400]="newUserData.role === 'admin'"
+              [class.bg-slate-950]="newUserData.role !== 'admin'"
+              [class.text-slate-400]="newUserData.role !== 'admin'"
+              [class.border-slate-800]="newUserData.role !== 'admin'"
+              class="p-2 rounded-xl border text-center font-bold transition-all cursor-pointer"
+            >
+              Адміністратор
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1.5">Градієнт аватара</label>
+          <div class="flex items-center gap-2">
+            <button 
+              *ngFor="let grad of [
+                'from-indigo-600 to-purple-600',
+                'from-cyan-500 to-blue-600',
+                'from-emerald-500 to-teal-700',
+                'from-rose-500 to-amber-600',
+                'from-amber-500 to-red-600'
+              ]"
+              type="button"
+              (click)="newUserData.avatarGradient = grad"
+              [class.ring-2]="newUserData.avatarGradient === grad"
+              [class.ring-white]="newUserData.avatarGradient === grad"
+              class="w-7 h-7 rounded-lg bg-gradient-to-tr {{ grad }} cursor-pointer transition-all hover:scale-110"
+            ></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t border-slate-800/80 pt-4 flex items-center justify-end gap-2.5">
+        <button 
+          (click)="closeCreateUserModal()" 
+          class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs font-semibold cursor-pointer transition-all"
+        >
+          Скасувати
+        </button>
+        <button 
+          (click)="submitCreateUser()" 
+          class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-500/25 cursor-pointer glow-indigo flex items-center gap-1.5"
+        >
+          <span class="material-icons text-sm">check</span>
+          <span>Створити акаунт</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: CHANGE USER PASSWORD -->
+  <div *ngIf="showChangePasswordModal" class="fixed inset-0 z-50 bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+    <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/60 rounded-3xl p-6 max-w-sm w-full shadow-2xl shadow-black/50 space-y-5 relative">
+      
+      <div class="flex items-center justify-between border-b border-slate-800/80 pb-3.5">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-400">
+            <span class="material-icons text-base">key</span>
+          </div>
+          <div>
+            <h3 class="text-base font-extrabold text-white">Зміна пароля</h3>
+            <p class="text-[10px] text-slate-400 font-mono">@{{ selectedUserForPasswordChange?.username }}</p>
+          </div>
+        </div>
+        <button (click)="closeChangePasswordModal()" class="text-slate-400 hover:text-white cursor-pointer p-1">
+          <span class="material-icons text-lg">close</span>
+        </button>
+      </div>
+
+      <div *ngIf="changePasswordError" class="p-3 bg-rose-950/70 border border-rose-600/60 rounded-xl text-rose-300 text-xs font-semibold">
+        {{ changePasswordError }}
+      </div>
+
+      <div *ngIf="changePasswordSuccess" class="p-3 bg-emerald-950/70 border border-emerald-600/60 rounded-xl text-emerald-300 text-xs font-semibold flex items-center gap-2">
+        <span class="material-icons text-emerald-400 text-sm">check_circle</span>
+        <span>Пароль успішно змінено в базі даних!</span>
+      </div>
+
+      <div class="space-y-3.5 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Новий пароль</label>
+          <input 
+            type="password" 
+            [(ngModel)]="newUserPassword"
+            placeholder="Введіть новий пароль" 
+            class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-white placeholder-slate-500 outline-none transition-all"
+          />
+        </div>
+      </div>
+
+      <div class="border-t border-slate-800/80 pt-4 flex items-center justify-end gap-2.5">
+        <button 
+          (click)="closeChangePasswordModal()" 
+          class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs font-semibold cursor-pointer transition-all"
+        >
+          Скасувати
+        </button>
+        <button 
+          (click)="submitChangePassword()" 
+          class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-500/25 cursor-pointer glow-indigo flex items-center gap-1.5"
+        >
+          <span class="material-icons text-sm">save</span>
+          <span>Зберегти пароль</span>
+        </button>
       </div>
 
     </div>
