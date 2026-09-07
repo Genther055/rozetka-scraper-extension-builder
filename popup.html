@@ -2,16 +2,31 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <title>TradeScout</title>
+    <title>TradeScout Parallel Scraper</title>
     <style>
         body {
-            width: 330px;
+            width: 360px;
+            max-height: 590px;
+            overflow-y: auto;
             padding: 12px;
             margin: 0;
             font-family: "Segoe UI", Tahoma, Arial, sans-serif;
             font-size: 13px;
             background-color: #0f172a;
             color: #f1f5f9;
+            box-sizing: border-box;
+        }
+
+        /* Custom scrollbar */
+        body::-webkit-scrollbar {
+            width: 6px;
+        }
+        body::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        body::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
         }
 
         .brand-container {
@@ -73,12 +88,58 @@
             font-weight: 700;
         }
 
-        /* Active Tab Header */
+        /* Master Actions Toolbar */
+        .master-toolbar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .btn-master-start {
+            flex: 2;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #ffffff;
+            border: 1px solid #10b981;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            padding: 8px 10px;
+            font-size: 11px;
+            font-weight: 800;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        .btn-master-start:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .btn-master-stop {
+            flex: 1;
+            background: #1e293b;
+            color: #f87171;
+            border: 1px solid #7f1d1d;
+            padding: 8px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-master-stop:hover {
+            background: #ef4444;
+            color: #ffffff;
+        }
+
+        /* Active Tab Header Card */
         .tab-info-card {
             background: #1e293b;
             border: 1px solid #334155;
-            border-radius: 6px;
-            padding: 8px 10px;
+            border-radius: 8px;
+            padding: 10px;
             margin-bottom: 10px;
         }
 
@@ -91,74 +152,31 @@
             color: #94a3b8;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 3px;
+            margin-bottom: 4px;
         }
 
         .tab-info-title {
             font-size: 12px;
             font-weight: 700;
-            color: #ffffff;
+            color: #38bdf8;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             display: block;
+            margin-bottom: 8px;
         }
 
-        /* Multi-tab parallel badge */
-        .parallel-badge {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(99, 102, 241, 0.15);
-            border: 1px solid rgba(99, 102, 241, 0.35);
-            color: #a5b4fc;
-            padding: 5px 8px;
-            border-radius: 6px;
-            font-size: 10px;
-            font-weight: 600;
-            margin-bottom: 10px;
-        }
-
-        .form-group {
-            margin-bottom: 10px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 4px;
-            font-weight: 600;
-            font-size: 11px;
-            color: #cbd5e1;
-        }
-
-        input[type="text"] {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 6px 8px;
-            border: 1px solid #334155;
-            border-radius: 6px;
-            background-color: #0f172a;
-            color: #f8fafc;
-            font-family: inherit;
-            font-size: 11px;
-            outline: none;
-        }
-
-        input[type="text"]:focus {
-            border-color: #10b981;
-        }
-
+        /* Single tab buttons */
         .button-container {
             display: flex;
-            gap: 8px;
-            margin-bottom: 10px;
+            gap: 6px;
+            margin-bottom: 8px;
         }
 
         button {
-            flex: 1;
-            padding: 7px 10px;
+            padding: 6px 10px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: bold;
             border: 1px solid #334155;
             border-radius: 6px;
@@ -167,68 +185,51 @@
             transition: all 0.2s;
         }
 
-        button:hover {
-            background-color: #334155;
-        }
-
         #btn-start {
+            flex: 1;
             background-color: #10b981;
             color: #ffffff;
             border-color: #059669;
         }
-
-        #btn-start:hover {
-            background-color: #059669;
-        }
-
+        #btn-start:hover { background-color: #059669; }
         #btn-start:disabled {
-            background-color: rgba(16, 185, 129, 0.25);
-            border-color: rgba(16, 185, 129, 0.2);
+            background-color: rgba(16, 185, 129, 0.2);
             color: #6ee7b7;
             cursor: not-allowed;
+            border-color: transparent;
         }
 
         #btn-stop {
+            flex: 1;
             background-color: #ef4444;
             color: #ffffff;
             border-color: #dc2626;
         }
-
-        #btn-stop:hover {
-            background-color: #dc2626;
-        }
-
+        #btn-stop:hover { background-color: #dc2626; }
         #btn-stop:disabled {
             background-color: rgba(239, 68, 68, 0.2);
-            border-color: rgba(239, 68, 68, 0.2);
             color: #fca5a5;
             cursor: not-allowed;
+            border-color: transparent;
         }
 
-        /* Progress Bar Card */
-        .progress-wrapper {
-            background: #1e293b;
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 10px;
-        }
-
+        /* Progress Bar */
         .progress-header {
             display: flex;
             justify-content: space-between;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
             color: #94a3b8;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
         }
 
         .progress-bar-bg {
             width: 100%;
-            height: 8px;
+            height: 6px;
             background-color: #0f172a;
-            border-radius: 4px;
+            border-radius: 3px;
             overflow: hidden;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             border: 1px solid #334155;
         }
 
@@ -236,7 +237,7 @@
             height: 100%;
             width: 0%;
             background: linear-gradient(90deg, #10b981 0%, #3b82f6 100%);
-            border-radius: 4px;
+            border-radius: 3px;
             transition: width 0.3s ease;
         }
 
@@ -249,10 +250,11 @@
             font-weight: 600;
             color: #f8fafc;
             display: block;
-            margin-bottom: 3px;
+            margin-bottom: 2px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            font-size: 10px;
         }
 
         .status-metrics {
@@ -262,6 +264,127 @@
             font-size: 10px;
             font-weight: 600;
         }
+
+        /* Multi-Tab List Card */
+        .tabs-list-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .tabs-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 4px;
+        }
+
+        .btn-refresh-tabs {
+            background: none;
+            border: none;
+            color: #38bdf8;
+            cursor: pointer;
+            padding: 0;
+            font-size: 11px;
+        }
+        .btn-refresh-tabs:hover { color: #7dd3fc; }
+
+        .tab-item-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            padding: 6px 8px;
+            margin-bottom: 6px;
+            gap: 6px;
+        }
+        .tab-item-row.is-active-tab {
+            border-color: rgba(56, 189, 248, 0.4);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        .tab-item-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .tab-item-name {
+            font-size: 11px;
+            font-weight: 700;
+            color: #f8fafc;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .tab-item-status {
+            font-size: 10px;
+            color: #94a3b8;
+            margin-top: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tab-item-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .btn-tab-action {
+            padding: 3px 6px;
+            font-size: 10px;
+            border-radius: 4px;
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: #e2e8f0;
+            cursor: pointer;
+        }
+        .btn-tab-action:hover { background: #334155; }
+        .btn-tab-start { color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
+        .btn-tab-stop { color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
+
+        /* Webhook Config Card */
+        .config-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 8px 10px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 600;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 5px 8px;
+            border: 1px solid #334155;
+            border-radius: 5px;
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: inherit;
+            font-size: 10px;
+            outline: none;
+        }
+        input[type="text"]:focus { border-color: #10b981; }
     </style>
 </head>
 <body>
@@ -275,39 +398,34 @@
         </div>
         <div class="brand-title-group">
             <h1 class="brand-title">TradeScout</h1>
-            <span class="brand-subtitle">Parallel Scraper</span>
+            <span class="brand-subtitle">Parallel Multi-Tab</span>
         </div>
-        <span class="version-badge">v3.0 Multi-Tab</span>
+        <span class="version-badge">v3.0 Live</span>
     </div>
 
-    <!-- Active Tab Info -->
+    <!-- Master Toolbar (Start / Stop All Rozetka Tabs) -->
+    <div class="master-toolbar">
+        <button id="btn-master-start" class="btn-master-start">
+            <span>⚡ Запустити всі вкладки (<span id="all-tabs-count">0</span>)</span>
+        </button>
+        <button id="btn-master-stop" class="btn-master-stop">⏹ Зупинити всі</button>
+    </div>
+
+    <!-- Active Tab Info Card -->
     <div class="tab-info-card">
         <div class="tab-info-header">
             <span>Поточна вкладка:</span>
             <span id="tab-badge" style="color: #10b981;">Готова</span>
         </div>
-        <span class="tab-info-title" id="tab-title">Визначення категорії...</span>
-    </div>
+        <span class="tab-info-title" id="tab-title">Визначення каталогу...</span>
 
-    <!-- Parallel Tabs Indicator (Shows when other background tabs are running) -->
-    <div id="parallel-badge" class="parallel-badge" style="display: none;">
-        <span>⚡</span>
-        <span>Паралельно у фоні: <strong id="parallel-count">0</strong> вкладок</span>
-    </div>
+        <div class="button-container">
+            <button id="btn-start">Запустити цю вкладку</button>
+            <button id="btn-stop" disabled>Зупинити</button>
+        </div>
 
-    <div class="form-group">
-        <label for="webhook-url">Адреса сервера (TradeScout):</label>
-        <input type="text" id="webhook-url" placeholder="https://rozetka-scraper-extension-builder.onrender.com/api/products">
-    </div>
-
-    <div class="button-container">
-        <button id="btn-start">Запустити цю вкладку</button>
-        <button id="btn-stop" disabled>Зупинити</button>
-    </div>
-
-    <div class="progress-wrapper">
         <div class="progress-header">
-            <span>Прогрес збору:</span>
+            <span>Прогрес:</span>
             <span id="percent-text">0%</span>
         </div>
         
@@ -322,6 +440,24 @@
                 <span id="count-text">0 товарів</span>
             </div>
         </div>
+    </div>
+
+    <!-- Open Rozetka Tabs List Card -->
+    <div class="tabs-list-card">
+        <div class="tabs-list-header">
+            <span>Відкриті вкладки Rozetka (<span id="tabs-found-count">0</span>)</span>
+            <button id="btn-refresh-tabs" class="btn-refresh-tabs" title="Оновити список">🔄 Оновити</button>
+        </div>
+        <div id="tabs-list-container">
+            <!-- Dynamic tab items rendered via popup.js -->
+            <div style="font-size: 10px; color: #94a3b8; text-align: center; padding: 6px 0;">Пошук вкладок Rozetka...</div>
+        </div>
+    </div>
+
+    <!-- Webhook URL Configuration Card -->
+    <div class="config-card">
+        <label for="webhook-url">Адреса сервера (TradeScout):</label>
+        <input type="text" id="webhook-url" placeholder="https://rozetka-scraper-extension-builder.onrender.com/api/products">
     </div>
 
     <script src="popup.js"></script>

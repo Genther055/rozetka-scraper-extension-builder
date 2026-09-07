@@ -1,4 +1,8 @@
-// TradeScout Popup Script v3.0 (Multi-Tab Aware)
+// TradeScout Popup Script v3.0 (Parallel Multi-Tab Control Center)
+const btnMasterStart = document.getElementById('btn-master-start');
+const btnMasterStop = document.getElementById('btn-master-stop');
+const allTabsCountEl = document.getElementById('all-tabs-count');
+
 const btnStart = document.getElementById('btn-start');
 const btnStop = document.getElementById('btn-stop');
 const inputWebhook = document.getElementById('webhook-url');
@@ -9,8 +13,10 @@ const percentText = document.getElementById('percent-text');
 const progressFill = document.getElementById('progress-fill');
 const tabTitleEl = document.getElementById('tab-title');
 const tabBadgeEl = document.getElementById('tab-badge');
-const parallelBadge = document.getElementById('parallel-badge');
-const parallelCountEl = document.getElementById('parallel-count');
+
+const tabsListContainer = document.getElementById('tabs-list-container');
+const tabsFoundCountEl = document.getElementById('tabs-found-count');
+const btnRefreshTabs = document.getElementById('btn-refresh-tabs');
 
 let activeTabId = null;
 let timerInterval = null;
@@ -46,28 +52,107 @@ function updateProgress(percent, count, actionMsg) {
     }
 }
 
-function updateParallelBadge(allSessions) {
-    if (!allSessions) return;
-    const runningOtherTabs = Object.keys(allSessions).filter(id => {
-        return String(id) !== String(activeTabId) && allSessions[id]?.isRunning;
-    });
+// Render the full list of open Rozetka tabs
+async function refreshTabsList() {
+    chrome.runtime.sendMessage({ action: 'GET_ALL_ROZETKA_TABS' }, (res) => {
+        const err = chrome.runtime.lastError;
+        if (err || !res || !res.tabs) return;
 
-    if (runningOtherTabs.length > 0) {
-        parallelBadge.style.display = 'flex';
-        parallelCountEl.innerText = runningOtherTabs.length;
-    } else {
-        parallelBadge.style.display = 'none';
-    }
+        const tabs = res.tabs;
+        tabsFoundCountEl.innerText = tabs.length;
+        allTabsCountEl.innerText = tabs.length;
+
+        if (tabs.length === 0) {
+            tabsListContainer.innerHTML = `
+                <div style="font-size: 11px; color: #94a3b8; text-align: center; padding: 8px;">
+                    Вкладок Rozetka не знайдено.<br>Відкрийте каталог Rozetka у новій вкладці!
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        tabs.forEach((t, idx) => {
+            const isCurrent = t.id === activeTabId;
+            const session = t.session;
+            let statusText = '⚪ Готова';
+            let statusClass = 'color: #94a3b8;';
+            let isRunning = false;
+
+            if (session) {
+                if (session.isRunning) {
+                    isRunning = true;
+                    statusText = `🟢 Збирається: ${session.totalScraped || 0} тов. (стор. ${session.currentPage || 1})`;
+                    statusClass = 'color: #34d399; font-weight: 700;';
+                } else if (session.finishedAt) {
+                    statusText = `✓ Завершено (${session.totalScraped || 0} тов.)`;
+                    statusClass = 'color: #10b981; font-weight: 700;';
+                }
+            }
+
+            html += `
+                <div class="tab-item-row ${isCurrent ? 'is-active-tab' : ''}" data-tab-id="${t.id}">
+                    <div class="tab-item-info">
+                        <div class="tab-item-name" title="${t.title}">
+                            <span>${idx + 1}.</span>
+                            <span>${t.title}</span>
+                            ${isCurrent ? '<span style="font-size: 9px; color: #38bdf8; font-weight: bold;">(Ця)</span>' : ''}
+                        </div>
+                        <div class="tab-item-status" style="${statusClass}">
+                            ${statusText}
+                        </div>
+                    </div>
+                    <div class="tab-item-actions">
+                        ${isRunning ? 
+                            `<button class="btn-tab-action btn-tab-stop" data-action="stop" data-tab-id="${t.id}" title="Зупинити">⏹</button>` :
+                            `<button class="btn-tab-action btn-tab-start" data-action="start" data-tab-id="${t.id}" title="Запустити збір">▶</button>`
+                        }
+                        ${!isCurrent ? `<button class="btn-tab-action" data-action="focus" data-tab-id="${t.id}" title="Перейти до вкладки">👁</button>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+
+        tabsListContainer.innerHTML = html;
+
+        // Bind buttons in tabs list
+        tabsListContainer.querySelectorAll('.btn-tab-action').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const action = btn.getAttribute('data-action');
+                const targetTabId = parseInt(btn.getAttribute('data-tab-id'), 10);
+                const webhookUrl = inputWebhook.value.trim();
+
+                if (action === 'start') {
+                    chrome.runtime.sendMessage({
+                        action: 'START_SINGLE_TAB',
+                        targetTabId: targetTabId,
+                        webhookUrl: webhookUrl
+                    }, () => {
+                        setTimeout(refreshTabsList, 200);
+                    });
+                } else if (action === 'stop') {
+                    chrome.runtime.sendMessage({
+                        action: 'STOP_SINGLE_TAB',
+                        targetTabId: targetTabId
+                    }, () => {
+                        setTimeout(refreshTabsList, 200);
+                    });
+                } else if (action === 'focus') {
+                    chrome.tabs.update(targetTabId, { active: true });
+                }
+            });
+        });
+    });
 }
 
 // Initialize popup for active tab
 async function initPopup() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) return;
-    activeTabId = tab.id;
-
-    // Set fallback title
-    tabTitleEl.innerText = tab.title ? tab.title.split(/[-–—|]/)[0].trim() : 'Сторінка Rozetka';
+    if (tab) {
+        activeTabId = tab.id;
+        tabTitleEl.innerText = tab.title ? tab.title.split(/[-–—|]/)[0].replace(/купити|в києві|україна|ціни|rozetka/gi, '').trim() : 'Сторінка Rozetka';
+    }
 
     // 1. Load saved webhook URL
     chrome.storage.local.get(['webhookUrl', 'tabSessions'], (data) => {
@@ -79,8 +164,6 @@ async function initPopup() {
 
         const sessions = data.tabSessions || {};
         const currentSession = sessions[activeTabId];
-
-        updateParallelBadge(sessions);
 
         if (currentSession) {
             if (currentSession.sessionTitle) {
@@ -112,31 +195,34 @@ async function initPopup() {
         }
 
         // Ping content script to verify alive status
-        chrome.tabs.sendMessage(activeTabId, { action: 'PING_TAB_STATUS' }, (res) => {
-            const err = chrome.runtime.lastError;
-            if (err) {
-                // If content script was not connected, inject it now
-                if (tab.url && tab.url.includes('rozetka.com.ua')) {
-                    chrome.scripting.executeScript({
-                        target: { tabId: activeTabId },
-                        files: ['content.js']
-                    }, () => {
-                        const _ = chrome.runtime.lastError;
-                    });
+        if (activeTabId) {
+            chrome.tabs.sendMessage(activeTabId, { action: 'PING_TAB_STATUS' }, (res) => {
+                const err = chrome.runtime.lastError;
+                if (err) {
+                    if (tab && tab.url && tab.url.includes('rozetka.com.ua')) {
+                        chrome.scripting.executeScript({
+                            target: { tabId: activeTabId },
+                            files: ['content.js']
+                        }, () => {
+                            const _ = chrome.runtime.lastError;
+                        });
+                    }
+                    return;
                 }
-                return;
-            }
-            if (res) {
-                if (res.sessionTitle) tabTitleEl.innerText = res.sessionTitle;
-                if (res.isRunning) {
-                    btnStart.disabled = true;
-                    btnStop.disabled = false;
-                    tabBadgeEl.innerText = '● Збирається...';
-                    tabBadgeEl.style.color = '#38bdf8';
-                    updateProgress(Math.min(99, Math.round(((res.totalScraped || 0) / 300) * 100)), res.totalScraped || 0, `Збір активний (${res.totalScraped || 0} тов.)`);
+                if (res) {
+                    if (res.sessionTitle) tabTitleEl.innerText = res.sessionTitle;
+                    if (res.isRunning) {
+                        btnStart.disabled = true;
+                        btnStop.disabled = false;
+                        tabBadgeEl.innerText = '● Збирається...';
+                        tabBadgeEl.style.color = '#38bdf8';
+                        updateProgress(Math.min(99, Math.round(((res.totalScraped || 0) / 300) * 100)), res.totalScraped || 0, `Збір активний (${res.totalScraped || 0} тов.)`);
+                    }
                 }
-            }
-        });
+            });
+        }
+
+        refreshTabsList();
     });
 }
 
@@ -144,7 +230,7 @@ async function initPopup() {
 chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local' && changes.tabSessions) {
         const sessions = changes.tabSessions.newValue || {};
-        updateParallelBadge(sessions);
+        refreshTabsList();
 
         const currentSession = sessions[activeTabId];
         if (currentSession) {
@@ -175,6 +261,41 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     }
 });
 
+// Master Start (All Tabs in parallel)
+btnMasterStart.addEventListener('click', async () => {
+    const webhookUrl = inputWebhook.value.trim();
+    if (!webhookUrl) return;
+    chrome.storage.local.set({ webhookUrl });
+
+    btnMasterStart.disabled = true;
+    btnMasterStart.innerText = '⚡ Запуск усіх вкладок...';
+
+    chrome.runtime.sendMessage({
+        action: 'START_ALL_TABS',
+        webhookUrl: webhookUrl
+    }, () => {
+        setTimeout(() => {
+            btnMasterStart.disabled = false;
+            btnMasterStart.innerHTML = `<span>⚡ Запустити всі вкладки (<span id="all-tabs-count">${tabsFoundCountEl.innerText}</span>)</span>`;
+            initPopup();
+        }, 600);
+    });
+});
+
+// Master Stop (All Tabs)
+btnMasterStop.addEventListener('click', async () => {
+    chrome.runtime.sendMessage({ action: 'STOP_ALL_TABS' }, () => {
+        setTimeout(() => {
+            initPopup();
+        }, 300);
+    });
+});
+
+// Refresh button
+btnRefreshTabs.addEventListener('click', () => {
+    refreshTabsList();
+});
+
 // Start Scraping on THIS Active Tab
 btnStart.addEventListener('click', async () => {
     const webhookUrl = inputWebhook.value.trim();
@@ -201,67 +322,40 @@ btnStart.addEventListener('click', async () => {
     startTimer(now);
     updateProgress(5, 0, 'Ініціалізація скрейпінгу...');
 
-    const sendStart = () => {
-        chrome.tabs.sendMessage(tab.id, {
-            action: 'START_TAB_SCRAPE',
-            tabId: tab.id,
-            webhookUrl: webhookUrl,
-            sessionId: `session_${tab.id}_${now}`
-        }, (res) => {
-            const err = chrome.runtime.lastError;
-            if (err) {
-                chrome.scripting.executeScript({
-                    target: { tabId: tab.id },
-                    files: ['content.js']
-                }, () => {
-                    const _ = chrome.runtime.lastError;
-                    setTimeout(() => {
-                        chrome.tabs.sendMessage(tab.id, {
-                            action: 'START_TAB_SCRAPE',
-                            tabId: tab.id,
-                            webhookUrl: webhookUrl,
-                            sessionId: `session_${tab.id}_${now}`
-                        }, (r) => {
-                            const __ = chrome.runtime.lastError;
-                            if (r && r.sessionTitle) tabTitleEl.innerText = r.sessionTitle;
-                        });
-                    }, 100);
-                });
-            } else if (res && res.sessionTitle) {
-                tabTitleEl.innerText = res.sessionTitle;
-            }
-        });
-    };
-
-    sendStart();
+    chrome.runtime.sendMessage({
+        action: 'START_SINGLE_TAB',
+        targetTabId: tab.id,
+        webhookUrl: webhookUrl
+    }, () => {
+        setTimeout(refreshTabsList, 300);
+    });
 });
 
 // Stop Scraping on THIS Active Tab
 btnStop.addEventListener('click', async () => {
     if (!activeTabId) return;
 
-    chrome.tabs.sendMessage(activeTabId, { action: 'STOP_TAB_SCRAPE' }, () => {
-        const err = chrome.runtime.lastError;
-        if (err) {
-            chrome.scripting.executeScript({
-                target: { tabId: activeTabId },
-                func: () => {
-                    if (window.__tradeScoutStopScrape) {
-                        window.__tradeScoutStopScrape();
-                    }
-                }
-            }, () => {
-                const _ = chrome.runtime.lastError;
-            });
-        }
+    chrome.runtime.sendMessage({
+        action: 'STOP_SINGLE_TAB',
+        targetTabId: activeTabId
+    }, () => {
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+        tabBadgeEl.innerText = 'Зупинено';
+        tabBadgeEl.style.color = '#94a3b8';
+        stopTimer();
+        updateProgress(0, 0, 'Скрейпінг цієї вкладки зупинено.');
+        setTimeout(refreshTabsList, 300);
     });
-
-    btnStart.disabled = false;
-    btnStop.disabled = true;
-    tabBadgeEl.innerText = 'Зупинено';
-    tabBadgeEl.style.color = '#94a3b8';
-    stopTimer();
-    updateProgress(0, 0, 'Скрейпінг цієї вкладки зупинено.');
 });
+
+// Save Webhook input on change
+inputWebhook.addEventListener('change', () => {
+    const webhookUrl = inputWebhook.value.trim();
+    if (webhookUrl) chrome.storage.local.set({ webhookUrl });
+});
+
+// Periodic lightweight refresh when popup is open
+setInterval(refreshTabsList, 1500);
 
 initPopup();

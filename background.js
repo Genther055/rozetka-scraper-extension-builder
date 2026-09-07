@@ -39,6 +39,86 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
     await removeTabSession(tabId);
 });
 
+// Helper to query all open Rozetka tabs
+async function getAllRozetkaTabs() {
+    const tabs = await chrome.tabs.query({ url: "*://*.rozetka.com.ua/*" });
+    const sessions = await getTabSessions();
+    
+    return tabs.map(t => {
+        const session = sessions[t.id] || null;
+        let cleanTitle = t.title ? t.title.split(/[-–—|]/)[0].replace(/купити|в києві|україна|ціни|rozetka/gi, '').trim() : 'Каталог Rozetka';
+        if (!cleanTitle) cleanTitle = 'Каталог Rozetka';
+        return {
+            id: t.id,
+            title: cleanTitle,
+            url: t.url,
+            active: t.active,
+            session: session
+        };
+    });
+}
+
+// Helper to safely start scraping on a given tab
+async function startScrapingTab(tabId, webhookUrl) {
+    const now = Date.now();
+    const sessionId = `session_${tabId}_${now}`;
+
+    return new Promise(resolve => {
+        chrome.tabs.sendMessage(tabId, {
+            action: 'START_TAB_SCRAPE',
+            tabId: tabId,
+            webhookUrl: webhookUrl,
+            sessionId: sessionId
+        }, (res) => {
+            const err = chrome.runtime.lastError;
+            if (err) {
+                // If content script was not connected yet, inject and retry
+                chrome.scripting.executeScript({
+                    target: { tabId: tabId },
+                    files: ['content.js']
+                }, () => {
+                    const _ = chrome.runtime.lastError;
+                    setTimeout(() => {
+                        chrome.tabs.sendMessage(tabId, {
+                            action: 'START_TAB_SCRAPE',
+                            tabId: tabId,
+                            webhookUrl: webhookUrl,
+                            sessionId: sessionId
+                        }, (r) => {
+                            const __ = chrome.runtime.lastError;
+                            resolve(r || { success: true });
+                        });
+                    }, 150);
+                });
+            } else {
+                resolve(res || { success: true });
+            }
+        });
+    });
+}
+
+// Helper to safely stop scraping on a given tab
+async function stopScrapingTab(tabId) {
+    return new Promise(resolve => {
+        chrome.tabs.sendMessage(tabId, { action: 'STOP_TAB_SCRAPE' }, () => {
+            const err = chrome.runtime.lastError;
+            if (err) {
+                chrome.scripting.executeScript({
+                    target: { tabId: tabId },
+                    func: () => {
+                        if (window.__tradeScoutStopScrape) window.__tradeScoutStopScrape();
+                    }
+                }, () => {
+                    const _ = chrome.runtime.lastError;
+                    resolve({ success: true });
+                });
+            } else {
+                resolve({ success: true });
+            }
+        });
+    });
+}
+
 // Main Message Router
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = message.tabId || (sender && sender.tab ? sender.tab.id : null);
@@ -54,7 +134,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             syncedCount: message.syncedCount || 0,
             sessionTitle: message.sessionTitle || 'Каталог Rozetka',
             category: message.category || 'Товари',
-            sessionId: message.sessionId || `session_${tabId}`
+            sessionId: message.sessionId || `session_${tabId}`,
+            startTime: message.startTime || Date.now()
         });
         sendResponse({ success: true });
         return true;
@@ -92,7 +173,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const itemCount = payload?.products?.length || 0;
         console.log(`TradeScout Background: Tab ${tabId} sending ${itemCount} products for "${payload.sessionTitle || 'Каталог'}"...`);
 
-        // Send to local dashboard and specified webhook (e.g. Render / n8n)
         const targets = [];
         if (webhookUrl) targets.push(webhookUrl);
         if (!targets.includes(LOCAL_DASHBOARD_API)) targets.push(LOCAL_DASHBOARD_API);
@@ -110,7 +190,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                         return await res.json();
                     }
                 } catch (e) {
-                    // Backoff before retry
                     if (i < maxRetries - 1) {
                         await new Promise(r => setTimeout(r, 1000 * (i + 1)));
                     }
@@ -129,10 +208,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true; // async sendResponse
     }
 
-    // 5. Query all active sessions count
-    if (message.action === 'getAllSessions') {
-        getTabSessions().then(sessions => {
-            sendResponse({ success: true, sessions });
+    // 5. Query all open Rozetka tabs with live session statuses
+    if (message.action === 'GET_ALL_ROZETKA_TABS') {
+        getAllRozetkaTabs().then(tabs => {
+            sendResponse({ success: true, tabs });
+        });
+        return true;
+    }
+
+    // 6. Start scraping on ALL open Rozetka tabs in parallel
+    if (message.action === 'START_ALL_TABS') {
+        const { webhookUrl } = message;
+        getAllRozetkaTabs().then(async (tabs) => {
+            const promises = tabs.map(t => startScrapingTab(t.id, webhookUrl));
+            await Promise.all(promises);
+            sendResponse({ success: true, launchedCount: tabs.length });
+        });
+        return true;
+    }
+
+    // 7. Stop scraping on ALL tabs
+    if (message.action === 'STOP_ALL_TABS') {
+        getAllRozetkaTabs().then(async (tabs) => {
+            const promises = tabs.map(t => stopScrapingTab(t.id));
+            await Promise.all(promises);
+            sendResponse({ success: true, stoppedCount: tabs.length });
+        });
+        return true;
+    }
+
+    // 8. Start/Stop single tab via tabId
+    if (message.action === 'START_SINGLE_TAB' && message.targetTabId) {
+        startScrapingTab(message.targetTabId, message.webhookUrl).then(res => {
+            sendResponse(res);
+        });
+        return true;
+    }
+
+    if (message.action === 'STOP_SINGLE_TAB' && message.targetTabId) {
+        stopScrapingTab(message.targetTabId).then(res => {
+            sendResponse(res);
         });
         return true;
     }
