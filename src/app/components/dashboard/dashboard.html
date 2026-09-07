@@ -1,7 +1,7 @@
-<div class="h-screen w-full bg-[#0b0f19] text-slate-100 flex font-sans overflow-hidden">
+<div class="min-h-screen bg-[#0b0f19] text-slate-100 flex font-sans w-full">
   
   <!-- Fixed Sticky Sidebar -->
-  <aside class="w-64 bg-[#0e1424] border-r border-slate-800/80 flex flex-col shrink-0 shadow-2xl shadow-black/40 h-full overflow-hidden select-none z-30">
+  <aside class="w-64 bg-[#0e1424] border-r border-slate-800/80 flex flex-col shrink-0 shadow-2xl shadow-black/40 sticky top-0 h-screen z-30 select-none">
     <!-- Brand -->
     <div class="p-6 border-b border-slate-800/80 flex items-center gap-3 shrink-0 bg-[#0e1424]">
       <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
@@ -70,7 +70,7 @@
     </nav>
 
     <!-- Pinned User Profile & Action Footer (Always Visible at Bottom) -->
-    <div class="p-4 border-t border-slate-800/80 bg-[#090d18] flex flex-col gap-3 shrink-0 mt-auto shadow-2xl">
+    <div class="p-4 border-t border-slate-800/80 bg-[#090d18] flex flex-col gap-3 shrink-0 mt-auto shadow-2xl sticky bottom-0 z-10">
       <div class="flex items-center gap-3 px-1">
         <div class="relative shrink-0">
           <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center border border-indigo-400/40 text-white font-black text-sm shadow-md shadow-indigo-950">
@@ -104,8 +104,8 @@
     </div>
   </aside>
 
-  <!-- Main Content Wrapper (Scrollable Independently) -->
-  <main class="flex-1 flex flex-col min-w-0 bg-[#0b0f19] h-full overflow-y-auto custom-scrollbar relative">
+  <!-- Main Content Wrapper -->
+  <main class="flex-1 flex flex-col min-w-0 bg-[#0b0f19] w-full min-h-screen">
     <!-- Sticky Header -->
     <header class="h-20 bg-[#0e1424]/90 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between px-8 z-20 shrink-0 sticky top-0 shadow-lg shadow-black/20">
       <div>
@@ -176,7 +176,7 @@
     </header>
 
     <!-- Main Content Body -->
-    <div class="flex-1 overflow-y-auto p-8 space-y-8">
+    <div class="flex-1 p-6 md:p-8 space-y-6 md:space-y-8 w-full">
       
       <!-- Loading indicator -->
       <div *ngIf="loading && products.length === 0" class="flex flex-col items-center justify-center py-20 gap-3">
