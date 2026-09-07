@@ -99,6 +99,13 @@ async function startScrapingTab(tabId, webhookUrl) {
 
 // Helper to safely stop scraping on a given tab
 async function stopScrapingTab(tabId) {
+    notifyServerScrapingStatus({
+        tabId,
+        sessionId: `session_${tabId}`,
+        status: 'stopped',
+        percent: 100,
+        statusMsg: 'Збір зупинено користувачем'
+    });
     return new Promise(resolve => {
         chrome.tabs.sendMessage(tabId, { action: 'STOP_TAB_SCRAPE' }, () => {
             const err = chrome.runtime.lastError;
@@ -119,6 +126,23 @@ async function stopScrapingTab(tabId) {
     });
 }
 
+const STATUS_TARGETS = [
+    'https://rozetka-scraper-extension-builder.onrender.com/api/scraping-status',
+    'http://localhost:4000/api/scraping-status',
+    'http://127.0.0.1:4000/api/scraping-status'
+];
+
+async function notifyServerScrapingStatus(taskData) {
+    if (!taskData) return;
+    for (const url of STATUS_TARGETS) {
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(taskData)
+        }).catch(() => {});
+    }
+}
+
 // Main Message Router
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = message.tabId || (sender && sender.tab ? sender.tab.id : null);
@@ -137,6 +161,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sessionId: message.sessionId || `session_${tabId}`,
             startTime: message.startTime || Date.now()
         });
+
+        notifyServerScrapingStatus({
+            tabId,
+            sessionId: message.sessionId || `session_${tabId}`,
+            sessionTitle: message.sessionTitle || 'Каталог Rozetka',
+            category: message.category || 'Товари',
+            status: 'scraping',
+            pageIndex: message.page || 1,
+            currentCount: message.total || 0,
+            estimatedTotal: message.estimatedTotal || 0,
+            percent: message.percent || 0,
+            statusMsg: message.statusMsg || '',
+            startTime: message.startTime || Date.now()
+        });
+
         sendResponse({ success: true });
         return true;
     }
@@ -153,6 +192,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             category: message.category || 'Товари',
             finishedAt: Date.now()
         });
+
+        notifyServerScrapingStatus({
+            tabId,
+            sessionId: message.sessionId || `session_${tabId}`,
+            sessionTitle: message.sessionTitle || 'Каталог Rozetka',
+            category: message.category || 'Товари',
+            status: 'completed',
+            pageIndex: message.page || 1,
+            currentCount: message.total || 0,
+            estimatedTotal: message.total || 0,
+            percent: 100,
+            statusMsg: `Збір завершено! (${message.total} товарів)`
+        });
+
         sendResponse({ success: true });
         return true;
     }
@@ -163,6 +216,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             isRunning: false,
             statusMsg: `Помилка: ${message.message || 'Збій скрапінгу'}`
         });
+
+        notifyServerScrapingStatus({
+            tabId,
+            sessionId: `session_${tabId}`,
+            status: 'error',
+            percent: 0,
+            statusMsg: `Помилка: ${message.message || 'Збій скрапінгу'}`
+        });
+
         sendResponse({ success: true });
         return true;
     }

@@ -78,6 +78,75 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
   }
 }
 
+interface LiveScrapingTask {
+  tabId?: number;
+  sessionId: string;
+  sessionTitle: string;
+  category?: string;
+  status: 'scraping' | 'completed' | 'stopped' | 'error';
+  pageIndex: number;
+  currentCount: number;
+  estimatedTotal: number;
+  percent: number;
+  statusMsg?: string;
+  updatedAt: number;
+  startTime?: number;
+}
+
+const activeScrapes = new Map<string, LiveScrapingTask>();
+
+function getCleanActiveScrapes(): LiveScrapingTask[] {
+  const now = Date.now();
+  const list: LiveScrapingTask[] = [];
+  for (const [key, item] of activeScrapes.entries()) {
+    if (item.status === 'completed' || item.status === 'stopped') {
+      if (now - item.updatedAt > 15000) {
+        activeScrapes.delete(key);
+        continue;
+      }
+    } else if (now - item.updatedAt > 45000) {
+      activeScrapes.delete(key);
+      continue;
+    }
+    list.push(item);
+  }
+  return list;
+}
+
+app.post('/api/scraping-status', (req, res) => {
+  try {
+    const data = req.body || {};
+    const key = data.sessionId || (data.tabId ? `tab_${data.tabId}` : 'default_scrape');
+    const task: LiveScrapingTask = {
+      tabId: data.tabId,
+      sessionId: key,
+      sessionTitle: data.sessionTitle || 'Каталог Rozetka',
+      category: data.category || 'Загальна',
+      status: data.status || 'scraping',
+      pageIndex: typeof data.pageIndex === 'number' ? data.pageIndex : (parseInt(data.pageIndex, 10) || 1),
+      currentCount: typeof data.currentCount === 'number' ? data.currentCount : (parseInt(data.currentCount, 10) || 0),
+      estimatedTotal: typeof data.estimatedTotal === 'number' ? data.estimatedTotal : (parseInt(data.estimatedTotal, 10) || 0),
+      percent: typeof data.percent === 'number' ? data.percent : (parseInt(data.percent, 10) || 0),
+      statusMsg: data.statusMsg || '',
+      updatedAt: Date.now(),
+      startTime: data.startTime || Date.now()
+    };
+    activeScrapes.set(key, task);
+    res.json({ success: true, activeScrapes: getCleanActiveScrapes() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/scraping-status', (req, res) => {
+  res.json({ success: true, activeScrapes: getCleanActiveScrapes() });
+});
+
+app.post('/api/scraping-status/clear', (req, res) => {
+  activeScrapes.clear();
+  res.json({ success: true });
+});
+
 app.post('/api/products', async (req, res) => {
   try {
     let newItems = req.body ? (req.body.products || req.body) : [];

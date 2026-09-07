@@ -174,6 +174,21 @@ interface Product {
   reviewsGrowth?: number;
 }
 
+export interface LiveScrapingTask {
+  tabId?: number;
+  sessionId: string;
+  sessionTitle: string;
+  category?: string;
+  status: 'scraping' | 'completed' | 'stopped' | 'error';
+  pageIndex: number;
+  currentCount: number;
+  estimatedTotal: number;
+  percent: number;
+  statusMsg?: string;
+  updatedAt: number;
+  startTime?: number;
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -194,17 +209,34 @@ export class DashboardComponent implements OnInit {
   // Filters
   searchQuery = '';
   selectedSessionTitle = 'all'; // 'all' or specific session title (e.g. 'Повербанки Anker', 'Повербанки Sigma')
+  selectedPageFilter: number | 'all' = 'all';
   minPrice = 0;
   maxPrice: number | null = null;
   minRating = 0;
   statusFilter = 'all';
   stockFilter = 'all';
 
+  // Live Scraping Monitor State
+  activeScrapes: LiveScrapingTask[] = [];
+  isAnyScrapeActive = false;
+  liveStatusPollTimer: any = null;
+  recentScrapeSuccessNotice: string | null = null;
+
+  normalizeSessionTitle(title: string): string {
+    if (!title) return 'Загальна';
+    let t = title.trim();
+    // Normalize Rozetka variations such as "Повербанки та УМБ Brand" -> "Повербанки Brand"
+    t = t.replace(/^Повербанки\s+та\s+УМБ\s+/i, 'Повербанки ');
+    t = t.replace(/^Power\s*banks?\s+and\s+UMB\s+/i, 'Повербанки ');
+    return t;
+  }
+
   getAvailableSessions(): Array<{ title: string, count: number }> {
     if (!this.products || this.products.length === 0) return [];
     const map = new Map<string, number>();
     for (const p of this.products) {
-      const t = (p.sessionTitle || p.category || 'Загальна').trim();
+      const raw = (p.sessionTitle || p.category || 'Загальна').trim();
+      const t = this.normalizeSessionTitle(raw);
       if (t) {
         map.set(t, (map.get(t) || 0) + 1);
       }
@@ -218,18 +250,38 @@ export class DashboardComponent implements OnInit {
 
   selectSession(title: string) {
     this.selectedSessionTitle = title;
+    this.selectedPageFilter = 'all';
     this.applyFilters();
     this.calculateMetrics();
     this.cdr.markForCheck();
   }
 
+  selectPageFilter(page: number | 'all') {
+    this.selectedPageFilter = page;
+    this.applyFilters();
+    this.calculateMetrics();
+    this.cdr.markForCheck();
+  }
+
+  getAvailablePagesForActiveSession(): number[] {
+    const prods = this.getActiveSessionProducts();
+    if (!prods || prods.length === 0) return [];
+    const totalPages = Math.ceil(prods.length / 60);
+    const pages: number[] = [];
+    for (let i = 1; i <= totalPages; i++) {
+      pages.push(i);
+    }
+    return pages;
+  }
+
   getActiveSessionProducts(): Product[] {
     if (!this.products || this.products.length === 0) return [];
     if (this.selectedSessionTitle === 'all') return this.products;
-    return this.products.filter(p => 
-      (p.sessionTitle && p.sessionTitle === this.selectedSessionTitle) || 
-      (p.category && p.category === this.selectedSessionTitle)
-    );
+    return this.products.filter(p => {
+      const raw = (p.sessionTitle || p.category || 'Загальна').trim();
+      const clean = this.normalizeSessionTitle(raw);
+      return clean === this.selectedSessionTitle || raw === this.selectedSessionTitle;
+    });
   }
 
   // History & Folders State
@@ -513,6 +565,7 @@ export class DashboardComponent implements OnInit {
       this.loadProducts();
       this.loadFolders();
       this.loadHistory();
+      this.startLiveStatusPolling();
 
       this.autoRefreshTimer = setInterval(() => {
         this.loadProducts(true);
@@ -524,6 +577,50 @@ export class DashboardComponent implements OnInit {
     if (this.autoRefreshTimer) {
       clearInterval(this.autoRefreshTimer);
     }
+    this.stopLiveStatusPolling();
+  }
+
+  startLiveStatusPolling() {
+    if (typeof window === 'undefined') return;
+    this.pollScrapingStatus();
+    this.liveStatusPollTimer = setInterval(() => {
+      this.pollScrapingStatus();
+    }, 1500);
+  }
+
+  stopLiveStatusPolling() {
+    if (this.liveStatusPollTimer) {
+      clearInterval(this.liveStatusPollTimer);
+      this.liveStatusPollTimer = null;
+    }
+  }
+
+  pollScrapingStatus() {
+    this.http.get<{ success: boolean, activeScrapes: LiveScrapingTask[] }>(`${this.apiUrl}/api/scraping-status`)
+      .subscribe({
+        next: (res) => {
+          if (res.success && Array.isArray(res.activeScrapes)) {
+            const previousActive = this.isAnyScrapeActive;
+            this.activeScrapes = res.activeScrapes;
+            this.isAnyScrapeActive = this.activeScrapes.some(t => t.status === 'scraping');
+
+            // If scraping is currently active, load products silently so counters & tables update live!
+            if (this.isAnyScrapeActive) {
+              this.loadProducts(true);
+            } else if (previousActive && !this.isAnyScrapeActive) {
+              // Scraping just completed
+              this.recentScrapeSuccessNotice = 'Збір успішно завершено! Всі дані синхронізовано.';
+              this.loadProducts(false);
+              setTimeout(() => {
+                this.recentScrapeSuccessNotice = null;
+                this.cdr.markForCheck();
+              }, 7000);
+            }
+            this.cdr.markForCheck();
+          }
+        },
+        error: () => {}
+      });
   }
 
   loadProducts(silent = false) {
@@ -1594,7 +1691,7 @@ export class DashboardComponent implements OnInit {
 
   applyFilters() {
     const baseProducts = this.getActiveSessionProducts();
-    this.filteredProducts = baseProducts.filter(p => {
+    this.filteredProducts = baseProducts.filter((p, index) => {
       const matchesSearch = p.name.toLowerCase().includes(this.searchQuery.toLowerCase());
       const matchesPrice = p.price >= (this.minPrice || 0) && (this.maxPrice === null || this.maxPrice === undefined || p.price <= this.maxPrice);
       const matchesRating = p.rating >= this.minRating;
@@ -1606,8 +1703,14 @@ export class DashboardComponent implements OnInit {
       } else if (this.stockFilter === 'outOfStock') {
         matchesStock = p.inStock === false;
       }
+
+      let matchesPage = true;
+      if (this.selectedPageFilter !== 'all') {
+        const itemPage = Math.floor(index / 60) + 1;
+        matchesPage = itemPage === this.selectedPageFilter;
+      }
       
-      return matchesSearch && matchesPrice && matchesRating && matchesStatus && matchesStock;
+      return matchesSearch && matchesPrice && matchesRating && matchesStatus && matchesStock && matchesPage;
     });
 
     if (this.sortColumn) {

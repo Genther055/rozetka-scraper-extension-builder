@@ -415,10 +415,13 @@
     // Silent background scroll to ensure lazy-loaded items and specs on current page are fully rendered
     async function silentBackgroundScroll() {
         try {
+            const midY = Math.round(document.body.scrollHeight / 2);
+            window.scrollTo({ top: midY, behavior: 'auto' });
+            await new Promise(r => setTimeout(r, 200));
             const targetY = Math.max(0, document.body.scrollHeight - window.innerHeight);
             window.scrollTo({ top: targetY, behavior: 'auto' });
+            await new Promise(r => setTimeout(r, 300));
         } catch (_) {}
-        await new Promise(r => setTimeout(r, 400));
     }
 
     // Comprehensive pagination finder with retry/recovery support for Rozetka
@@ -557,12 +560,12 @@
     }
 
     async function scrapeCurrentDomItems(meta, pageIndex) {
-        const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"], [data-testid="goods-tile"]';
+        const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"], [data-testid="goods-tile"], app-goods-tile-default, .catalog-grid__cell, .goods-tile__inner';
         let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => !item.closest('.recently-viewed'));
         
         if (items.length === 0) {
             const links = document.querySelectorAll('a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
-            items = Array.from(links).map(l => l.closest('li, div, rz-catalog-tile, article, section') || l).filter(Boolean);
+            items = Array.from(links).map(l => l.closest('li, div, rz-catalog-tile, article, section, app-goods-tile-default') || l).filter(Boolean);
         }
 
         if (items.length === 0) return [];
@@ -729,6 +732,7 @@
                     percent,
                     statusMsg,
                     syncedCount: sentLinks.size,
+                    estimatedTotal: estimatedTotal,
                     sessionTitle: meta.title,
                     category: meta.category,
                     sessionId: currentSessionId,
