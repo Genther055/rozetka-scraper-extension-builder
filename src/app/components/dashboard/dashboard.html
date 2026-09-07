@@ -1,7 +1,7 @@
 <div class="min-h-screen bg-[#0b0f19] text-slate-100 flex font-sans w-full">
   
-  <!-- Fixed Sticky Sidebar -->
-  <aside class="w-64 bg-[#0e1424] border-r border-slate-800/80 flex flex-col shrink-0 shadow-2xl shadow-black/40 sticky top-0 h-screen z-30 select-none">
+  <!-- Fixed Sidebar From Top To Bottom -->
+  <aside class="fixed top-0 bottom-0 left-0 w-64 bg-[#0e1424] border-r border-slate-800/80 flex flex-col shrink-0 shadow-2xl shadow-black/40 z-30 select-none">
     <!-- Brand -->
     <div class="p-6 border-b border-slate-800/80 flex items-center gap-3 shrink-0 bg-[#0e1424]">
       <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
@@ -69,8 +69,8 @@
       </button>
     </nav>
 
-    <!-- Pinned User Profile & Action Footer (Always Visible at Bottom) -->
-    <div class="p-4 border-t border-slate-800/80 bg-[#090d18] flex flex-col gap-3 shrink-0 mt-auto shadow-2xl sticky bottom-0 z-10">
+    <!-- Pinned User Profile & Action Footer (Anchored at very bottom edge) -->
+    <div class="p-4 border-t border-slate-800/80 bg-[#090d18] flex flex-col gap-3 shrink-0 mt-auto shadow-2xl">
       <div class="flex items-center gap-3 px-1">
         <div class="relative shrink-0">
           <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center border border-indigo-400/40 text-white font-black text-sm shadow-md shadow-indigo-950">
@@ -105,7 +105,7 @@
   </aside>
 
   <!-- Main Content Wrapper -->
-  <main class="flex-1 flex flex-col min-w-0 bg-[#0b0f19] w-full min-h-screen">
+  <main class="flex-1 flex flex-col min-w-0 bg-[#0b0f19] ml-64 min-h-screen">
     <!-- Sticky Header -->
     <header class="h-20 bg-[#0e1424]/90 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between px-8 z-20 shrink-0 sticky top-0 shadow-lg shadow-black/20">
       <div>
