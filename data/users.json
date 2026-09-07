@@ -1,0 +1,22 @@
+[
+  {
+    "id": "usr_admin",
+    "username": "admin",
+    "passwordHash": "41b532f923ef205c95ce07c1909c6841:4e368fdbc453b5f0b092b959f70920d2e493220141e65903b08a383cad7deead330f7e003abad859824511e3ddd45b984857d5d4efbef3e4e18108c134f5002c",
+    "role": "admin",
+    "displayName": "Головний адміністратор",
+    "avatarGradient": "from-indigo-600 to-purple-600",
+    "isActive": true,
+    "createdAt": "2026-09-07T13:34:54.535Z"
+  },
+  {
+    "id": "usr_analyst",
+    "username": "analyst",
+    "passwordHash": "f02e144766a67c2139dff4647579073a:7f97e070c8995a731249b1982de7b4e7f900790cb52f03bbb17e6bf28555a03e288db9943b9ec65c95d066c60810a9f66dd735676e8768091f757631b561723e",
+    "role": "analyst",
+    "displayName": "Аналітик команди",
+    "avatarGradient": "from-cyan-500 to-blue-600",
+    "isActive": true,
+    "createdAt": "2026-09-07T13:34:54.583Z"
+  }
+]

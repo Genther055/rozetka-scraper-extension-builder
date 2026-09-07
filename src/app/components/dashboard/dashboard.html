@@ -119,8 +119,35 @@
 
   <!-- Main Content Wrapper -->
   <main class="flex-1 flex flex-col min-w-0 bg-[#0b0f19] ml-64 min-h-screen">
+    
+    <!-- TOP IMPERSONATION / SUPPORT MODE BANNER -->
+    <div 
+      *ngIf="isImpersonating"
+      class="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white px-8 py-2.5 flex items-center justify-between shadow-2xl z-30 sticky top-0 text-xs font-bold border-b border-amber-400/40 animate-fadeIn"
+    >
+      <div class="flex items-center gap-2.5">
+        <span class="material-icons text-white text-base animate-pulse">support_agent</span>
+        <span>
+          Режим підтримки: Ви переглядаєте кабінет від імені <u>{{ impersonateTargetUser?.displayName || impersonateTargetUser?.username }}</u> (@{{ impersonateTargetUser?.username }}). Всі дії та збереження відбуваються в його просторі.
+        </span>
+      </div>
+
+      <button 
+        (click)="exitImpersonation()"
+        class="px-3.5 py-1.5 bg-black/40 hover:bg-black/60 text-white border border-white/40 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-md text-xs font-black tracking-wide"
+        title="Завершити діагностику та повернутися до свого акаунта"
+      >
+        <span class="material-icons text-sm">arrow_back</span>
+        <span>Повернутися до акаунта Власника</span>
+      </button>
+    </div>
+
     <!-- Sticky Header -->
-    <header class="h-20 bg-[#0e1424]/90 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between px-8 z-20 shrink-0 sticky top-0 shadow-lg shadow-black/20">
+    <header 
+      [class.top-10]="isImpersonating"
+      [class.top-0]="!isImpersonating"
+      class="h-20 bg-[#0e1424]/90 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between px-8 z-20 shrink-0 sticky shadow-lg shadow-black/20"
+    >
       <div>
         <h2 class="text-xl font-extrabold tracking-tight premium-title">
           <span *ngIf="activeTab === 'overview'">Панель огляду ніші</span>
@@ -2563,6 +2590,15 @@
                   </td>
                   <td class="py-3.5 px-3 text-right">
                     <div class="flex items-center justify-end gap-2">
+                      <button 
+                        *ngIf="!isImpersonating"
+                        (click)="impersonateUser(u)"
+                        class="px-2.5 py-1 bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 hover:text-white border border-indigo-500/40 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                        title="Увійти в кабінет цього користувача в режимі технічної підтримки"
+                      >
+                        <span class="material-icons text-xs">visibility</span>
+                        <span>Увійти</span>
+                      </button>
                       <button 
                         (click)="openChangePasswordModal(u)"
                         class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-indigo-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"

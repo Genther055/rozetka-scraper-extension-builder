@@ -1,29 +1,64 @@
-<div class="relative min-h-screen flex items-center justify-center bg-slate-950 overflow-hidden font-sans">
+<div class="relative min-h-screen flex items-center justify-center bg-[#0b0f19] overflow-hidden font-sans p-4">
   <!-- Glowing background blobs -->
   <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl animate-pulse"></div>
   <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
 
-  <div class="relative w-full max-w-md p-8 bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-2xl">
+  <div class="relative w-full max-w-md p-8 bg-[#0e1424]/90 backdrop-blur-xl border border-slate-800/80 rounded-3xl shadow-2xl space-y-6">
     <!-- Header/Logo -->
-    <div class="text-center mb-8">
-      <div class="inline-flex items-center justify-center w-14 h-14 bg-indigo-600 rounded-xl mb-4 shadow-lg shadow-indigo-600/30">
+    <div class="text-center">
+      <div class="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-2xl mb-3 shadow-lg shadow-indigo-600/30">
         <span class="material-icons text-white text-3xl font-bold">query_stats</span>
       </div>
-      <h2 class="text-3xl font-bold tracking-tight text-white">TradeScout</h2>
-      <p class="mt-2 text-sm text-slate-400">Платформа аналітики маркетплейсів</p>
+      <h2 class="text-2xl font-black tracking-tight text-white">TradeScout Analytics OS</h2>
+      <p class="mt-1 text-xs text-slate-400">Хмарна платформа аналізу товарів та ніш Rozetka</p>
     </div>
 
-    <!-- Login Form -->
-    <form (submit)="onLogin()" class="space-y-6">
-      <div *ngIf="errorMessage" class="p-3 bg-red-950/50 border border-red-800 text-red-400 text-xs rounded-lg text-center animate-shake">
-        {{ errorMessage }}
-      </div>
+    <!-- Segmented Mode Switcher (Login vs Register) -->
+    <div class="grid grid-cols-2 p-1 bg-slate-950/80 border border-slate-800/80 rounded-2xl gap-1">
+      <button 
+        type="button"
+        (click)="setMode('login')"
+        [class.bg-gradient-to-r]="activeMode === 'login'"
+        [class.from-indigo-600]="activeMode === 'login'"
+        [class.to-purple-600]="activeMode === 'login'"
+        [class.text-white]="activeMode === 'login'"
+        [class.shadow-md]="activeMode === 'login'"
+        [class.text-slate-400]="activeMode !== 'login'"
+        class="py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+      >
+        <span class="material-icons text-sm">login</span>
+        <span>Вхід</span>
+      </button>
 
+      <button 
+        type="button"
+        (click)="setMode('register')"
+        [class.bg-gradient-to-r]="activeMode === 'register'"
+        [class.from-indigo-600]="activeMode === 'register'"
+        [class.to-purple-600]="activeMode === 'register'"
+        [class.text-white]="activeMode === 'register'"
+        [class.shadow-md]="activeMode === 'register'"
+        [class.text-slate-400]="activeMode !== 'register'"
+        class="py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+      >
+        <span class="material-icons text-sm">person_add</span>
+        <span>Реєстрація</span>
+      </button>
+    </div>
+
+    <!-- Error / Success Notices -->
+    <div *ngIf="errorMessage" class="p-3 bg-rose-950/80 border border-rose-600/60 text-rose-300 text-xs rounded-xl text-center font-semibold animate-shake flex items-center justify-center gap-2">
+      <span class="material-icons text-sm">error</span>
+      <span>{{ errorMessage }}</span>
+    </div>
+
+    <!-- 1. LOGIN FORM -->
+    <form *ngIf="activeMode === 'login'" (submit)="onLogin()" class="space-y-4">
       <div>
-        <label for="username" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Логін</label>
+        <label for="username" class="block text-xs font-semibold text-slate-300 mb-1.5">Логін</label>
         <div class="relative">
-          <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
-            <span class="material-icons text-lg">person</span>
+          <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
+            <span class="material-icons text-base">person</span>
           </span>
           <input
             id="username"
@@ -31,17 +66,17 @@
             type="text"
             required
             [(ngModel)]="username"
-            class="block w-full pl-10 pr-3 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-sm transition-all"
-            placeholder="Введіть логін (admin)"
+            class="block w-full pl-10 pr-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs transition-all shadow-inner"
+            placeholder="Введіть логін (наприклад: admin)"
           />
         </div>
       </div>
 
       <div>
-        <label for="password" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Пароль</label>
+        <label for="password" class="block text-xs font-semibold text-slate-300 mb-1.5">Пароль</label>
         <div class="relative">
-          <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
-            <span class="material-icons text-lg">lock</span>
+          <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
+            <span class="material-icons text-base">lock</span>
           </span>
           <input
             id="password"
@@ -49,23 +84,117 @@
             type="password"
             required
             [(ngModel)]="password"
-            class="block w-full pl-10 pr-3 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-sm transition-all"
-            placeholder="Введіть пароль (admin)"
+            class="block w-full pl-10 pr-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs transition-all shadow-inner"
+            placeholder="Введіть пароль"
           />
         </div>
       </div>
 
       <button
         type="submit"
-        class="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 cursor-pointer shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 transition-all"
+        [disabled]="loading"
+        class="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 active:from-indigo-700 active:to-purple-700 cursor-pointer shadow-lg shadow-indigo-600/25 transition-all glow-indigo disabled:opacity-50"
       >
-        Увійти в систему
+        <span *ngIf="loading" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+        <span>{{ loading ? 'Авторизація...' : 'Увійти в кабінет' }}</span>
+      </button>
+    </form>
+
+    <!-- 2. REGISTRATION FORM -->
+    <form *ngIf="activeMode === 'register'" (submit)="onRegister()" class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">Логін для входу</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
+            <span class="material-icons text-base">alternate_email</span>
+          </span>
+          <input
+            name="regUsername"
+            type="text"
+            required
+            [(ngModel)]="regUsername"
+            class="block w-full pl-10 pr-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs transition-all shadow-inner"
+            placeholder="наприклад: alex_analyst"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">Відображуване ім'я або Компанія</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
+            <span class="material-icons text-base">badge</span>
+          </span>
+          <input
+            name="regDisplayName"
+            type="text"
+            [(ngModel)]="regDisplayName"
+            class="block w-full pl-10 pr-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs transition-all shadow-inner"
+            placeholder="наприклад: Олексій (Аналітика)"
+          />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Пароль</label>
+          <input
+            name="regPassword"
+            type="password"
+            required
+            [(ngModel)]="regPassword"
+            class="block w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs transition-all shadow-inner"
+            placeholder="Мінімум 3 симв."
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Повтор пароля</label>
+          <input
+            name="regConfirmPassword"
+            type="password"
+            required
+            [(ngModel)]="regConfirmPassword"
+            class="block w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs transition-all shadow-inner"
+            placeholder="Підтвердження"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">Колірний стиль аватара</label>
+        <div class="flex items-center gap-2">
+          <button 
+            *ngFor="let grad of [
+              'from-indigo-600 to-purple-600',
+              'from-cyan-500 to-blue-600',
+              'from-emerald-500 to-teal-700',
+              'from-rose-500 to-amber-600',
+              'from-amber-500 to-red-600'
+            ]"
+            type="button"
+            (click)="regAvatarGradient = grad"
+            [class.ring-2]="regAvatarGradient === grad"
+            [class.ring-white]="regAvatarGradient === grad"
+            class="w-7 h-7 rounded-lg bg-gradient-to-tr {{ grad }} cursor-pointer transition-all hover:scale-110"
+          ></button>
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        [disabled]="loading"
+        class="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:from-emerald-700 active:to-teal-700 cursor-pointer shadow-lg shadow-emerald-600/25 transition-all glow-emerald disabled:opacity-50"
+      >
+        <span *ngIf="loading" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+        <span>{{ loading ? 'Створення акаунта...' : 'Зареєструватися та увійти' }}</span>
       </button>
     </form>
 
     <!-- Footer info -->
-    <div class="mt-8 text-center text-xs text-slate-500 border-t border-slate-800/80 pt-6">
-      Розроблено для локального аналізу Rozetka & Prom
+    <div class="text-center text-[11px] text-slate-500 border-t border-slate-800/80 pt-4 flex items-center justify-center gap-1.5">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span>Синхронізація з Neon PostgreSQL Active</span>
     </div>
   </div>
 </div>

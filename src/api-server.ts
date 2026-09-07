@@ -692,6 +692,55 @@ app.post('/api/auth/login', async (req, res) => {
   });
 });
 
+// 2. Public / Self-serve Registration
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, password, displayName, avatarGradient } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ success: false, error: "Логін та пароль обов'язкові" });
+    }
+
+    const cleanUsername = username.trim().toLowerCase();
+    if (cleanUsername.length < 3) {
+      return res.status(400).json({ success: false, error: "Логін має містити щонайменше 3 символи" });
+    }
+
+    if (password.trim().length < 3) {
+      return res.status(400).json({ success: false, error: "Пароль має містити щонайменше 3 символи" });
+    }
+
+    const existing = await getUserByUsername(cleanUsername);
+    if (existing) {
+      return res.status(400).json({ success: false, error: "Користувач з таким логіном вже зареєстрований" });
+    }
+
+    const created = await createUser({
+      username: cleanUsername,
+      password: password.trim(),
+      role: 'analyst',
+      displayName: displayName?.trim() || cleanUsername,
+      avatarGradient: avatarGradient || 'from-indigo-600 to-purple-600'
+    });
+
+    await recordUserLogin(created.id);
+
+    return res.json({
+      success: true,
+      user: {
+        id: created.id,
+        username: created.username,
+        role: created.role,
+        displayName: created.displayName,
+        avatarGradient: created.avatarGradient,
+        isActive: created.isActive,
+        lastLoginAt: new Date().toISOString()
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // 2. Get all users
 app.get('/api/users', async (req, res) => {
   try {

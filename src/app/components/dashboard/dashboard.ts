@@ -242,6 +242,11 @@ export class DashboardComponent implements OnInit {
   loadingUsers = false;
   usersErrorMessage = '';
 
+  // Support Mode / Impersonation State
+  isImpersonating = false;
+  impersonatedAdminData: any = null;
+  impersonateTargetUser: TeamUser | null = null;
+
   showCreateUserModal = false;
   newUserData = {
     username: '',
@@ -844,6 +849,71 @@ export class DashboardComponent implements OnInit {
   }
 
   // --- Team & Users Management Methods ---
+  checkImpersonationState() {
+    if (typeof window !== 'undefined') {
+      const rawAdmin = localStorage.getItem('tradescout_impersonator_admin');
+      if (rawAdmin) {
+        try {
+          this.impersonatedAdminData = JSON.parse(rawAdmin);
+          this.isImpersonating = true;
+          const currentRaw = localStorage.getItem('tradescout_current_user');
+          if (currentRaw) {
+            this.impersonateTargetUser = JSON.parse(currentRaw);
+          }
+        } catch (_) {}
+      } else {
+        this.isImpersonating = false;
+        this.impersonatedAdminData = null;
+        this.impersonateTargetUser = null;
+      }
+    }
+  }
+
+  impersonateUser(target: TeamUser) {
+    if (typeof window === 'undefined') return;
+    const currentRaw = localStorage.getItem('tradescout_current_user');
+    if (!currentRaw) return;
+    const current = JSON.parse(currentRaw);
+
+    // Save admin identity if not already impersonating
+    if (!this.isImpersonating) {
+      localStorage.setItem('tradescout_impersonator_admin', JSON.stringify(current));
+      this.impersonatedAdminData = current;
+    }
+
+    this.impersonateTargetUser = target;
+    this.isImpersonating = true;
+
+    // Switch active session to target user
+    localStorage.setItem('tradescout_current_user', JSON.stringify(target));
+    this.userSettings.username = target.displayName || target.username;
+    this.userSettings.role = target.role === 'admin' 
+      ? 'Головний аналітик (Admin)' 
+      : (target.role === 'analyst' ? 'Аналітик команди' : target.role);
+    this.userSettings.avatarGradient = target.avatarGradient || this.userSettings.avatarGradient;
+    this.userSettings.avatarInitial = (target.displayName || target.username).charAt(0).toUpperCase();
+    localStorage.setItem(this.STORAGE_USER_SETTINGS_KEY, JSON.stringify(this.userSettings));
+
+    this.showSettingsSavedToast();
+    this.cdr.markForCheck();
+  }
+
+  exitImpersonation() {
+    if (typeof window === 'undefined' || !this.impersonatedAdminData) return;
+
+    // Restore original admin session
+    localStorage.setItem('tradescout_current_user', JSON.stringify(this.impersonatedAdminData));
+    localStorage.removeItem('tradescout_impersonator_admin');
+
+    this.isImpersonating = false;
+    this.impersonateTargetUser = null;
+
+    this.loadUserSettings();
+    this.loadTeamUsers();
+    this.showSettingsSavedToast();
+    this.cdr.markForCheck();
+  }
+
   async loadTeamUsers() {
     this.loadingUsers = true;
     this.usersErrorMessage = '';
@@ -1088,6 +1158,7 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit() {
     if (typeof window !== 'undefined') {
+      this.checkImpersonationState();
       this.loadUserSettings();
 
       const savedAuto = localStorage.getItem('tradescout_auto_save_history');
