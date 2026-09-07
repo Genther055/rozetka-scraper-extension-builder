@@ -189,6 +189,13 @@ export interface LiveScrapingTask {
   startTime?: number;
 }
 
+export interface CategoryPageBreakdown {
+  title: string;
+  totalCount: number;
+  totalPages: number;
+  pages: Array<{ pageNum: number, count: number }>;
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -324,6 +331,44 @@ export class DashboardComponent implements OnInit {
   }
 
   selectPageFilter(page: number | 'all') {
+    this.selectedPageFilter = page;
+    this.applyFilters();
+    this.calculateMetrics();
+    this.cdr.markForCheck();
+  }
+
+  getCategoryPageBreakdowns(): CategoryPageBreakdown[] {
+    if (!this.products || this.products.length === 0) return [];
+    const sessions = this.getAvailableSessions();
+    const list: CategoryPageBreakdown[] = [];
+
+    for (const s of sessions) {
+      const prods = this.products.filter(p => {
+        const raw = (p.sessionTitle || p.category || 'Загальна').trim();
+        return this.normalizeSessionTitle(raw) === s.title || raw === s.title;
+      });
+
+      const totalPages = Math.max(1, Math.ceil(prods.length / 60));
+      const pages: Array<{ pageNum: number, count: number }> = [];
+
+      for (let i = 1; i <= totalPages; i++) {
+        const pageProds = prods.filter((_, idx) => Math.floor(idx / 60) + 1 === i);
+        pages.push({ pageNum: i, count: pageProds.length });
+      }
+
+      list.push({
+        title: s.title,
+        totalCount: s.count,
+        totalPages,
+        pages
+      });
+    }
+
+    return list;
+  }
+
+  selectCategoryAndPage(categoryTitle: string, page: number | 'all') {
+    this.selectedSessionTitle = categoryTitle;
     this.selectedPageFilter = page;
     this.applyFilters();
     this.calculateMetrics();
