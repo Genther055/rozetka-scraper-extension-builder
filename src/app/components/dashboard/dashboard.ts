@@ -264,6 +264,9 @@ export class DashboardComponent implements OnInit {
   showSaveSnapshotModal = false;
   newSnapshotTitle = '';
   newSnapshotFolderId: string | null = null;
+  showInlineCreateFolderInSaveModal = false;
+  inlineNewFolderName = '';
+  inlineNewFolderColor = '#6366f1';
 
   // Deterministic Analytics Engine State
   analyticsSummary: AnalyticalSummary | null = null;
@@ -870,6 +873,49 @@ export class DashboardComponent implements OnInit {
     });
   }
 
+  toggleInlineCreateFolderInSaveModal() {
+    this.showInlineCreateFolderInSaveModal = !this.showInlineCreateFolderInSaveModal;
+    if (this.showInlineCreateFolderInSaveModal) {
+      this.inlineNewFolderName = '';
+      this.inlineNewFolderColor = '#6366f1';
+    }
+    this.cdr.markForCheck();
+  }
+
+  createFolderInlineAndSelect() {
+    if (!this.inlineNewFolderName || !this.inlineNewFolderName.trim()) {
+      this.showNotification('Введіть назву нової папки', true);
+      return;
+    }
+
+    const newFld: ScrapingFolder = {
+      id: 'fld_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      name: this.inlineNewFolderName.trim(),
+      color: this.inlineNewFolderColor || '#6366f1',
+      icon: 'folder',
+      createdAt: new Date().toISOString()
+    };
+
+    // Instant local save & auto-select for this snapshot
+    this.folders.push(newFld);
+    this.saveFoldersLocally();
+    this.newSnapshotFolderId = newFld.id;
+    this.showInlineCreateFolderInSaveModal = false;
+    this.inlineNewFolderName = '';
+    this.showNotification(`Папку «${newFld.name}» успішно створено та вибрано!`);
+    this.cdr.markForCheck();
+
+    // Background sync to backend
+    this.http.post<{ success: boolean, folder: ScrapingFolder }>(`${this.apiUrl}/api/folders`, {
+      name: newFld.name,
+      color: newFld.color,
+      icon: newFld.icon
+    }).subscribe({
+      next: () => {},
+      error: (err) => console.warn('Server sync notice for new folder (saved locally):', err)
+    });
+  }
+
   openSaveSnapshotModal() {
     if (this.products.length === 0) {
       this.showNotification('У поточній базі немає товарів для збереження в знімок.', true);
@@ -880,6 +926,8 @@ export class DashboardComponent implements OnInit {
     const formattedDate = now.toLocaleDateString('uk-UA') + ' ' + now.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
     this.newSnapshotTitle = `Збір ${cat} (${this.products.length} шт) — ${formattedDate}`;
     this.newSnapshotFolderId = this.selectedFolderId !== 'all' && this.selectedFolderId !== 'unassigned' ? this.selectedFolderId : null;
+    this.showInlineCreateFolderInSaveModal = false;
+    this.inlineNewFolderName = '';
     this.showSaveSnapshotModal = true;
     this.cdr.markForCheck();
   }
