@@ -411,13 +411,13 @@
         } catch (_) {}
     }
 
-    // Silent background scroll without requestAnimationFrame
+    // Silent background scroll without requestAnimationFrame (optimized for high-speed scraping)
     async function silentBackgroundScroll() {
         try {
             const targetY = Math.max(0, document.body.scrollHeight - window.innerHeight);
             window.scrollTo({ top: targetY, behavior: 'auto' });
         } catch (_) {}
-        await new Promise(r => setTimeout(r, 600));
+        await new Promise(r => setTimeout(r, 200));
     }
 
     // Comprehensive pagination finder with retry/recovery support for Rozetka
@@ -748,10 +748,10 @@
 
                     dispatchSafeClick(actionObj.element);
 
-                    // Wait up to 6s per attempt for new elements to appear
-                    for (let w = 0; w < 12; w++) {
+                    // Wait up to 5s per attempt for new elements to appear (checking every 150ms)
+                    for (let w = 0; w < 30; w++) {
                         if (!isTabScrapingActive) break;
-                        await new Promise(r => setTimeout(r, 500));
+                        await new Promise(r => setTimeout(r, 150));
                         const currentDomCount = document.querySelectorAll(tileSelectors).length;
                         if (currentDomCount > prevDomCount) {
                             pageTransitionSuccess = true;
@@ -769,7 +769,7 @@
                 // If not succeeded yet, scroll down further and wait backoff delay before next attempt
                 if (attempt < maxTransitionAttempts) {
                     await silentBackgroundScroll();
-                    await new Promise(r => setTimeout(r, attempt * 1000));
+                    await new Promise(r => setTimeout(r, attempt * 600));
                 }
             }
 
