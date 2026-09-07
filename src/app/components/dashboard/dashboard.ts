@@ -563,6 +563,7 @@ export class DashboardComponent implements OnInit {
     this.drilldownSubtitle = `${valStat.productsCount} товарів (${valStat.productsShare}% пропозиції, ${valStat.reviewsShare}% попиту ніші)`;
     this.drilldownProducts = valStat.products || [];
     this.drilldownSearchQuery = '';
+    this.drilldownSelectedCategory = 'all';
     this.showDrilldownModal = true;
     this.cdr.markForCheck();
   }
@@ -1713,12 +1714,31 @@ export class DashboardComponent implements OnInit {
   drilldownSubtitle = '';
   drilldownProducts: Product[] = [];
   drilldownSearchQuery = '';
+  drilldownSelectedCategory = 'all';
+
+  getDrilldownAvailableCategories(): Array<{ title: string, count: number }> {
+    if (!this.drilldownProducts || this.drilldownProducts.length === 0) return [];
+    const map = new Map<string, number>();
+    for (const p of this.drilldownProducts) {
+      const raw = (p.category || p.sessionTitle || 'Основна').trim();
+      const norm = this.normalizeSessionTitle(raw);
+      if (norm) {
+        map.set(norm, (map.get(norm) || 0) + 1);
+      }
+    }
+    const result: Array<{ title: string, count: number }> = [];
+    map.forEach((count, title) => {
+      result.push({ title, count });
+    });
+    return result.sort((a, b) => b.count - a.count);
+  }
 
   openSellerProductsModal(sellerName: string) {
     const rawSeller = (sellerName || '').trim();
     const isRozetka = rawSeller.toLowerCase() === 'rozetka' || rawSeller.toLowerCase().includes('rozetka');
+    const base = this.getActiveSessionProducts();
     
-    const matchedProducts = this.products.filter(p => {
+    const matchedProducts = base.filter(p => {
       const pSeller = (p.seller && String(p.seller).trim()) ? String(p.seller).trim() : 'Rozetka';
       if (isRozetka) {
         return pSeller.toLowerCase() === 'rozetka' || pSeller.toLowerCase().includes('rozetka');
@@ -1727,37 +1747,53 @@ export class DashboardComponent implements OnInit {
     });
 
     this.drilldownTitle = `Товари продавця: ${sellerName}`;
-    this.drilldownSubtitle = `${matchedProducts.length} товарів у вибірці (${((matchedProducts.length / Math.max(1, this.products.length)) * 100).toFixed(1)}% ніші)`;
+    this.drilldownSubtitle = `${matchedProducts.length} товарів у вибірці (${((matchedProducts.length / Math.max(1, base.length)) * 100).toFixed(1)}% ніші)`;
     this.drilldownProducts = matchedProducts;
     this.drilldownSearchQuery = '';
+    this.drilldownSelectedCategory = 'all';
     this.showDrilldownModal = true;
     this.cdr.markForCheck();
   }
 
   openPriceBinProductsModal(bin: { rangeLabel: string; minPrice: number; maxPrice: number }) {
-    const matchedProducts = this.products.filter(p => {
+    const base = this.getActiveSessionProducts();
+    const matchedProducts = base.filter(p => {
       const price = Number(p.price) || 0;
       return price >= bin.minPrice && price <= bin.maxPrice;
     });
 
     this.drilldownTitle = `Товари в діапазоні: ${bin.rangeLabel}`;
-    this.drilldownSubtitle = `${matchedProducts.length} товарів (${((matchedProducts.length / Math.max(1, this.products.length)) * 100).toFixed(1)}% ніші)`;
+    this.drilldownSubtitle = `${matchedProducts.length} товарів (${((matchedProducts.length / Math.max(1, base.length)) * 100).toFixed(1)}% ніші)`;
     this.drilldownProducts = matchedProducts;
     this.drilldownSearchQuery = '';
+    this.drilldownSelectedCategory = 'all';
     this.showDrilldownModal = true;
     this.cdr.markForCheck();
   }
 
   getFilteredDrilldownProducts(): Product[] {
-    if (!this.drilldownSearchQuery || !this.drilldownSearchQuery.trim()) {
-      return this.drilldownProducts;
+    let list = this.drilldownProducts || [];
+
+    // 1. Category Filter
+    if (this.drilldownSelectedCategory && this.drilldownSelectedCategory !== 'all') {
+      list = list.filter(p => {
+        const raw = (p.category || p.sessionTitle || 'Основна').trim();
+        const norm = this.normalizeSessionTitle(raw);
+        return norm === this.drilldownSelectedCategory || raw === this.drilldownSelectedCategory;
+      });
     }
-    const q = this.drilldownSearchQuery.toLowerCase().trim();
-    return this.drilldownProducts.filter(p => 
-      (p.name && p.name.toLowerCase().includes(q)) ||
-      (p.category && p.category.toLowerCase().includes(q)) ||
-      (p.seller && p.seller.toLowerCase().includes(q))
-    );
+
+    // 2. Text Search Query Filter
+    if (this.drilldownSearchQuery && this.drilldownSearchQuery.trim()) {
+      const q = this.drilldownSearchQuery.toLowerCase().trim();
+      list = list.filter(p => 
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.category && p.category.toLowerCase().includes(q)) ||
+        (p.seller && p.seller.toLowerCase().includes(q))
+      );
+    }
+
+    return list;
   }
 
   openConfirmDialog(options: {

@@ -3177,6 +3177,53 @@
         </div>
       </div>
 
+      <!-- Category Filter Pills Bar (when multiple categories exist in drilldown) -->
+      <div *ngIf="getDrilldownAvailableCategories().length > 1" class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 pt-0.5 select-none shrink-0">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1 mr-1">
+          <span class="material-icons text-xs text-indigo-400">filter_alt</span>
+          <span>Категорія:</span>
+        </span>
+
+        <!-- All Categories Button -->
+        <button 
+          (click)="drilldownSelectedCategory = 'all'"
+          [class.bg-indigo-600]="drilldownSelectedCategory === 'all'"
+          [class.text-white]="drilldownSelectedCategory === 'all'"
+          [class.border-indigo-400]="drilldownSelectedCategory === 'all'"
+          [class.shadow-md]="drilldownSelectedCategory === 'all'"
+          [class.shadow-indigo-500/25]="drilldownSelectedCategory === 'all'"
+          [class.bg-slate-950]="drilldownSelectedCategory !== 'all'"
+          [class.text-slate-400]="drilldownSelectedCategory !== 'all'"
+          [class.border-slate-800]="drilldownSelectedCategory !== 'all'"
+          class="px-3 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:border-indigo-400 hover:text-white shrink-0 flex items-center gap-1.5"
+        >
+          <span>Всі</span>
+          <span class="px-1.5 py-0.2 text-[10px] font-mono rounded-full" [class.bg-indigo-700]="drilldownSelectedCategory === 'all'" [class.bg-slate-900]="drilldownSelectedCategory !== 'all'">
+            {{ drilldownProducts.length }}
+          </span>
+        </button>
+
+        <!-- Dynamic Category Filter Buttons -->
+        <button 
+          *ngFor="let cat of getDrilldownAvailableCategories()"
+          (click)="drilldownSelectedCategory = cat.title"
+          [class.bg-indigo-600]="drilldownSelectedCategory === cat.title"
+          [class.text-white]="drilldownSelectedCategory === cat.title"
+          [class.border-indigo-400]="drilldownSelectedCategory === cat.title"
+          [class.shadow-md]="drilldownSelectedCategory === cat.title"
+          [class.shadow-indigo-500/25]="drilldownSelectedCategory === cat.title"
+          [class.bg-slate-950]="drilldownSelectedCategory !== cat.title"
+          [class.text-slate-400]="drilldownSelectedCategory !== cat.title"
+          [class.border-slate-800]="drilldownSelectedCategory !== cat.title"
+          class="px-3 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:border-indigo-400 hover:text-white shrink-0 flex items-center gap-1.5"
+        >
+          <span>{{ cat.title }}</span>
+          <span class="px-1.5 py-0.2 text-[10px] font-mono rounded-full" [class.bg-indigo-700]="drilldownSelectedCategory === cat.title" [class.bg-slate-900]="drilldownSelectedCategory !== cat.title">
+            {{ cat.count }}
+          </span>
+        </button>
+      </div>
+
       <!-- Products List / Table Body -->
       <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 min-h-[250px]">
         <table class="w-full border-collapse text-left text-sm">
@@ -3207,9 +3254,13 @@
               </td>
 
               <td class="py-3 px-3 whitespace-nowrap">
-                <span class="px-2 py-0.5 text-[11px] font-semibold bg-slate-900 text-indigo-300 border border-slate-800 rounded-md">
+                <button 
+                  (click)="drilldownSelectedCategory = normalizeSessionTitle(p.category || p.sessionTitle || 'Основна')"
+                  class="px-2 py-0.5 text-[11px] font-semibold bg-slate-900 hover:bg-indigo-950 text-indigo-300 hover:text-white border border-slate-800 hover:border-indigo-500/40 rounded-md transition-all cursor-pointer"
+                  [title]="'Фільтрувати за категорією ' + (p.category || 'Основна')"
+                >
                   {{ p.category || 'Основна' }}
-                </span>
+                </button>
               </td>
 
               <td class="py-3 px-3 whitespace-nowrap font-mono">
