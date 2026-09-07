@@ -224,6 +224,7 @@ export class DashboardComponent implements OnInit {
   
   // Navigation & Tabs
   activeTab: 'overview' | 'explorer' | 'demand' | 'details' | 'history' | 'settings' = 'overview';
+  settingsActiveSubTab: 'all' | 'profile' | 'scraping' | 'analytics' | 'storage' = 'all';
 
   // User & System Settings State
   readonly STORAGE_USER_SETTINGS_KEY = 'tradescout_user_settings_v1';

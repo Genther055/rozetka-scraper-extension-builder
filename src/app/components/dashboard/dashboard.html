@@ -67,18 +67,26 @@
           {{ snapshots.length }}
         </span>
       </button>
+
+      <button 
+        (click)="activeTab = 'settings'" 
+        [class.premium-menu-btn-active]="activeTab === 'settings'"
+        [class.premium-menu-btn-inactive]="activeTab !== 'settings'"
+        class="premium-menu-btn"
+      >
+        <span class="material-icons text-lg">settings</span>
+        <span>Налаштування & Профіль</span>
+      </button>
     </nav>
 
-    <!-- Pinned User Profile & Action Footer (Interactive Settings Hub) -->
+    <!-- Pinned User Profile Footer (Standard SaaS Profile Bar) -->
     <div 
-      class="p-3.5 border-t border-slate-800/80 bg-[#090d18] flex flex-col gap-2.5 shrink-0 mt-auto shadow-2xl transition-all"
-      [class.border-indigo-500]="activeTab === 'settings'"
-      [class.bg-indigo-950/20]="activeTab === 'settings'"
+      class="p-3 border-t border-slate-800/80 bg-[#090d18] flex flex-col gap-2 shrink-0 mt-auto shadow-2xl transition-all"
     >
       <div 
         (click)="activeTab = 'settings'" 
-        class="flex items-center gap-2.5 px-1.5 py-1 rounded-xl cursor-pointer hover:bg-white/5 transition-all group"
-        title="Відкрити налаштування профілю та системи"
+        class="flex items-center gap-2.5 p-1.5 rounded-xl cursor-pointer hover:bg-white/5 transition-all group"
+        title="Відкрити налаштування профілю"
       >
         <div class="relative shrink-0">
           <div class="w-9 h-9 rounded-full bg-gradient-to-tr {{ userSettings.avatarGradient || 'from-indigo-600 to-purple-600' }} flex items-center justify-center border border-indigo-400/40 text-white font-black text-sm shadow-md shadow-indigo-950 group-hover:scale-105 transition-transform">
@@ -87,44 +95,20 @@
           <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-[#090d18] rounded-full" title="Сесія активна (Онлайн)"></span>
         </div>
         <div class="flex-1 min-w-0">
-          <div class="flex items-center justify-between">
-            <p class="text-xs font-bold text-white truncate group-hover:text-indigo-300 transition-colors">{{ userSettings.username || 'Адміністратор' }}</p>
-            <span class="material-icons text-sm text-slate-500 group-hover:text-indigo-400 transition-colors">settings</span>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <span class="text-[10px] text-indigo-400 font-extrabold uppercase tracking-wider truncate">{{ userSettings.role || 'ROLE: ADMIN' }}</span>
-          </div>
+          <p class="text-xs font-bold text-white truncate group-hover:text-indigo-300 transition-colors">{{ userSettings.username || 'Адміністратор' }}</p>
+          <p class="text-[10px] text-slate-400 font-semibold truncate">{{ userSettings.role || 'ROLE: ADMIN' }}</p>
         </div>
-      </div>
-      
-      <!-- Actions: Settings Button & Logout Button -->
-      <div class="flex items-center gap-1.5">
         <button 
-          (click)="activeTab = 'settings'" 
-          [class.bg-indigo-600]="activeTab === 'settings'"
-          [class.text-white]="activeTab === 'settings'"
-          [class.border-indigo-400]="activeTab === 'settings'"
-          [class.bg-slate-900/90]="activeTab !== 'settings'"
-          [class.text-slate-300]="activeTab !== 'settings'"
-          [class.border-slate-800]="activeTab !== 'settings'"
-          class="flex-1 py-1.5 px-2.5 hover:bg-indigo-600/80 hover:text-white border rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
-          title="Налаштування профілю, скрейпінгу та сховища"
+          (click)="$event.stopPropagation(); logout()" 
+          class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer shrink-0"
+          title="Вийти з платформи"
         >
-          <span class="material-icons text-xs">tune</span>
-          <span>Налаштування</span>
-        </button>
-
-        <button 
-          (click)="logout()" 
-          class="p-1.5 bg-slate-900/90 hover:bg-rose-950/80 text-slate-400 hover:text-rose-300 border border-slate-800 hover:border-rose-800/60 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center shadow-sm"
-          title="Вийти з облікового запису"
-        >
-          <span class="material-icons text-sm">logout</span>
+          <span class="material-icons text-base">logout</span>
         </button>
       </div>
 
       <!-- Subtle Sidebar Scraping Indicator -->
-      <div *ngIf="getLastScrapedDate()" class="pt-0.5 text-[10px] text-slate-400 flex items-center justify-center gap-1.5 select-none" [title]="'Останній скрейпінг: ' + getLastScrapedText()">
+      <div *ngIf="getLastScrapedDate()" class="pt-0.5 text-[10px] text-slate-500 flex items-center justify-center gap-1.5 select-none" [title]="'Останній скрейпінг: ' + getLastScrapedText()">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
         <span>Збір: {{ getLastScrapedRelative() }}</span>
       </div>
@@ -2375,11 +2359,84 @@
           </div>
         </div>
 
-        <!-- 4-Card Settings Grid -->
+        <!-- Sub-tabs Navigation Bar -->
+        <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
+          <button 
+            (click)="settingsActiveSubTab = 'all'"
+            [class.bg-indigo-600]="settingsActiveSubTab === 'all'"
+            [class.text-white]="settingsActiveSubTab === 'all'"
+            [class.border-indigo-400]="settingsActiveSubTab === 'all'"
+            [class.bg-slate-900]="settingsActiveSubTab !== 'all'"
+            [class.text-slate-300]="settingsActiveSubTab !== 'all'"
+            [class.border-slate-800]="settingsActiveSubTab !== 'all'"
+            class="px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:border-indigo-400/80 flex items-center gap-1.5 shrink-0"
+          >
+            <span class="material-icons text-sm">tune</span>
+            <span>Всі налаштування</span>
+          </button>
+
+          <button 
+            (click)="settingsActiveSubTab = 'profile'"
+            [class.bg-indigo-600]="settingsActiveSubTab === 'profile'"
+            [class.text-white]="settingsActiveSubTab === 'profile'"
+            [class.border-indigo-400]="settingsActiveSubTab === 'profile'"
+            [class.bg-slate-900]="settingsActiveSubTab !== 'profile'"
+            [class.text-slate-300]="settingsActiveSubTab !== 'profile'"
+            [class.border-slate-800]="settingsActiveSubTab !== 'profile'"
+            class="px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:border-indigo-400/80 flex items-center gap-1.5 shrink-0"
+          >
+            <span class="material-icons text-sm">account_circle</span>
+            <span>Профіль користувача</span>
+          </button>
+
+          <button 
+            (click)="settingsActiveSubTab = 'scraping'"
+            [class.bg-indigo-600]="settingsActiveSubTab === 'scraping'"
+            [class.text-white]="settingsActiveSubTab === 'scraping'"
+            [class.border-indigo-400]="settingsActiveSubTab === 'scraping'"
+            [class.bg-slate-900]="settingsActiveSubTab !== 'scraping'"
+            [class.text-slate-300]="settingsActiveSubTab !== 'scraping'"
+            [class.border-slate-800]="settingsActiveSubTab !== 'scraping'"
+            class="px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:border-indigo-400/80 flex items-center gap-1.5 shrink-0"
+          >
+            <span class="material-icons text-sm">speed</span>
+            <span>Параметри скрейпінгу</span>
+          </button>
+
+          <button 
+            (click)="settingsActiveSubTab = 'analytics'"
+            [class.bg-indigo-600]="settingsActiveSubTab === 'analytics'"
+            [class.text-white]="settingsActiveSubTab === 'analytics'"
+            [class.border-indigo-400]="settingsActiveSubTab === 'analytics'"
+            [class.bg-slate-900]="settingsActiveSubTab !== 'analytics'"
+            [class.text-slate-300]="settingsActiveSubTab !== 'analytics'"
+            [class.border-slate-800]="settingsActiveSubTab !== 'analytics'"
+            class="px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:border-indigo-400/80 flex items-center gap-1.5 shrink-0"
+          >
+            <span class="material-icons text-sm">insights</span>
+            <span>Аналітика & Інтерфейс</span>
+          </button>
+
+          <button 
+            (click)="settingsActiveSubTab = 'storage'"
+            [class.bg-indigo-600]="settingsActiveSubTab === 'storage'"
+            [class.text-white]="settingsActiveSubTab === 'storage'"
+            [class.border-indigo-400]="settingsActiveSubTab === 'storage'"
+            [class.bg-slate-900]="settingsActiveSubTab !== 'storage'"
+            [class.text-slate-300]="settingsActiveSubTab !== 'storage'"
+            [class.border-slate-800]="settingsActiveSubTab !== 'storage'"
+            class="px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:border-indigo-400/80 flex items-center gap-1.5 shrink-0"
+          >
+            <span class="material-icons text-sm">database</span>
+            <span>Сховище & Бекап</span>
+          </button>
+        </div>
+
+        <!-- Settings Cards Grid -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           <!-- 1. USER PROFILE & ACCOUNT CARD -->
-          <div class="p-6 bg-[#0e1424]/90 backdrop-blur-md border border-slate-800/80 rounded-3xl space-y-5 shadow-xl">
+          <div *ngIf="settingsActiveSubTab === 'all' || settingsActiveSubTab === 'profile'" class="p-6 bg-[#0e1424]/90 backdrop-blur-md border border-slate-800/80 rounded-3xl space-y-5 shadow-xl">
             <div class="flex items-center justify-between border-b border-white/5 pb-4">
               <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-2xl bg-indigo-950/80 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-md">
@@ -2469,7 +2526,7 @@
           </div>
 
           <!-- 2. SCRAPING & AUTOMATION CARD -->
-          <div class="p-6 bg-[#0e1424]/90 backdrop-blur-md border border-slate-800/80 rounded-3xl space-y-5 shadow-xl">
+          <div *ngIf="settingsActiveSubTab === 'all' || settingsActiveSubTab === 'scraping'" class="p-6 bg-[#0e1424]/90 backdrop-blur-md border border-slate-800/80 rounded-3xl space-y-5 shadow-xl">
             <div class="flex items-center justify-between border-b border-white/5 pb-4">
               <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-2xl bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-md">
@@ -2561,7 +2618,7 @@
           </div>
 
           <!-- 3. ANALYTICS & INTERFACE PREFERENCES -->
-          <div class="p-6 bg-[#0e1424]/90 backdrop-blur-md border border-slate-800/80 rounded-3xl space-y-5 shadow-xl">
+          <div *ngIf="settingsActiveSubTab === 'all' || settingsActiveSubTab === 'analytics'" class="p-6 bg-[#0e1424]/90 backdrop-blur-md border border-slate-800/80 rounded-3xl space-y-5 shadow-xl">
             <div class="flex items-center justify-between border-b border-white/5 pb-4">
               <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-2xl bg-purple-950/80 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-md">
@@ -2635,7 +2692,7 @@
           </div>
 
           <!-- 4. DATA STORAGE & BACKUP MANAGEMENT -->
-          <div class="p-6 bg-[#0e1424]/90 backdrop-blur-md border border-slate-800/80 rounded-3xl space-y-5 shadow-xl">
+          <div *ngIf="settingsActiveSubTab === 'all' || settingsActiveSubTab === 'storage'" class="p-6 bg-[#0e1424]/90 backdrop-blur-md border border-slate-800/80 rounded-3xl space-y-5 shadow-xl">
             <div class="flex items-center justify-between border-b border-white/5 pb-4">
               <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-2xl bg-emerald-950/80 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-md">
