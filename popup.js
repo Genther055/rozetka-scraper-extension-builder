@@ -113,13 +113,16 @@ async function initPopup() {
 
         // Ping content script to verify alive status
         chrome.tabs.sendMessage(activeTabId, { action: 'PING_TAB_STATUS' }, (res) => {
-            if (chrome.runtime.lastError) {
+            const err = chrome.runtime.lastError;
+            if (err) {
                 // If content script was not connected, inject it now
                 if (tab.url && tab.url.includes('rozetka.com.ua')) {
                     chrome.scripting.executeScript({
                         target: { tabId: activeTabId },
                         files: ['content.js']
-                    }, () => {});
+                    }, () => {
+                        const _ = chrome.runtime.lastError;
+                    });
                 }
                 return;
             }
@@ -205,11 +208,13 @@ btnStart.addEventListener('click', async () => {
             webhookUrl: webhookUrl,
             sessionId: `session_${tab.id}_${now}`
         }, (res) => {
-            if (chrome.runtime.lastError) {
+            const err = chrome.runtime.lastError;
+            if (err) {
                 chrome.scripting.executeScript({
                     target: { tabId: tab.id },
                     files: ['content.js']
                 }, () => {
+                    const _ = chrome.runtime.lastError;
                     setTimeout(() => {
                         chrome.tabs.sendMessage(tab.id, {
                             action: 'START_TAB_SCRAPE',
@@ -217,6 +222,7 @@ btnStart.addEventListener('click', async () => {
                             webhookUrl: webhookUrl,
                             sessionId: `session_${tab.id}_${now}`
                         }, (r) => {
+                            const __ = chrome.runtime.lastError;
                             if (r && r.sessionTitle) tabTitleEl.innerText = r.sessionTitle;
                         });
                     }, 100);
@@ -235,7 +241,8 @@ btnStop.addEventListener('click', async () => {
     if (!activeTabId) return;
 
     chrome.tabs.sendMessage(activeTabId, { action: 'STOP_TAB_SCRAPE' }, () => {
-        if (chrome.runtime.lastError) {
+        const err = chrome.runtime.lastError;
+        if (err) {
             chrome.scripting.executeScript({
                 target: { tabId: activeTabId },
                 func: () => {
@@ -243,6 +250,8 @@ btnStop.addEventListener('click', async () => {
                         window.__tradeScoutStopScrape();
                     }
                 }
+            }, () => {
+                const _ = chrome.runtime.lastError;
             });
         }
     });
