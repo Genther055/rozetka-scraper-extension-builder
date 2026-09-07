@@ -15,8 +15,19 @@
     "https://*.rozetka.com.ua/*",
     "http://localhost:*/*",
     "http://127.0.0.1:*/*",
-    "https://*.n8n.cloud/*"
+    "https://*.onrender.com/*",
+    "https://*.vercel.app/*",
+    "https://*.n8n.cloud/*",
+    "<all_urls>"
   ],
+  "externally_connectable": {
+    "matches": [
+      "https://*.vercel.app/*",
+      "https://*.onrender.com/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*"
+    ]
+  },
   "background": {
     "service_worker": "background.js"
   },

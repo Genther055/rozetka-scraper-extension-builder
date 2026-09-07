@@ -228,7 +228,7 @@ export interface UserProfileSettings {
 export class DashboardComponent implements OnInit {
   apiUrl: string = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? (window.location.port === '4000' ? '' : 'http://localhost:4000')
-    : '';
+    : (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com') ? '' : 'https://rozetka-scraper-extension-builder.onrender.com');
 
   products: Product[] = [];
   filteredProducts: Product[] = [];
@@ -270,6 +270,7 @@ export class DashboardComponent implements OnInit {
   myPasswordSuccess = false;
 
   // User & System Settings State
+  readonly STORAGE_PRODUCTS_KEY = 'tradescout_cached_products';
   readonly STORAGE_CACHED_TEAM_USERS_KEY = 'tradescout_cached_team_users';
   readonly STORAGE_USER_SETTINGS_KEY = 'tradescout_user_settings_v1';
   userSettings: UserProfileSettings = {
@@ -1304,12 +1305,15 @@ export class DashboardComponent implements OnInit {
     if (typeof window !== 'undefined') {
       try {
         sessionStorage.clear();
+        localStorage.removeItem(this.STORAGE_PRODUCTS_KEY);
       } catch (e) {}
     }
     this.showSettingsSavedToast();
   }
 
   autoRefreshTimer: any;
+  private productUpdateListener: any = null;
+  private storageEventListener: any = null;
 
   ngOnInit() {
     if (typeof window !== 'undefined') {
@@ -1320,6 +1324,48 @@ export class DashboardComponent implements OnInit {
       if (savedAuto !== null) {
         this.autoSaveHistory = savedAuto === 'true';
       }
+
+      // Fast initial load from local storage cache
+      try {
+        const cachedProducts = localStorage.getItem(this.STORAGE_PRODUCTS_KEY);
+        if (cachedProducts) {
+          const parsed = JSON.parse(cachedProducts);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.products = parsed;
+            this.applyFilters();
+            this.calculateMetrics();
+          }
+        }
+      } catch (e) {}
+
+      // Listen for instant live updates from Chrome Extension
+      this.productUpdateListener = (e: CustomEvent) => {
+        if (e && e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+          this.products = e.detail;
+          try {
+            localStorage.setItem(this.STORAGE_PRODUCTS_KEY, JSON.stringify(this.products));
+          } catch (_) {}
+          this.applyFilters();
+          this.calculateMetrics();
+          this.cdr.markForCheck();
+        }
+      };
+      window.addEventListener('tradescout_products_updated', this.productUpdateListener as EventListener);
+
+      this.storageEventListener = (e: StorageEvent) => {
+        if (e.key === this.STORAGE_PRODUCTS_KEY && e.newValue) {
+          try {
+            const parsed = JSON.parse(e.newValue);
+            if (Array.isArray(parsed)) {
+              this.products = parsed;
+              this.applyFilters();
+              this.calculateMetrics();
+              this.cdr.markForCheck();
+            }
+          } catch (_) {}
+        }
+      };
+      window.addEventListener('storage', this.storageEventListener);
 
       this.loadProducts();
       this.loadFolders();
@@ -1338,6 +1384,14 @@ export class DashboardComponent implements OnInit {
       clearInterval(this.autoRefreshTimer);
     }
     this.stopLiveStatusPolling();
+    if (typeof window !== 'undefined') {
+      if (this.productUpdateListener) {
+        window.removeEventListener('tradescout_products_updated', this.productUpdateListener as EventListener);
+      }
+      if (this.storageEventListener) {
+        window.removeEventListener('storage', this.storageEventListener);
+      }
+    }
   }
 
   startLiveStatusPolling() {
@@ -1390,31 +1444,50 @@ export class DashboardComponent implements OnInit {
   }
 
   loadProducts(silent = false) {
-    if (!silent) this.loading = true;
-    this.http.get<{ success: boolean, products: Product[] }>(`${this.apiUrl}/api/products`)
-      .subscribe({
-        next: (res) => {
-          if (res.success) {
-            const newProds = res.products || [];
-            // If this is a background auto-refresh and server returned empty array while user has active products on screen,
-            // DO NOT wipe the active products
-            if (silent && newProds.length === 0 && this.products.length > 0) {
-              // Retain active products
+    if (!silent && this.products.length === 0) this.loading = true;
+
+    const tryFetch = (url: string) => {
+      this.http.get<{ success: boolean, products: Product[] }>(url)
+        .subscribe({
+          next: (res) => {
+            if (res.success) {
+              const newProds = res.products || [];
+              if (silent && newProds.length === 0 && this.products.length > 0) {
+                // Retain active products
+              } else {
+                if (newProds.length > 0) {
+                  this.products = newProds;
+                  if (typeof window !== 'undefined') {
+                    try {
+                      localStorage.setItem(this.STORAGE_PRODUCTS_KEY, JSON.stringify(newProds));
+                    } catch (_) {}
+                  }
+                  this.applyFilters();
+                  this.calculateMetrics();
+                } else if (!silent && this.products.length === 0) {
+                  this.products = [];
+                  this.applyFilters();
+                  this.calculateMetrics();
+                }
+              }
+            }
+            if (!silent) this.loading = false;
+            this.cdr.markForCheck();
+          },
+          error: (err) => {
+            if (url.startsWith('http')) {
+              // Fallback to local/relative endpoint
+              tryFetch('/api/products');
             } else {
-              this.products = newProds;
-              this.applyFilters();
-              this.calculateMetrics();
+              console.error('Failed to load products:', err);
+              if (!silent) this.loading = false;
+              this.cdr.markForCheck();
             }
           }
-          if (!silent) this.loading = false;
-          this.cdr.markForCheck();
-        },
-        error: (err) => {
-          console.error('Failed to load products:', err);
-          if (!silent) this.loading = false;
-          this.cdr.markForCheck();
-        }
-      });
+        });
+    };
+
+    tryFetch(`${this.apiUrl}/api/products`);
   }
 
   getLastScrapedDate(): Date | null {

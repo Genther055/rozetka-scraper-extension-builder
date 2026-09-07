@@ -235,10 +235,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const itemCount = payload?.products?.length || 0;
         console.log(`TradeScout Background: Tab ${tabId} sending ${itemCount} products for "${payload.sessionTitle || 'Каталог'}"...`);
 
+        const RENDER_CLOUD_API = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
         const targets = [];
-        if (webhookUrl) targets.push(webhookUrl);
+        if (webhookUrl && !targets.includes(webhookUrl)) targets.push(webhookUrl);
+        if (!targets.includes(RENDER_CLOUD_API)) targets.push(RENDER_CLOUD_API);
         if (!targets.includes(LOCAL_DASHBOARD_API)) targets.push(LOCAL_DASHBOARD_API);
         if (!targets.includes(LOCAL_IP_API)) targets.push(LOCAL_IP_API);
+
+        // Also broadcast directly to any open TradeScout dashboard tabs in browser for instant 0-second sync
+        try {
+            chrome.tabs.query({ url: ["*://*.vercel.app/*", "*://localhost/*", "*://127.0.0.1/*", "*://*.onrender.com/*"] }, (dashboardTabs) => {
+                if (dashboardTabs && dashboardTabs.length > 0) {
+                    dashboardTabs.forEach(dTab => {
+                        chrome.scripting.executeScript({
+                            target: { tabId: dTab.id },
+                            func: (prods) => {
+                                try {
+                                    if (prods && prods.length > 0) {
+                                        localStorage.setItem('tradescout_cached_products', JSON.stringify(prods));
+                                        window.dispatchEvent(new CustomEvent('tradescout_products_updated', { detail: prods }));
+                                    }
+                                } catch (_) {}
+                            },
+                            args: [payload.products]
+                        }).catch(() => {});
+                    });
+                }
+            });
+        } catch (_) {}
 
         const postWithRetry = async (url, data, maxRetries = 3) => {
             for (let i = 0; i < maxRetries; i++) {

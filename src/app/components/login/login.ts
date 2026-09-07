@@ -25,7 +25,7 @@ export class LoginComponent {
 
   apiUrl: string = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? (window.location.port === '4000' ? '' : 'http://localhost:4000')
-    : '';
+    : (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com') ? '' : 'https://rozetka-scraper-extension-builder.onrender.com');
 
   errorMessage = '';
   successMessage = '';
