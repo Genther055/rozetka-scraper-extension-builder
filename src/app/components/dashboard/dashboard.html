@@ -131,7 +131,7 @@
         <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Збір та інтелектуальний аналіз товарів з Rozetka</p>
       </div>
 
-      <div class="flex items-center gap-2.5">
+      <div *ngIf="activeTab !== 'settings'" class="flex items-center gap-2.5">
         <!-- Quick Snapshot Save Button -->
         <button 
           *ngIf="products.length > 0"
@@ -185,19 +185,30 @@
           <span class="material-icons text-lg" [class.animate-spin]="loading">refresh</span>
         </button>
       </div>
+
+      <!-- Settings Header Actions -->
+      <div *ngIf="activeTab === 'settings'" class="flex items-center gap-3">
+        <button 
+          (click)="saveUserSettings()"
+          class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-full font-bold text-xs transition-all cursor-pointer shadow-lg shadow-indigo-500/25 flex items-center gap-1.5 border border-indigo-400/30 glow-indigo"
+        >
+          <span class="material-icons text-sm">save</span>
+          <span>Зберегти налаштування</span>
+        </button>
+      </div>
     </header>
 
     <!-- Main Content Body -->
     <div class="flex-1 p-6 md:p-8 space-y-6 md:space-y-8 w-full">
       
       <!-- Loading indicator -->
-      <div *ngIf="loading && products.length === 0" class="flex flex-col items-center justify-center py-20 gap-3">
+      <div *ngIf="loading && products.length === 0 && activeTab !== 'settings'" class="flex flex-col items-center justify-center py-20 gap-3">
         <div class="w-10 h-10 border-4 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin"></div>
         <p class="text-sm text-slate-400 font-semibold">Завантаження аналітики...</p>
       </div>
 
-      <!-- Live Scraping Monitor Hub (Shown whenever scraping is active or recently completed) -->
-      <section *ngIf="activeScrapes.length > 0 || recentScrapeSuccessNotice" class="space-y-4">
+      <!-- Live Scraping Monitor Hub (Shown whenever scraping is active or recently completed on analytics tabs) -->
+      <section *ngIf="(activeScrapes.length > 0 || recentScrapeSuccessNotice) && activeTab !== 'settings'" class="space-y-4">
         <!-- Success Notice Toast / Banner -->
         <div *ngIf="recentScrapeSuccessNotice" class="p-4 bg-emerald-950/70 border border-emerald-500/50 rounded-2xl flex items-center justify-between shadow-xl shadow-emerald-950/40 animate-fade-in">
           <div class="flex items-center gap-3">
@@ -359,7 +370,7 @@
       </section>
 
       <!-- Multi-Session & Category Page Breakdown Bar -->
-      <section *ngIf="products.length > 0" class="bg-[#111827]/90 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-3.5 shadow-xl shadow-black/30">
+      <section *ngIf="products.length > 0 && activeTab !== 'settings' && activeTab !== 'history'" class="bg-[#111827]/90 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-3.5 shadow-xl shadow-black/30">
         
         <!-- Category Selector Header -->
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-3">
@@ -486,9 +497,9 @@
 
       </section>
 
-      <!-- Stats Grid (Hidden if no products) -->
+      <!-- Stats Grid (Hidden if no products or on settings/history tabs) -->
       <!-- Stats Grid (5 Deterministic Cards: Обсяг вибірки, Цінові орієнтири, Складські залишки, Концентрація CR3, Бар'єр входу) -->
-      <section *ngIf="products.length > 0 && analyticsSummary" class="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6 relative z-30">
+      <section *ngIf="products.length > 0 && analyticsSummary && activeTab !== 'settings' && activeTab !== 'history'" class="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6 relative z-30">
         <!-- 1. Обсяг вибірки -->
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
@@ -792,8 +803,8 @@
         </div>
       </section>
 
-      <!-- Empty State if no data has been received -->
-      <div *ngIf="products.length === 0 && !loading" class="flex flex-col items-center justify-center p-12 premium-card text-center max-w-2xl mx-auto mt-10">
+      <!-- Empty State if no data has been received (hidden on settings/history) -->
+      <div *ngIf="products.length === 0 && !loading && activeTab !== 'settings' && activeTab !== 'history'" class="flex flex-col items-center justify-center p-12 premium-card text-center max-w-2xl mx-auto mt-10">
         <span class="material-icons text-6xl text-indigo-400/50 mb-4 animate-pulse">settings_input_component</span>
         <h3 class="text-xl font-bold text-white mb-2 premium-title">Немає зібраних даних</h3>
         <p class="text-slate-400 text-sm mb-6 max-w-md">
