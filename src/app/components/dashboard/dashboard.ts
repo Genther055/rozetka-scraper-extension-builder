@@ -221,6 +221,73 @@ export class DashboardComponent implements OnInit {
   isAnyScrapeActive = false;
   liveStatusPollTimer: any = null;
   recentScrapeSuccessNotice: string | null = null;
+  liveScrapeStartTime: number | null = null;
+  liveElapsedText = '00:00';
+  liveItemsPerMinute = 0;
+  liveStopwatchTimer: any = null;
+
+  startLiveStopwatch() {
+    if (this.liveStopwatchTimer) return;
+    this.liveScrapeStartTime = this.liveScrapeStartTime || Date.now();
+    this.liveStopwatchTimer = setInterval(() => {
+      if (!this.liveScrapeStartTime) return;
+      const elapsedSec = Math.floor((Date.now() - this.liveScrapeStartTime) / 1000);
+      const m = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+      const s = String(elapsedSec % 60).padStart(2, '0');
+      this.liveElapsedText = `${m}:${s}`;
+      
+      const totalCollected = this.getTotalActiveProductsCollected();
+      if (elapsedSec > 2 && totalCollected > 0) {
+        this.liveItemsPerMinute = Math.round((totalCollected / elapsedSec) * 60);
+      }
+      this.cdr.markForCheck();
+    }, 1000);
+  }
+
+  stopLiveStopwatch() {
+    if (this.liveStopwatchTimer) {
+      clearInterval(this.liveStopwatchTimer);
+      this.liveStopwatchTimer = null;
+    }
+  }
+
+  getTotalActiveProductsCollected(): number {
+    if (!this.activeScrapes || this.activeScrapes.length === 0) return 0;
+    return this.activeScrapes.reduce((acc, t) => acc + (t.currentCount || 0), 0);
+  }
+
+  getTotalEstimatedProducts(): number {
+    if (!this.activeScrapes || this.activeScrapes.length === 0) return 0;
+    return this.activeScrapes.reduce((acc, t) => acc + (t.estimatedTotal || 0), 0);
+  }
+
+  getOverallScrapePercent(): number {
+    const est = this.getTotalEstimatedProducts();
+    if (est <= 0) return 0;
+    return Math.min(100, Math.round((this.getTotalActiveProductsCollected() / est) * 100));
+  }
+
+  getTaskTotalPages(task: LiveScrapingTask): number {
+    const est = task.estimatedTotal || 60;
+    return Math.max(1, Math.ceil(est / 60));
+  }
+
+  getTaskPageSteps(task: LiveScrapingTask): Array<{ pageNum: number, status: 'done' | 'current' | 'pending' }> {
+    const totalPages = this.getTaskTotalPages(task);
+    const steps: Array<{ pageNum: number, status: 'done' | 'current' | 'pending' }> = [];
+    const maxVisiblePages = Math.min(10, totalPages);
+    
+    for (let p = 1; p <= maxVisiblePages; p++) {
+      let status: 'done' | 'current' | 'pending' = 'pending';
+      if (task.status === 'completed' || p < task.pageIndex) {
+        status = 'done';
+      } else if (p === task.pageIndex && task.status === 'scraping') {
+        status = 'current';
+      }
+      steps.push({ pageNum: p, status });
+    }
+    return steps;
+  }
 
   normalizeSessionTitle(title: string): string {
     if (!title) return 'Загальна';
@@ -606,9 +673,12 @@ export class DashboardComponent implements OnInit {
 
             // If scraping is currently active, load products silently so counters & tables update live!
             if (this.isAnyScrapeActive) {
+              this.startLiveStopwatch();
               this.loadProducts(true);
             } else if (previousActive && !this.isAnyScrapeActive) {
               // Scraping just completed
+              this.stopLiveStopwatch();
+              this.liveScrapeStartTime = null;
               this.recentScrapeSuccessNotice = 'Збір успішно завершено! Всі дані синхронізовано.';
               this.loadProducts(false);
               setTimeout(() => {
