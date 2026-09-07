@@ -978,20 +978,29 @@ export class DashboardComponent implements OnInit {
         }
       }
     } catch (err: any) {
+    } finally {
       if (!this.teamUsers || this.teamUsers.length === 0) {
+        const currentUserRaw = typeof window !== 'undefined' ? localStorage.getItem('tradescout_current_user') : null;
+        let current: any = null;
+        if (currentUserRaw) {
+          try { current = JSON.parse(currentUserRaw); } catch (_) {}
+        }
         this.teamUsers = [
           {
-            id: 'admin_default',
-            username: 'admin',
-            displayName: 'Головний аналітик',
-            role: 'admin',
-            avatarGradient: 'from-indigo-600 to-purple-600',
+            id: current?.id || 'admin_default',
+            username: current?.username || 'admin',
+            displayName: current?.displayName || 'Головний аналітик',
+            role: current?.role || 'admin',
+            avatarGradient: current?.avatarGradient || 'from-indigo-600 to-purple-600',
             isActive: true,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString()
           }
         ];
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(this.STORAGE_CACHED_TEAM_USERS_KEY, JSON.stringify(this.teamUsers));
+        }
       }
-    } finally {
       this.loadingUsers = false;
       this.cdr.markForCheck();
     }
