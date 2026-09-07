@@ -729,32 +729,50 @@ export class DashboardComponent implements OnInit {
   loadUserSettings() {
     if (typeof window !== 'undefined') {
       try {
-        const currentUserRaw = localStorage.getItem('tradescout_current_user');
-        if (currentUserRaw) {
-          const user = JSON.parse(currentUserRaw);
-          if (user) {
-            this.userSettings.username = user.displayName || user.username || 'Адміністратор';
-            this.userSettings.role = user.role === 'admin' ? 'Головний аналітик (Admin)' : 'Аналітик маркетплейсів';
-            this.userSettings.avatarGradient = user.avatarGradient || 'from-indigo-600 to-purple-600';
-            this.userSettings.avatarInitial = (user.displayName || user.username || 'A').charAt(0).toUpperCase();
-          }
-        }
         const local = localStorage.getItem(this.STORAGE_USER_SETTINGS_KEY);
         if (local) {
           const parsed = JSON.parse(local);
           this.userSettings = { ...this.userSettings, ...parsed };
           this.autoSaveHistory = this.userSettings.autoSaveHistory;
         }
+
+        const currentUserRaw = localStorage.getItem('tradescout_current_user');
+        if (currentUserRaw) {
+          const user = JSON.parse(currentUserRaw);
+          if (user) {
+            this.userSettings.username = user.displayName || user.username || this.userSettings.username;
+            this.userSettings.role = user.role === 'admin' ? 'Головний аналітик (Admin)' : (user.role || this.userSettings.role);
+            this.userSettings.avatarGradient = user.avatarGradient || this.userSettings.avatarGradient;
+            this.userSettings.avatarInitial = (this.userSettings.username || 'A').charAt(0).toUpperCase();
+          }
+        }
       } catch (e) {}
     }
   }
 
-  saveUserSettings() {
+  async saveUserSettings() {
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(this.STORAGE_USER_SETTINGS_KEY, JSON.stringify(this.userSettings));
         localStorage.setItem('tradescout_auto_save_history', String(this.userSettings.autoSaveHistory));
         this.autoSaveHistory = this.userSettings.autoSaveHistory;
+
+        // Also sync profile changes to Neon database if user is logged in
+        const currentUserRaw = localStorage.getItem('tradescout_current_user');
+        if (currentUserRaw) {
+          const current = JSON.parse(currentUserRaw);
+          if (current && current.id) {
+            fetch(`${this.apiUrl}/api/users/${current.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                displayName: this.userSettings.username,
+                avatarGradient: this.userSettings.avatarGradient,
+                role: this.userSettings.role.toLowerCase().includes('admin') ? 'admin' : 'analyst'
+              })
+            }).then(() => this.loadTeamUsers()).catch(() => {});
+          }
+        }
       } catch (e) {}
     }
     this.showSettingsSavedToast();
@@ -835,6 +853,24 @@ export class DashboardComponent implements OnInit {
         const data = await res.json();
         if (data.success && Array.isArray(data.users)) {
           this.teamUsers = data.users;
+
+          // Real-time synchronization of active session with Neon database
+          if (typeof window !== 'undefined') {
+            const currentUserRaw = localStorage.getItem('tradescout_current_user');
+            if (currentUserRaw) {
+              const current = JSON.parse(currentUserRaw);
+              const dbUser = this.teamUsers.find(u => u.id === current.id || u.username === current.username);
+              if (dbUser) {
+                this.userSettings.username = dbUser.displayName || dbUser.username;
+                this.userSettings.role = dbUser.role === 'admin' ? 'Головний аналітик (Admin)' : 'Аналітик команди';
+                this.userSettings.avatarGradient = dbUser.avatarGradient || this.userSettings.avatarGradient;
+                this.userSettings.avatarInitial = (dbUser.displayName || dbUser.username).charAt(0).toUpperCase();
+
+                localStorage.setItem('tradescout_current_user', JSON.stringify({ ...current, ...dbUser }));
+                localStorage.setItem(this.STORAGE_USER_SETTINGS_KEY, JSON.stringify(this.userSettings));
+              }
+            }
+          }
         }
       }
     } catch (err: any) {
