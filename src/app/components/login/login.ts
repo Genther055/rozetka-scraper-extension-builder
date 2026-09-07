@@ -47,12 +47,15 @@ export class LoginComponent {
           localStorage.setItem('tradescout_current_user', JSON.stringify(data.user));
           
           // Sync profile settings with logged-in user
-          const existingSettingsRaw = localStorage.getItem('tradescout_user_settings');
+          const existingSettingsRaw = localStorage.getItem('tradescout_user_settings_v1') || localStorage.getItem('tradescout_user_settings');
           const existingSettings = existingSettingsRaw ? JSON.parse(existingSettingsRaw) : {};
           existingSettings.username = data.user.displayName || data.user.username;
-          existingSettings.role = data.user.role === 'admin' ? 'Головний аналітик (Admin)' : 'Аналітик маркетплейсів';
+          existingSettings.role = data.user.role === 'admin' 
+            ? 'Головний аналітик (Admin)' 
+            : (data.user.role === 'analyst' ? 'Аналітик команди' : data.user.role);
           existingSettings.avatarGradient = data.user.avatarGradient || 'from-indigo-600 to-purple-600';
           existingSettings.avatarInitial = (data.user.displayName || data.user.username).charAt(0).toUpperCase();
+          localStorage.setItem('tradescout_user_settings_v1', JSON.stringify(existingSettings));
           localStorage.setItem('tradescout_user_settings', JSON.stringify(existingSettings));
         }
         this.router.navigate(['/dashboard']);

@@ -862,7 +862,9 @@ export class DashboardComponent implements OnInit {
               const dbUser = this.teamUsers.find(u => u.id === current.id || u.username === current.username);
               if (dbUser) {
                 this.userSettings.username = dbUser.displayName || dbUser.username;
-                this.userSettings.role = dbUser.role === 'admin' ? 'Головний аналітик (Admin)' : 'Аналітик команди';
+                this.userSettings.role = dbUser.role === 'admin' 
+                  ? 'Головний аналітик (Admin)' 
+                  : (dbUser.role === 'analyst' ? 'Аналітик команди' : dbUser.role);
                 this.userSettings.avatarGradient = dbUser.avatarGradient || this.userSettings.avatarGradient;
                 this.userSettings.avatarInitial = (dbUser.displayName || dbUser.username).charAt(0).toUpperCase();
 
