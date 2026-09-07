@@ -321,18 +321,19 @@
     }
 
     function isSponsoredTile(item) {
-        const itemText = item.innerText || '';
-        if (itemText.includes('Реклама') || itemText.includes('Спонсор') || itemText.includes('Рекламний')) {
+        // Pure banner ad slots without product data
+        if (item.classList.contains('catalog-banner') || item.classList.contains('rz-banner') || item.classList.contains('banner-tile') || item.classList.contains('advertising-slot')) {
             return true;
         }
-        const spans = item.querySelectorAll('span, rz-tile-info, [class*="tile-info"], [class*="badge"]');
-        for (const s of spans) {
-            const txt = (s.innerText || '').trim().toLowerCase();
-            if (txt === 'реклама' || txt.startsWith('реклама') || txt === 'спонсор') return true;
+
+        // Must have at least a product link or price to be a valid product
+        const hasProductLink = !!item.querySelector('a[href*="/p"], a.goods-tile__heading, a.tile-title, [class*="heading"] a');
+        const hasPrice = !!item.querySelector('.goods-tile__price, .price, [class*="price"]');
+
+        if (!hasProductLink && !hasPrice) {
+            return true; // Not a product card
         }
-        if (item.querySelector('.goods-tile__badge_type_promo, [class*="sponsored"], [class*="advertising"], .promo-tile')) {
-            return true;
-        }
+
         return false;
     }
 
@@ -555,11 +556,11 @@
     }
 
     async function scrapeCurrentDomItems(meta, pageIndex) {
-        const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
+        const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"], [data-testid="goods-tile"]';
         let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => !item.closest('.recently-viewed'));
         
         if (items.length === 0) {
-            const links = document.querySelectorAll('a[href*="/p/"], a[href*="/p-"]');
+            const links = document.querySelectorAll('a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
             items = Array.from(links).map(l => l.closest('li, div, rz-catalog-tile, article, section') || l).filter(Boolean);
         }
 
@@ -571,14 +572,14 @@
             try {
                 if (isSponsoredTile(item)) return;
 
-                const linkTag = item.tagName === 'A' ? item : item.querySelector('a[href*="/p"], a[href]');
+                const linkTag = item.tagName === 'A' ? item : (item.querySelector('a.goods-tile__heading, a.tile-title, [class*="heading"] a, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]') || item.querySelector('a[href]'));
                 if (!linkTag) return;
                 
                 const linkEl = linkTag.getAttribute('href');
                 if (!linkEl) return;
 
                 const titleEl = item.querySelector('a.tile-title, a.goods-tile__heading, .goods-tile__heading, .tile-title, [class*="heading"], [class*="title"]') || linkTag;
-                const name = titleEl && titleEl.innerText ? titleEl.innerText.trim() : linkTag.innerText.trim();
+                const name = titleEl && titleEl.innerText ? titleEl.innerText.trim() : (linkTag.innerText ? linkTag.innerText.trim() : '');
                 if (!name || name.length < 3) return;
 
                 let link = linkEl.startsWith('http') ? linkEl : (linkEl.startsWith('/') ? `https://rozetka.com.ua${linkEl}` : `https://rozetka.com.ua/${linkEl}`);
@@ -586,20 +587,20 @@
 
                 if (sentLinks.has(link)) return;
 
-                const priceEl = item.querySelector('.goods-tile__price-value, .price');
+                const priceEl = item.querySelector('.goods-tile__price-value, .price, [class*="price-value"], [class*="price__current"]');
                 const priceText = priceEl && priceEl.innerText ? priceEl.innerText : '';
                 const price = priceText ? parseInt(priceText.replace(/\D/g, ''), 10) || 0 : 0;
 
-                const oldPriceEl = item.querySelector('.goods-tile__price.type_old, .goods-tile__price--old, .price--old');
+                const oldPriceEl = item.querySelector('.goods-tile__price.type_old, .goods-tile__price--old, .price--old, [class*="price--old"]');
                 const oldPriceText = oldPriceEl && oldPriceEl.innerText ? oldPriceEl.innerText : '';
                 const oldPrice = oldPriceText ? parseInt(oldPriceText.replace(/\D/g, ''), 10) || 0 : 0;
                 const discount = (oldPrice && oldPrice > price) ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0;
 
-                const reviewsEl = item.querySelector('.rating-block-rating, [class*="rating"], [class*="comments"], .goods-tile__reviews-link');
+                const reviewsEl = item.querySelector('.rating-block-rating, [class*="rating"], [class*="comments"], .goods-tile__reviews-link, [class*="reviews"]');
                 const reviewsText = reviewsEl && reviewsEl.innerText ? reviewsEl.innerText : '';
                 const reviews = reviewsText ? parseInt(reviewsText.replace(/\D/g, ''), 10) || 0 : 0;
 
-                const starsEl = item.querySelector('.stars_rating, [data-testid="stars-rating"], .goods-tile__stars svg');
+                const starsEl = item.querySelector('.stars_rating, [data-testid="stars-rating"], .goods-tile__stars svg, [class*="stars"] svg');
                 let rating = 5.0;
                 if (starsEl) {
                     const style = starsEl.getAttribute('style') || '';
@@ -616,7 +617,7 @@
                 const power = powerMatch ? `${powerMatch[1]}W` : '';
                 const specs = [capacity, power].filter(Boolean).join(', ') || 'Стандартні';
 
-                const merchantEl = item.querySelector('.goods-tile__merchant, [class*="merchant"]');
+                const merchantEl = item.querySelector('.goods-tile__merchant, [class*="merchant"], .seller-title');
                 const seller = merchantEl && merchantEl.innerText ? merchantEl.innerText.trim() : 'Rozetka';
 
                 newItems.push({
@@ -671,7 +672,16 @@
             await silentBackgroundScroll();
 
             // 2. Scrape all items on the current page
-            const newProducts = await scrapeCurrentDomItems(meta, pageCount);
+            let newProducts = await scrapeCurrentDomItems(meta, pageCount);
+            
+            // Micro-sweep if more items were still mounting
+            if (newProducts.length === 0 || (sentLinks.size < estimatedTotal && newProducts.length % 60 !== 0)) {
+                await new Promise(r => setTimeout(r, 300));
+                const extraSweep = await scrapeCurrentDomItems(meta, pageCount);
+                if (extraSweep.length > 0) {
+                    newProducts = newProducts.concat(extraSweep);
+                }
+            }
             
             if (newProducts.length > 0) {
                 // Realtime item-by-item progress update
