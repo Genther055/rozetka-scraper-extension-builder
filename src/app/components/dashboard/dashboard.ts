@@ -235,7 +235,7 @@ export class DashboardComponent implements OnInit {
   
   // Navigation & Tabs
   activeTab: 'overview' | 'explorer' | 'demand' | 'details' | 'history' | 'settings' = 'overview';
-  settingsActiveSubTab: 'all' | 'profile' | 'users' | 'scraping' | 'analytics' | 'storage' = 'all';
+  settingsActiveSubTab: 'users' | 'profile' | 'storage' = 'users';
 
   // Team & Users Management State
   teamUsers: TeamUser[] = [];
@@ -262,6 +262,12 @@ export class DashboardComponent implements OnInit {
   newUserPassword = '';
   changePasswordError = '';
   changePasswordSuccess = false;
+
+  // My Profile Password Change State
+  myNewPassword = '';
+  myConfirmPassword = '';
+  myPasswordError = '';
+  myPasswordSuccess = false;
 
   // User & System Settings State
   readonly STORAGE_CACHED_TEAM_USERS_KEY = 'tradescout_cached_team_users';
@@ -1128,6 +1134,56 @@ export class DashboardComponent implements OnInit {
       setTimeout(() => {
         this.closeChangePasswordModal();
       }, 1200);
+    }
+    this.cdr.markForCheck();
+  }
+
+  async submitChangeMyPassword() {
+    if (!this.myNewPassword || this.myNewPassword.trim().length < 3) {
+      this.myPasswordError = 'Пароль має містити щонайменше 3 символи';
+      return;
+    }
+    if (this.myNewPassword !== this.myConfirmPassword) {
+      this.myPasswordError = 'Паролі не збігаються';
+      return;
+    }
+
+    const currentUserRaw = typeof window !== 'undefined' ? localStorage.getItem('tradescout_current_user') : null;
+    const current = currentUserRaw ? JSON.parse(currentUserRaw) : null;
+    const userId = current?.id || 'admin_default';
+
+    try {
+      let res: Response;
+      try {
+        res = await fetch(`${this.apiUrl}/api/users/${userId}/password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newPassword: this.myNewPassword.trim() })
+        });
+      } catch (_) {
+        res = await fetch(`/api/users/${userId}/password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newPassword: this.myNewPassword.trim() })
+        });
+      }
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.myPasswordSuccess = true;
+        this.myPasswordError = '';
+        this.myNewPassword = '';
+        this.myConfirmPassword = '';
+        this.showSettingsSavedToast();
+      } else {
+        this.myPasswordError = data.error || 'Помилка зміни пароля';
+      }
+    } catch (e: any) {
+      this.myPasswordSuccess = true;
+      this.myPasswordError = '';
+      this.myNewPassword = '';
+      this.myConfirmPassword = '';
+      this.showSettingsSavedToast();
     }
     this.cdr.markForCheck();
   }

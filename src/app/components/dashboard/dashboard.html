@@ -2346,322 +2346,285 @@
       </section>
 
       <!-- SECTION: USER PROFILE & SYSTEM SETTINGS TAB -->
-      <section *ngIf="activeTab === 'settings'" class="space-y-6 animate-fadeIn max-w-7xl mx-auto pb-10">
+      <section *ngIf="activeTab === 'settings'" class="space-y-6 animate-fadeIn max-w-7xl mx-auto pb-12">
         
         <!-- Floating Settings Saved Notification -->
         <div *ngIf="settingsSavedNotice" class="p-4 bg-emerald-950/95 border border-emerald-500/60 rounded-2xl flex items-center justify-between shadow-2xl text-emerald-300 text-xs font-bold animate-fadeIn">
           <div class="flex items-center gap-3">
             <span class="material-icons text-emerald-400 text-lg">check_circle</span>
-            <span>Налаштування профілю та системи успішно збережені в Neon PostgreSQL!</span>
+            <span>Зміни успішно збережені в базі даних Neon PostgreSQL!</span>
           </div>
           <button (click)="settingsSavedNotice = false" class="text-xs text-emerald-400 hover:text-white px-2.5 py-1 bg-emerald-900/60 rounded-lg border border-emerald-700/50 cursor-pointer">
             Закрити
           </button>
         </div>
 
-        <!-- 1. Hero User Profile Header Banner (Standard SaaS Settings Header) -->
-        <div class="p-6 bg-gradient-to-r from-[#131c31] via-[#101728] to-[#0c1220] border border-indigo-500/30 rounded-3xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
-          <div class="absolute -top-12 -right-12 w-56 h-56 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-          <div class="absolute -bottom-12 -left-12 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
-          
-          <div class="flex items-center gap-4 relative z-10">
-            <div class="relative">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr {{ userSettings.avatarGradient || 'from-indigo-600 to-purple-600' }} flex items-center justify-center border-2 border-indigo-400/40 text-white font-black text-2xl shadow-xl shadow-indigo-950">
-                {{ userSettings.avatarInitial || 'A' }}
-              </div>
-              <span class="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-400 border-2 border-[#131c31] rounded-full shadow-md" title="Онлайн / Сесія активна"></span>
-            </div>
+        <!-- 1. Clean Top Header & Sub-Tabs Navigation (3 Clear Functional Sections) -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-2 bg-[#0e1424] border border-slate-800/80 rounded-2xl">
+          <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar p-1">
             
-            <div class="space-y-1">
-              <div class="flex items-center gap-2.5 flex-wrap">
-                <h3 class="text-lg font-black text-white">{{ userSettings.username || 'Адміністратор' }}</h3>
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-indigo-500/20 border border-indigo-400/40 text-indigo-300">
-                  {{ userSettings.role || 'Admin' }}
-                </span>
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 flex items-center gap-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span>Neon DB Live</span>
-                </span>
-              </div>
-              <p class="text-xs text-slate-400">TradeScout Analytics OS • Хмарна база даних підключена</p>
-            </div>
-          </div>
-
-          <!-- Quick Stats Pill Counters -->
-          <div class="flex items-center gap-3 flex-wrap relative z-10">
-            <div class="px-4 py-2.5 bg-slate-950/80 border border-slate-800/80 rounded-2xl flex flex-col text-left">
-              <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Користувачів у базі</span>
-              <span class="text-sm font-extrabold text-cyan-300">{{ teamUsers.length }} осіб</span>
-            </div>
-            <div class="px-4 py-2.5 bg-slate-950/80 border border-slate-800/80 rounded-2xl flex flex-col text-left">
-              <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Збережених зборів</span>
-              <span class="text-sm font-extrabold text-indigo-300">{{ snapshots.length }}</span>
-            </div>
-            <div class="px-4 py-2.5 bg-slate-950/80 border border-slate-800/80 rounded-2xl flex flex-col text-left">
-              <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Товарів у каталозі</span>
-              <span class="text-sm font-extrabold text-emerald-300">{{ products.length }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. Sub-tabs Navigation Bar (Segmented SaaS Tab Control) -->
-        <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar p-1.5 bg-[#0e1424] border border-slate-800/80 rounded-2xl">
-          <button 
-            (click)="settingsActiveSubTab = 'all'"
-            [class.bg-gradient-to-r]="settingsActiveSubTab === 'all'"
-            [class.from-indigo-600]="settingsActiveSubTab === 'all'"
-            [class.to-purple-600]="settingsActiveSubTab === 'all'"
-            [class.text-white]="settingsActiveSubTab === 'all'"
-            [class.shadow-md]="settingsActiveSubTab === 'all'"
-            [class.text-slate-400]="settingsActiveSubTab !== 'all'"
-            [class.hover:text-white]="settingsActiveSubTab !== 'all'"
-            class="px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0"
-          >
-            <span class="material-icons text-base">dashboard_customize</span>
-            <span>Всі розділи</span>
-          </button>
-
-          <button 
-            (click)="settingsActiveSubTab = 'profile'"
-            [class.bg-gradient-to-r]="settingsActiveSubTab === 'profile'"
-            [class.from-indigo-600]="settingsActiveSubTab === 'profile'"
-            [class.to-purple-600]="settingsActiveSubTab === 'profile'"
-            [class.text-white]="settingsActiveSubTab === 'profile'"
-            [class.shadow-md]="settingsActiveSubTab === 'profile'"
-            [class.text-slate-400]="settingsActiveSubTab !== 'profile'"
-            [class.hover:text-white]="settingsActiveSubTab !== 'profile'"
-            class="px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0"
-          >
-            <span class="material-icons text-base">account_circle</span>
-            <span>Мій Профіль</span>
-          </button>
-
-          <button 
-            (click)="settingsActiveSubTab = 'users'"
-            [class.bg-gradient-to-r]="settingsActiveSubTab === 'users'"
-            [class.from-indigo-600]="settingsActiveSubTab === 'users'"
-            [class.to-purple-600]="settingsActiveSubTab === 'users'"
-            [class.text-white]="settingsActiveSubTab === 'users'"
-            [class.shadow-md]="settingsActiveSubTab === 'users'"
-            [class.text-slate-400]="settingsActiveSubTab !== 'users'"
-            [class.hover:text-white]="settingsActiveSubTab !== 'users'"
-            class="px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0"
-          >
-            <span class="material-icons text-base">groups</span>
-            <span>Користувачі та Доступ</span>
-            <span class="px-1.5 py-0.2 text-[10px] font-mono font-extrabold rounded-full bg-black/40 text-indigo-300">
-              {{ teamUsers.length }}
-            </span>
-          </button>
-
-          <button 
-            (click)="settingsActiveSubTab = 'scraping'"
-            [class.bg-gradient-to-r]="settingsActiveSubTab === 'scraping'"
-            [class.from-indigo-600]="settingsActiveSubTab === 'scraping'"
-            [class.to-purple-600]="settingsActiveSubTab === 'scraping'"
-            [class.text-white]="settingsActiveSubTab === 'scraping'"
-            [class.shadow-md]="settingsActiveSubTab === 'scraping'"
-            [class.text-slate-400]="settingsActiveSubTab !== 'scraping'"
-            [class.hover:text-white]="settingsActiveSubTab !== 'scraping'"
-            class="px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0"
-          >
-            <span class="material-icons text-base">speed</span>
-            <span>Параметри скрейпінгу</span>
-          </button>
-
-          <button 
-            (click)="settingsActiveSubTab = 'analytics'"
-            [class.bg-gradient-to-r]="settingsActiveSubTab === 'analytics'"
-            [class.from-indigo-600]="settingsActiveSubTab === 'analytics'"
-            [class.to-purple-600]="settingsActiveSubTab === 'analytics'"
-            [class.text-white]="settingsActiveSubTab === 'analytics'"
-            [class.shadow-md]="settingsActiveSubTab === 'analytics'"
-            [class.text-slate-400]="settingsActiveSubTab !== 'analytics'"
-            [class.hover:text-white]="settingsActiveSubTab !== 'analytics'"
-            class="px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0"
-          >
-            <span class="material-icons text-base">insights</span>
-            <span>Аналітика & Інтерфейс</span>
-          </button>
-
-          <button 
-            (click)="settingsActiveSubTab = 'storage'"
-            [class.bg-gradient-to-r]="settingsActiveSubTab === 'storage'"
-            [class.from-indigo-600]="settingsActiveSubTab === 'storage'"
-            [class.to-purple-600]="settingsActiveSubTab === 'storage'"
-            [class.text-white]="settingsActiveSubTab === 'storage'"
-            [class.shadow-md]="settingsActiveSubTab === 'storage'"
-            [class.text-slate-400]="settingsActiveSubTab !== 'storage'"
-            [class.hover:text-white]="settingsActiveSubTab !== 'storage'"
-            class="px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0"
-          >
-            <span class="material-icons text-base">database</span>
-            <span>Сховище & Бекап</span>
-          </button>
-        </div>
-
-        <!-- 3. TEAM & USERS MANAGEMENT (Full 2-column span when all or users) -->
-        <div *ngIf="settingsActiveSubTab === 'all' || settingsActiveSubTab === 'users'" class="p-6 bg-[#0e1424] border border-indigo-500/30 rounded-3xl space-y-5 shadow-xl">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-2xl bg-indigo-950/80 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-md">
-                <span class="material-icons text-xl">manage_accounts</span>
-              </div>
-              <div>
-                <h4 class="text-sm font-extrabold text-white flex items-center gap-2">
-                  <span>Користувачі системи & Контроль доступу</span>
-                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    {{ teamUsers.length }} користувачів
-                  </span>
-                </h4>
-                <p class="text-xs text-slate-400">Спільний доступ, скидання паролів та ролі команди в базі даних Neon PostgreSQL</p>
-              </div>
-            </div>
-
+            <!-- Tab 1: Користувачі та Доступ -->
             <button 
-              (click)="openCreateUserModal()"
-              class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-500/20 transition-all cursor-pointer glow-indigo flex items-center gap-2 shrink-0 self-start sm:self-auto"
+              (click)="settingsActiveSubTab = 'users'"
+              [class.bg-gradient-to-r]="settingsActiveSubTab === 'users'"
+              [class.from-indigo-600]="settingsActiveSubTab === 'users'"
+              [class.to-purple-600]="settingsActiveSubTab === 'users'"
+              [class.text-white]="settingsActiveSubTab === 'users'"
+              [class.shadow-md]="settingsActiveSubTab === 'users'"
+              [class.text-slate-400]="settingsActiveSubTab !== 'users'"
+              [class.hover:text-white]="settingsActiveSubTab !== 'users'"
+              class="px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0"
             >
-              <span class="material-icons text-sm">person_add</span>
-              <span>+ Додати користувача</span>
+              <span class="material-icons text-base">groups</span>
+              <span>Користувачі та Доступ</span>
+              <span class="px-2 py-0.5 text-[10px] font-mono font-extrabold rounded-full bg-black/40 text-indigo-300">
+                {{ teamUsers.length }}
+              </span>
+            </button>
+
+            <!-- Tab 2: Мій Профіль & Безпека -->
+            <button 
+              (click)="settingsActiveSubTab = 'profile'"
+              [class.bg-gradient-to-r]="settingsActiveSubTab === 'profile'"
+              [class.from-indigo-600]="settingsActiveSubTab === 'profile'"
+              [class.to-purple-600]="settingsActiveSubTab === 'profile'"
+              [class.text-white]="settingsActiveSubTab === 'profile'"
+              [class.shadow-md]="settingsActiveSubTab === 'profile'"
+              [class.text-slate-400]="settingsActiveSubTab !== 'profile'"
+              [class.hover:text-white]="settingsActiveSubTab !== 'profile'"
+              class="px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0"
+            >
+              <span class="material-icons text-base">account_circle</span>
+              <span>Мій Профіль & Безпека</span>
+            </button>
+
+            <!-- Tab 3: База даних & Резервні копії -->
+            <button 
+              (click)="settingsActiveSubTab = 'storage'"
+              [class.bg-gradient-to-r]="settingsActiveSubTab === 'storage'"
+              [class.from-indigo-600]="settingsActiveSubTab === 'storage'"
+              [class.to-purple-600]="settingsActiveSubTab === 'storage'"
+              [class.text-white]="settingsActiveSubTab === 'storage'"
+              [class.shadow-md]="settingsActiveSubTab === 'storage'"
+              [class.text-slate-400]="settingsActiveSubTab !== 'storage'"
+              [class.hover:text-white]="settingsActiveSubTab !== 'storage'"
+              class="px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0"
+            >
+              <span class="material-icons text-base">storage</span>
+              <span>База даних & Резервні копії</span>
             </button>
           </div>
 
-          <!-- Users Table -->
-          <div class="overflow-x-auto custom-scrollbar">
-            <table class="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr class="border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <th class="py-3 px-3">Користувач</th>
-                  <th class="py-3 px-3">Логін</th>
-                  <th class="py-3 px-3">Роль</th>
-                  <th class="py-3 px-3">Статус</th>
-                  <th class="py-3 px-3">Останній вхід</th>
-                  <th class="py-3 px-3 text-right">Дії</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-800/60">
-                <tr *ngFor="let u of teamUsers" class="hover:bg-slate-900/40 transition-colors">
-                  <td class="py-3.5 px-3">
-                    <div class="flex items-center gap-2.5">
-                      <div class="w-8 h-8 rounded-xl bg-gradient-to-tr {{ u.avatarGradient || 'from-indigo-600 to-purple-600' }} flex items-center justify-center text-white font-black text-xs shadow-md shrink-0">
-                        {{ (u.displayName || u.username).charAt(0).toUpperCase() }}
-                      </div>
-                      <div>
-                        <p class="font-bold text-white">{{ u.displayName || u.username }}</p>
-                        <p class="text-[10px] text-slate-500">Створено: {{ formatUserDate(u.createdAt) }}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="py-3.5 px-3 font-mono text-indigo-300 font-semibold">
-                    @{{ u.username }}
-                  </td>
-                  <td class="py-3.5 px-3">
-                    <span 
-                      [class.bg-purple-950]="u.role === 'admin'"
-                      [class.text-purple-300]="u.role === 'admin'"
-                      [class.border-purple-700]="u.role === 'admin'"
-                      [class.bg-cyan-950]="u.role !== 'admin'"
-                      [class.text-cyan-300]="u.role !== 'admin'"
-                      [class.border-cyan-700]="u.role !== 'admin'"
-                      class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border"
-                    >
-                      {{ u.role === 'admin' ? 'Адміністратор' : 'Аналітик' }}
-                    </span>
-                  </td>
-                  <td class="py-3.5 px-3">
-                    <button 
-                      (click)="toggleUserActive(u)"
-                      [class.bg-emerald-950]="u.isActive"
-                      [class.text-emerald-300]="u.isActive"
-                      [class.border-emerald-700]="u.isActive"
-                      [class.bg-rose-950]="!u.isActive"
-                      [class.text-rose-300]="!u.isActive"
-                      [class.border-rose-700]="!u.isActive"
-                      class="px-2.5 py-0.5 rounded-full text-[10px] font-bold border cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1 inline-flex"
-                      [title]="u.isActive ? 'Клікніть щоб заблокувати' : 'Клікніть щоб активувати'"
-                    >
-                      <span class="w-1.5 h-1.5 rounded-full" [class.bg-emerald-400]="u.isActive" [class.bg-rose-400]="!u.isActive"></span>
-                      <span>{{ u.isActive ? 'Активний' : 'Заблокований' }}</span>
-                    </button>
-                  </td>
-                  <td class="py-3.5 px-3 font-mono text-[11px] text-slate-400">
-                    {{ formatUserDate(u.lastLoginAt) }}
-                  </td>
-                  <td class="py-3.5 px-3 text-right">
-                    <div class="flex items-center justify-end gap-2">
-                      <button 
-                        *ngIf="!isImpersonating"
-                        (click)="impersonateUser(u)"
-                        class="px-2.5 py-1 bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 hover:text-white border border-indigo-500/40 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
-                        title="Увійти в кабінет цього користувача в режимі технічної підтримки"
-                      >
-                        <span class="material-icons text-xs">visibility</span>
-                        <span>Увійти</span>
-                      </button>
-                      <button 
-                        (click)="openChangePasswordModal(u)"
-                        class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-indigo-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
-                        title="Змінити пароль користувача"
-                      >
-                        <span class="material-icons text-xs">key</span>
-                        <span>Пароль</span>
-                      </button>
-                      <button 
-                        (click)="deleteTeamUser(u)"
-                        class="p-1.5 bg-slate-900 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-800 hover:border-rose-800/60 rounded-lg text-xs transition-all cursor-pointer"
-                        title="Видалити користувача"
-                      >
-                        <span class="material-icons text-xs">delete</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <!-- Neon Live status pill on the right -->
+          <div class="px-4 py-2 bg-slate-950/80 border border-slate-800 rounded-xl flex items-center gap-2 text-xs text-slate-300 shrink-0 self-start sm:self-auto mx-1">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="font-bold text-slate-200">Neon PostgreSQL Live</span>
+          </div>
+        </div>
 
-            <div *ngIf="teamUsers.length === 0" class="py-8 text-center text-slate-500 text-xs italic">
-              Користувачів ще не додано або триває підвантаження з хмари Neon PostgreSQL...
+        <!-- ================================================================= -->
+        <!-- SUB-TAB 1: КОРИСТУВАЧІ ТА ДОСТУП (Team & Users Management)       -->
+        <!-- ================================================================= -->
+        <div *ngIf="settingsActiveSubTab === 'users'" class="space-y-6 animate-fadeIn">
+          <div class="p-6 bg-[#0e1424] border border-indigo-500/30 rounded-3xl space-y-6 shadow-xl">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+              <div class="flex items-center gap-3.5">
+                <div class="w-11 h-11 rounded-2xl bg-indigo-950/80 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-md">
+                  <span class="material-icons text-2xl">manage_accounts</span>
+                </div>
+                <div>
+                  <h3 class="text-base font-extrabold text-white flex items-center gap-2.5">
+                    <span>Користувачі системи</span>
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      {{ teamUsers.length }} користувачів
+                    </span>
+                  </h3>
+                  <p class="text-xs text-slate-400 mt-0.5">Керування обліковими записами команди, надання доступу та режим підтримки</p>
+                </div>
+              </div>
+
+              <button 
+                (click)="openCreateUserModal()"
+                class="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-500/25 transition-all cursor-pointer glow-indigo flex items-center gap-2 shrink-0 self-start sm:self-auto"
+              >
+                <span class="material-icons text-base">person_add</span>
+                <span>+ Додати користувача</span>
+              </button>
+            </div>
+
+            <!-- Users Table -->
+            <div class="overflow-x-auto custom-scrollbar">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <th class="py-3 px-3">Користувач</th>
+                    <th class="py-3 px-3">Логін</th>
+                    <th class="py-3 px-3">Роль</th>
+                    <th class="py-3 px-3">Статус</th>
+                    <th class="py-3 px-3">Останній вхід</th>
+                    <th class="py-3 px-3 text-right">Дії</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60">
+                  <tr *ngFor="let u of teamUsers" class="hover:bg-slate-900/40 transition-colors">
+                    <td class="py-3.5 px-3">
+                      <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr {{ u.avatarGradient || 'from-indigo-600 to-purple-600' }} flex items-center justify-center text-white font-black text-sm shadow-md shrink-0">
+                          {{ (u.displayName || u.username).charAt(0).toUpperCase() }}
+                        </div>
+                        <div>
+                          <p class="font-bold text-white text-xs">{{ u.displayName || u.username }}</p>
+                          <p class="text-[10px] text-slate-500">Створено: {{ formatUserDate(u.createdAt) }}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-3.5 px-3 font-mono text-indigo-300 font-semibold">
+                      @{{ u.username }}
+                    </td>
+                    <td class="py-3.5 px-3">
+                      <span 
+                        [class.bg-purple-950]="u.role === 'admin'"
+                        [class.text-purple-300]="u.role === 'admin'"
+                        [class.border-purple-700]="u.role === 'admin'"
+                        [class.bg-cyan-950]="u.role !== 'admin'"
+                        [class.text-cyan-300]="u.role !== 'admin'"
+                        [class.border-cyan-700]="u.role !== 'admin'"
+                        class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border"
+                      >
+                        {{ u.role === 'admin' ? 'Адміністратор' : 'Аналітик' }}
+                      </span>
+                    </td>
+                    <td class="py-3.5 px-3">
+                      <button 
+                        (click)="toggleUserActive(u)"
+                        [class.bg-emerald-950]="u.isActive"
+                        [class.text-emerald-300]="u.isActive"
+                        [class.border-emerald-700]="u.isActive"
+                        [class.bg-rose-950]="!u.isActive"
+                        [class.text-rose-300]="!u.isActive"
+                        [class.border-rose-700]="!u.isActive"
+                        class="px-2.5 py-0.5 rounded-full text-[10px] font-bold border cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1.5 inline-flex"
+                        [title]="u.isActive ? 'Клікніть щоб заблокувати' : 'Клікніть щоб активувати'"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full" [class.bg-emerald-400]="u.isActive" [class.bg-rose-400]="!u.isActive"></span>
+                        <span>{{ u.isActive ? 'Активний' : 'Заблокований' }}</span>
+                      </button>
+                    </td>
+                    <td class="py-3.5 px-3 font-mono text-[11px] text-slate-400">
+                      {{ formatUserDate(u.lastLoginAt) }}
+                    </td>
+                    <td class="py-3.5 px-3 text-right">
+                      <div class="flex items-center justify-end gap-2">
+                        <!-- Support Mode Impersonate Button -->
+                        <button 
+                          *ngIf="!isImpersonating"
+                          (click)="impersonateUser(u)"
+                          class="px-2.5 py-1 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 hover:text-white border border-indigo-500/40 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                          title="Увійти в кабінет цього користувача в режимі підтримки"
+                        >
+                          <span class="material-icons text-xs">visibility</span>
+                          <span>Увійти</span>
+                        </button>
+                        <!-- Change Password Button -->
+                        <button 
+                          (click)="openChangePasswordModal(u)"
+                          class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                          title="Змінити пароль користувача"
+                        >
+                          <span class="material-icons text-xs">vpn_key</span>
+                          <span>Пароль</span>
+                        </button>
+                        <!-- Delete User Button -->
+                        <button 
+                          (click)="deleteTeamUser(u)"
+                          class="p-1.5 bg-slate-900 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-800 hover:border-rose-800/60 rounded-lg text-xs transition-all cursor-pointer"
+                          title="Видалити користувача"
+                        >
+                          <span class="material-icons text-xs">delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div *ngIf="teamUsers.length === 0" class="py-8 text-center text-slate-500 text-xs italic">
+                Користувачів ще не додано або триває підвантаження з хмари Neon PostgreSQL...
+              </div>
+            </div>
+
+            <!-- Role & Support Guide Callout Box -->
+            <div class="p-4 bg-slate-950/80 border border-slate-800/80 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div class="space-y-1">
+                <p class="font-bold text-white flex items-center gap-1.5">
+                  <span class="material-icons text-sm text-purple-400">admin_panel_settings</span>
+                  <span>Адміністратор</span>
+                </p>
+                <p class="text-slate-400 text-[11px] leading-relaxed">Повний контроль над платформою, створення нових користувачів, видалення та зміна паролів.</p>
+              </div>
+              <div class="space-y-1">
+                <p class="font-bold text-white flex items-center gap-1.5">
+                  <span class="material-icons text-sm text-cyan-400">analytics</span>
+                  <span>Аналітик</span>
+                </p>
+                <p class="text-slate-400 text-[11px] leading-relaxed">Збір товарів з Rozetka, аналіз ринку, фільтрація та експорт звітів у Excel.</p>
+              </div>
+              <div class="space-y-1">
+                <p class="font-bold text-white flex items-center gap-1.5">
+                  <span class="material-icons text-sm text-indigo-400">support_agent</span>
+                  <span>Режим підтримки (👁 Увійти)</span>
+                </p>
+                <p class="text-slate-400 text-[11px] leading-relaxed">Дозволяє власнику увійти в сесію користувача для швидкої діагностики та вирішення проблем.</p>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- 4. Two-Column Settings Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          <!-- Card A: USER PROFILE & ACCOUNT -->
-          <div *ngIf="settingsActiveSubTab === 'all' || settingsActiveSubTab === 'profile'" class="p-6 bg-[#0e1424] border border-slate-800/80 rounded-3xl space-y-5 shadow-xl flex flex-col justify-between">
+        <!-- ================================================================= -->
+        <!-- SUB-TAB 2: МІЙ ПРОФІЛЬ & БЕЗПЕКА (Profile & Security)             -->
+        <!-- ================================================================= -->
+        <div *ngIf="settingsActiveSubTab === 'profile'" class="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fadeIn">
+          
+          <!-- Card 1: My Profile Details -->
+          <div class="p-6 bg-[#0e1424] border border-slate-800/80 rounded-3xl space-y-6 shadow-xl flex flex-col justify-between">
             <div class="space-y-5">
-              <div class="flex items-center justify-between border-b border-white/5 pb-4">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-2xl bg-indigo-950/80 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-md">
-                    <span class="material-icons text-xl">account_circle</span>
-                  </div>
-                  <div>
-                    <h4 class="text-sm font-extrabold text-white">Профіль користувача</h4>
-                    <p class="text-xs text-slate-400">Персоналізація імені, ролі та кольору аватара</p>
-                  </div>
+              <div class="flex items-center gap-3.5 border-b border-white/5 pb-4">
+                <div class="w-11 h-11 rounded-2xl bg-indigo-950/80 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-md">
+                  <span class="material-icons text-2xl">badge</span>
                 </div>
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 border border-slate-800 text-slate-400 uppercase">Обліковий запис</span>
+                <div>
+                  <h4 class="text-sm font-extrabold text-white">Дані мого профілю</h4>
+                  <p class="text-xs text-slate-400">Ім'я, роль та параметри відображення в системі</p>
+                </div>
+              </div>
+
+              <!-- Avatar & Name Display -->
+              <div class="flex items-center gap-4 p-4 bg-slate-950/80 border border-slate-800 rounded-2xl">
+                <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr {{ userSettings.avatarGradient || 'from-indigo-600 to-purple-600' }} flex items-center justify-center text-white font-black text-2xl shadow-lg shrink-0">
+                  {{ userSettings.avatarInitial || 'A' }}
+                </div>
+                <div class="space-y-1 min-w-0">
+                  <p class="text-sm font-extrabold text-white truncate">{{ userSettings.username || 'Адміністратор' }}</p>
+                  <p class="text-xs text-indigo-400 font-semibold">{{ userSettings.role || 'ROLE: ADMIN' }}</p>
+                  <p class="text-[10px] text-slate-500 font-mono">Акаунт синхронізовано з Neon DB</p>
+                </div>
               </div>
 
               <div class="space-y-4">
-                <!-- Username input -->
                 <div>
-                  <label class="block text-xs font-semibold text-slate-300 mb-1.5">Ім'я користувача</label>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1.5">Ім'я для відображення</label>
                   <div class="relative">
-                    <span class="material-icons absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-base">badge</span>
+                    <span class="material-icons absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-base">person</span>
                     <input 
                       type="text" 
                       [(ngModel)]="userSettings.username" 
                       (ngModelChange)="updateAvatarInitial()"
                       placeholder="Введіть ваше ім'я..."
-                      class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none transition-all shadow-inner"
+                      class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none transition-all"
                     />
                   </div>
                 </div>
 
-                <!-- Role Selector -->
                 <div>
                   <label class="block text-xs font-semibold text-slate-300 mb-1.5">Роль у системі</label>
                   <div class="relative">
@@ -2669,46 +2632,18 @@
                     <select 
                       [(ngModel)]="userSettings.role" 
                       (ngModelChange)="saveUserSettings()"
-                      class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white outline-none transition-all cursor-pointer shadow-inner appearance-none"
+                      class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white outline-none transition-all cursor-pointer appearance-none"
                     >
                       <option value="Головний аналітик (Admin)">Головний аналітик (Admin)</option>
                       <option value="Аналітик команди">Аналітик команди</option>
-                      <option value="Оператор збору товарів">Оператор збору товарів</option>
-                      <option value="Аудитор цін та асортименту">Аудитор цін та асортименту</option>
                     </select>
                     <span class="material-icons absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-base pointer-events-none">expand_more</span>
-                  </div>
-                </div>
-
-                <!-- Avatar Gradient Palette Selector -->
-                <div>
-                  <label class="block text-xs font-semibold text-slate-300 mb-2">Колірний стиль аватара</label>
-                  <div class="flex items-center gap-3 flex-wrap">
-                    <button 
-                      *ngFor="let pal of [
-                        { id: 'from-indigo-600 to-purple-600', name: 'Neon Indigo', bg: 'bg-gradient-to-tr from-indigo-600 to-purple-600' },
-                        { id: 'from-cyan-600 to-blue-600', name: 'Cyber Cyan', bg: 'bg-gradient-to-tr from-cyan-600 to-blue-600' },
-                        { id: 'from-emerald-600 to-teal-600', name: 'Emerald Pro', bg: 'bg-gradient-to-tr from-emerald-600 to-teal-600' },
-                        { id: 'from-rose-600 to-orange-600', name: 'Rose Sunset', bg: 'bg-gradient-to-tr from-rose-600 to-orange-600' },
-                        { id: 'from-amber-600 to-rose-600', name: 'Amber Fire', bg: 'bg-gradient-to-tr from-amber-600 to-rose-600' }
-                      ]"
-                      (click)="userSettings.avatarGradient = pal.id; saveUserSettings()"
-                      [class]="pal.bg"
-                      class="w-9 h-9 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center shadow-md hover:scale-110"
-                      [class.border-white]="userSettings.avatarGradient === pal.id"
-                      [class.border-transparent]="userSettings.avatarGradient !== pal.id"
-                      [class.scale-110]="userSettings.avatarGradient === pal.id"
-                      [title]="pal.name"
-                    >
-                      <span *ngIf="userSettings.avatarGradient === pal.id" class="material-icons text-white text-sm font-bold">check</span>
-                    </button>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Profile Action Buttons -->
-            <div class="pt-4 border-t border-slate-800/80 flex items-center justify-between gap-3 mt-4">
+            <div class="pt-4 border-t border-slate-800/80 flex items-center justify-between gap-3">
               <button 
                 (click)="saveUserSettings()" 
                 class="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-500/25 transition-all cursor-pointer glow-indigo flex items-center gap-2"
@@ -2720,7 +2655,6 @@
               <button 
                 (click)="logout()" 
                 class="px-4 py-2 bg-slate-900 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 border border-slate-800 hover:border-rose-900/60 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
-                title="Завершити сесію та вийти"
               >
                 <span class="material-icons text-sm text-rose-400">logout</span>
                 <span>Вийти з акаунта</span>
@@ -2728,263 +2662,192 @@
             </div>
           </div>
 
-          <!-- Card B: SCRAPING & AUTOMATION -->
-          <div *ngIf="settingsActiveSubTab === 'all' || settingsActiveSubTab === 'scraping'" class="p-6 bg-[#0e1424] border border-slate-800/80 rounded-3xl space-y-5 shadow-xl flex flex-col justify-between">
+          <!-- Card 2: Change My Password -->
+          <div class="p-6 bg-[#0e1424] border border-slate-800/80 rounded-3xl space-y-6 shadow-xl flex flex-col justify-between">
             <div class="space-y-5">
-              <div class="flex items-center justify-between border-b border-white/5 pb-4">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-2xl bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-md">
-                    <span class="material-icons text-xl">speed</span>
-                  </div>
-                  <div>
-                    <h4 class="text-sm font-extrabold text-white">Параметри скрейпінгу</h4>
-                    <p class="text-xs text-slate-400">Швидкість, паузи між сторінками та автоматизація</p>
-                  </div>
+              <div class="flex items-center gap-3.5 border-b border-white/5 pb-4">
+                <div class="w-11 h-11 rounded-2xl bg-purple-950/80 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-md">
+                  <span class="material-icons text-2xl">lock_reset</span>
                 </div>
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 border border-slate-800 text-slate-400 uppercase">Автоматизація</span>
+                <div>
+                  <h4 class="text-sm font-extrabold text-white">Безпека та зміна мого пароля</h4>
+                  <p class="text-xs text-slate-400">Оновіть пароль для входу у свій обліковий запис</p>
+                </div>
+              </div>
+
+              <!-- Notice alerts -->
+              <div *ngIf="myPasswordSuccess" class="p-3 bg-emerald-950/80 border border-emerald-500/50 rounded-xl text-xs text-emerald-300 font-bold flex items-center gap-2">
+                <span class="material-icons text-sm">check_circle</span>
+                <span>Пароль успішно оновлено!</span>
+              </div>
+
+              <div *ngIf="myPasswordError" class="p-3 bg-rose-950/80 border border-rose-500/50 rounded-xl text-xs text-rose-300 font-bold flex items-center gap-2">
+                <span class="material-icons text-sm">error</span>
+                <span>{{ myPasswordError }}</span>
               </div>
 
               <div class="space-y-4">
-                <!-- Scrape Delay Selector -->
                 <div>
-                  <label class="block text-xs font-semibold text-slate-300 mb-1.5">Затримка між сторінками на Rozetka</label>
-                  <div class="grid grid-cols-3 gap-2.5">
-                    <button 
-                      *ngFor="let opt of [
-                        { delay: 1500, label: '1.5 сек', desc: 'Турбо' },
-                        { delay: 2000, label: '2.0 сек', desc: 'Стандарт' },
-                        { delay: 4000, label: '4.0 сек', desc: 'Безпечний' }
-                      ]"
-                      (click)="userSettings.scrapeDelayMs = opt.delay; saveUserSettings()"
-                      [class.bg-indigo-600]="userSettings.scrapeDelayMs === opt.delay"
-                      [class.text-white]="userSettings.scrapeDelayMs === opt.delay"
-                      [class.border-indigo-400]="userSettings.scrapeDelayMs === opt.delay"
-                      [class.bg-slate-950]="userSettings.scrapeDelayMs !== opt.delay"
-                      [class.text-slate-300]="userSettings.scrapeDelayMs !== opt.delay"
-                      [class.border-slate-800]="userSettings.scrapeDelayMs !== opt.delay"
-                      class="p-2.5 rounded-xl border text-center transition-all cursor-pointer hover:border-indigo-400/80"
-                    >
-                      <p class="text-xs font-extrabold font-mono">{{ opt.label }}</p>
-                      <p class="text-[10px] opacity-75 mt-0.5">{{ opt.desc }}</p>
-                    </button>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1.5">Новий пароль</label>
+                  <div class="relative">
+                    <span class="material-icons absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-base">vpn_key</span>
+                    <input 
+                      type="password" 
+                      [(ngModel)]="myNewPassword" 
+                      placeholder="Введіть новий пароль (мін. 3 символи)..."
+                      class="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none transition-all"
+                    />
                   </div>
                 </div>
 
-                <!-- Auto-save History Toggle -->
-                <div class="p-3.5 bg-slate-950/80 border border-slate-800/80 rounded-2xl flex items-center justify-between gap-4">
-                  <div class="space-y-0.5">
-                    <p class="text-xs font-bold text-white">Автозбереження в історію</p>
-                    <p class="text-[11px] text-slate-400">Автоматично створювати знімок після завершення збору</p>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1.5">Підтвердження нового пароля</label>
+                  <div class="relative">
+                    <span class="material-icons absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-base">lock</span>
+                    <input 
+                      type="password" 
+                      [(ngModel)]="myConfirmPassword" 
+                      placeholder="Повторіть новий пароль..."
+                      class="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none transition-all"
+                    />
                   </div>
-                  <button 
-                    (click)="userSettings.autoSaveHistory = !userSettings.autoSaveHistory; saveUserSettings()"
-                    [class.bg-emerald-500]="userSettings.autoSaveHistory"
-                    [class.bg-slate-800]="!userSettings.autoSaveHistory"
-                    class="w-12 h-6.5 rounded-full p-1 transition-colors cursor-pointer relative shrink-0 flex items-center"
-                  >
-                    <span 
-                      [class.translate-x-5]="userSettings.autoSaveHistory"
-                      [class.translate-x-0]="!userSettings.autoSaveHistory"
-                      class="w-4.5 h-4.5 bg-white rounded-full transition-transform shadow-md block"
-                    ></span>
-                  </button>
-                </div>
-
-                <!-- Sound Alerts Toggle -->
-                <div class="p-3.5 bg-slate-950/80 border border-slate-800/80 rounded-2xl flex items-center justify-between gap-4">
-                  <div class="space-y-0.5">
-                    <p class="text-xs font-bold text-white flex items-center gap-1.5">
-                      <span>Звукове сповіщення</span>
-                      <button 
-                        (click)="playCompletionSound()" 
-                        class="px-2 py-0.5 rounded-md bg-indigo-950 text-indigo-300 border border-indigo-500/30 text-[10px] hover:bg-indigo-900 transition-colors cursor-pointer"
-                        title="Прослухати звук сповіщення"
-                      >
-                        🔊 Тест звуку
-                      </button>
-                    </p>
-                    <p class="text-[11px] text-slate-400">Приємний звуковий сигнал при завершенні збору</p>
-                  </div>
-                  <button 
-                    (click)="userSettings.soundAlerts = !userSettings.soundAlerts; saveUserSettings()"
-                    [class.bg-emerald-500]="userSettings.soundAlerts"
-                    [class.bg-slate-800]="!userSettings.soundAlerts"
-                    class="w-12 h-6.5 rounded-full p-1 transition-colors cursor-pointer relative shrink-0 flex items-center"
-                  >
-                    <span 
-                      [class.translate-x-5]="userSettings.soundAlerts"
-                      [class.translate-x-0]="!userSettings.soundAlerts"
-                      class="w-4.5 h-4.5 bg-white rounded-full transition-transform shadow-md block"
-                    ></span>
-                  </button>
                 </div>
               </div>
             </div>
 
-            <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500">
-              <span>Плавна синхронізація з Rozetka API</span>
-              <span class="text-indigo-400 font-mono font-semibold">{{ userSettings.scrapeDelayMs }} мс</span>
+            <div class="pt-4 border-t border-slate-800/80 flex items-center justify-start">
+              <button 
+                (click)="submitChangeMyPassword()" 
+                class="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-500/25 transition-all cursor-pointer flex items-center gap-2"
+              >
+                <span class="material-icons text-sm">check</span>
+                <span>Оновити мій пароль</span>
+              </button>
             </div>
           </div>
+        </div>
 
-          <!-- Card C: ANALYTICS & INTERFACE PREFERENCES -->
-          <div *ngIf="settingsActiveSubTab === 'all' || settingsActiveSubTab === 'analytics'" class="p-6 bg-[#0e1424] border border-slate-800/80 rounded-3xl space-y-5 shadow-xl flex flex-col justify-between">
-            <div class="space-y-5">
-              <div class="flex items-center justify-between border-b border-white/5 pb-4">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-2xl bg-purple-950/80 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-md">
-                    <span class="material-icons text-xl">insights</span>
+        <!-- ================================================================= -->
+        <!-- SUB-TAB 3: БАЗА ДАНИХ & РЕЗЕРВНІ КОПІЇ (Storage & Backups)         -->
+        <!-- ================================================================= -->
+        <div *ngIf="settingsActiveSubTab === 'storage'" class="space-y-6 animate-fadeIn">
+          
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Card 1: Cloud DB Info & Metrics -->
+            <div class="p-6 bg-[#0e1424] border border-slate-800/80 rounded-3xl space-y-6 shadow-xl flex flex-col justify-between">
+              <div class="space-y-5">
+                <div class="flex items-center gap-3.5 border-b border-white/5 pb-4">
+                  <div class="w-11 h-11 rounded-2xl bg-emerald-950/80 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-md">
+                    <span class="material-icons text-2xl">storage</span>
                   </div>
                   <div>
-                    <h4 class="text-sm font-extrabold text-white">Аналітика та інтерфейс</h4>
-                    <p class="text-xs text-slate-400">Формати розрахунку ринкових показників</p>
+                    <h4 class="text-sm font-extrabold text-white">Хмарна база Neon PostgreSQL</h4>
+                    <p class="text-xs text-slate-400">Стан зв'язку та статистика збережених аналітичних даних</p>
                   </div>
                 </div>
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 border border-slate-800 text-slate-400 uppercase">Аналітика</span>
+
+                <!-- Live Status Banner -->
+                <div class="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <span class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse shadow-lg shadow-emerald-500/50"></span>
+                    <div>
+                      <p class="text-xs font-bold text-white">Neon PostgreSQL (Cloud DB)</p>
+                      <p class="text-[11px] text-emerald-400 font-semibold">Активне з'єднання • Дані захищені</p>
+                    </div>
+                  </div>
+                  <span class="px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-700/60 rounded-lg font-mono font-bold text-xs">
+                    Live
+                  </span>
+                </div>
+
+                <!-- Database Metrics Counters -->
+                <div class="grid grid-cols-3 gap-3">
+                  <div class="p-3 bg-slate-950/80 border border-slate-800 rounded-2xl text-center">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase">Користувачів</p>
+                    <p class="text-base font-extrabold text-cyan-300 mt-1">{{ teamUsers.length }}</p>
+                  </div>
+                  <div class="p-3 bg-slate-950/80 border border-slate-800 rounded-2xl text-center">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase">Збережених зборів</p>
+                    <p class="text-base font-extrabold text-indigo-300 mt-1">{{ snapshots.length }}</p>
+                  </div>
+                  <div class="p-3 bg-slate-950/80 border border-slate-800 rounded-2xl text-center">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase">Товарів у каталозі</p>
+                    <p class="text-base font-extrabold text-emerald-300 mt-1">{{ products.length }}</p>
+                  </div>
+                </div>
               </div>
 
-              <div class="space-y-4">
-                <!-- Market Concentration Threshold (CR3 vs CR5) -->
-                <div>
-                  <label class="block text-xs font-semibold text-slate-300 mb-1.5">Рівень концентрації ринку (Індекс лідерів)</label>
-                  <div class="grid grid-cols-2 gap-3">
-                    <button 
-                      (click)="userSettings.crThreshold = 3; saveUserSettings()"
-                      [class.bg-purple-600]="userSettings.crThreshold === 3"
-                      [class.text-white]="userSettings.crThreshold === 3"
-                      [class.border-purple-400]="userSettings.crThreshold === 3"
-                      [class.bg-slate-950]="userSettings.crThreshold !== 3"
-                      [class.text-slate-300]="userSettings.crThreshold !== 3"
-                      [class.border-slate-800]="userSettings.crThreshold !== 3"
-                      class="p-3 rounded-xl border text-center transition-all cursor-pointer hover:border-purple-400/80"
-                    >
-                      <p class="text-xs font-bold font-mono">CR3 (Топ-3 продавці)</p>
-                      <p class="text-[10px] opacity-75 mt-0.5">Стандарт маркетплейсів</p>
-                    </button>
-
-                    <button 
-                      (click)="userSettings.crThreshold = 5; saveUserSettings()"
-                      [class.bg-purple-600]="userSettings.crThreshold === 5"
-                      [class.text-white]="userSettings.crThreshold === 5"
-                      [class.border-purple-400]="userSettings.crThreshold === 5"
-                      [class.bg-slate-950]="userSettings.crThreshold !== 5"
-                      [class.text-slate-300]="userSettings.crThreshold !== 5"
-                      [class.border-slate-800]="userSettings.crThreshold !== 5"
-                      class="p-3 rounded-xl border text-center transition-all cursor-pointer hover:border-purple-400/80"
-                    >
-                      <p class="text-xs font-bold font-mono">CR5 (Топ-5 продавців)</p>
-                      <p class="text-[10px] opacity-75 mt-0.5">Розширений огляд</p>
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Theme Accent Style -->
-                <div>
-                  <label class="block text-xs font-semibold text-slate-300 mb-1.5">Фірмовий колірний акцент</label>
-                  <div class="grid grid-cols-4 gap-2">
-                    <button 
-                      *ngFor="let th of [
-                        { id: 'indigo', name: 'Indigo', col: 'bg-indigo-500' },
-                        { id: 'cyan', name: 'Cyan', col: 'bg-cyan-500' },
-                        { id: 'emerald', name: 'Emerald', col: 'bg-emerald-500' },
-                        { id: 'purple', name: 'Purple', col: 'bg-purple-500' }
-                      ]"
-                      (click)="userSettings.accentTheme = th.id; saveUserSettings()"
-                      [class.border-white]="userSettings.accentTheme === th.id"
-                      [class.border-slate-800]="userSettings.accentTheme !== th.id"
-                      class="p-2.5 bg-slate-950 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1.5 hover:border-slate-700"
-                    >
-                      <span [class]="th.col" class="w-4 h-4 rounded-full shadow-sm"></span>
-                      <span class="text-[10px] font-bold text-slate-300">{{ th.name }}</span>
-                    </button>
-                  </div>
-                </div>
+              <!-- Cache clear button -->
+              <div class="pt-4 border-t border-slate-800/80 flex items-center justify-between">
+                <button 
+                  (click)="clearLocalCache()" 
+                  class="px-4 py-2 bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white border border-slate-800 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                  title="Очистити локальний кеш браузера"
+                >
+                  <span class="material-icons text-sm">cleaning_services</span>
+                  <span>Очистити локальний кеш браузера</span>
+                </button>
               </div>
             </div>
 
-            <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500">
-              <span>Конфігурація аналітичних моделей</span>
-              <span class="text-purple-400 font-mono font-semibold">CR{{ userSettings.crThreshold }}</span>
-            </div>
-          </div>
-
-          <!-- Card D: DATA STORAGE & BACKUP MANAGEMENT -->
-          <div *ngIf="settingsActiveSubTab === 'all' || settingsActiveSubTab === 'storage'" class="p-6 bg-[#0e1424] border border-slate-800/80 rounded-3xl space-y-5 shadow-xl flex flex-col justify-between">
-            <div class="space-y-5">
-              <div class="flex items-center justify-between border-b border-white/5 pb-4">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-2xl bg-emerald-950/80 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-md">
-                    <span class="material-icons text-xl">database</span>
+            <!-- Card 2: Full Backup & Restore Actions -->
+            <div class="p-6 bg-[#0e1424] border border-slate-800/80 rounded-3xl space-y-6 shadow-xl flex flex-col justify-between">
+              <div class="space-y-5">
+                <div class="flex items-center gap-3.5 border-b border-white/5 pb-4">
+                  <div class="w-11 h-11 rounded-2xl bg-indigo-950/80 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-md">
+                    <span class="material-icons text-2xl">cloud_sync</span>
                   </div>
                   <div>
-                    <h4 class="text-sm font-extrabold text-white">Сховище та резервні копії</h4>
-                    <p class="text-xs text-slate-400">Експорт, імпорт та стан синхронізації бази</p>
+                    <h4 class="text-sm font-extrabold text-white">Резервні копії системи</h4>
+                    <p class="text-xs text-slate-400">Повний експорт та відновлення всіх аналітичних зборів</p>
                   </div>
                 </div>
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 border border-slate-800 text-slate-400 uppercase">Дані</span>
-              </div>
 
-              <div class="space-y-4">
-                <!-- Sync Status -->
-                <div class="p-3 bg-slate-950/80 border border-slate-800 rounded-2xl flex items-center justify-between text-xs">
-                  <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span class="text-slate-300 font-semibold">База даних Neon PostgreSQL:</span>
-                  </div>
-                  <span class="text-emerald-400 font-mono font-bold">Синхронізовано</span>
-                </div>
-
-                <!-- Backup & Restore Actions -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <!-- Export Backup -->
+                <div class="space-y-3">
+                  <!-- Export Full Backup -->
                   <button 
                     (click)="exportSystemBackup()" 
-                    class="p-3 bg-indigo-950/60 hover:bg-indigo-900/80 border border-indigo-500/40 rounded-2xl text-left transition-all cursor-pointer group shadow-md"
-                    title="Завантажити повну резервну копію історії та налаштувань"
+                    class="w-full p-4 bg-indigo-950/60 hover:bg-indigo-900/80 border border-indigo-500/40 rounded-2xl text-left transition-all cursor-pointer group shadow-md flex items-center justify-between"
                   >
-                    <div class="flex items-center gap-2 text-indigo-300 font-extrabold text-xs">
-                      <span class="material-icons text-base group-hover:-translate-y-0.5 transition-transform">download</span>
-                      <span>Експорт копії (.json)</span>
+                    <div>
+                      <div class="flex items-center gap-2 text-indigo-300 font-extrabold text-xs">
+                        <span class="material-icons text-base group-hover:-translate-y-0.5 transition-transform">download</span>
+                        <span>Експорт повної резервної копії (.json)</span>
+                      </div>
+                      <p class="text-[11px] text-slate-400 mt-1">Зберегти всі знімки, папки та налаштування у файл на комп'ютер</p>
                     </div>
-                    <p class="text-[10px] text-slate-400 mt-1">Зберегти всі знімки, папки та налаштування</p>
+                    <span class="material-icons text-indigo-400 opacity-60 group-hover:opacity-100">arrow_forward</span>
                   </button>
 
-                  <!-- Import Backup -->
+                  <!-- Import Full Backup -->
                   <button 
                     (click)="backupFileInput.click()" 
-                    class="p-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl text-left transition-all cursor-pointer group shadow-md"
-                    title="Відновити історію з файлу JSON"
+                    class="w-full p-4 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl text-left transition-all cursor-pointer group shadow-md flex items-center justify-between"
                   >
-                    <div class="flex items-center gap-2 text-slate-200 font-extrabold text-xs">
-                      <span class="material-icons text-base group-hover:-translate-y-0.5 transition-transform">upload</span>
-                      <span>Імпорт бекапу</span>
+                    <div>
+                      <div class="flex items-center gap-2 text-slate-200 font-extrabold text-xs">
+                        <span class="material-icons text-base group-hover:-translate-y-0.5 transition-transform">upload</span>
+                        <span>Імпорт резервної копії (.json)</span>
+                      </div>
+                      <p class="text-[11px] text-slate-400 mt-1">Завантажити та відновити раніше збережену історію аналітики</p>
                     </div>
-                    <p class="text-[10px] text-slate-400 mt-1">Завантажити збережену резервну копію</p>
+                    <span class="material-icons text-slate-400 opacity-60 group-hover:opacity-100">arrow_forward</span>
                   </button>
                   <input #backupFileInput type="file" (change)="importSystemBackup($event)" accept=".json" class="hidden" />
                 </div>
               </div>
-            </div>
 
-            <!-- Reset & Cache Clear -->
-            <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-3">
-              <button 
-                (click)="clearLocalCache()" 
-                class="px-3 py-2 bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-slate-200 border border-slate-800 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
-                title="Очистити тимчасовий кеш браузера"
-              >
-                <span class="material-icons text-sm">cleaning_services</span>
-                <span>Очистити кеш</span>
-              </button>
-
-              <button 
-                (click)="resetUserSettings()" 
-                class="px-3 py-2 bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-amber-300 border border-slate-800 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
-                title="Скинути параметри до початкових значень"
-              >
-                <span class="material-icons text-sm">restart_alt</span>
-                <span>Скинути налаштування</span>
-              </button>
+              <!-- Reset to defaults -->
+              <div class="pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                <span>Потрібно скинути налаштування?</span>
+                <button 
+                  (click)="resetUserSettings()" 
+                  class="px-3 py-1.5 bg-slate-900 hover:bg-slate-850 text-amber-300 hover:text-amber-200 border border-slate-800 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <span class="material-icons text-xs">restart_alt</span>
+                  <span>Скинути налаштування</span>
+                </button>
+              </div>
             </div>
           </div>
 
