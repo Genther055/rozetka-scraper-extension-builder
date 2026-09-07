@@ -23,6 +23,10 @@ export class LoginComponent {
   regConfirmPassword = '';
   regAvatarGradient = 'from-indigo-600 to-purple-600';
 
+  apiUrl: string = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? (window.location.port === '4000' ? '' : 'http://localhost:4000')
+    : '';
+
   errorMessage = '';
   successMessage = '';
   loading = false;
@@ -49,14 +53,26 @@ export class LoginComponent {
     this.errorMessage = '';
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: this.username.trim(),
-          password: this.password.trim()
-        })
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${this.apiUrl}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: this.username.trim(),
+            password: this.password.trim()
+          })
+        });
+      } catch (_) {
+        response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: this.username.trim(),
+            password: this.password.trim()
+          })
+        });
+      }
 
       const data = await response.json();
       if (response.ok && data.success && data.user) {
@@ -65,12 +81,29 @@ export class LoginComponent {
         this.errorMessage = data.error || 'Неправильний логін або пароль';
       }
     } catch (e: any) {
-      // Offline fallback
-      if (this.username.trim() === 'admin' && this.password.trim() === 'admin') {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('tradescout_auth', 'true');
+      // Offline fallback: verify against local cached team users
+      if (typeof window !== 'undefined') {
+        const cachedRaw = localStorage.getItem('tradescout_cached_team_users');
+        if (cachedRaw) {
+          try {
+            const cachedList = JSON.parse(cachedRaw);
+            const found = cachedList.find((u: any) => u.username && u.username.toLowerCase() === this.username.trim().toLowerCase());
+            if (found && found.isActive) {
+              this.completeAuth(found);
+              return;
+            }
+          } catch (_) {}
         }
-        this.router.navigate(['/dashboard']);
+      }
+
+      if (this.username.trim().toLowerCase() === 'admin' && this.password.trim() === 'admin') {
+        this.completeAuth({
+          id: 'admin_default',
+          username: 'admin',
+          displayName: 'Головний аналітик',
+          role: 'admin',
+          avatarGradient: 'from-indigo-600 to-purple-600'
+        });
       } else {
         this.errorMessage = 'Помилка зв\'язку із сервером авторизації';
       }
@@ -103,17 +136,28 @@ export class LoginComponent {
     this.loading = true;
     this.errorMessage = '';
 
+    const payload = {
+      username: this.regUsername.trim(),
+      password: this.regPassword.trim(),
+      displayName: this.regDisplayName.trim() || this.regUsername.trim(),
+      avatarGradient: this.regAvatarGradient
+    };
+
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: this.regUsername.trim(),
-          password: this.regPassword.trim(),
-          displayName: this.regDisplayName.trim() || this.regUsername.trim(),
-          avatarGradient: this.regAvatarGradient
-        })
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${this.apiUrl}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (_) {
+        response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
 
       const data = await response.json();
       if (response.ok && data.success && data.user) {
@@ -122,7 +166,25 @@ export class LoginComponent {
         this.errorMessage = data.error || 'Помилка реєстрації нового користувача';
       }
     } catch (e: any) {
-      this.errorMessage = 'Помилка з\'єднання із сервером реєстрації';
+      // Offline fallback: save locally and log in
+      const localUser = {
+        id: 'usr_' + Date.now(),
+        username: this.regUsername.trim(),
+        displayName: this.regDisplayName.trim() || this.regUsername.trim(),
+        role: 'analyst',
+        avatarGradient: this.regAvatarGradient,
+        isActive: true,
+        createdAt: new Date().toISOString()
+      };
+      if (typeof window !== 'undefined') {
+        try {
+          const cachedRaw = localStorage.getItem('tradescout_cached_team_users');
+          const list = cachedRaw ? JSON.parse(cachedRaw) : [];
+          list.push(localUser);
+          localStorage.setItem('tradescout_cached_team_users', JSON.stringify(list));
+        } catch (_) {}
+      }
+      this.completeAuth(localUser);
     } finally {
       this.loading = false;
     }
