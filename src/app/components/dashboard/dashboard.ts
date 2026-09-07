@@ -1715,6 +1715,42 @@ export class DashboardComponent implements OnInit {
   drilldownProducts: Product[] = [];
   drilldownSearchQuery = '';
   drilldownSelectedCategory = 'all';
+  drilldownSellerFilter: 'all' | 'rozetka' | '3p' | string = 'all';
+  drilldownStockFilter: 'all' | 'inStock' | 'outOfStock' = 'all';
+  drilldownReviewsFilter: 'all' | 'withReviews' | 'topReviews' | 'noReviews' = 'all';
+  drilldownSortColumn: 'name' | 'category' | 'price' | 'reviews' | 'inStock' = 'reviews';
+  drilldownSortDirection: 'asc' | 'desc' = 'desc';
+
+  resetDrilldownFilters() {
+    this.drilldownSearchQuery = '';
+    this.drilldownSelectedCategory = 'all';
+    this.drilldownSellerFilter = 'all';
+    this.drilldownStockFilter = 'all';
+    this.drilldownReviewsFilter = 'all';
+    this.drilldownSortColumn = 'reviews';
+    this.drilldownSortDirection = 'desc';
+    this.cdr.markForCheck();
+  }
+
+  hasActiveDrilldownFilters(): boolean {
+    return !!(
+      (this.drilldownSearchQuery && this.drilldownSearchQuery.trim()) ||
+      this.drilldownSelectedCategory !== 'all' ||
+      this.drilldownSellerFilter !== 'all' ||
+      this.drilldownStockFilter !== 'all' ||
+      this.drilldownReviewsFilter !== 'all'
+    );
+  }
+
+  sortDrilldownBy(col: 'name' | 'category' | 'price' | 'reviews' | 'inStock') {
+    if (this.drilldownSortColumn === col) {
+      this.drilldownSortDirection = this.drilldownSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.drilldownSortColumn = col;
+      this.drilldownSortDirection = (col === 'price' || col === 'reviews' || col === 'inStock') ? 'desc' : 'asc';
+    }
+    this.cdr.markForCheck();
+  }
 
   getDrilldownAvailableCategories(): Array<{ title: string, count: number }> {
     if (!this.drilldownProducts || this.drilldownProducts.length === 0) return [];
@@ -1733,7 +1769,22 @@ export class DashboardComponent implements OnInit {
     return result.sort((a, b) => b.count - a.count);
   }
 
+  getDrilldownAvailableSellers(): Array<{ name: string, count: number }> {
+    if (!this.drilldownProducts || this.drilldownProducts.length === 0) return [];
+    const map = new Map<string, number>();
+    for (const p of this.drilldownProducts) {
+      const s = (p.seller && String(p.seller).trim()) ? String(p.seller).trim() : 'Rozetka';
+      map.set(s, (map.get(s) || 0) + 1);
+    }
+    const result: Array<{ name: string, count: number }> = [];
+    map.forEach((count, name) => {
+      result.push({ name, count });
+    });
+    return result.sort((a, b) => b.count - a.count);
+  }
+
   openSellerProductsModal(sellerName: string) {
+    this.resetDrilldownFilters();
     const rawSeller = (sellerName || '').trim();
     const isRozetka = rawSeller.toLowerCase() === 'rozetka' || rawSeller.toLowerCase().includes('rozetka');
     const base = this.getActiveSessionProducts();
@@ -1749,13 +1800,12 @@ export class DashboardComponent implements OnInit {
     this.drilldownTitle = `Товари продавця: ${sellerName}`;
     this.drilldownSubtitle = `${matchedProducts.length} товарів у вибірці (${((matchedProducts.length / Math.max(1, base.length)) * 100).toFixed(1)}% ніші)`;
     this.drilldownProducts = matchedProducts;
-    this.drilldownSearchQuery = '';
-    this.drilldownSelectedCategory = 'all';
     this.showDrilldownModal = true;
     this.cdr.markForCheck();
   }
 
   openPriceBinProductsModal(bin: { rangeLabel: string; minPrice: number; maxPrice: number }) {
+    this.resetDrilldownFilters();
     const base = this.getActiveSessionProducts();
     const matchedProducts = base.filter(p => {
       const price = Number(p.price) || 0;
@@ -1765,10 +1815,17 @@ export class DashboardComponent implements OnInit {
     this.drilldownTitle = `Товари в діапазоні: ${bin.rangeLabel}`;
     this.drilldownSubtitle = `${matchedProducts.length} товарів (${((matchedProducts.length / Math.max(1, base.length)) * 100).toFixed(1)}% ніші)`;
     this.drilldownProducts = matchedProducts;
-    this.drilldownSearchQuery = '';
-    this.drilldownSelectedCategory = 'all';
     this.showDrilldownModal = true;
     this.cdr.markForCheck();
+  }
+
+  async exportDrilldownToExcel() {
+    const list = this.getFilteredDrilldownProducts();
+    if (!list || list.length === 0) return;
+    const tempFiltered = this.filteredProducts;
+    this.filteredProducts = list;
+    await this.exportToExcel();
+    this.filteredProducts = tempFiltered;
   }
 
   getFilteredDrilldownProducts(): Product[] {
@@ -1783,7 +1840,34 @@ export class DashboardComponent implements OnInit {
       });
     }
 
-    // 2. Text Search Query Filter
+    // 2. Seller Filter
+    if (this.drilldownSellerFilter && this.drilldownSellerFilter !== 'all') {
+      if (this.drilldownSellerFilter === 'rozetka') {
+        list = list.filter(p => (p.seller || '').toLowerCase().includes('rozetka'));
+      } else if (this.drilldownSellerFilter === '3p') {
+        list = list.filter(p => !(p.seller || '').toLowerCase().includes('rozetka'));
+      } else {
+        list = list.filter(p => (p.seller || 'Rozetka').trim() === this.drilldownSellerFilter);
+      }
+    }
+
+    // 3. Stock Filter
+    if (this.drilldownStockFilter === 'inStock') {
+      list = list.filter(p => p.inStock !== false);
+    } else if (this.drilldownStockFilter === 'outOfStock') {
+      list = list.filter(p => p.inStock === false);
+    }
+
+    // 4. Reviews Filter
+    if (this.drilldownReviewsFilter === 'withReviews') {
+      list = list.filter(p => (p.reviews || 0) > 0);
+    } else if (this.drilldownReviewsFilter === 'topReviews') {
+      list = list.filter(p => (p.reviews || 0) >= 10);
+    } else if (this.drilldownReviewsFilter === 'noReviews') {
+      list = list.filter(p => !p.reviews || p.reviews === 0);
+    }
+
+    // 5. Text Search Query Filter
     if (this.drilldownSearchQuery && this.drilldownSearchQuery.trim()) {
       const q = this.drilldownSearchQuery.toLowerCase().trim();
       list = list.filter(p => 
@@ -1792,6 +1876,39 @@ export class DashboardComponent implements OnInit {
         (p.seller && p.seller.toLowerCase().includes(q))
       );
     }
+
+    // 6. Sorting
+    list = [...list].sort((a, b) => {
+      let valA: any;
+      let valB: any;
+
+      if (this.drilldownSortColumn === 'name') {
+        valA = (a.name || '').toLowerCase();
+        valB = (b.name || '').toLowerCase();
+      } else if (this.drilldownSortColumn === 'category') {
+        valA = (a.category || '').toLowerCase();
+        valB = (b.category || '').toLowerCase();
+      } else if (this.drilldownSortColumn === 'price') {
+        valA = Number(a.price) || 0;
+        valB = Number(b.price) || 0;
+      } else if (this.drilldownSortColumn === 'reviews') {
+        valA = Number(a.reviews) || 0;
+        valB = Number(b.reviews) || 0;
+      } else if (this.drilldownSortColumn === 'inStock') {
+        valA = a.inStock !== false ? 1 : 0;
+        valB = b.inStock !== false ? 1 : 0;
+      } else {
+        valA = Number(a.reviews) || 0;
+        valB = Number(b.reviews) || 0;
+      }
+
+      if (valA === valB) return 0;
+      if (this.drilldownSortDirection === 'asc') {
+        return valA > valB ? 1 : -1;
+      } else {
+        return valA < valB ? 1 : -1;
+      }
+    });
 
     return list;
   }

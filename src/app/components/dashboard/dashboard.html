@@ -3224,17 +3224,124 @@
         </button>
       </div>
 
+      <!-- Secondary Multi-Filter Toolbar (Seller, Stock, Reviews & Reset) -->
+      <div class="flex flex-wrap items-center justify-between gap-2.5 bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800/80 text-xs shrink-0">
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- Seller Select -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+              <span class="material-icons text-xs text-indigo-400">store</span>
+              <span>Продавець:</span>
+            </span>
+            <select 
+              [(ngModel)]="drilldownSellerFilter"
+              class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-xs text-white rounded-xl px-2.5 py-1 outline-none cursor-pointer"
+            >
+              <option value="all">Всі продавці</option>
+              <option value="rozetka">Rozetka (1P)</option>
+              <option value="3p">Сторонні (3P)</option>
+              <option *ngFor="let s of getDrilldownAvailableSellers()" [value]="s.name">{{ s.name }} ({{ s.count }})</option>
+            </select>
+          </div>
+
+          <!-- Stock Select -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+              <span class="material-icons text-xs text-emerald-400">check_circle</span>
+              <span>Наявність:</span>
+            </span>
+            <select 
+              [(ngModel)]="drilldownStockFilter"
+              class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-xs text-white rounded-xl px-2.5 py-1 outline-none cursor-pointer"
+            >
+              <option value="all">Вся наявність</option>
+              <option value="inStock">В наявності</option>
+              <option value="outOfStock">Немає в наявності</option>
+            </select>
+          </div>
+
+          <!-- Reviews Select -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+              <span class="material-icons text-xs text-amber-400">star</span>
+              <span>Відгуки:</span>
+            </span>
+            <select 
+              [(ngModel)]="drilldownReviewsFilter"
+              class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-xs text-white rounded-xl px-2.5 py-1 outline-none cursor-pointer"
+            >
+              <option value="all">Всі відгуки</option>
+              <option value="withReviews">З відгуками (>0)</option>
+              <option value="topReviews">Топ попит (10+ відг.)</option>
+              <option value="noReviews">0 відгуків</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Reset Filters Button if Active -->
+        <button 
+          *ngIf="hasActiveDrilldownFilters()"
+          (click)="resetDrilldownFilters()"
+          class="px-2.5 py-1 bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 hover:text-white border border-amber-600/40 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0"
+          title="Скинути всі активні фільтри та пошук"
+        >
+          <span class="material-icons text-xs">restart_alt</span>
+          <span>Скинути фільтри</span>
+        </button>
+      </div>
+
       <!-- Products List / Table Body -->
       <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 min-h-[250px]">
         <table class="w-full border-collapse text-left text-sm">
-          <thead class="sticky top-0 z-10 bg-[#141c2e] border-b border-slate-800">
+          <thead class="sticky top-0 z-10 bg-[#141c2e] border-b border-slate-800 select-none">
             <tr class="text-xs text-slate-400 font-bold uppercase tracking-wider">
               <th class="py-2.5 px-3 text-center w-12">#</th>
-              <th class="py-2.5 px-3">Товар</th>
-              <th class="py-2.5 px-3">Категорія</th>
-              <th class="py-2.5 px-3">Ціна</th>
-              <th class="py-2.5 px-3 text-center">Відгуки</th>
-              <th class="py-2.5 px-3 text-center">Наявність</th>
+              
+              <th (click)="sortDrilldownBy('name')" class="py-2.5 px-3 cursor-pointer hover:text-white transition-colors" title="Сортувати за назвою">
+                <div class="flex items-center gap-1">
+                  <span>Товар</span>
+                  <span class="material-icons text-xs" [class.text-indigo-400]="drilldownSortColumn === 'name'">
+                    {{ drilldownSortColumn === 'name' ? (drilldownSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more' }}
+                  </span>
+                </div>
+              </th>
+
+              <th (click)="sortDrilldownBy('category')" class="py-2.5 px-3 cursor-pointer hover:text-white transition-colors" title="Сортувати за категорією">
+                <div class="flex items-center gap-1">
+                  <span>Категорія</span>
+                  <span class="material-icons text-xs" [class.text-indigo-400]="drilldownSortColumn === 'category'">
+                    {{ drilldownSortColumn === 'category' ? (drilldownSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more' }}
+                  </span>
+                </div>
+              </th>
+
+              <th (click)="sortDrilldownBy('price')" class="py-2.5 px-3 cursor-pointer hover:text-white transition-colors" title="Сортувати за ціною">
+                <div class="flex items-center gap-1">
+                  <span>Ціна</span>
+                  <span class="material-icons text-xs" [class.text-indigo-400]="drilldownSortColumn === 'price'">
+                    {{ drilldownSortColumn === 'price' ? (drilldownSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more' }}
+                  </span>
+                </div>
+              </th>
+
+              <th (click)="sortDrilldownBy('reviews')" class="py-2.5 px-3 text-center cursor-pointer hover:text-white transition-colors" title="Сортувати за відгуками">
+                <div class="flex items-center justify-center gap-1">
+                  <span>Відгуки</span>
+                  <span class="material-icons text-xs" [class.text-indigo-400]="drilldownSortColumn === 'reviews'">
+                    {{ drilldownSortColumn === 'reviews' ? (drilldownSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more' }}
+                  </span>
+                </div>
+              </th>
+
+              <th (click)="sortDrilldownBy('inStock')" class="py-2.5 px-3 text-center cursor-pointer hover:text-white transition-colors" title="Сортувати за наявністю">
+                <div class="flex items-center justify-center gap-1">
+                  <span>Наявність</span>
+                  <span class="material-icons text-xs" [class.text-indigo-400]="drilldownSortColumn === 'inStock'">
+                    {{ drilldownSortColumn === 'inStock' ? (drilldownSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more' }}
+                  </span>
+                </div>
+              </th>
+
               <th class="py-2.5 px-3 text-center w-16">Лінк</th>
             </tr>
           </thead>
@@ -3304,7 +3411,7 @@
 
             <tr *ngIf="getFilteredDrilldownProducts().length === 0">
               <td colspan="7" class="py-12 text-center text-slate-500 font-semibold text-xs">
-                Не знайдено жодного товару за поточним запитом.
+                Не знайдено жодного товару за поточними фільтрами.
               </td>
             </tr>
           </tbody>
@@ -3313,11 +3420,24 @@
 
       <!-- Footer Actions -->
       <div class="border-t border-slate-800/80 pt-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-        <div class="text-slate-400 text-xs">
-          Показано: <b class="text-white">{{ getFilteredDrilldownProducts().length }}</b> з <b class="text-white">{{ drilldownProducts.length }}</b> товарів
+        <div class="text-slate-400 text-xs flex items-center gap-2">
+          <span>Показано: <b class="text-white">{{ getFilteredDrilldownProducts().length }}</b> з <b class="text-white">{{ drilldownProducts.length }}</b> товарів</span>
+          <span *ngIf="hasActiveDrilldownFilters()" class="text-[10px] text-indigo-400 bg-indigo-950/80 border border-indigo-500/30 px-2 py-0.5 rounded-full font-semibold">
+            Фільтри активні
+          </span>
         </div>
 
         <div class="flex items-center gap-2">
+          <button 
+            (click)="exportDrilldownToExcel()"
+            [disabled]="getFilteredDrilldownProducts().length === 0"
+            class="px-4 py-2 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed border border-emerald-600/40 rounded-full font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+            title="Експортувати відфільтровані товари цієї таблиці у файл Excel"
+          >
+            <span class="material-icons text-sm">download</span>
+            <span>Експорт в Excel (.xlsx)</span>
+          </button>
+
           <button 
             (click)="showDrilldownModal = false"
             class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white font-semibold rounded-full cursor-pointer transition-all border border-slate-800"
