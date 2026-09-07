@@ -196,6 +196,18 @@ export interface CategoryPageBreakdown {
   pages: Array<{ pageNum: number, count: number }>;
 }
 
+export interface UserProfileSettings {
+  username: string;
+  role: string;
+  avatarInitial: string;
+  avatarGradient: string;
+  scrapeDelayMs: number;
+  autoSaveHistory: boolean;
+  soundAlerts: boolean;
+  crThreshold: number;
+  accentTheme: string;
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -211,7 +223,23 @@ export class DashboardComponent implements OnInit {
   filteredProducts: Product[] = [];
   
   // Navigation & Tabs
-  activeTab: 'overview' | 'explorer' | 'demand' | 'details' | 'history' = 'overview';
+  activeTab: 'overview' | 'explorer' | 'demand' | 'details' | 'history' | 'settings' = 'overview';
+
+  // User & System Settings State
+  readonly STORAGE_USER_SETTINGS_KEY = 'tradescout_user_settings_v1';
+  userSettings: UserProfileSettings = {
+    username: 'Адміністратор',
+    role: 'Головний аналітик (Admin)',
+    avatarInitial: 'A',
+    avatarGradient: 'from-indigo-600 to-purple-600',
+    scrapeDelayMs: 2000,
+    autoSaveHistory: true,
+    soundAlerts: true,
+    crThreshold: 3,
+    accentTheme: 'indigo'
+  };
+  settingsSavedNotice = false;
+  settingsNoticeTimeout: any = null;
 
   // Filters
   searchQuery = '';
@@ -665,10 +693,162 @@ export class DashboardComponent implements OnInit {
     }
   }
 
+  loadUserSettings() {
+    if (typeof window !== 'undefined') {
+      try {
+        const local = localStorage.getItem(this.STORAGE_USER_SETTINGS_KEY);
+        if (local) {
+          const parsed = JSON.parse(local);
+          this.userSettings = { ...this.userSettings, ...parsed };
+          this.autoSaveHistory = this.userSettings.autoSaveHistory;
+        }
+      } catch (e) {}
+    }
+  }
+
+  saveUserSettings() {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(this.STORAGE_USER_SETTINGS_KEY, JSON.stringify(this.userSettings));
+        localStorage.setItem('tradescout_auto_save_history', String(this.userSettings.autoSaveHistory));
+        this.autoSaveHistory = this.userSettings.autoSaveHistory;
+      } catch (e) {}
+    }
+    this.showSettingsSavedToast();
+  }
+
+  showSettingsSavedToast() {
+    this.settingsSavedNotice = true;
+    if (this.settingsNoticeTimeout) clearTimeout(this.settingsNoticeTimeout);
+    this.settingsNoticeTimeout = setTimeout(() => {
+      this.settingsSavedNotice = false;
+      this.cdr.markForCheck();
+    }, 4000);
+    this.cdr.markForCheck();
+  }
+
+  resetUserSettings() {
+    this.userSettings = {
+      username: 'Адміністратор',
+      role: 'Головний аналітик (Admin)',
+      avatarInitial: 'A',
+      avatarGradient: 'from-indigo-600 to-purple-600',
+      scrapeDelayMs: 2000,
+      autoSaveHistory: true,
+      soundAlerts: true,
+      crThreshold: 3,
+      accentTheme: 'indigo'
+    };
+    this.saveUserSettings();
+  }
+
+  updateAvatarInitial() {
+    if (this.userSettings.username && this.userSettings.username.trim().length > 0) {
+      this.userSettings.avatarInitial = this.userSettings.username.trim().charAt(0).toUpperCase();
+    } else {
+      this.userSettings.avatarInitial = 'A';
+    }
+    this.saveUserSettings();
+  }
+
+  playCompletionSound() {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      
+      const now = ctx.currentTime;
+      // Synthesize a clean 3-note melodic notification chime (C5 -> E5 -> G5)
+      const notes = [523.25, 659.25, 783.99];
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+
+        gain.gain.setValueAtTime(0.001, now + idx * 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.2, now + idx * 0.12 + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.35);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now + idx * 0.12);
+        osc.stop(now + idx * 0.12 + 0.4);
+      });
+    } catch (e) {
+      console.warn('Audio chime notice:', e);
+    }
+  }
+
+  exportSystemBackup() {
+    const backupData = {
+      version: '1.0.0',
+      exportedAt: new Date().toISOString(),
+      userSettings: this.userSettings,
+      folders: this.folders,
+      snapshots: this.snapshots,
+      productsCount: this.products.length
+    };
+    const jsonStr = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tradescout_system_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  importSystemBackup(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const data = JSON.parse(content);
+        if (data.userSettings) {
+          this.userSettings = { ...this.userSettings, ...data.userSettings };
+          this.saveUserSettings();
+        }
+        if (Array.isArray(data.folders) && data.folders.length > 0) {
+          this.folders = data.folders;
+          this.saveFoldersLocally();
+        }
+        if (Array.isArray(data.snapshots) && data.snapshots.length > 0) {
+          this.snapshots = data.snapshots;
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(this.STORAGE_HISTORY_KEY, JSON.stringify(this.snapshots));
+          }
+        }
+        this.showSettingsSavedToast();
+        this.cdr.markForCheck();
+      } catch (err) {
+        alert('Помилка читання файлу резервної копії JSON');
+      }
+    };
+    reader.readAsText(file);
+    input.value = '';
+  }
+
+  clearLocalCache() {
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.clear();
+      } catch (e) {}
+    }
+    this.showSettingsSavedToast();
+  }
+
   autoRefreshTimer: any;
 
   ngOnInit() {
     if (typeof window !== 'undefined') {
+      this.loadUserSettings();
+
       const savedAuto = localStorage.getItem('tradescout_auto_save_history');
       if (savedAuto !== null) {
         this.autoSaveHistory = savedAuto === 'true';
@@ -725,6 +905,9 @@ export class DashboardComponent implements OnInit {
               this.stopLiveStopwatch();
               this.liveScrapeStartTime = null;
               this.recentScrapeSuccessNotice = 'Збір успішно завершено! Всі дані синхронізовано.';
+              if (this.userSettings.soundAlerts) {
+                this.playCompletionSound();
+              }
               this.loadProducts(false);
               setTimeout(() => {
                 this.recentScrapeSuccessNotice = null;
