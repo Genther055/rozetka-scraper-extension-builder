@@ -411,13 +411,13 @@
         } catch (_) {}
     }
 
-    // Silent background scroll without requestAnimationFrame (optimized for high-speed scraping)
+    // Silent background scroll to ensure lazy-loaded items and specs on current page are fully rendered
     async function silentBackgroundScroll() {
         try {
             const targetY = Math.max(0, document.body.scrollHeight - window.innerHeight);
             window.scrollTo({ top: targetY, behavior: 'auto' });
         } catch (_) {}
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 400));
     }
 
     // Comprehensive pagination finder with retry/recovery support for Rozetka
@@ -646,11 +646,11 @@
         return newItems;
     }
 
-    // Main multi-tab isolated scraping runner with resilient pagination, instant progress, and retry logic
+    // Main multi-tab isolated scraping runner with guaranteed full page extraction & reliable pagination
     async function runTabScraper() {
         const meta = getPageMetadata();
         const estimatedTotal = getEstimatedTotalFromPage();
-        console.log(`TradeScout Tab ${currentTabId}: Starting resilient scrape for "${meta.title}" (Estimated: ${estimatedTotal})...`);
+        console.log(`TradeScout Tab ${currentTabId}: Starting thorough scrape for "${meta.title}" (Estimated: ${estimatedTotal})...`);
 
         startHudTimer();
         updateHud({
@@ -667,7 +667,10 @@
         const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"]';
 
         while (isTabScrapingActive) {
-            // 1. Scrape items visible now in DOM
+            // 1. Silent background scroll to let all items & lazy elements on the current page render completely
+            await silentBackgroundScroll();
+
+            // 2. Scrape all items on the current page
             const newProducts = await scrapeCurrentDomItems(meta, pageCount);
             
             if (newProducts.length > 0) {
@@ -696,8 +699,8 @@
                     startTime: hudStartTime
                 });
 
-                // Immediately send payload tagged with session title and category
-                sendWebhookPayload({
+                // Await webhook payload delivery so all items from this page are confirmed stored
+                await sendWebhookPayload({
                     products: newProducts,
                     page: pageCount,
                     sessionId: currentSessionId,
@@ -709,10 +712,7 @@
 
             if (!isTabScrapingActive) break;
 
-            // 2. Silent background scroll to bottom
-            await silentBackgroundScroll();
-
-            // Check if new items loaded
+            // Check if new items were added from this page
             if (sentLinks.size > lastCount) {
                 consecutiveNoNew = 0;
                 lastCount = sentLinks.size;
@@ -720,7 +720,7 @@
                 consecutiveNoNew++;
             }
 
-            // 3. Multi-attempt pagination transition with retry for 50x / network errors
+            // 3. ONLY AFTER all items on current page are processed and delivered, find and trigger next page transition
             let pageTransitionSuccess = false;
             const maxTransitionAttempts = 4;
 
@@ -748,10 +748,10 @@
 
                     dispatchSafeClick(actionObj.element);
 
-                    // Wait up to 5s per attempt for new elements to appear (checking every 150ms)
-                    for (let w = 0; w < 30; w++) {
+                    // Wait for new elements of next page to populate into DOM
+                    for (let w = 0; w < 24; w++) {
                         if (!isTabScrapingActive) break;
-                        await new Promise(r => setTimeout(r, 150));
+                        await new Promise(r => setTimeout(r, 250));
                         const currentDomCount = document.querySelectorAll(tileSelectors).length;
                         if (currentDomCount > prevDomCount) {
                             pageTransitionSuccess = true;
@@ -766,10 +766,10 @@
                     }
                 }
 
-                // If not succeeded yet, scroll down further and wait backoff delay before next attempt
+                // If not loaded yet, scroll down and wait backoff delay before next attempt
                 if (attempt < maxTransitionAttempts) {
                     await silentBackgroundScroll();
-                    await new Promise(r => setTimeout(r, attempt * 600));
+                    await new Promise(r => setTimeout(r, attempt * 800));
                 }
             }
 
