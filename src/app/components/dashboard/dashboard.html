@@ -1,7 +1,7 @@
 <div class="min-h-screen bg-[#0b0f19] text-slate-100 flex font-sans w-full">
   
   <!-- Fixed Sidebar From Top To Bottom -->
-  <aside class="fixed top-0 bottom-0 left-0 w-64 bg-[#0e1424] border-r border-slate-800/80 flex flex-col shrink-0 shadow-2xl shadow-black/40 z-30 select-none">
+  <aside class="fixed top-0 bottom-0 left-0 w-64 bg-[#0e1424] border-r border-slate-800/80 flex flex-col shrink-0 shadow-2xl shadow-black/40 z-40 select-none">
     <!-- Brand -->
     <div class="p-6 border-b border-slate-800/80 flex items-center gap-3 shrink-0 bg-[#0e1424]">
       <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
@@ -123,7 +123,7 @@
     <!-- TOP IMPERSONATION / SUPPORT MODE BANNER -->
     <div 
       *ngIf="isImpersonating"
-      class="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white px-8 py-2.5 flex items-center justify-between shadow-2xl z-30 sticky top-0 text-xs font-bold border-b border-amber-400/40 animate-fadeIn"
+      class="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white px-8 py-2.5 flex items-center justify-between shadow-2xl z-40 sticky top-0 text-xs font-bold border-b border-amber-400/40 animate-fadeIn"
     >
       <div class="flex items-center gap-2.5">
         <span class="material-icons text-white text-base animate-pulse">support_agent</span>
@@ -146,7 +146,7 @@
     <header 
       [class.top-10]="isImpersonating"
       [class.top-0]="!isImpersonating"
-      class="h-20 bg-[#0e1424]/90 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between px-8 z-20 shrink-0 sticky shadow-lg shadow-black/20"
+      class="h-20 bg-[#0e1424] border-b border-slate-800/80 flex items-center justify-between px-8 z-30 shrink-0 sticky shadow-xl shadow-black/40"
     >
       <div>
         <h2 class="text-xl font-extrabold tracking-tight premium-title">
@@ -528,7 +528,7 @@
 
       <!-- Stats Grid (Hidden if no products or on settings/history tabs) -->
       <!-- Stats Grid (5 Deterministic Cards: Обсяг вибірки, Цінові орієнтири, Складські залишки, Концентрація CR3, Бар'єр входу) -->
-      <section *ngIf="products.length > 0 && analyticsSummary && activeTab !== 'settings' && activeTab !== 'history'" class="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6 relative z-30">
+      <section *ngIf="products.length > 0 && analyticsSummary && activeTab !== 'settings' && activeTab !== 'history'" class="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6 relative z-10">
         <!-- 1. Обсяг вибірки -->
         <div class="p-6 premium-card flex items-center justify-between transition-all">
           <div>
@@ -940,7 +940,7 @@
           </div>
 
           <!-- Right (4 cols): СТРУКТУРА ТА МОНОПОЛІЗАЦІЯ НІШІ -->
-          <div class="lg:col-span-4 p-6 premium-card flex flex-col justify-between space-y-4 relative z-20">
+          <div class="lg:col-span-4 p-6 premium-card flex flex-col justify-between space-y-4 relative z-10">
             <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
               <div class="flex items-center gap-2">
                 <span class="material-icons text-amber-400 text-lg">domain</span>
