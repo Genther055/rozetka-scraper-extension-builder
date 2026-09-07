@@ -226,12 +226,18 @@ export interface UserProfileSettings {
   templateUrl: './dashboard.html',
 })
 export class DashboardComponent implements OnInit {
+  readonly Math = Math;
   apiUrl: string = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? (window.location.port === '4000' ? '' : 'http://localhost:4000')
     : (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com') ? '' : 'https://rozetka-scraper-extension-builder.onrender.com');
 
   products: Product[] = [];
   filteredProducts: Product[] = [];
+  
+  getDiscountPercent(p: any): number {
+    if (!p || !p.price || !p.oldPrice || p.oldPrice <= p.price) return 0;
+    return Math.round(((p.oldPrice - p.price) / p.oldPrice) * 100);
+  }
   
   // Navigation & Tabs
   activeTab: 'overview' | 'explorer' | 'demand' | 'details' | 'history' | 'settings' = 'overview';
@@ -1718,7 +1724,11 @@ export class DashboardComponent implements OnInit {
   drilldownSellerFilter: 'all' | 'rozetka' | '3p' | string = 'all';
   drilldownStockFilter: 'all' | 'inStock' | 'outOfStock' = 'all';
   drilldownReviewsFilter: 'all' | 'withReviews' | 'topReviews' | 'noReviews' = 'all';
-  drilldownSortColumn: 'name' | 'category' | 'price' | 'reviews' | 'inStock' = 'reviews';
+  drilldownRatingFilter: 'all' | '4.5' | '4.0' = 'all';
+  drilldownDiscountFilter: 'all' | 'discountOnly' = 'all';
+  drilldownMinPrice: number | null = null;
+  drilldownMaxPrice: number | null = null;
+  drilldownSortColumn: 'name' | 'category' | 'price' | 'reviews' | 'rating' | 'inStock' = 'reviews';
   drilldownSortDirection: 'asc' | 'desc' = 'desc';
 
   resetDrilldownFilters() {
@@ -1727,6 +1737,10 @@ export class DashboardComponent implements OnInit {
     this.drilldownSellerFilter = 'all';
     this.drilldownStockFilter = 'all';
     this.drilldownReviewsFilter = 'all';
+    this.drilldownRatingFilter = 'all';
+    this.drilldownDiscountFilter = 'all';
+    this.drilldownMinPrice = null;
+    this.drilldownMaxPrice = null;
     this.drilldownSortColumn = 'reviews';
     this.drilldownSortDirection = 'desc';
     this.cdr.markForCheck();
@@ -1738,16 +1752,46 @@ export class DashboardComponent implements OnInit {
       this.drilldownSelectedCategory !== 'all' ||
       this.drilldownSellerFilter !== 'all' ||
       this.drilldownStockFilter !== 'all' ||
-      this.drilldownReviewsFilter !== 'all'
+      this.drilldownReviewsFilter !== 'all' ||
+      this.drilldownRatingFilter !== 'all' ||
+      this.drilldownDiscountFilter !== 'all' ||
+      (this.drilldownMinPrice !== null && this.drilldownMinPrice > 0) ||
+      (this.drilldownMaxPrice !== null && this.drilldownMaxPrice > 0)
     );
   }
 
-  sortDrilldownBy(col: 'name' | 'category' | 'price' | 'reviews' | 'inStock') {
+  toggleQuickFilter(type: 'discount' | 'inStock' | 'topReviews' | 'rozetka' | '3p' | 'rating45') {
+    if (type === 'discount') {
+      this.drilldownDiscountFilter = this.drilldownDiscountFilter === 'discountOnly' ? 'all' : 'discountOnly';
+    } else if (type === 'inStock') {
+      this.drilldownStockFilter = this.drilldownStockFilter === 'inStock' ? 'all' : 'inStock';
+    } else if (type === 'topReviews') {
+      this.drilldownReviewsFilter = this.drilldownReviewsFilter === 'topReviews' ? 'all' : 'topReviews';
+    } else if (type === 'rozetka') {
+      this.drilldownSellerFilter = this.drilldownSellerFilter === 'rozetka' ? 'all' : 'rozetka';
+    } else if (type === '3p') {
+      this.drilldownSellerFilter = this.drilldownSellerFilter === '3p' ? 'all' : '3p';
+    } else if (type === 'rating45') {
+      this.drilldownRatingFilter = this.drilldownRatingFilter === '4.5' ? 'all' : '4.5';
+    }
+    this.cdr.markForCheck();
+  }
+
+  toggleDrilldownCategory(catTitle: string) {
+    if (this.drilldownSelectedCategory === catTitle) {
+      this.drilldownSelectedCategory = 'all';
+    } else {
+      this.drilldownSelectedCategory = catTitle;
+    }
+    this.cdr.markForCheck();
+  }
+
+  sortDrilldownBy(col: 'name' | 'category' | 'price' | 'reviews' | 'rating' | 'inStock') {
     if (this.drilldownSortColumn === col) {
       this.drilldownSortDirection = this.drilldownSortDirection === 'asc' ? 'desc' : 'asc';
     } else {
       this.drilldownSortColumn = col;
-      this.drilldownSortDirection = (col === 'price' || col === 'reviews' || col === 'inStock') ? 'desc' : 'asc';
+      this.drilldownSortDirection = (col === 'price' || col === 'reviews' || col === 'rating' || col === 'inStock') ? 'desc' : 'asc';
     }
     this.cdr.markForCheck();
   }
@@ -1867,17 +1911,38 @@ export class DashboardComponent implements OnInit {
       list = list.filter(p => !p.reviews || p.reviews === 0);
     }
 
-    // 5. Text Search Query Filter
+    // 5. Rating Filter
+    if (this.drilldownRatingFilter === '4.5') {
+      list = list.filter(p => (p.rating || 0) >= 4.5);
+    } else if (this.drilldownRatingFilter === '4.0') {
+      list = list.filter(p => (p.rating || 0) >= 4.0);
+    }
+
+    // 6. Discount / Promo Filter
+    if (this.drilldownDiscountFilter === 'discountOnly') {
+      list = list.filter(p => p.oldPrice && p.price && p.oldPrice > p.price);
+    }
+
+    // 7. Min / Max Price Filter
+    if (this.drilldownMinPrice !== null && this.drilldownMinPrice > 0) {
+      list = list.filter(p => (p.price || 0) >= this.drilldownMinPrice!);
+    }
+    if (this.drilldownMaxPrice !== null && this.drilldownMaxPrice > 0) {
+      list = list.filter(p => (p.price || 0) <= this.drilldownMaxPrice!);
+    }
+
+    // 8. Text Search Query Filter
     if (this.drilldownSearchQuery && this.drilldownSearchQuery.trim()) {
       const q = this.drilldownSearchQuery.toLowerCase().trim();
       list = list.filter(p => 
         (p.name && p.name.toLowerCase().includes(q)) ||
         (p.category && p.category.toLowerCase().includes(q)) ||
-        (p.seller && p.seller.toLowerCase().includes(q))
+        (p.seller && p.seller.toLowerCase().includes(q)) ||
+        (p.specs && p.specs.toLowerCase().includes(q))
       );
     }
 
-    // 6. Sorting
+    // 9. Sorting
     list = [...list].sort((a, b) => {
       let valA: any;
       let valB: any;
@@ -1894,6 +1959,9 @@ export class DashboardComponent implements OnInit {
       } else if (this.drilldownSortColumn === 'reviews') {
         valA = Number(a.reviews) || 0;
         valB = Number(b.reviews) || 0;
+      } else if (this.drilldownSortColumn === 'rating') {
+        valA = Number(a.rating) || 0;
+        valB = Number(b.rating) || 0;
       } else if (this.drilldownSortColumn === 'inStock') {
         valA = a.inStock !== false ? 1 : 0;
         valB = b.inStock !== false ? 1 : 0;

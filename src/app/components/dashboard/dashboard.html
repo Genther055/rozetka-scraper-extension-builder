@@ -3139,11 +3139,11 @@
   </div>
 
   <!-- MODAL: DRILLDOWN PRODUCTS (ТОГО ЧИ ІНШОГО ПРОДАВЦЯ / ДІАПАЗОНУ) -->
-  <div *ngIf="showDrilldownModal" class="fixed inset-0 z-50 bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-fadeIn">
-    <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/70 rounded-3xl p-6 max-w-4xl w-full max-h-[88vh] shadow-2xl shadow-black/80 flex flex-col space-y-4 relative">
+  <div *ngIf="showDrilldownModal" class="fixed inset-0 z-50 bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+    <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/70 rounded-3xl p-5 sm:p-6 max-w-5xl w-full max-h-[90vh] shadow-2xl shadow-black/80 flex flex-col space-y-3.5 relative">
       
       <!-- Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-2xl bg-indigo-950/80 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shadow-lg shadow-indigo-500/10 shrink-0">
             <span class="material-icons text-xl">inventory_2</span>
@@ -3161,14 +3161,21 @@
 
         <div class="flex items-center gap-3">
           <!-- Search in drilldown modal -->
-          <div class="relative w-full sm:w-60">
+          <div class="relative w-full sm:w-64">
             <span class="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">search</span>
             <input 
               type="text" 
               [(ngModel)]="drilldownSearchQuery"
-              placeholder="Пошук серед товарів..." 
-              class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 pl-9 pr-3 py-1.5 text-xs text-white rounded-xl outline-none transition-all placeholder-slate-600"
+              placeholder="Пошук за назвою чи брендом..." 
+              class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 pl-9 pr-7 py-1.5 text-xs text-white rounded-xl outline-none transition-all placeholder-slate-600"
             />
+            <button 
+              *ngIf="drilldownSearchQuery"
+              (click)="drilldownSearchQuery = ''"
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white text-xs cursor-pointer p-0.5"
+            >
+              ✕
+            </button>
           </div>
 
           <button (click)="showDrilldownModal = false" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800/60 cursor-pointer transition-colors">
@@ -3177,8 +3184,8 @@
         </div>
       </div>
 
-      <!-- Category Filter Pills Bar (when multiple categories exist in drilldown) -->
-      <div *ngIf="getDrilldownAvailableCategories().length > 1" class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 pt-0.5 select-none shrink-0">
+      <!-- Category Filter Pills Bar (when categories exist) -->
+      <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 pt-0.5 select-none shrink-0">
         <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1 mr-1">
           <span class="material-icons text-xs text-indigo-400">filter_alt</span>
           <span>Категорія:</span>
@@ -3206,7 +3213,7 @@
         <!-- Dynamic Category Filter Buttons -->
         <button 
           *ngFor="let cat of getDrilldownAvailableCategories()"
-          (click)="drilldownSelectedCategory = cat.title"
+          (click)="toggleDrilldownCategory(cat.title)"
           [class.bg-indigo-600]="drilldownSelectedCategory === cat.title"
           [class.text-white]="drilldownSelectedCategory === cat.title"
           [class.border-indigo-400]="drilldownSelectedCategory === cat.title"
@@ -3224,7 +3231,90 @@
         </button>
       </div>
 
-      <!-- Secondary Multi-Filter Toolbar (Seller, Stock, Reviews & Reset) -->
+      <!-- Quick Action Filter Chips -->
+      <div class="flex flex-wrap items-center gap-1.5 select-none shrink-0 text-xs">
+        <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1">Швидкі фільтри:</span>
+        
+        <button 
+          (click)="toggleQuickFilter('inStock')"
+          [class.bg-emerald-950]="drilldownStockFilter === 'inStock'"
+          [class.text-emerald-300]="drilldownStockFilter === 'inStock'"
+          [class.border-emerald-500]="drilldownStockFilter === 'inStock'"
+          [class.bg-slate-900]="drilldownStockFilter !== 'inStock'"
+          [class.text-slate-400]="drilldownStockFilter !== 'inStock'"
+          [class.border-slate-800]="drilldownStockFilter !== 'inStock'"
+          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1"
+        >
+          <span>⚡ В наявності</span>
+        </button>
+
+        <button 
+          (click)="toggleQuickFilter('topReviews')"
+          [class.bg-amber-950]="drilldownReviewsFilter === 'topReviews'"
+          [class.text-amber-300]="drilldownReviewsFilter === 'topReviews'"
+          [class.border-amber-500]="drilldownReviewsFilter === 'topReviews'"
+          [class.bg-slate-900]="drilldownReviewsFilter !== 'topReviews'"
+          [class.text-slate-400]="drilldownReviewsFilter !== 'topReviews'"
+          [class.border-slate-800]="drilldownReviewsFilter !== 'topReviews'"
+          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1"
+        >
+          <span>🔥 Топ попит (10+ відг.)</span>
+        </button>
+
+        <button 
+          (click)="toggleQuickFilter('discount')"
+          [class.bg-rose-950]="drilldownDiscountFilter === 'discountOnly'"
+          [class.text-rose-300]="drilldownDiscountFilter === 'discountOnly'"
+          [class.border-rose-500]="drilldownDiscountFilter === 'discountOnly'"
+          [class.bg-slate-900]="drilldownDiscountFilter !== 'discountOnly'"
+          [class.text-slate-400]="drilldownDiscountFilter !== 'discountOnly'"
+          [class.border-slate-800]="drilldownDiscountFilter !== 'discountOnly'"
+          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1"
+        >
+          <span>🏷️ Зі знижкою</span>
+        </button>
+
+        <button 
+          (click)="toggleQuickFilter('rating45')"
+          [class.bg-amber-950]="drilldownRatingFilter === '4.5'"
+          [class.text-amber-300]="drilldownRatingFilter === '4.5'"
+          [class.border-amber-500]="drilldownRatingFilter === '4.5'"
+          [class.bg-slate-900]="drilldownRatingFilter !== '4.5'"
+          [class.text-slate-400]="drilldownRatingFilter !== '4.5'"
+          [class.border-slate-800]="drilldownRatingFilter !== '4.5'"
+          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1"
+        >
+          <span>⭐ Рейтинг 4.5+</span>
+        </button>
+
+        <button 
+          (click)="toggleQuickFilter('rozetka')"
+          [class.bg-indigo-950]="drilldownSellerFilter === 'rozetka'"
+          [class.text-indigo-300]="drilldownSellerFilter === 'rozetka'"
+          [class.border-indigo-500]="drilldownSellerFilter === 'rozetka'"
+          [class.bg-slate-900]="drilldownSellerFilter !== 'rozetka'"
+          [class.text-slate-400]="drilldownSellerFilter !== 'rozetka'"
+          [class.border-slate-800]="drilldownSellerFilter !== 'rozetka'"
+          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1"
+        >
+          <span>🏢 Rozetka</span>
+        </button>
+
+        <button 
+          (click)="toggleQuickFilter('3p')"
+          [class.bg-purple-950]="drilldownSellerFilter === '3p'"
+          [class.text-purple-300]="drilldownSellerFilter === '3p'"
+          [class.border-purple-500]="drilldownSellerFilter === '3p'"
+          [class.bg-slate-900]="drilldownSellerFilter !== '3p'"
+          [class.text-slate-400]="drilldownSellerFilter !== '3p'"
+          [class.border-slate-800]="drilldownSellerFilter !== '3p'"
+          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1"
+        >
+          <span>👥 3P селери</span>
+        </button>
+      </div>
+
+      <!-- Secondary Multi-Filter Toolbar (Seller, Stock, Reviews, Price Range & Reset) -->
       <div class="flex flex-wrap items-center justify-between gap-2.5 bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800/80 text-xs shrink-0">
         <div class="flex flex-wrap items-center gap-3">
           <!-- Seller Select -->
@@ -3242,6 +3332,29 @@
               <option value="3p">Сторонні (3P)</option>
               <option *ngFor="let s of getDrilldownAvailableSellers()" [value]="s.name">{{ s.name }} ({{ s.count }})</option>
             </select>
+          </div>
+
+          <!-- Price Range Inputs -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+              <span class="material-icons text-xs text-emerald-400">payments</span>
+              <span>Ціна:</span>
+            </span>
+            <div class="flex items-center gap-1">
+              <input 
+                type="number" 
+                [(ngModel)]="drilldownMinPrice"
+                placeholder="Від ₴" 
+                class="w-16 bg-slate-900 border border-slate-750 focus:border-indigo-500 text-xs text-white rounded-xl px-2 py-1 outline-none text-center placeholder-slate-600"
+              />
+              <span class="text-slate-500">-</span>
+              <input 
+                type="number" 
+                [(ngModel)]="drilldownMaxPrice"
+                placeholder="До ₴" 
+                class="w-16 bg-slate-900 border border-slate-750 focus:border-indigo-500 text-xs text-white rounded-xl px-2 py-1 outline-none text-center placeholder-slate-600"
+              />
+            </div>
           </div>
 
           <!-- Stock Select -->
@@ -3274,6 +3387,22 @@
               <option value="withReviews">З відгуками (>0)</option>
               <option value="topReviews">Топ попит (10+ відг.)</option>
               <option value="noReviews">0 відгуків</option>
+            </select>
+          </div>
+
+          <!-- Rating Select -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+              <span class="material-icons text-xs text-amber-400">grade</span>
+              <span>Рейтинг:</span>
+            </span>
+            <select 
+              [(ngModel)]="drilldownRatingFilter"
+              class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-xs text-white rounded-xl px-2.5 py-1 outline-none cursor-pointer"
+            >
+              <option value="all">Всі оцінки</option>
+              <option value="4.5">4.5+ ★ Відмінні</option>
+              <option value="4.0">4.0+ ★ Добрі</option>
             </select>
           </div>
         </div>
@@ -3355,14 +3484,22 @@
                     {{ p.name }}
                   </a>
                   <div class="flex items-center gap-2 mt-1">
-                    <span class="text-[10px] text-slate-400 font-mono">Продавець: <b class="text-slate-300">{{ p.seller || 'Rozetka' }}</b></span>
+                    <span class="text-[10px] text-slate-400 font-mono">Продавець: 
+                      <button 
+                        (click)="drilldownSellerFilter = (p.seller || 'Rozetka')"
+                        class="text-slate-300 hover:text-indigo-300 font-bold underline cursor-pointer"
+                        title="Фільтрувати за цим продавцем"
+                      >
+                        {{ p.seller || 'Rozetka' }}
+                      </button>
+                    </span>
                   </div>
                 </div>
               </td>
 
               <td class="py-3 px-3 whitespace-nowrap">
                 <button 
-                  (click)="drilldownSelectedCategory = normalizeSessionTitle(p.category || p.sessionTitle || 'Основна')"
+                  (click)="toggleDrilldownCategory(normalizeSessionTitle(p.category || p.sessionTitle || 'Основна'))"
                   class="px-2 py-0.5 text-[11px] font-semibold bg-slate-900 hover:bg-indigo-950 text-indigo-300 hover:text-white border border-slate-800 hover:border-indigo-500/40 rounded-md transition-all cursor-pointer"
                   [title]="'Фільтрувати за категорією ' + (p.category || 'Основна')"
                 >
@@ -3374,9 +3511,14 @@
                 <div class="flex flex-col">
                   <span *ngIf="p.price && p.price > 0" class="text-sm font-extrabold text-emerald-400">{{ p.price | number }} ₴</span>
                   <span *ngIf="!p.price || p.price <= 0" class="px-2 py-0.5 text-[11px] font-semibold bg-slate-800 text-slate-400 rounded-md border border-slate-700 font-mono">Архів</span>
-                  <span *ngIf="p.price > 0 && p.oldPrice && p.oldPrice > p.price" class="text-[10px] text-slate-500 line-through">
-                    {{ p.oldPrice | number }} ₴
-                  </span>
+                  <div class="flex items-center gap-1.5 mt-0.5" *ngIf="p.price > 0 && p.oldPrice && p.oldPrice > p.price">
+                    <span class="text-[10px] text-slate-500 line-through">
+                      {{ p.oldPrice | number }} ₴
+                    </span>
+                    <span class="px-1 py-0.2 text-[9px] font-bold bg-rose-950 text-rose-300 rounded border border-rose-800/40">
+                      -{{ Math.round(((p.oldPrice - p.price) / p.oldPrice) * 100) }}%
+                    </span>
+                  </div>
                 </div>
               </td>
 
@@ -3410,8 +3552,14 @@
             </tr>
 
             <tr *ngIf="getFilteredDrilldownProducts().length === 0">
-              <td colspan="7" class="py-12 text-center text-slate-500 font-semibold text-xs">
-                Не знайдено жодного товару за поточними фільтрами.
+              <td colspan="7" class="py-12 text-center text-slate-500 font-semibold text-xs space-y-2">
+                <p>Не знайдено жодного товару за поточними фільтрами.</p>
+                <button 
+                  (click)="resetDrilldownFilters()"
+                  class="px-3 py-1 bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Скинути всі фільтри
+                </button>
               </td>
             </tr>
           </tbody>
