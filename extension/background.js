@@ -253,10 +253,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-        sendResponse({ success: true });
-        return true;
-    }
-
     // 4. Send Webhook payload to server (with multi-tab session identification & auto-retry)
     if (message.action === 'sendWebhook') {
         const { webhookUrl, payload } = message;

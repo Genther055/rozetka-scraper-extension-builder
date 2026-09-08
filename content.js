@@ -959,13 +959,14 @@
     }
 
     function startScrapingOnThisTab(tabId, customUrl) {
-        if (isTabScrapingActive) return;
+        stopHudTimer();
         isTabScrapingActive = true;
         currentTabId = tabId || currentTabId || Date.now();
         currentSessionId = `session_${currentTabId}_${Date.now()}`;
         if (customUrl) webhookEndpoint = customUrl;
         sentLinks.clear();
         hudStartTime = Date.now();
+        startHudTimer(hudStartTime);
 
         const meta = getPageMetadata();
         const estTotal = getEstimatedTotalFromPage();

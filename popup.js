@@ -205,6 +205,10 @@ async function initPopup() {
             chrome.tabs.sendMessage(activeTabId, { action: 'PING_TAB_STATUS' }, (res) => {
                 const err = chrome.runtime.lastError;
                 if (err) {
+                    btnStart.disabled = false;
+                    btnStop.disabled = true;
+                    tabBadgeEl.innerText = 'Готова до запуску';
+                    tabBadgeEl.style.color = '#10b981';
                     if (tab && tab.url && tab.url.includes('rozetka.com.ua')) {
                         chrome.scripting.executeScript({
                             target: { tabId: activeTabId },
@@ -225,6 +229,17 @@ async function initPopup() {
                         const est = res.estimatedTotal || 0;
                         const pct = est > 0 ? Math.min(100, Math.round(((res.totalScraped || 0) / est) * 100)) : 5;
                         updateProgress(pct, res.totalScraped || 0, `Збір активний (${res.totalScraped || 0} тов.)`, est);
+                    } else {
+                        btnStart.disabled = false;
+                        btnStop.disabled = true;
+                        tabBadgeEl.innerText = (res.totalScraped > 0) ? '✓ Завершено' : 'Готова до запуску';
+                        tabBadgeEl.style.color = '#10b981';
+                        stopTimer();
+                        if (res.totalScraped > 0) {
+                            updateProgress(100, res.totalScraped, `Збір завершено (${res.totalScraped} тов.)`, res.estimatedTotal);
+                        } else {
+                            updateProgress(0, 0, 'Очікування запуску...');
+                        }
                     }
                 }
             });
