@@ -1,10 +1,10 @@
-// TradeScout Content Script v3.0 (Multi-Tab, Silent Background Scraper & Live In-Page Floating HUD)
+// TradeScout Content Script v3.0 (Multi-Tab, Controlled Scraper & Live Floating HUD)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
     window.__tradeScoutInjected = true;
 
-    console.log('TradeScout Content Script v3.0 active on:', window.location.href);
+    console.log('TradeScout Content Script loaded on:', window.location.href);
 
     let isTabScrapingActive = false;
     window.__tradeScoutIsScrapingActive = false;
@@ -73,13 +73,7 @@
                     width: 8px;
                     height: 8px;
                     border-radius: 50%;
-                    background: #10b981;
-                    box-shadow: 0 0 8px #10b981;
-                    animation: pulse 1.5s infinite;
-                }
-                @keyframes pulse {
-                    0%, 100% { opacity: 1; transform: scale(1); }
-                    50% { opacity: 0.5; transform: scale(1.2); }
+                    background: #94a3b8;
                 }
                 .hud-title {
                     font-weight: 700;
@@ -175,7 +169,7 @@
                         <span id="hud-count">0 товарів</span>
                         <span id="hud-timer">Час: 00:00</span>
                     </div>
-                    <div class="hud-msg" id="hud-msg">Готовий до збору</div>
+                    <div class="hud-msg" id="hud-msg">Готовий до запуску</div>
                     <div class="hud-actions">
                         <button class="hud-btn hud-btn-start" id="btn-hud-start">Запустити збір</button>
                         <button class="hud-btn hud-btn-stop" id="btn-hud-stop" style="display: none;">Зупинити</button>
@@ -279,7 +273,7 @@
     // Helper to send messages safely to background service worker
     function sendTabMessage(msg) {
         if (msg.action === 'tabProgress' && (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive)) {
-            return; // Never leak progress after stop
+            return; // Block progress messages if scraping has stopped
         }
         try {
             chrome.runtime.sendMessage({ ...msg, tabId: currentTabId }, () => {
@@ -411,7 +405,6 @@
         return false;
     }
 
-    // Silent background scroll to ensure lazy-loaded items and specs on current page are fully rendered
     async function silentBackgroundScroll() {
         try {
             const midY = Math.round(document.body.scrollHeight / 2);
@@ -423,7 +416,6 @@
         } catch (_) {}
     }
 
-    // Comprehensive pagination finder with retry/recovery support for Rozetka
     function findPaginationActionElements(currentPage) {
         const retrySelectors = [
             'button.retry',
@@ -643,36 +635,11 @@
         return newItems;
     }
 
-    // Helper to persist tab session ONLY for cross-page direct URL navigation
-    function persistTabNavTransit(nextPage, meta) {
-        try {
-            sessionStorage.setItem('tradescout_tab_navigating', JSON.stringify({
-                inTransit: true,
-                tabId: currentTabId,
-                sessionId: currentSessionId,
-                webhookEndpoint: webhookEndpoint,
-                sentLinks: Array.from(sentLinks),
-                pageCount: nextPage || 1,
-                sessionTitle: meta.title,
-                category: meta.category,
-                startTime: hudStartTime,
-                navTimestamp: Date.now()
-            }));
-        } catch (_) {}
-    }
-
-    function clearTabPersistedSession() {
-        try {
-            sessionStorage.removeItem('tradescout_tab_navigating');
-            sessionStorage.removeItem('tradescout_tab_scraping');
-        } catch (_) {}
-    }
-
-    // Main multi-tab isolated scraping runner
+    // Main scraping runner
     async function runTabScraper(initialPage) {
         const meta = getPageMetadata();
         let estimatedTotal = getEstimatedTotalFromPage();
-        console.log(`TradeScout Tab ${currentTabId}: Active scrape for "${meta.title}" (Estimated: ${estimatedTotal}, starting page ${initialPage || 1})...`);
+        console.log(`TradeScout Tab ${currentTabId}: Started scraping "${meta.title}"...`);
 
         startHudTimer();
         const initialPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, estimatedTotal)) * 100)) || 1;
@@ -696,15 +663,14 @@
                 estimatedTotal = latestEstimated;
             }
 
-            // 1. Silent background scroll
+            // 1. Silent scroll
             await silentBackgroundScroll();
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
-            // 2. Scrape all items on the current page
+            // 2. Scrape all items on current page
             let newProducts = await scrapeCurrentDomItems(meta, pageCount);
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
             
-            // Micro-sweep if more items were still mounting
             if (newProducts.length === 0 || (sentLinks.size < estimatedTotal && newProducts.length % 60 !== 0)) {
                 await new Promise(r => setTimeout(r, 300));
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
@@ -767,7 +733,7 @@
                 break;
             }
 
-            // 4. Trigger next page transition
+            // 4. Trigger next page via DOM click
             let pageTransitionSuccess = false;
             const maxTransitionAttempts = 3;
 
@@ -780,20 +746,11 @@
                 if (actionObj) {
                     if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
-                    if (actionObj.type === 'retry') {
-                        console.log(`TradeScout Tab ${currentTabId}: Detected retry button. Clicking to recover...`);
-                        updateHud({
-                            statusMsg: `Відновлення Rozetka (стор. ${pageCount + 1})...`,
-                            total: sentLinks.size,
-                            isRunning: true
-                        });
-                    } else {
-                        updateHud({
-                            statusMsg: `Завантаження стор. ${pageCount + 1} (спроба ${attempt}/${maxTransitionAttempts})...`,
-                            total: sentLinks.size,
-                            isRunning: true
-                        });
-                    }
+                    updateHud({
+                        statusMsg: `Завантаження стор. ${pageCount + 1}...`,
+                        total: sentLinks.size,
+                        isRunning: true
+                    });
 
                     dispatchSafeClick(actionObj.element);
 
@@ -814,24 +771,6 @@
                         consecutiveNoNew = 0;
                         break;
                     }
-
-                    // Background Tab Fallback: Navigate directly via URL
-                    if (!pageTransitionSuccess && (actionObj.href || actionObj.type === 'nextPage' || actionObj.type === 'pageNum')) {
-                        if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                        let targetUrl = actionObj.href;
-                        if (!targetUrl || targetUrl === '#' || targetUrl === 'javascript:void(0)') {
-                            const urlObj = new URL(window.location.href);
-                            urlObj.searchParams.set('page', String(pageCount + 1));
-                            targetUrl = urlObj.toString();
-                        } else if (!targetUrl.startsWith('http')) {
-                            targetUrl = targetUrl.startsWith('/') ? `https://rozetka.com.ua${targetUrl}` : `https://rozetka.com.ua/${targetUrl}`;
-                        }
-
-                        console.log(`TradeScout Tab ${currentTabId}: Background tab navigating directly to page ${pageCount + 1}: ${targetUrl}`);
-                        persistTabNavTransit(pageCount + 1, meta);
-                        window.location.href = targetUrl;
-                        return;
-                    }
                 }
 
                 if (attempt < maxTransitionAttempts) {
@@ -842,7 +781,7 @@
 
             if (!pageTransitionSuccess) {
                 if (consecutiveNoNew >= 2) {
-                    console.log(`TradeScout Tab ${currentTabId}: Catalog end reached with ${sentLinks.size} items.`);
+                    console.log(`TradeScout Tab ${currentTabId}: Catalog finished with ${sentLinks.size} items.`);
                     break;
                 }
                 await new Promise(r => setTimeout(r, 800));
@@ -852,9 +791,8 @@
         if (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
             isTabScrapingActive = false;
             window.__tradeScoutIsScrapingActive = false;
-            clearTabPersistedSession();
             stopHudTimer();
-            console.log(`TradeScout Tab ${currentTabId}: Finished scrape with ${sentLinks.size} items.`);
+            console.log(`TradeScout Tab ${currentTabId}: Scrape completed with ${sentLinks.size} items.`);
             
             updateHud({
                 percent: 100,
@@ -907,7 +845,6 @@
     function stopScrapingOnThisTab() {
         isTabScrapingActive = false;
         window.__tradeScoutIsScrapingActive = false;
-        clearTabPersistedSession();
         stopHudTimer();
         const meta = getPageMetadata();
         
@@ -929,54 +866,23 @@
         });
     }
 
-    // Auto-create floating HUD on page load
+    // Auto-create floating HUD on page load in 100% idle state
     const initialMeta = getPageMetadata();
     createOrGetHud();
     updateHud({
         sessionTitle: initialMeta.title,
         total: 0,
         percent: 0,
-        statusMsg: 'Готовий до запуску на цій вкладці',
+        statusMsg: 'Готовий до запуску',
         isRunning: false
     });
+
+    // Notify background that tab is idle and ready
+    sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
 
     // Expose direct window handlers for fail-safe invocation
     window.__tradeScoutStartScrape = startScrapingOnThisTab;
     window.__tradeScoutStopScrape = stopScrapingOnThisTab;
-
-    // Check if this tab has an active in-flight pagination transition
-    try {
-        const navTransitStr = sessionStorage.getItem('tradescout_tab_navigating');
-        sessionStorage.removeItem('tradescout_tab_navigating');
-        sessionStorage.removeItem('tradescout_tab_scraping');
-
-        if (navTransitStr) {
-            const transit = JSON.parse(navTransitStr);
-            const isRecent = transit.navTimestamp && (Date.now() - transit.navTimestamp < 15000);
-            if (transit.inTransit && isRecent) {
-                console.log(`TradeScout: Resuming active scraping sequence on page ${transit.pageCount} (${transit.sentLinks?.length || 0} items)...`);
-                currentTabId = transit.tabId;
-                currentSessionId = transit.sessionId;
-                webhookEndpoint = transit.webhookEndpoint || webhookEndpoint;
-                hudStartTime = transit.startTime || Date.now();
-                if (Array.isArray(transit.sentLinks)) {
-                    transit.sentLinks.forEach(link => sentLinks.add(link));
-                }
-                isTabScrapingActive = true;
-                window.__tradeScoutIsScrapingActive = true;
-                startHudTimer(hudStartTime);
-                setTimeout(() => {
-                    runTabScraper(transit.pageCount || 1);
-                }, 500);
-            } else {
-                sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
-            }
-        } else {
-            sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
-        }
-    } catch (_) {
-        sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
-    }
 
     // Message listener for popup / background commands
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -997,7 +903,7 @@
             const meta = getPageMetadata();
             const est = getEstimatedTotalFromPage();
             sendResponse({
-                isRunning: isTabScrapingActive,
+                isRunning: isTabScrapingActive && window.__tradeScoutIsScrapingActive,
                 totalScraped: sentLinks.size,
                 estimatedTotal: est,
                 sessionTitle: meta.title,
