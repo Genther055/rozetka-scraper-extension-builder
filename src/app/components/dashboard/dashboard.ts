@@ -1387,21 +1387,33 @@ export class DashboardComponent implements OnInit {
       this.productUpdateListener = (e: CustomEvent) => {
         if (e && e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
           const incoming = e.detail;
-          if (this.products.length > 0 && incoming.length < this.products.length) {
-            const productMap = new Map(this.products.map(p => [p.link || p.name, p]));
-            incoming.forEach(p => {
-              const key = p.link || p.name;
-              const existing = productMap.get(key);
-              if (existing) {
-                Object.assign(existing, p);
-              } else {
-                productMap.set(key, p);
-              }
-            });
-            this.products = Array.from(productMap.values());
-          } else {
-            this.products = incoming;
-          }
+          const getItemKey = (p: any) => {
+            if (!p) return '';
+            const linkKey = p.link ? p.link.split('?')[0].split('#')[0].replace(/\/+$/, '') : '';
+            if (linkKey) return linkKey;
+            return (p.name || '').trim().toLowerCase();
+          };
+
+          const productMap = new Map<string, any>();
+          // 1. First populate map with current products
+          this.products.forEach(p => {
+            const k = getItemKey(p);
+            if (k) productMap.set(k, p);
+          });
+
+          // 2. Merge or append incoming products
+          incoming.forEach(p => {
+            const k = getItemKey(p);
+            if (!k) return;
+            const existing = productMap.get(k);
+            if (existing) {
+              Object.assign(existing, p);
+            } else {
+              productMap.set(k, p);
+            }
+          });
+
+          this.products = Array.from(productMap.values());
           try {
             localStorage.setItem(this.STORAGE_PRODUCTS_KEY, JSON.stringify(this.products));
           } catch (_) {}

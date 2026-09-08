@@ -410,7 +410,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             func: (prods) => {
                                 try {
                                     if (prods && prods.length > 0) {
-                                        localStorage.setItem('tradescout_cached_products', JSON.stringify(prods));
                                         window.dispatchEvent(new CustomEvent('tradescout_products_updated', { detail: prods }));
                                     }
                                 } catch (_) {}
