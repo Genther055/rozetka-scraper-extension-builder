@@ -276,8 +276,8 @@
               </div>
             </div>
 
-            <!-- Telemetry Metrics Counters -->
-            <div class="flex items-center gap-3 flex-wrap text-xs font-mono">
+            <!-- Telemetry Metrics Counters & Close Button -->
+            <div class="flex items-center gap-2.5 flex-wrap text-xs font-mono">
               <div class="px-3 py-1.5 bg-slate-950/80 border border-slate-800 rounded-xl flex items-center gap-2">
                 <span class="material-icons text-sm text-cyan-400">timer</span>
                 <span class="text-slate-400">Час:</span>
@@ -292,6 +292,10 @@
                 <span class="material-icons text-sm text-indigo-400">inventory_2</span>
                 <span class="text-indigo-300 font-bold">{{ getTotalActiveProductsCollected() }} <span *ngIf="getTotalEstimatedProducts() > 0">/ {{ getTotalEstimatedProducts() }}</span> тов.</span>
               </div>
+              <button (click)="dismissActiveScrapes()" class="px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 rounded-xl flex items-center gap-1 cursor-pointer transition-all" title="Закрити панель збору">
+                <span class="material-icons text-xs">close</span>
+                <span class="text-[11px] font-sans font-bold">Закрити</span>
+              </button>
             </div>
           </div>
 

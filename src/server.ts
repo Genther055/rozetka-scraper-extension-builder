@@ -330,6 +330,7 @@ app.get('/api/products', async (req, res) => {
 app.post('/api/products/clear', async (req, res) => {
   try {
     await clearCurrentProducts();
+    activeScrapes.clear();
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });

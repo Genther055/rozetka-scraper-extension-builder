@@ -1,4 +1,4 @@
-// TradeScout Content Script v3.5 Pro (Multi-Tab Background Worker & Live Telemetry)
+// TradeScout Content Script v3.5 Pro (Multi-Tab Background Worker & Precise Catalog Scraper)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
@@ -143,11 +143,16 @@
         return currentDomTiles > 0 ? currentDomTiles : 60;
     }
 
-    function isSponsoredTile(item) {
+    // Precise filter: ignore carousels, sliders, sidebars, recommendations, accessories
+    function isUnwantedTile(item) {
+        if (!item || !(item instanceof Element)) return true;
+        if (item.closest('rz-goods-carousel, .goods-carousel, .recently-viewed, rz-goods-section-slider, .slider, rz-similar-goods, rz-recommended-goods, rz-viewed-goods, .catalog-banner, .advertising-slot, aside, .sidebar, rz-accessories, .goods-slider, .recommendations, [data-testid*="carousel"], [data-testid*="slider"]')) {
+            return true;
+        }
         if (item.classList.contains('catalog-banner') || item.classList.contains('rz-banner') || item.classList.contains('banner-tile') || item.classList.contains('advertising-slot')) {
             return true;
         }
-        const hasProductLink = !!item.querySelector('a[href*="/p"], a.goods-tile__heading, a.tile-title, [class*="heading"] a');
+        const hasProductLink = !!item.querySelector('a[href*="/p/"], a[href*="/p-"], a[href*="/p"], a.goods-tile__heading, a.tile-title, [class*="heading"] a');
         const hasPrice = !!item.querySelector('.goods-tile__price, .price, [class*="price"]');
         if (!hasProductLink && !hasPrice) return true;
         return false;
@@ -281,34 +286,42 @@
     }
 
     async function scrapeCurrentDomItems(meta, pageIndex) {
-        const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"], [data-testid="goods-tile"], app-goods-tile-default, .catalog-grid__cell, .goods-tile__inner';
-        let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => !item.closest('.recently-viewed'));
+        // Look specifically for the main catalog container
+        const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, .catalog-grid, rz-catalog-grid, rz-catalog-tiles, .catalog-selection__goods, section.catalog-grid') || document.querySelector('main') || document.body;
         
-        if (items.length === 0) {
-            const links = document.querySelectorAll('a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
-            items = Array.from(links).map(l => l.closest('li, div, rz-catalog-tile, article, section, app-goods-tile-default') || l).filter(Boolean);
-        }
+        // Find candidate product tiles inside the catalog container
+        const rawTiles = Array.from(catalogContainer.querySelectorAll('rz-catalog-tile, rz-product-tile, .goods-tile, [data-goods-id], li.catalog-grid__cell'));
+        
+        // Filter out unwanted elements and remove nested child tiles
+        const distinctTiles = rawTiles.filter(item => {
+            if (isUnwantedTile(item)) return false;
+            // Prevent picking both outer li and inner rz-catalog-tile
+            const parentTile = item.parentElement ? item.parentElement.closest('rz-catalog-tile, rz-product-tile, .goods-tile, [data-goods-id], li.catalog-grid__cell') : null;
+            return !parentTile || isUnwantedTile(parentTile);
+        });
 
-        if (items.length === 0) return [];
+        if (distinctTiles.length === 0) return [];
 
         const newItems = [];
 
-        items.forEach((item) => {
+        distinctTiles.forEach((item) => {
             try {
-                if (isSponsoredTile(item)) return;
+                if (isUnwantedTile(item)) return;
 
                 const linkTag = item.tagName === 'A' ? item : (item.querySelector('a.goods-tile__heading, a.tile-title, [class*="heading"] a, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]') || item.querySelector('a[href]'));
                 if (!linkTag) return;
                 
-                const linkEl = linkTag.getAttribute('href');
-                if (!linkEl) return;
+                const rawHref = linkTag.getAttribute('href');
+                if (!rawHref) return;
 
                 const titleEl = item.querySelector('a.tile-title, a.goods-tile__heading, .goods-tile__heading, .tile-title, [class*="heading"], [class*="title"]') || linkTag;
                 const name = titleEl && titleEl.innerText ? titleEl.innerText.trim() : (linkTag.innerText ? linkTag.innerText.trim() : '');
                 if (!name || name.length < 3) return;
 
-                let link = linkEl.startsWith('http') ? linkEl : (linkEl.startsWith('/') ? `https://rozetka.com.ua${linkEl}` : `https://rozetka.com.ua/${linkEl}`);
-                link = link.split('?')[0].split('#')[0];
+                let link = rawHref.split('?')[0].split('#')[0].replace(/\/+$/, '');
+                if (!link.startsWith('http')) {
+                    link = link.startsWith('/') ? `https://rozetka.com.ua${link}` : `https://rozetka.com.ua/${link}`;
+                }
 
                 if (sentLinks.has(link)) return;
 
@@ -501,10 +514,11 @@
                         // Check if new tiles loaded in DOM with unscraped links (Numbered Pagination)
                         const freshItems = Array.from(document.querySelectorAll(tileSelectors));
                         const hasUnscrapedLink = freshItems.some(tile => {
+                            if (isUnwantedTile(tile)) return false;
                             const linkTag = tile.querySelector('a.goods-tile__heading, a.tile-title, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
                             if (!linkTag) return false;
                             let href = linkTag.getAttribute('href') || '';
-                            href = href.split('?')[0].split('#')[0];
+                            href = href.split('?')[0].split('#')[0].replace(/\/+$/, '');
                             return href && !sentLinks.has(href) && !sentLinks.has(`https://rozetka.com.ua${href}`);
                         });
                         if (hasUnscrapedLink) {
@@ -608,6 +622,18 @@
         });
     }
 
+    function resetTabState() {
+        isTabScrapingActive = false;
+        window.__tradeScoutIsScrapingActive = false;
+        sentLinks.clear();
+        currentPercent = 0;
+        currentEstimatedTotal = 0;
+        currentStatusMsg = 'Готова до запуску';
+        currentPage = 1;
+        const meta = getPageMetadata();
+        sendTabMessage({ action: 'tabIdle', sessionTitle: meta.title, category: meta.category });
+    }
+
     // Default 100% idle on page load
     const initialMeta = getPageMetadata();
     sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
@@ -615,6 +641,15 @@
     // Expose direct window handlers for fail-safe invocation
     window.__tradeScoutStartScrape = startScrapingOnThisTab;
     window.__tradeScoutStopScrape = stopScrapingOnThisTab;
+    window.__tradeScoutResetState = resetTabState;
+
+    // Listen for clear events from dashboard window
+    window.addEventListener('tradescout_reset_extension_sessions', resetTabState);
+    window.addEventListener('message', (event) => {
+        if (event.data && (event.data.type === 'TRADESCOUT_CLEAR_ALL' || event.data.action === 'RESET_ALL_SESSIONS')) {
+            resetTabState();
+        }
+    });
 
     // Message listener for popup / background commands
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -627,6 +662,12 @@
 
         if (message.action === 'STOP_TAB_SCRAPE') {
             stopScrapingOnThisTab();
+            sendResponse({ success: true });
+            return true;
+        }
+
+        if (message.action === 'RESET_TAB_STATE') {
+            resetTabState();
             sendResponse({ success: true });
             return true;
         }

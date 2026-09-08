@@ -318,6 +318,13 @@ export class DashboardComponent implements OnInit {
     this.liveScrapeStartTime = this.liveScrapeStartTime || Date.now();
     this.liveStopwatchTimer = setInterval(() => {
       if (!this.liveScrapeStartTime) return;
+      const isStillScraping = this.activeScrapes.some(t => t.status === 'scraping' && (t.percent < 100));
+      if (!isStillScraping && this.activeScrapes.length > 0) {
+        this.stopLiveStopwatch();
+        this.isAnyScrapeActive = false;
+        this.cdr.markForCheck();
+        return;
+      }
       const elapsedSec = Math.floor((Date.now() - this.liveScrapeStartTime) / 1000);
       const m = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
       const s = String(elapsedSec % 60).padStart(2, '0');
@@ -336,6 +343,23 @@ export class DashboardComponent implements OnInit {
       clearInterval(this.liveStopwatchTimer);
       this.liveStopwatchTimer = null;
     }
+  }
+
+  dismissActiveScrapes() {
+    this.activeScrapes = [];
+    this.isAnyScrapeActive = false;
+    this.stopLiveStopwatch();
+    this.liveElapsedText = '00:00';
+    this.liveItemsPerMinute = 0;
+    this.liveScrapeStartTime = null;
+    this.http.post(`${this.apiUrl}/api/scraping-status/clear`, {}).subscribe({ error: () => {} });
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(new CustomEvent('tradescout_reset_extension_sessions'));
+        window.postMessage({ type: 'TRADESCOUT_CLEAR_ALL' }, '*');
+      } catch (_) {}
+    }
+    this.cdr.markForCheck();
   }
 
   getTotalActiveProductsCollected(): number {
@@ -1383,9 +1407,11 @@ export class DashboardComponent implements OnInit {
           } else {
             this.activeScrapes = [...this.activeScrapes, task];
           }
-          this.isAnyScrapeActive = this.activeScrapes.some(t => t.status === 'scraping');
+          this.isAnyScrapeActive = this.activeScrapes.some(t => t.status === 'scraping' && (t.percent < 100));
           if (this.isAnyScrapeActive) {
             this.startLiveStopwatch();
+          } else {
+            this.stopLiveStopwatch();
           }
           this.cdr.markForCheck();
         }
@@ -1424,6 +1450,7 @@ export class DashboardComponent implements OnInit {
       clearInterval(this.autoRefreshTimer);
     }
     this.stopLiveStatusPolling();
+    this.stopLiveStopwatch();
     if (typeof window !== 'undefined') {
       if (this.productUpdateListener) {
         window.removeEventListener('tradescout_products_updated', this.productUpdateListener as EventListener);
@@ -1459,25 +1486,26 @@ export class DashboardComponent implements OnInit {
           if (res.success && Array.isArray(res.activeScrapes)) {
             const previousActive = this.isAnyScrapeActive;
             this.activeScrapes = res.activeScrapes;
-            this.isAnyScrapeActive = this.activeScrapes.some(t => t.status === 'scraping');
+            this.isAnyScrapeActive = this.activeScrapes.some(t => t.status === 'scraping' && (t.percent < 100));
 
             // If scraping is currently active, load products silently so counters & tables update live!
             if (this.isAnyScrapeActive) {
               this.startLiveStopwatch();
               this.loadProducts(true);
-            } else if (previousActive && !this.isAnyScrapeActive) {
-              // Scraping just completed
+            } else {
               this.stopLiveStopwatch();
-              this.liveScrapeStartTime = null;
-              this.recentScrapeSuccessNotice = 'Збір успішно завершено! Всі дані синхронізовано.';
-              if (this.userSettings.soundAlerts) {
-                this.playCompletionSound();
+              if (previousActive) {
+                this.liveScrapeStartTime = null;
+                this.recentScrapeSuccessNotice = 'Збір успішно завершено! Всі дані синхронізовано.';
+                if (this.userSettings.soundAlerts) {
+                  this.playCompletionSound();
+                }
+                this.loadProducts(false);
+                setTimeout(() => {
+                  this.recentScrapeSuccessNotice = null;
+                  this.cdr.markForCheck();
+                }, 7000);
               }
-              this.loadProducts(false);
-              setTimeout(() => {
-                this.recentScrapeSuccessNotice = null;
-                this.cdr.markForCheck();
-              }, 7000);
             }
             this.cdr.markForCheck();
           }
@@ -2347,9 +2375,19 @@ export class DashboardComponent implements OnInit {
       actionType: 'danger',
       onConfirm: () => {
         this.products = [];
+        this.activeScrapes = [];
+        this.isAnyScrapeActive = false;
+        this.stopLiveStopwatch();
+        this.liveElapsedText = '00:00';
+        this.liveItemsPerMinute = 0;
+        this.liveScrapeStartTime = null;
+
         if (typeof window !== 'undefined') {
           try {
             localStorage.removeItem(this.STORAGE_PRODUCTS_KEY);
+            localStorage.removeItem('tradescout_cached_products');
+            window.dispatchEvent(new CustomEvent('tradescout_reset_extension_sessions'));
+            window.postMessage({ type: 'TRADESCOUT_CLEAR_ALL' }, '*');
           } catch (_) {}
         }
         this.applyFilters();
@@ -2362,9 +2400,16 @@ export class DashboardComponent implements OnInit {
               next: (res) => {
                 if (res.success) {
                   this.products = [];
+                  this.activeScrapes = [];
+                  this.isAnyScrapeActive = false;
+                  this.stopLiveStopwatch();
+                  this.liveElapsedText = '00:00';
+                  this.liveItemsPerMinute = 0;
+                  this.liveScrapeStartTime = null;
                   if (typeof window !== 'undefined') {
                     try {
                       localStorage.removeItem(this.STORAGE_PRODUCTS_KEY);
+                      localStorage.removeItem('tradescout_cached_products');
                     } catch (_) {}
                   }
                   this.applyFilters();
@@ -2384,6 +2429,7 @@ export class DashboardComponent implements OnInit {
         };
 
         tryClear(`${this.apiUrl}/api/products/clear`);
+        this.http.post(`${this.apiUrl}/api/scraping-status/clear`, {}).subscribe({ error: () => {} });
       }
     });
   }

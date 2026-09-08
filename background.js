@@ -503,10 +503,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // 10. Reset all cached sessions
-    if (message.action === 'RESET_ALL_SESSIONS') {
+    // 10. Reset all cached sessions & reset all open tabs
+    if (message.action === 'RESET_ALL_SESSIONS' || message.action === 'CLEAR_ALL_DATA') {
         stoppedTabs.clear();
         chrome.storage.local.set({ tabSessions: {} }, () => {
+            chrome.tabs.query({ url: "*://*.rozetka.com.ua/*" }, (tabs) => {
+                if (tabs && tabs.length > 0) {
+                    tabs.forEach(t => {
+                        chrome.tabs.sendMessage(t.id, { action: 'RESET_TAB_STATE' }, () => {
+                            if (chrome.runtime.lastError) {}
+                        });
+                    });
+                }
+            });
             sendResponse({ success: true });
         });
         return true;
