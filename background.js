@@ -132,8 +132,30 @@ const STATUS_TARGETS = [
     'http://127.0.0.1:4000/api/scraping-status'
 ];
 
+async function broadcastTaskProgressToDashboard(taskData) {
+    if (!taskData) return;
+    try {
+        chrome.tabs.query({ url: ["*://*.vercel.app/*", "*://localhost/*", "*://127.0.0.1/*", "*://*.onrender.com/*"] }, (dashboardTabs) => {
+            if (dashboardTabs && dashboardTabs.length > 0) {
+                dashboardTabs.forEach(dTab => {
+                    chrome.scripting.executeScript({
+                        target: { tabId: dTab.id },
+                        func: (t) => {
+                            try {
+                                window.dispatchEvent(new CustomEvent('tradescout_task_progress', { detail: t }));
+                            } catch (_) {}
+                        },
+                        args: [taskData]
+                    }).catch(() => {});
+                });
+            }
+        });
+    } catch (_) {}
+}
+
 async function notifyServerScrapingStatus(taskData) {
     if (!taskData) return;
+    broadcastTaskProgressToDashboard(taskData);
     for (const url of STATUS_TARGETS) {
         fetch(url, {
             method: 'POST',
@@ -156,6 +178,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             statusMsg: message.statusMsg || 'Скрейпінг активний...',
             percentProgress: message.percent || 0,
             syncedCount: message.syncedCount || 0,
+            estimatedTotal: message.estimatedTotal || 0,
             sessionTitle: message.sessionTitle || 'Каталог Rozetka',
             category: message.category || 'Товари',
             sessionId: message.sessionId || `session_${tabId}`,
@@ -188,6 +211,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             percentProgress: 100,
             statusMsg: `Збір завершено! (${message.total} товарів)`,
             syncedCount: message.syncedCount || message.total,
+            estimatedTotal: message.estimatedTotal || message.total,
             sessionTitle: message.sessionTitle || 'Каталог Rozetka',
             category: message.category || 'Товари',
             finishedAt: Date.now()
@@ -201,7 +225,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             status: 'completed',
             pageIndex: message.page || 1,
             currentCount: message.total || 0,
-            estimatedTotal: message.total || 0,
+            estimatedTotal: message.estimatedTotal || message.total,
             percent: 100,
             statusMsg: `Збір завершено! (${message.total} товарів)`
         });
@@ -224,6 +248,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             percent: 0,
             statusMsg: `Помилка: ${message.message || 'Збій скрапінгу'}`
         });
+
+        sendResponse({ success: true });
+        return true;
+    }
 
         sendResponse({ success: true });
         return true;

@@ -41,11 +41,15 @@ function stopTimer() {
     }
 }
 
-function updateProgress(percent, count, actionMsg) {
+function updateProgress(percent, count, actionMsg, estimatedTotal) {
     const safePercent = Math.min(100, Math.max(0, Math.round(percent)));
     progressFill.style.width = `${safePercent}%`;
     percentText.innerText = `${safePercent}%`;
-    countText.innerText = `${count || 0} товарів`;
+    if (estimatedTotal && estimatedTotal > 0) {
+        countText.innerText = `${count || 0} / ${estimatedTotal} товарів`;
+    } else {
+        countText.innerText = `${count || 0} товарів`;
+    }
     
     if (actionMsg) {
         statusText.innerText = actionMsg;
@@ -82,10 +86,12 @@ async function refreshTabsList() {
             if (session) {
                 if (session.isRunning) {
                     isRunning = true;
-                    statusText = `🟢 Збирається: ${session.totalScraped || 0} тов. (стор. ${session.currentPage || 1})`;
+                    const est = (session.estimatedTotal && session.estimatedTotal > 0) ? ` / ${session.estimatedTotal}` : '';
+                    statusText = `🟢 Збирається: ${session.totalScraped || 0}${est} тов. (${session.percentProgress || 0}%, стор. ${session.currentPage || 1})`;
                     statusClass = 'color: #34d399; font-weight: 700;';
                 } else if (session.finishedAt) {
-                    statusText = `✓ Завершено (${session.totalScraped || 0} тов.)`;
+                    const est = (session.estimatedTotal && session.estimatedTotal > 0) ? ` з ${session.estimatedTotal}` : '';
+                    statusText = `✓ Завершено (${session.totalScraped || 0}${est} тов.)`;
                     statusClass = 'color: #10b981; font-weight: 700;';
                 }
             }
@@ -176,14 +182,14 @@ async function initPopup() {
                 tabBadgeEl.innerText = '● Збирається...';
                 tabBadgeEl.style.color = '#38bdf8';
                 startTimer(currentSession.startTime || Date.now());
-                updateProgress(currentSession.percentProgress || 5, currentSession.totalScraped || 0, currentSession.statusMsg || 'Скрейпінг активний...');
+                updateProgress(currentSession.percentProgress || 5, currentSession.totalScraped || 0, currentSession.statusMsg || 'Скрейпінг активний...', currentSession.estimatedTotal);
             } else if (currentSession.finishedAt) {
                 btnStart.disabled = false;
                 btnStop.disabled = true;
                 tabBadgeEl.innerText = '✓ Завершено';
                 tabBadgeEl.style.color = '#10b981';
                 stopTimer();
-                updateProgress(100, currentSession.totalScraped || 0, `Збір завершено! (${currentSession.totalScraped || 0} тов.)`);
+                updateProgress(100, currentSession.totalScraped || 0, `Збір завершено! (${currentSession.totalScraped || 0} тов.)`, currentSession.estimatedTotal);
             } else {
                 btnStart.disabled = false;
                 btnStop.disabled = true;
@@ -216,7 +222,9 @@ async function initPopup() {
                         btnStop.disabled = false;
                         tabBadgeEl.innerText = '● Збирається...';
                         tabBadgeEl.style.color = '#38bdf8';
-                        updateProgress(Math.min(99, Math.round(((res.totalScraped || 0) / 300) * 100)), res.totalScraped || 0, `Збір активний (${res.totalScraped || 0} тов.)`);
+                        const est = res.estimatedTotal || 0;
+                        const pct = est > 0 ? Math.min(100, Math.round(((res.totalScraped || 0) / est) * 100)) : 5;
+                        updateProgress(pct, res.totalScraped || 0, `Збір активний (${res.totalScraped || 0} тов.)`, est);
                     }
                 }
             });
@@ -244,7 +252,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
                 tabBadgeEl.innerText = '● Збирається...';
                 tabBadgeEl.style.color = '#38bdf8';
                 if (!timerInterval) startTimer(currentSession.startTime || Date.now());
-                updateProgress(currentSession.percentProgress || 5, currentSession.totalScraped || 0, currentSession.statusMsg);
+                updateProgress(currentSession.percentProgress || 5, currentSession.totalScraped || 0, currentSession.statusMsg, currentSession.estimatedTotal);
             } else {
                 btnStart.disabled = false;
                 btnStop.disabled = true;
@@ -252,9 +260,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
                 tabBadgeEl.style.color = currentSession.finishedAt ? '#10b981' : '#94a3b8';
                 stopTimer();
                 if (currentSession.finishedAt) {
-                    updateProgress(100, currentSession.totalScraped || 0, `Збір завершено! (${currentSession.totalScraped || 0} тов.)`);
+                    updateProgress(100, currentSession.totalScraped || 0, `Збір завершено! (${currentSession.totalScraped || 0} тов.)`, currentSession.estimatedTotal);
                 } else {
-                    updateProgress(0, currentSession.totalScraped || 0, currentSession.statusMsg || 'Скрейпінг зупинено.');
+                    updateProgress(0, currentSession.totalScraped || 0, currentSession.statusMsg || 'Скрейпінг зупинено.', currentSession.estimatedTotal);
                 }
             }
         }

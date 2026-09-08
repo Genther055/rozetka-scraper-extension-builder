@@ -227,7 +227,13 @@
 
         if (state.sessionTitle) hudTitle.innerText = state.sessionTitle;
         if (state.percent !== undefined) hudFill.style.width = `${Math.min(100, Math.max(0, state.percent))}%`;
-        if (state.total !== undefined) hudCount.innerText = `${state.total} товарів`;
+        if (state.total !== undefined) {
+            if (state.estimatedTotal && state.estimatedTotal > 0) {
+                hudCount.innerText = `${state.total} / ${state.estimatedTotal} тов. (${state.percent || 0}%)`;
+            } else {
+                hudCount.innerText = `${state.total} товарів`;
+            }
+        }
         if (state.statusMsg) hudMsg.innerText = state.statusMsg;
 
         if (state.isRunning) {
@@ -299,25 +305,99 @@
         return { title, category };
     }
 
+    function parseCountFromText(text) {
+        if (!text || typeof text !== 'string') return 0;
+        const cleaned = text.replace(/&nbsp;/g, ' ').replace(/\u00A0/g, ' ').replace(/\u202F/g, ' ').trim();
+        
+        // Pattern 1: explicit "знайдено X товар" or "X товарів" (e.g. "Знайдено 507 товарів", "Знайдено 1 250 товарів")
+        const m1 = cleaned.match(/(?:знайдено|найдено)?\s*([\d\s\u00A0\u202F.,]+)\s*(?:товар|тов)/i);
+        if (m1 && m1[1]) {
+            const num = parseInt(m1[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
+            if (!isNaN(num) && num > 0) return num;
+        }
+
+        // Pattern 2: "X товарів/товари/товаров/товара"
+        const m2 = cleaned.match(/([\d\s\u00A0\u202F.,]+)\s*(?:товарів|товари|товаров|товара)/i);
+        if (m2 && m2[1]) {
+            const num = parseInt(m2[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
+            if (!isNaN(num) && num > 0) return num;
+        }
+
+        // Pattern 3: general digits inside counter elements
+        const digitsOnly = cleaned.replace(/[^\d]/g, '');
+        if (digitsOnly.length > 0) {
+            const num = parseInt(digitsOnly, 10);
+            if (!isNaN(num) && num > 0 && num < 10000000) return num;
+        }
+
+        return 0;
+    }
+
     function getEstimatedTotalFromPage() {
         const selectors = [
+            '[data-testid="filters-found-goods"]',
+            'p[data-testid="filters-found-goods"]',
+            '[data-testid*="found-goods"]',
+            '[data-testid*="filters-found"]',
+            '[data-testid="goods-counter"]',
+            '[data-testid*="counter"]',
             '.catalog-heading__goods', 
             '.catalog-selection__label',
             '.goods-count',
             '[class*="heading__goods"]',
-            '[class*="selection__label"]'
+            '[class*="selection__label"]',
+            '[class*="found-goods"]',
+            '[class*="filters-found"]',
+            '[class*="goods-count"]',
+            'rz-catalog-settings [class*="found"]',
+            'rz-catalog-settings p',
+            'rz-catalog-counter',
+            'rz-goods-counter',
+            '.catalog-settings__goods-count'
         ];
+        
         for (const sel of selectors) {
             try {
-                const el = document.querySelector(sel);
-                if (el) {
-                    const txt = el.textContent || '';
-                    const match = txt.replace(/\s/g, '').match(/\d+/);
-                    if (match) return parseInt(match[0], 10);
+                const elements = document.querySelectorAll(sel);
+                for (const el of elements) {
+                    const txt = el.textContent || el.innerText || '';
+                    const count = parseCountFromText(txt);
+                    if (count > 0) return count;
                 }
             } catch (e) {}
         }
-        return 120;
+
+        // Text search across DOM nodes
+        try {
+            const pTags = document.querySelectorAll('p, span, div, h1, h2');
+            for (const el of pTags) {
+                if (el.children.length > 3) continue;
+                const txt = el.textContent || el.innerText || '';
+                if (txt.includes('товар') || txt.includes('Знайдено') || txt.includes('знайдено') || txt.includes('найдено')) {
+                    const count = parseCountFromText(txt);
+                    if (count > 0 && count < 10000000) return count;
+                }
+            }
+        } catch (e) {}
+
+        // Fallback: estimate based on pagination numbers on page (e.g. if last page is 9, 9 * 60 = 540)
+        try {
+            const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a');
+            let maxPage = 1;
+            pageLinks.forEach(link => {
+                const txt = (link.textContent || '').trim();
+                const num = parseInt(txt, 10);
+                if (!isNaN(num) && num > maxPage && num < 1000) {
+                    maxPage = num;
+                }
+            });
+            if (maxPage > 1) {
+                return maxPage * 60;
+            }
+        } catch (e) {}
+
+        const currentDomTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, [data-goods-id]').length;
+        return currentDomTiles > 0 ? currentDomTiles : 60;
     }
 
     function isSponsoredTile(item) {
@@ -677,14 +757,16 @@
     // Main multi-tab isolated scraping runner with guaranteed full page extraction & reliable pagination
     async function runTabScraper(initialPage) {
         const meta = getPageMetadata();
-        const estimatedTotal = getEstimatedTotalFromPage();
+        let estimatedTotal = getEstimatedTotalFromPage();
         console.log(`TradeScout Tab ${currentTabId}: Active scrape for "${meta.title}" (Estimated: ${estimatedTotal}, starting page ${initialPage || 1})...`);
 
         startHudTimer();
+        const initialPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, estimatedTotal)) * 100)) || 1;
         updateHud({
             sessionTitle: meta.title,
-            percent: Math.min(99, Math.round((sentLinks.size / Math.max(1, estimatedTotal)) * 100)) || 5,
+            percent: initialPercent,
             total: sentLinks.size,
+            estimatedTotal: estimatedTotal,
             statusMsg: `Збір: ${meta.title} (${sentLinks.size}/${estimatedTotal})...`,
             isRunning: true
         });
@@ -695,6 +777,12 @@
         const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"], [data-testid="goods-tile"]';
 
         while (isTabScrapingActive) {
+            // Re-evaluate estimated total in case it loaded asynchronously
+            const latestEstimated = getEstimatedTotalFromPage();
+            if (latestEstimated > estimatedTotal) {
+                estimatedTotal = latestEstimated;
+            }
+
             persistTabSession(pageCount, meta);
 
             // 1. Silent background scroll to let all items & lazy elements on the current page render completely
@@ -714,13 +802,14 @@
             
             if (newProducts.length > 0) {
                 persistTabSession(pageCount, meta);
-                const percent = Math.min(99, Math.round((sentLinks.size / Math.max(1, estimatedTotal)) * 100));
-                const statusMsg = `Зібрано ${sentLinks.size}/${estimatedTotal} товарів (стор. ${pageCount})...`;
+                const percent = Math.min(100, Math.round((sentLinks.size / Math.max(1, estimatedTotal)) * 100));
+                const statusMsg = `Зібрано ${sentLinks.size} з ${estimatedTotal} товарів (стор. ${pageCount})...`;
 
                 updateHud({
                     sessionTitle: meta.title,
                     percent,
                     total: sentLinks.size,
+                    estimatedTotal: estimatedTotal,
                     statusMsg,
                     isRunning: true
                 });
@@ -879,17 +968,19 @@
         hudStartTime = Date.now();
 
         const meta = getPageMetadata();
+        const estTotal = getEstimatedTotalFromPage();
         persistTabSession(1, meta);
 
         sendTabMessage({
             action: 'tabProgress',
             total: 0,
             page: 1,
-            percent: 5,
+            percent: 1,
             statusMsg: `Запуск скрейпінгу: ${meta.title}...`,
             sessionTitle: meta.title,
             category: meta.category,
             sessionId: currentSessionId,
+            estimatedTotal: estTotal,
             startTime: hudStartTime
         });
 
@@ -974,9 +1065,11 @@
 
         if (message.action === 'PING_TAB_STATUS') {
             const meta = getPageMetadata();
+            const est = getEstimatedTotalFromPage();
             sendResponse({
                 isRunning: isTabScrapingActive,
                 totalScraped: sentLinks.size,
+                estimatedTotal: est,
                 sessionTitle: meta.title,
                 category: meta.category,
                 sessionId: currentSessionId

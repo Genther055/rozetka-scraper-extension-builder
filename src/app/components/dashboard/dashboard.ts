@@ -1329,6 +1329,7 @@ export class DashboardComponent implements OnInit {
 
   autoRefreshTimer: any;
   private productUpdateListener: any = null;
+  private taskProgressListener: any = null;
   private storageEventListener: any = null;
 
   ngOnInit() {
@@ -1368,6 +1369,26 @@ export class DashboardComponent implements OnInit {
       };
       window.addEventListener('tradescout_products_updated', this.productUpdateListener as EventListener);
 
+      // Listen for instant live progress telemetry events directly from Extension background
+      this.taskProgressListener = (e: CustomEvent) => {
+        if (e && e.detail) {
+          const task: LiveScrapingTask = e.detail;
+          const key = task.sessionId || (task.tabId ? `tab_${task.tabId}` : 'default_scrape');
+          const idx = this.activeScrapes.findIndex(t => (t.sessionId === key || (task.tabId && t.tabId === task.tabId)));
+          if (idx >= 0) {
+            this.activeScrapes[idx] = { ...this.activeScrapes[idx], ...task };
+          } else {
+            this.activeScrapes = [...this.activeScrapes, task];
+          }
+          this.isAnyScrapeActive = this.activeScrapes.some(t => t.status === 'scraping');
+          if (this.isAnyScrapeActive) {
+            this.startLiveStopwatch();
+          }
+          this.cdr.markForCheck();
+        }
+      };
+      window.addEventListener('tradescout_task_progress', this.taskProgressListener as EventListener);
+
       this.storageEventListener = (e: StorageEvent) => {
         if (e.key === this.STORAGE_PRODUCTS_KEY && e.newValue) {
           try {
@@ -1403,6 +1424,9 @@ export class DashboardComponent implements OnInit {
     if (typeof window !== 'undefined') {
       if (this.productUpdateListener) {
         window.removeEventListener('tradescout_products_updated', this.productUpdateListener as EventListener);
+      }
+      if (this.taskProgressListener) {
+        window.removeEventListener('tradescout_task_progress', this.taskProgressListener as EventListener);
       }
       if (this.storageEventListener) {
         window.removeEventListener('storage', this.storageEventListener);
