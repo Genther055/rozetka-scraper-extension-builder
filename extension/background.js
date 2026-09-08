@@ -86,6 +86,18 @@ async function startScrapingTab(tabId, webhookUrl) {
                             sessionId: sessionId
                         }, (r) => {
                             const __ = chrome.runtime.lastError;
+                            if (__) {
+                                // Direct fail-safe execution if port hasn't bound yet
+                                chrome.scripting.executeScript({
+                                    target: { tabId: tabId },
+                                    func: (tId, wUrl) => {
+                                        if (window.__tradeScoutStartScrape) {
+                                            window.__tradeScoutStartScrape(tId, wUrl);
+                                        }
+                                    },
+                                    args: [tabId, webhookUrl]
+                                }).catch(() => {});
+                            }
                             resolve(r || { success: true });
                         });
                     }, 150);
