@@ -232,37 +232,26 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         refreshTabsList();
 
         const currentSession = sessions[activeTabId];
-        if (currentSession) {
-            if (currentSession.sessionTitle) {
-                tabTitleEl.innerText = currentSession.sessionTitle;
+        if (currentSession && currentSession.isRunning === true && !currentSession.statusMsg?.includes('зупинено')) {
+            btnStart.disabled = true;
+            btnStop.disabled = false;
+            tabBadgeEl.innerText = '● Збирається...';
+            tabBadgeEl.style.color = '#38bdf8';
+            if (!timerInterval && currentSession.startTime) {
+                startTimer(currentSession.startTime);
             }
-
-            if (currentSession.isRunning && !currentSession.statusMsg?.includes('зупинено')) {
-                btnStart.disabled = true;
-                btnStop.disabled = false;
-                tabBadgeEl.innerText = '● Збирається...';
-                tabBadgeEl.style.color = '#38bdf8';
-                if (!timerInterval) startTimer(currentSession.startTime || Date.now());
-                updateProgress(currentSession.percentProgress || 5, currentSession.totalScraped || 0, currentSession.statusMsg, currentSession.estimatedTotal);
-            } else {
-                btnStart.disabled = false;
-                btnStop.disabled = true;
-                tabBadgeEl.innerText = currentSession.finishedAt ? '✓ Завершено' : 'Готова до запуску';
-                tabBadgeEl.style.color = '#10b981';
-                stopTimer(!currentSession.finishedAt);
-                if (currentSession.finishedAt) {
-                    updateProgress(100, currentSession.totalScraped || 0, `Збір завершено! (${currentSession.totalScraped || 0} тов.)`, currentSession.estimatedTotal);
-                } else {
-                    updateProgress(0, 0, currentSession.statusMsg || 'Готова до запуску', currentSession.estimatedTotal);
-                }
-            }
+            updateProgress(currentSession.percentProgress || 5, currentSession.totalScraped || 0, currentSession.statusMsg, currentSession.estimatedTotal);
         } else {
             btnStart.disabled = false;
             btnStop.disabled = true;
-            tabBadgeEl.innerText = 'Готова до запуску';
+            tabBadgeEl.innerText = (currentSession && currentSession.finishedAt) ? '✓ Завершено' : 'Готова до запуску';
             tabBadgeEl.style.color = '#10b981';
-            stopTimer(true);
-            updateProgress(0, 0, 'Готова до запуску');
+            stopTimer(!(currentSession && currentSession.finishedAt));
+            if (currentSession && currentSession.finishedAt) {
+                updateProgress(100, currentSession.totalScraped || 0, `Збір завершено! (${currentSession.totalScraped || 0} тов.)`, currentSession.estimatedTotal);
+            } else {
+                updateProgress(0, 0, (currentSession && currentSession.statusMsg) || 'Готова до запуску');
+            }
         }
     }
 });
