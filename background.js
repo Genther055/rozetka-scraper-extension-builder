@@ -1,5 +1,5 @@
-// Background Service Worker for TradeScout Multi-Tab Extension v3.0
-console.log('TradeScout Background Service Worker v3.0 initialized.');
+// Background Service Worker for TradeScout Multi-Tab Extension v3.5 Pro
+console.log('TradeScout Background Service Worker v3.5 Pro initialized.');
 
 const LOCAL_DASHBOARD_API = 'http://localhost:4000/api/products';
 const LOCAL_IP_API = 'http://127.0.0.1:4000/api/products';
@@ -37,7 +37,7 @@ async function removeTabSession(tabId) {
     }
 }
 
-// Clean up sessions on startup or reload
+// Clean up sessions on startup or install
 chrome.runtime.onInstalled.addListener(async () => {
     stoppedTabs.clear();
     await chrome.storage.local.set({ tabSessions: {} });
@@ -47,24 +47,6 @@ chrome.runtime.onStartup.addListener(async () => {
     stoppedTabs.clear();
     await chrome.storage.local.set({ tabSessions: {} });
 });
-
-// Clear running flags on initial worker boot
-(async () => {
-    try {
-        const sessions = await getTabSessions();
-        let updated = false;
-        for (const k in sessions) {
-            if (sessions[k]?.isRunning) {
-                sessions[k].isRunning = false;
-                sessions[k].statusMsg = 'Готова до запуску';
-                updated = true;
-            }
-        }
-        if (updated) {
-            await chrome.storage.local.set({ tabSessions: sessions });
-        }
-    } catch (_) {}
-})();
 
 // Clean up sessions when a tab is closed
 chrome.tabs.onRemoved.addListener(async (tabId) => {
@@ -111,6 +93,8 @@ async function getAllRozetkaTabs() {
                         isRunning: !!res.isRunning,
                         totalScraped: res.totalScraped || 0,
                         estimatedTotal: res.estimatedTotal || 0,
+                        percent: res.percent || 0,
+                        page: res.page || 1,
                         sessionTitle: res.sessionTitle || t.title || 'Каталог Rozetka',
                         category: res.category || 'Товари'
                     };
@@ -212,15 +196,13 @@ async function stopScrapingTab(tabId) {
     return new Promise(resolve => {
         chrome.tabs.sendMessage(tabId, { action: 'STOP_TAB_SCRAPE' }, () => {
             const _ = chrome.runtime.lastError;
-            // Always run direct fail-safe script to guarantee immediate halting
+            // Direct fail-safe script to guarantee immediate halting
             chrome.scripting.executeScript({
                 target: { tabId: tabId },
                 func: () => {
                     try {
                         window.__tradeScoutIsScrapingActive = false;
                         if (window.__tradeScoutStopScrape) window.__tradeScoutStopScrape();
-                        sessionStorage.removeItem('tradescout_tab_navigating');
-                        sessionStorage.removeItem('tradescout_tab_scraping');
                     } catch (_) {}
                 }
             }).catch(() => {});

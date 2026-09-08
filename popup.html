@@ -4,20 +4,23 @@
     <meta charset="UTF-8">
     <title>TradeScout Rozetka Scraper</title>
     <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
-            width: 360px;
-            max-height: 590px;
+            width: 340px;
+            max-height: 580px;
             overflow-y: auto;
             padding: 12px;
-            margin: 0;
             font-family: "Segoe UI", Tahoma, Arial, sans-serif;
             font-size: 13px;
             background-color: #0f172a;
             color: #f1f5f9;
-            box-sizing: border-box;
         }
 
-        /* Custom scrollbar */
         body::-webkit-scrollbar {
             width: 6px;
         }
@@ -29,11 +32,12 @@
             border-radius: 3px;
         }
 
+        /* Brand Container */
         .brand-container {
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
             padding: 8px 12px;
             border-radius: 8px;
@@ -59,7 +63,6 @@
         }
 
         .brand-title {
-            margin: 0;
             font-size: 13px;
             font-weight: 800;
             letter-spacing: 0.5px;
@@ -68,7 +71,6 @@
         }
 
         .brand-subtitle {
-            margin: 0;
             font-size: 9px;
             font-weight: 700;
             color: #10b981;
@@ -92,7 +94,7 @@
         .master-toolbar {
             display: flex;
             gap: 8px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .btn-master-start {
@@ -100,8 +102,8 @@
             background: linear-gradient(135deg, #10b981 0%, #059669 100%);
             color: #ffffff;
             border: 1px solid #10b981;
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-            padding: 8px 10px;
+            box-shadow: 0 4px 10px rgba(16, 185, 129, 0.25);
+            padding: 7px 10px;
             font-size: 11px;
             font-weight: 800;
             border-radius: 6px;
@@ -109,7 +111,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 5px;
             transition: all 0.2s;
         }
         .btn-master-start:hover {
@@ -122,7 +124,7 @@
             background: #1e293b;
             color: #f87171;
             border: 1px solid #7f1d1d;
-            padding: 8px 10px;
+            padding: 7px 10px;
             font-size: 11px;
             font-weight: 700;
             border-radius: 6px;
@@ -134,16 +136,17 @@
             color: #ffffff;
         }
 
-        /* Active Tab Header Card */
-        .tab-info-card {
+        /* Current Tab Main Card */
+        .current-tab-card {
             background: #1e293b;
             border: 1px solid #334155;
             border-radius: 8px;
-            padding: 10px;
+            padding: 12px;
             margin-bottom: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
         }
 
-        .tab-info-header {
+        .tab-card-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -152,64 +155,83 @@
             color: #94a3b8;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
 
-        .tab-info-title {
-            font-size: 12px;
+        .badge-status {
+            font-size: 10px;
+            font-weight: 700;
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .tab-title-text {
+            font-size: 13px;
             font-weight: 700;
             color: #38bdf8;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }
 
-        /* Single tab buttons */
-        .button-container {
+        /* Action Buttons */
+        .tab-button-group {
             display: flex;
-            gap: 6px;
-            margin-bottom: 8px;
+            gap: 8px;
+            margin-bottom: 12px;
         }
 
-        button {
-            padding: 6px 10px;
-            cursor: pointer;
-            font-size: 11px;
-            font-weight: bold;
-            border: 1px solid #334155;
-            border-radius: 6px;
-            background-color: #1e293b;
-            color: #e2e8f0;
-            transition: all 0.2s;
-        }
-
-        #btn-start {
+        .btn-action {
             flex: 1;
+            padding: 8px 10px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 800;
+            border-radius: 6px;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .btn-action-start {
             background-color: #10b981;
             color: #ffffff;
             border-color: #059669;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
         }
-        #btn-start:hover { background-color: #059669; }
-        #btn-start:disabled {
-            background-color: rgba(16, 185, 129, 0.2);
+        .btn-action-start:hover {
+            background-color: #059669;
+        }
+        .btn-action-start:disabled {
+            background-color: rgba(16, 185, 129, 0.15);
             color: #6ee7b7;
             cursor: not-allowed;
+            box-shadow: none;
             border-color: transparent;
         }
 
-        #btn-stop {
-            flex: 1;
+        .btn-action-stop {
             background-color: #ef4444;
             color: #ffffff;
             border-color: #dc2626;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
         }
-        #btn-stop:hover { background-color: #dc2626; }
-        #btn-stop:disabled {
-            background-color: rgba(239, 68, 68, 0.2);
+        .btn-action-stop:hover {
+            background-color: #dc2626;
+        }
+        .btn-action-stop:disabled {
+            background-color: rgba(239, 68, 68, 0.15);
             color: #fca5a5;
             cursor: not-allowed;
+            box-shadow: none;
             border-color: transparent;
         }
 
@@ -217,7 +239,7 @@
         .progress-header {
             display: flex;
             justify-content: space-between;
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 700;
             color: #94a3b8;
             margin-bottom: 4px;
@@ -225,136 +247,100 @@
 
         .progress-bar-bg {
             width: 100%;
-            height: 6px;
+            height: 7px;
             background-color: #0f172a;
-            border-radius: 3px;
+            border-radius: 4px;
             overflow: hidden;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
             border: 1px solid #334155;
         }
 
         .progress-bar-fill {
             height: 100%;
             width: 0%;
-            background: linear-gradient(90deg, #10b981 0%, #3b82f6 100%);
-            border-radius: 3px;
-            transition: width 0.3s ease;
+            background: linear-gradient(90deg, #10b981 0%, #38bdf8 100%);
+            border-radius: 4px;
+            transition: width 0.25s ease;
         }
 
-        .status-details {
+        /* Live Status Text */
+        .status-msg {
             font-size: 11px;
-            color: #e2e8f0;
-        }
-
-        .status-action {
             font-weight: 600;
             color: #f8fafc;
-            display: block;
-            margin-bottom: 2px;
+            margin-bottom: 8px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            font-size: 10px;
+            background: #0f172a;
+            padding: 5px 8px;
+            border-radius: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        .status-metrics {
-            display: flex;
-            justify-content: space-between;
-            color: #94a3b8;
+        /* Metrics Bar */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 4px;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 6px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
             font-size: 10px;
-            font-weight: 600;
+            font-weight: 700;
+            color: #cbd5e1;
+            text-align: center;
         }
 
-        /* Multi-Tab List Card */
-        .tabs-list-card {
+        .metric-item {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Summary / Utility Row */
+        .summary-card {
             background: #1e293b;
             border: 1px solid #334155;
             border-radius: 8px;
-            padding: 10px;
+            padding: 8px 10px;
             margin-bottom: 10px;
-        }
-
-        .tabs-list-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             font-size: 11px;
-            font-weight: 700;
-            color: #cbd5e1;
-            margin-bottom: 8px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            padding-bottom: 4px;
+            color: #94a3b8;
         }
 
-        .btn-refresh-tabs {
-            background: none;
-            border: none;
-            color: #38bdf8;
-            cursor: pointer;
-            padding: 0;
-            font-size: 11px;
-        }
-        .btn-refresh-tabs:hover { color: #7dd3fc; }
-
-        .tab-item-row {
+        .summary-btn-group {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: #0f172a;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 6px;
-            padding: 6px 8px;
-            margin-bottom: 6px;
             gap: 6px;
         }
-        .tab-item-row.is-active-tab {
-            border-color: rgba(56, 189, 248, 0.4);
-            background: rgba(15, 23, 42, 0.8);
-        }
 
-        .tab-item-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .tab-item-name {
-            font-size: 11px;
-            font-weight: 700;
-            color: #f8fafc;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .tab-item-status {
-            font-size: 10px;
-            color: #94a3b8;
-            margin-top: 1px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .tab-item-actions {
-            display: flex;
-            gap: 4px;
-        }
-
-        .btn-tab-action {
+        .btn-util {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #cbd5e1;
             padding: 3px 6px;
             font-size: 10px;
+            font-weight: 600;
             border-radius: 4px;
-            border: 1px solid #334155;
-            background: #1e293b;
-            color: #e2e8f0;
             cursor: pointer;
+            transition: all 0.2s;
         }
-        .btn-tab-action:hover { background: #334155; }
-        .btn-tab-start { color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
-        .btn-tab-stop { color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
+        .btn-util:hover {
+            background: #334155;
+            color: #ffffff;
+        }
+        .btn-util-reset {
+            color: #fca5a5;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+        .btn-util-reset:hover {
+            background: #ef4444;
+            color: #ffffff;
+        }
 
         /* Webhook Config Card */
         .config-card {
@@ -384,7 +370,9 @@
             font-size: 10px;
             outline: none;
         }
-        input[type="text"]:focus { border-color: #10b981; }
+        input[type="text"]:focus {
+            border-color: #10b981;
+        }
     </style>
 </head>
 <body>
@@ -400,60 +388,57 @@
             <h1 class="brand-title">TradeScout</h1>
             <span class="brand-subtitle">Каталог Rozetka</span>
         </div>
-        <span class="version-badge">v3.0 Live</span>
+        <span class="version-badge">v3.5 Pro</span>
     </div>
 
-    <!-- Master Toolbar (Start / Stop All Rozetka Tabs) -->
+    <!-- Master Actions Toolbar -->
     <div class="master-toolbar">
         <button id="btn-master-start" class="btn-master-start">
-            <span>⚡ Запустити всі відкриті вкладки (<span id="all-tabs-count">0</span>)</span>
+            <span>⚡ Запустити всі вкладки (<span id="all-tabs-count">1</span>)</span>
         </button>
         <button id="btn-master-stop" class="btn-master-stop">⏹ Зупинити всі</button>
     </div>
 
-    <!-- Active Tab Info Card -->
-    <div class="tab-info-card">
-        <div class="tab-info-header">
+    <!-- Current Tab Focus Card -->
+    <div class="current-tab-card">
+        <div class="tab-card-header">
             <span>Поточна вкладка:</span>
-            <span id="tab-badge" style="color: #10b981;">Готова до запуску</span>
+            <span id="tab-badge" class="badge-status">Готова до запуску</span>
         </div>
-        <span class="tab-info-title" id="tab-title">Визначення каталогу...</span>
+        <div class="tab-title-text" id="tab-title">Визначення сторінки Rozetka...</div>
 
-        <div class="button-container">
-            <button id="btn-start">Запустити цю вкладку</button>
-            <button id="btn-stop" disabled>Зупинити цю вкладку</button>
+        <!-- Start / Stop Action Buttons -->
+        <div class="tab-button-group">
+            <button id="btn-start" class="btn-action btn-action-start">▶ Почати збір</button>
+            <button id="btn-stop" class="btn-action btn-action-stop" disabled>⏹ Зупинити</button>
         </div>
 
+        <!-- Progress Bar -->
         <div class="progress-header">
             <span>Прогрес збору:</span>
             <span id="percent-text">0%</span>
         </div>
-        
         <div class="progress-bar-bg">
             <div id="progress-fill" class="progress-bar-fill"></div>
         </div>
 
-        <div class="status-details">
-            <span class="status-action" id="status-text">Очікування запуску...</span>
-            <div class="status-metrics">
-                <span id="timer-text">Час: 00:00</span>
-                <span id="count-text">0 товарів</span>
-            </div>
+        <!-- Status Action Message -->
+        <div class="status-msg" id="status-text">Готова до запуску</div>
+
+        <!-- Live Metrics Grid (Timer, Count, Page) -->
+        <div class="metrics-grid">
+            <div class="metric-item" id="timer-text">⏱ 00:00</div>
+            <div class="metric-item" id="count-text">📦 0 товарів</div>
+            <div class="metric-item" id="page-text">📄 Стор. 1</div>
         </div>
     </div>
 
-    <!-- Open Rozetka Tabs List Card -->
-    <div class="tabs-list-card">
-        <div class="tabs-list-header">
-            <span>Знайдено вкладок Rozetka (<span id="tabs-found-count">0</span>)</span>
-            <div style="display: flex; gap: 8px;">
-                <button id="btn-reset-all" class="btn-refresh-tabs" style="color: #fca5a5;" title="Очистити всі сесії та скинути стан">🧹 Скинути стан</button>
-                <button id="btn-refresh-tabs" class="btn-refresh-tabs" title="Оновити список">🔄 Оновити</button>
-            </div>
-        </div>
-        <div id="tabs-list-container">
-            <!-- Dynamic tab items rendered via popup.js -->
-            <div style="font-size: 10px; color: #94a3b8; text-align: center; padding: 6px 0;">Пошук вкладок Rozetka...</div>
+    <!-- Open Rozetka Tabs Summary Card -->
+    <div class="summary-card">
+        <div>Вкладок Rozetka: <strong id="tabs-found-count" style="color: #38bdf8;">1</strong></div>
+        <div class="summary-btn-group">
+            <button id="btn-reset-all" class="btn-util btn-util-reset" title="Очистити всі сесії та скинути стан">🧹 Скинути стан</button>
+            <button id="btn-refresh-tabs" class="btn-util" title="Оновити список вкладок">🔄 Оновити</button>
         </div>
     </div>
 

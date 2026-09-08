@@ -1,10 +1,10 @@
-// TradeScout Content Script v3.0 (Multi-Tab, Controlled Scraper & Live Floating HUD)
+// TradeScout Content Script v3.5 Pro (Multi-Tab Background Worker & Live Telemetry)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
     window.__tradeScoutInjected = true;
 
-    console.log('TradeScout Content Script loaded on:', window.location.href);
+    console.log('TradeScout Content Script v3.5 Pro loaded on:', window.location.href);
 
     let isTabScrapingActive = false;
     window.__tradeScoutIsScrapingActive = false;
@@ -12,263 +12,11 @@
     let currentTabId = null;
     let webhookEndpoint = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
     const sentLinks = new Set();
-    let hudTimerInterval = null;
-    let hudStartTime = null;
-
-    // --- Floating In-Page HUD Widget ---
-    let hudContainer = null;
-    let hudShadow = null;
-
-    function createOrGetHud() {
-        if (hudContainer && document.body.contains(hudContainer)) {
-            return hudShadow;
-        }
-
-        hudContainer = document.createElement('div');
-        hudContainer.id = 'tradescout-inpage-hud-host';
-        hudContainer.style.position = 'fixed';
-        hudContainer.style.bottom = '20px';
-        hudContainer.style.right = '20px';
-        hudContainer.style.zIndex = '2147483647';
-        hudContainer.style.fontFamily = 'Segoe UI, system-ui, -apple-system, sans-serif';
-
-        hudShadow = hudContainer.attachShadow({ mode: 'open' });
-        hudShadow.innerHTML = `
-            <style>
-                .hud-box {
-                    width: 290px;
-                    background: #0f172a;
-                    border: 1px solid rgba(255, 255, 255, 0.15);
-                    border-radius: 12px;
-                    padding: 12px;
-                    color: #f8fafc;
-                    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.2);
-                    backdrop-filter: blur(12px);
-                    font-size: 12px;
-                    line-height: 1.4;
-                    box-sizing: border-box;
-                    animation: slideUp 0.3s ease-out;
-                }
-                @keyframes slideUp {
-                    from { transform: translateY(20px); opacity: 0; }
-                    to { transform: translateY(0); opacity: 1; }
-                }
-                .hud-header {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    margin-bottom: 8px;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-                    padding-bottom: 6px;
-                }
-                .hud-brand {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    font-weight: 800;
-                    font-size: 12px;
-                    color: #ffffff;
-                }
-                .hud-dot {
-                    width: 8px;
-                    height: 8px;
-                    border-radius: 50%;
-                    background: #94a3b8;
-                }
-                .hud-title {
-                    font-weight: 700;
-                    color: #38bdf8;
-                    font-size: 12px;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    margin-bottom: 6px;
-                }
-                .hud-progress-bg {
-                    width: 100%;
-                    height: 6px;
-                    background: #1e293b;
-                    border-radius: 3px;
-                    overflow: hidden;
-                    margin-bottom: 6px;
-                    border: 1px solid rgba(255, 255, 255, 0.05);
-                }
-                .hud-progress-fill {
-                    height: 100%;
-                    width: 0%;
-                    background: linear-gradient(90deg, #10b981, #6366f1);
-                    border-radius: 3px;
-                    transition: width 0.25s ease;
-                }
-                .hud-status-row {
-                    display: flex;
-                    justify-content: space-between;
-                    font-size: 11px;
-                    color: #94a3b8;
-                    margin-bottom: 8px;
-                    font-weight: 600;
-                }
-                .hud-msg {
-                    font-size: 11px;
-                    color: #cbd5e1;
-                    margin-bottom: 8px;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-                .hud-actions {
-                    display: flex;
-                    gap: 6px;
-                }
-                .hud-btn {
-                    flex: 1;
-                    padding: 5px 8px;
-                    border-radius: 6px;
-                    font-size: 11px;
-                    font-weight: 700;
-                    cursor: pointer;
-                    border: none;
-                    transition: all 0.2s;
-                }
-                .hud-btn-start {
-                    background: #10b981;
-                    color: #fff;
-                }
-                .hud-btn-start:hover { background: #059669; }
-                .hud-btn-stop {
-                    background: #ef4444;
-                    color: #fff;
-                }
-                .hud-btn-stop:hover { background: #dc2626; }
-                .hud-btn-min {
-                    background: #334155;
-                    color: #cbd5e1;
-                    padding: 5px 8px;
-                }
-                .hud-btn-min:hover { background: #475569; }
-                .minimized {
-                    width: auto !important;
-                    padding: 6px 10px !important;
-                }
-            </style>
-            <div class="hud-box" id="hud-box">
-                <div class="hud-header">
-                    <div class="hud-brand">
-                        <div class="hud-dot" id="hud-dot"></div>
-                        <span>TradeScout</span>
-                        <span style="font-size: 9px; color: #10b981; font-weight: bold;">LIVE</span>
-                    </div>
-                    <button class="hud-btn hud-btn-min" id="btn-hud-min" title="Згорнути/Розгорнути">_</button>
-                </div>
-                <div id="hud-body">
-                    <div class="hud-title" id="hud-title">Каталог Rozetka</div>
-                    <div class="hud-progress-bg">
-                        <div class="hud-progress-fill" id="hud-fill"></div>
-                    </div>
-                    <div class="hud-status-row">
-                        <span id="hud-count">0 товарів</span>
-                        <span id="hud-timer">Час: 00:00</span>
-                    </div>
-                    <div class="hud-msg" id="hud-msg">Готовий до запуску</div>
-                    <div class="hud-actions">
-                        <button class="hud-btn hud-btn-start" id="btn-hud-start">Запустити збір</button>
-                        <button class="hud-btn hud-btn-stop" id="btn-hud-stop" style="display: none;">Зупинити</button>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(hudContainer);
-
-        // Bind in-page HUD buttons
-        const btnStart = hudShadow.getElementById('btn-hud-start');
-        const btnStop = hudShadow.getElementById('btn-hud-stop');
-        const btnMin = hudShadow.getElementById('btn-hud-min');
-        const hudBody = hudShadow.getElementById('hud-body');
-        const hudBox = hudShadow.getElementById('hud-box');
-
-        btnMin.addEventListener('click', () => {
-            const isHidden = hudBody.style.display === 'none';
-            hudBody.style.display = isHidden ? 'block' : 'none';
-            if (isHidden) {
-                hudBox.classList.remove('minimized');
-                btnMin.innerText = '_';
-            } else {
-                hudBox.classList.add('minimized');
-                btnMin.innerText = '□';
-            }
-        });
-
-        btnStart.addEventListener('click', () => {
-            startScrapingOnThisTab();
-        });
-
-        btnStop.addEventListener('click', () => {
-            stopScrapingOnThisTab();
-        });
-
-        return hudShadow;
-    }
-
-    function updateHud(state) {
-        const shadow = createOrGetHud();
-        if (!shadow) return;
-
-        const hudTitle = shadow.getElementById('hud-title');
-        const hudFill = shadow.getElementById('hud-fill');
-        const hudCount = shadow.getElementById('hud-count');
-        const hudMsg = shadow.getElementById('hud-msg');
-        const hudDot = shadow.getElementById('hud-dot');
-        const btnStart = shadow.getElementById('btn-hud-start');
-        const btnStop = shadow.getElementById('btn-hud-stop');
-
-        if (state.sessionTitle) hudTitle.innerText = state.sessionTitle;
-        if (state.percent !== undefined) hudFill.style.width = `${Math.min(100, Math.max(0, state.percent))}%`;
-        if (state.total !== undefined) {
-            if (state.estimatedTotal && state.estimatedTotal > 0) {
-                hudCount.innerText = `${state.total} / ${state.estimatedTotal} тов. (${state.percent || 0}%)`;
-            } else {
-                hudCount.innerText = `${state.total} товарів`;
-            }
-        }
-        if (state.statusMsg) hudMsg.innerText = state.statusMsg;
-
-        if (state.isRunning) {
-            hudDot.style.background = '#10b981';
-            hudDot.style.boxShadow = '0 0 8px #10b981';
-            btnStart.style.display = 'none';
-            btnStop.style.display = 'block';
-        } else {
-            hudDot.style.background = state.finished ? '#10b981' : '#94a3b8';
-            hudDot.style.boxShadow = 'none';
-            btnStart.style.display = 'block';
-            btnStop.style.display = 'none';
-            btnStart.innerText = state.finished ? 'Зібрати повторно' : 'Запустити збір';
-        }
-    }
-
-    function startHudTimer() {
-        if (hudTimerInterval) clearInterval(hudTimerInterval);
-        hudStartTime = Date.now();
-        hudTimerInterval = setInterval(() => {
-            const shadow = createOrGetHud();
-            if (!shadow) return;
-            const timerEl = shadow.getElementById('hud-timer');
-            if (timerEl) {
-                const sec = Math.floor((Date.now() - hudStartTime) / 1000);
-                const m = String(Math.floor(sec / 60)).padStart(2, '0');
-                const s = String(sec % 60).padStart(2, '0');
-                timerEl.innerText = `Час: ${m}:${s}`;
-            }
-        }, 1000);
-    }
-
-    function stopHudTimer() {
-        if (hudTimerInterval) {
-            clearInterval(hudTimerInterval);
-            hudTimerInterval = null;
-        }
-    }
+    let sessionStartTime = null;
+    let currentPercent = 0;
+    let currentEstimatedTotal = 0;
+    let currentStatusMsg = 'Готова до запуску';
+    let currentPage = 1;
 
     // Helper to send messages safely to background service worker
     function sendTabMessage(msg) {
@@ -416,7 +164,7 @@
         } catch (_) {}
     }
 
-    function findPaginationActionElements(currentPage) {
+    function findPaginationActionElements(pageIndex) {
         const retrySelectors = [
             'button.retry',
             'button[class*="retry"]',
@@ -474,7 +222,7 @@
             } catch (e) {}
         }
 
-        const nextPageNum = currentPage + 1;
+        const nextPageNum = pageIndex + 1;
         const pageNumSelectors = [
             `a.pagination__link[href*="page=${nextPageNum}"]`,
             `a.pagination__link[href*="page=${nextPageNum}/"]`,
@@ -627,29 +375,21 @@
     // Main scraping runner
     async function runTabScraper(initialPage) {
         const meta = getPageMetadata();
-        let estimatedTotal = getEstimatedTotalFromPage();
+        currentEstimatedTotal = getEstimatedTotalFromPage();
+        currentPage = initialPage || 1;
         console.log(`TradeScout Tab ${currentTabId}: Started scraping "${meta.title}"...`);
 
-        startHudTimer();
-        const initialPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, estimatedTotal)) * 100)) || 1;
-        updateHud({
-            sessionTitle: meta.title,
-            percent: initialPercent,
-            total: sentLinks.size,
-            estimatedTotal: estimatedTotal,
-            statusMsg: `Збір: ${meta.title} (${sentLinks.size}/${estimatedTotal})...`,
-            isRunning: true
-        });
+        currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
+        currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
 
-        let pageCount = initialPage || 1;
         let consecutiveNoNew = 0;
         let lastCount = sentLinks.size;
         const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"], [data-testid="goods-tile"]';
 
         while (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
             const latestEstimated = getEstimatedTotalFromPage();
-            if (latestEstimated > estimatedTotal) {
-                estimatedTotal = latestEstimated;
+            if (latestEstimated > currentEstimatedTotal) {
+                currentEstimatedTotal = latestEstimated;
             }
 
             // 1. Silent scroll to trigger lazy mounting
@@ -657,13 +397,13 @@
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
             // 2. Scrape all items on current page
-            let newProducts = await scrapeCurrentDomItems(meta, pageCount);
+            let newProducts = await scrapeCurrentDomItems(meta, currentPage);
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
             
             if (newProducts.length === 0) {
                 await new Promise(r => setTimeout(r, 350));
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                const extraSweep = await scrapeCurrentDomItems(meta, pageCount);
+                const extraSweep = await scrapeCurrentDomItems(meta, currentPage);
                 if (extraSweep.length > 0) {
                     newProducts = newProducts.concat(extraSweep);
                 }
@@ -671,35 +411,26 @@
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
             
             if (newProducts.length > 0 && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
-                const percent = Math.min(100, Math.round((sentLinks.size / Math.max(1, estimatedTotal)) * 100));
-                const statusMsg = `Зібрано ${sentLinks.size} з ${estimatedTotal} товарів (стор. ${pageCount})...`;
-
-                updateHud({
-                    sessionTitle: meta.title,
-                    percent,
-                    total: sentLinks.size,
-                    estimatedTotal: estimatedTotal,
-                    statusMsg,
-                    isRunning: true
-                });
+                currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100));
+                currentStatusMsg = `Зібрано ${sentLinks.size} з ${currentEstimatedTotal} товарів (стор. ${currentPage})...`;
 
                 sendTabMessage({
                     action: 'tabProgress',
                     total: sentLinks.size,
-                    page: pageCount,
-                    percent,
-                    statusMsg,
+                    page: currentPage,
+                    percent: currentPercent,
+                    statusMsg: currentStatusMsg,
                     syncedCount: sentLinks.size,
-                    estimatedTotal: estimatedTotal,
+                    estimatedTotal: currentEstimatedTotal,
                     sessionTitle: meta.title,
                     category: meta.category,
                     sessionId: currentSessionId,
-                    startTime: hudStartTime
+                    startTime: sessionStartTime
                 });
 
                 await sendWebhookPayload({
                     products: newProducts,
-                    page: pageCount,
+                    page: currentPage,
                     sessionId: currentSessionId,
                     sessionTitle: meta.title,
                     category: meta.category,
@@ -717,8 +448,8 @@
             }
 
             // 3. Check if all items in catalog are collected
-            if (estimatedTotal > 0 && sentLinks.size >= estimatedTotal) {
-                console.log(`TradeScout Tab ${currentTabId}: All ${sentLinks.size}/${estimatedTotal} items collected!`);
+            if (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) {
+                console.log(`TradeScout Tab ${currentTabId}: All ${sentLinks.size}/${currentEstimatedTotal} items collected!`);
                 break;
             }
 
@@ -735,15 +466,24 @@
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
                 const prevDomCount = document.querySelectorAll(tileSelectors).length;
-                const actionObj = findPaginationActionElements(pageCount);
+                const actionObj = findPaginationActionElements(currentPage);
 
                 if (actionObj) {
                     if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
-                    updateHud({
-                        statusMsg: `Завантаження стор. ${pageCount + 1}...`,
+                    currentStatusMsg = `Завантаження стор. ${currentPage + 1}...`;
+                    sendTabMessage({
+                        action: 'tabProgress',
                         total: sentLinks.size,
-                        isRunning: true
+                        page: currentPage,
+                        percent: currentPercent,
+                        statusMsg: currentStatusMsg,
+                        syncedCount: sentLinks.size,
+                        estimatedTotal: currentEstimatedTotal,
+                        sessionTitle: meta.title,
+                        category: meta.category,
+                        sessionId: currentSessionId,
+                        startTime: sessionStartTime
                     });
 
                     dispatchSafeClick(actionObj.element);
@@ -774,7 +514,7 @@
                     }
 
                     if (pageTransitionSuccess) {
-                        pageCount++;
+                        currentPage++;
                         consecutiveNoNew = 0;
                         break;
                     }
@@ -799,20 +539,18 @@
         if (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
             isTabScrapingActive = false;
             window.__tradeScoutIsScrapingActive = false;
-            stopHudTimer();
+            currentPercent = 100;
+            currentStatusMsg = `Збір завершено! Всього ${sentLinks.size} товарів.`;
             console.log(`TradeScout Tab ${currentTabId}: Scrape completed with ${sentLinks.size} items.`);
-            
-            updateHud({
-                percent: 100,
-                total: sentLinks.size,
-                statusMsg: `Збір завершено! Всього ${sentLinks.size} товарів.`,
-                isRunning: false,
-                finished: true
-            });
 
             sendTabMessage({
                 action: 'tabFinished',
                 total: sentLinks.size,
+                page: currentPage,
+                percent: 100,
+                statusMsg: currentStatusMsg,
+                syncedCount: sentLinks.size,
+                estimatedTotal: sentLinks.size,
                 sessionTitle: meta.title,
                 category: meta.category,
                 sessionId: currentSessionId
@@ -821,30 +559,31 @@
     }
 
     function startScrapingOnThisTab(tabId, customUrl) {
-        stopHudTimer();
         isTabScrapingActive = true;
         window.__tradeScoutIsScrapingActive = true;
         currentTabId = tabId || currentTabId || Date.now();
         currentSessionId = `session_${currentTabId}_${Date.now()}`;
         if (customUrl) webhookEndpoint = customUrl;
         sentLinks.clear();
-        hudStartTime = Date.now();
-        startHudTimer(hudStartTime);
+        sessionStartTime = Date.now();
+        currentPage = 1;
 
         const meta = getPageMetadata();
-        const estTotal = getEstimatedTotalFromPage();
+        currentEstimatedTotal = getEstimatedTotalFromPage();
+        currentPercent = 1;
+        currentStatusMsg = `Запуск скрейпінгу: ${meta.title}...`;
 
         sendTabMessage({
             action: 'tabProgress',
             total: 0,
             page: 1,
             percent: 1,
-            statusMsg: `Запуск скрейпінгу: ${meta.title}...`,
+            statusMsg: currentStatusMsg,
             sessionTitle: meta.title,
             category: meta.category,
             sessionId: currentSessionId,
-            estimatedTotal: estTotal,
-            startTime: hudStartTime
+            estimatedTotal: currentEstimatedTotal,
+            startTime: sessionStartTime
         });
 
         runTabScraper(1);
@@ -853,19 +592,14 @@
     function stopScrapingOnThisTab() {
         isTabScrapingActive = false;
         window.__tradeScoutIsScrapingActive = false;
-        stopHudTimer();
         const meta = getPageMetadata();
-        
-        updateHud({
-            statusMsg: 'Скрейпінг зупинено.',
-            total: sentLinks.size,
-            isRunning: false
-        });
+        currentPercent = 0;
+        currentStatusMsg = 'Скрейпінг зупинено.';
 
         sendTabMessage({
             action: 'tabStopped',
             total: sentLinks.size,
-            page: 1,
+            page: currentPage,
             percent: 0,
             statusMsg: 'Скрейпінг зупинено.',
             sessionTitle: meta.title,
@@ -874,18 +608,8 @@
         });
     }
 
-    // Auto-create floating HUD on page load in 100% idle state
+    // Default 100% idle on page load
     const initialMeta = getPageMetadata();
-    createOrGetHud();
-    updateHud({
-        sessionTitle: initialMeta.title,
-        total: 0,
-        percent: 0,
-        statusMsg: 'Готовий до запуску',
-        isRunning: false
-    });
-
-    // Notify background that tab is idle and ready
     sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
 
     // Expose direct window handlers for fail-safe invocation
@@ -913,7 +637,11 @@
             sendResponse({
                 isRunning: isTabScrapingActive && window.__tradeScoutIsScrapingActive,
                 totalScraped: sentLinks.size,
-                estimatedTotal: est,
+                estimatedTotal: currentEstimatedTotal > 0 ? currentEstimatedTotal : est,
+                percent: currentPercent,
+                statusMsg: currentStatusMsg,
+                page: currentPage,
+                startTime: sessionStartTime,
                 sessionTitle: meta.title,
                 category: meta.category,
                 sessionId: currentSessionId
