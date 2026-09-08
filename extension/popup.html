@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <title>TradeScout Parallel Scraper</title>
+    <title>TradeScout Rozetka Scraper</title>
     <style>
         body {
             width: 360px;
@@ -398,7 +398,7 @@
         </div>
         <div class="brand-title-group">
             <h1 class="brand-title">TradeScout</h1>
-            <span class="brand-subtitle">Parallel Multi-Tab</span>
+            <span class="brand-subtitle">Каталог Rozetka</span>
         </div>
         <span class="version-badge">v3.0 Live</span>
     </div>
@@ -406,7 +406,7 @@
     <!-- Master Toolbar (Start / Stop All Rozetka Tabs) -->
     <div class="master-toolbar">
         <button id="btn-master-start" class="btn-master-start">
-            <span>⚡ Запустити всі вкладки (<span id="all-tabs-count">0</span>)</span>
+            <span>⚡ Запустити всі відкриті вкладки (<span id="all-tabs-count">0</span>)</span>
         </button>
         <button id="btn-master-stop" class="btn-master-stop">⏹ Зупинити всі</button>
     </div>
@@ -415,17 +415,17 @@
     <div class="tab-info-card">
         <div class="tab-info-header">
             <span>Поточна вкладка:</span>
-            <span id="tab-badge" style="color: #10b981;">Готова</span>
+            <span id="tab-badge" style="color: #10b981;">Готова до запуску</span>
         </div>
         <span class="tab-info-title" id="tab-title">Визначення каталогу...</span>
 
         <div class="button-container">
             <button id="btn-start">Запустити цю вкладку</button>
-            <button id="btn-stop" disabled>Зупинити</button>
+            <button id="btn-stop" disabled>Зупинити цю вкладку</button>
         </div>
 
         <div class="progress-header">
-            <span>Прогрес:</span>
+            <span>Прогрес збору:</span>
             <span id="percent-text">0%</span>
         </div>
         
@@ -445,7 +445,7 @@
     <!-- Open Rozetka Tabs List Card -->
     <div class="tabs-list-card">
         <div class="tabs-list-header">
-            <span>Відкриті вкладки Rozetka (<span id="tabs-found-count">0</span>)</span>
+            <span>Знайдено вкладок Rozetka (<span id="tabs-found-count">0</span>)</span>
             <div style="display: flex; gap: 8px;">
                 <button id="btn-reset-all" class="btn-refresh-tabs" style="color: #fca5a5;" title="Очистити всі сесії та скинути стан">🧹 Скинути стан</button>
                 <button id="btn-refresh-tabs" class="btn-refresh-tabs" title="Оновити список">🔄 Оновити</button>

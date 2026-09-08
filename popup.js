@@ -35,10 +35,13 @@ function startTimer(savedStartTime) {
     }, 1000);
 }
 
-function stopTimer() {
+function stopTimer(resetToZero = false) {
     if (timerInterval) {
         clearInterval(timerInterval);
         timerInterval = null;
+    }
+    if (resetToZero) {
+        timerText.innerText = 'Час: 00:00';
     }
 }
 
@@ -65,7 +68,7 @@ async function refreshTabsList() {
 
         const tabs = res.tabs;
         tabsFoundCountEl.innerText = tabs.length;
-        allTabsCountEl.innerText = tabs.length;
+        if (allTabsCountEl) allTabsCountEl.innerText = tabs.length;
 
         if (tabs.length === 0) {
             tabsListContainer.innerHTML = `
@@ -80,7 +83,7 @@ async function refreshTabsList() {
         tabs.forEach((t, idx) => {
             const isCurrent = t.id === activeTabId;
             const session = t.session;
-            let statusText = '⚪ Готова';
+            let statusText = '⚪ Готова до запуску';
             let statusClass = 'color: #94a3b8;';
             let isRunning = false;
 
@@ -111,8 +114,8 @@ async function refreshTabsList() {
                     </div>
                     <div class="tab-item-actions">
                         ${isRunning ? 
-                            `<button class="btn-tab-action btn-tab-stop" data-action="stop" data-tab-id="${t.id}" title="Зупинити">⏹</button>` :
-                            `<button class="btn-tab-action btn-tab-start" data-action="start" data-tab-id="${t.id}" title="Запустити збір">▶</button>`
+                            `<button class="btn-tab-action btn-tab-stop" data-action="stop" data-tab-id="${t.id}" title="Зупинити цю вкладку">⏹</button>` :
+                            `<button class="btn-tab-action btn-tab-start" data-action="start" data-tab-id="${t.id}" title="Запустити збір на цій вкладці">▶</button>`
                         }
                         ${!isCurrent ? `<button class="btn-tab-action" data-action="focus" data-tab-id="${t.id}" title="Перейти до вкладки">👁</button>` : ''}
                     </div>
@@ -144,7 +147,7 @@ async function refreshTabsList() {
                         btnStop.disabled = true;
                         tabBadgeEl.innerText = 'Готова до запуску';
                         tabBadgeEl.style.color = '#10b981';
-                        stopTimer();
+                        stopTimer(true);
                         updateProgress(0, 0, 'Скрейпінг зупинено.');
                     }
                     chrome.runtime.sendMessage({
@@ -169,7 +172,15 @@ async function initPopup() {
         tabTitleEl.innerText = tab.title ? tab.title.split(/[-–—|]/)[0].replace(/купити|в києві|україна|ціни|rozetka/gi, '').trim() : 'Сторінка Rozetka';
     }
 
-    // 1. Load saved webhook URL
+    // Default UI to clean idle state
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+    tabBadgeEl.innerText = 'Готова до запуску';
+    tabBadgeEl.style.color = '#10b981';
+    stopTimer(true);
+    updateProgress(0, 0, 'Готова до запуску');
+
+    // 1. Load saved webhook URL & sessions
     chrome.storage.local.get(['webhookUrl', 'tabSessions'], (data) => {
         if (data.webhookUrl) {
             inputWebhook.value = data.webhookUrl;
@@ -185,7 +196,7 @@ async function initPopup() {
                 tabTitleEl.innerText = currentSession.sessionTitle;
             }
 
-            if (currentSession.isRunning) {
+            if (currentSession.isRunning && !currentSession.statusMsg?.includes('зупинено')) {
                 btnStart.disabled = true;
                 btnStop.disabled = false;
                 tabBadgeEl.innerText = '● Збирається...';
@@ -197,19 +208,12 @@ async function initPopup() {
                 btnStop.disabled = true;
                 tabBadgeEl.innerText = '✓ Завершено';
                 tabBadgeEl.style.color = '#10b981';
-                stopTimer();
+                stopTimer(false);
                 updateProgress(100, currentSession.totalScraped || 0, `Збір завершено! (${currentSession.totalScraped || 0} тов.)`, currentSession.estimatedTotal);
-            } else {
-                btnStart.disabled = false;
-                btnStop.disabled = true;
-                tabBadgeEl.innerText = 'Готова до запуску';
-                tabBadgeEl.style.color = '#10b981';
-                stopTimer();
-                updateProgress(0, 0, 'Очікування запуску...');
             }
         }
 
-        // Ping content script to verify alive status
+        // 2. Query tab directly to get actual live status
         if (activeTabId) {
             chrome.tabs.sendMessage(activeTabId, { action: 'PING_TAB_STATUS' }, (res) => {
                 const err = chrome.runtime.lastError;
@@ -218,6 +222,7 @@ async function initPopup() {
                     btnStop.disabled = true;
                     tabBadgeEl.innerText = 'Готова до запуску';
                     tabBadgeEl.style.color = '#10b981';
+                    stopTimer(true);
                     if (tab && tab.url && tab.url.includes('rozetka.com.ua')) {
                         chrome.scripting.executeScript({
                             target: { tabId: activeTabId },
@@ -243,7 +248,7 @@ async function initPopup() {
                         btnStop.disabled = true;
                         tabBadgeEl.innerText = (res.totalScraped > 0) ? '✓ Завершено' : 'Готова до запуску';
                         tabBadgeEl.style.color = '#10b981';
-                        stopTimer();
+                        stopTimer(res.totalScraped === 0);
                         if (res.totalScraped > 0) {
                             updateProgress(100, res.totalScraped, `Збір завершено (${res.totalScraped} тов.)`, res.estimatedTotal);
                         } else {
@@ -277,7 +282,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
                 tabTitleEl.innerText = currentSession.sessionTitle;
             }
 
-            if (currentSession.isRunning) {
+            if (currentSession.isRunning && !currentSession.statusMsg?.includes('зупинено')) {
                 btnStart.disabled = true;
                 btnStop.disabled = false;
                 tabBadgeEl.innerText = '● Збирається...';
@@ -289,13 +294,20 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
                 btnStop.disabled = true;
                 tabBadgeEl.innerText = currentSession.finishedAt ? '✓ Завершено' : 'Готова до запуску';
                 tabBadgeEl.style.color = '#10b981';
-                stopTimer();
+                stopTimer(!currentSession.finishedAt);
                 if (currentSession.finishedAt) {
                     updateProgress(100, currentSession.totalScraped || 0, `Збір завершено! (${currentSession.totalScraped || 0} тов.)`, currentSession.estimatedTotal);
                 } else {
                     updateProgress(0, 0, currentSession.statusMsg || 'Готова до запуску', currentSession.estimatedTotal);
                 }
             }
+        } else {
+            btnStart.disabled = false;
+            btnStop.disabled = true;
+            tabBadgeEl.innerText = 'Готова до запуску';
+            tabBadgeEl.style.color = '#10b981';
+            stopTimer(true);
+            updateProgress(0, 0, 'Готова до запуску');
         }
     }
 });
@@ -315,7 +327,7 @@ btnMasterStart.addEventListener('click', async () => {
     }, () => {
         setTimeout(() => {
             btnMasterStart.disabled = false;
-            btnMasterStart.innerHTML = `<span>⚡ Запустити всі вкладки (<span id="all-tabs-count">${tabsFoundCountEl.innerText}</span>)</span>`;
+            btnMasterStart.innerHTML = `<span>⚡ Запустити всі відкриті вкладки (<span id="all-tabs-count">${tabsFoundCountEl.innerText}</span>)</span>`;
             initPopup();
         }, 600);
     });
@@ -327,7 +339,7 @@ btnMasterStop.addEventListener('click', async () => {
     btnStop.disabled = true;
     tabBadgeEl.innerText = 'Готова до запуску';
     tabBadgeEl.style.color = '#10b981';
-    stopTimer();
+    stopTimer(true);
     updateProgress(0, 0, 'Всі вкладки зупинено.');
 
     chrome.runtime.sendMessage({ action: 'STOP_ALL_TABS' }, () => {
@@ -345,8 +357,8 @@ btnRefreshTabs.addEventListener('click', () => {
 // Reset all sessions & states button
 if (btnResetAll) {
     btnResetAll.addEventListener('click', () => {
-        chrome.storage.local.set({ tabSessions: {} }, () => {
-            stopTimer();
+        chrome.runtime.sendMessage({ action: 'RESET_ALL_SESSIONS' }, () => {
+            stopTimer(true);
             btnStart.disabled = false;
             btnStop.disabled = true;
             tabBadgeEl.innerText = 'Готова до запуску';
@@ -400,7 +412,7 @@ btnStop.addEventListener('click', async () => {
     btnStop.disabled = true;
     tabBadgeEl.innerText = 'Готова до запуску';
     tabBadgeEl.style.color = '#10b981';
-    stopTimer();
+    stopTimer(true);
     updateProgress(0, 0, 'Скрейпінг зупинено.');
 
     chrome.runtime.sendMessage({

@@ -4,6 +4,8 @@ console.log('TradeScout Background Service Worker v3.0 initialized.');
 const LOCAL_DASHBOARD_API = 'http://localhost:4000/api/products';
 const LOCAL_IP_API = 'http://127.0.0.1:4000/api/products';
 
+const stoppedTabs = new Set();
+
 // Helper to get or set tab sessions from storage
 async function getTabSessions() {
     return new Promise(resolve => {
@@ -14,6 +16,7 @@ async function getTabSessions() {
 }
 
 async function updateTabSession(tabId, patch) {
+    if (!tabId) return {};
     const sessions = await getTabSessions();
     const current = sessions[tabId] || {};
     sessions[tabId] = { ...current, ...patch, lastUpdated: Date.now() };
@@ -24,6 +27,7 @@ async function updateTabSession(tabId, patch) {
 }
 
 async function removeTabSession(tabId) {
+    if (!tabId) return;
     const sessions = await getTabSessions();
     if (sessions[tabId]) {
         delete sessions[tabId];
@@ -33,10 +37,26 @@ async function removeTabSession(tabId) {
     }
 }
 
-// Listen for tab closures so we cleanly stop that tab's session without touching other tabs
+// Clean up sessions when a tab is closed
 chrome.tabs.onRemoved.addListener(async (tabId) => {
-    console.log(`TradeScout Background: Tab ${tabId} was closed. Cleaning up session.`);
+    stoppedTabs.delete(tabId);
     await removeTabSession(tabId);
+});
+
+// Clean up sessions when a tab navigates or refreshes (unless in transit)
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'loading' && tab.url && tab.url.includes('rozetka.com.ua')) {
+        // If tab was navigating without active transit flag, ensure it resets to idle
+        const sessions = await getTabSessions();
+        if (sessions[tabId] && sessions[tabId].isRunning && stoppedTabs.has(tabId)) {
+            sessions[tabId].isRunning = false;
+            sessions[tabId].percentProgress = 0;
+            sessions[tabId].statusMsg = 'Готова до запуску';
+            await new Promise(resolve => {
+                chrome.storage.local.set({ tabSessions: sessions }, resolve);
+            });
+        }
+    }
 });
 
 // Helper to query all open Rozetka tabs
@@ -75,6 +95,7 @@ async function getAllRozetkaTabs() {
 
 // Helper to safely start scraping on a given tab
 async function startScrapingTab(tabId, webhookUrl) {
+    stoppedTabs.delete(tabId);
     const now = Date.now();
     const sessionId = `session_${tabId}_${now}`;
 
@@ -102,7 +123,6 @@ async function startScrapingTab(tabId, webhookUrl) {
                         }, (r) => {
                             const __ = chrome.runtime.lastError;
                             if (__) {
-                                // Direct fail-safe execution if port hasn't bound yet
                                 chrome.scripting.executeScript({
                                     target: { tabId: tabId },
                                     func: (tId, wUrl) => {
@@ -126,6 +146,7 @@ async function startScrapingTab(tabId, webhookUrl) {
 
 // Helper to safely stop scraping on a given tab
 async function stopScrapingTab(tabId) {
+    stoppedTabs.add(tabId);
     await updateTabSession(tabId, {
         isRunning: false,
         percentProgress: 0,
@@ -201,8 +222,28 @@ async function notifyServerScrapingStatus(taskData) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = message.tabId || (sender && sender.tab ? sender.tab.id : null);
 
+    // 0. Tab reports it is idle on load
+    if (message.action === 'tabIdle' && tabId) {
+        if (!stoppedTabs.has(tabId)) {
+            updateTabSession(tabId, {
+                isRunning: false,
+                percentProgress: 0,
+                statusMsg: 'Готова до запуску',
+                sessionTitle: message.sessionTitle || 'Каталог Rozetka',
+                category: message.category || 'Товари'
+            });
+        }
+        sendResponse({ success: true });
+        return true;
+    }
+
     // 1. Progress updates from a specific tab's content script
     if (message.action === 'tabProgress' && tabId) {
+        if (stoppedTabs.has(tabId)) {
+            sendResponse({ success: false, stopped: true });
+            return true;
+        }
+
         updateTabSession(tabId, {
             isRunning: true,
             totalScraped: message.total || 0,
@@ -235,8 +276,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // 2. Tab stopped by user or completed stop
+    // 2. Tab stopped by user
     if (message.action === 'tabStopped' && tabId) {
+        stoppedTabs.add(tabId);
         updateTabSession(tabId, {
             isRunning: false,
             totalScraped: message.total || 0,
@@ -265,6 +307,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // 3. Tab scraping completed
     if (message.action === 'tabFinished' && tabId) {
+        stoppedTabs.delete(tabId);
         updateTabSession(tabId, {
             isRunning: false,
             totalScraped: message.total || 0,
@@ -294,7 +337,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // 3. Tab error
+    // 4. Tab error
     if (message.action === 'tabError' && tabId) {
         updateTabSession(tabId, {
             isRunning: false,
@@ -313,7 +356,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // 4. Send Webhook payload to server (with multi-tab session identification & auto-retry)
+    // 5. Send Webhook payload to server
     if (message.action === 'sendWebhook') {
         const { webhookUrl, payload } = message;
         const itemCount = payload?.products?.length || 0;
@@ -326,7 +369,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!targets.includes(LOCAL_DASHBOARD_API)) targets.push(LOCAL_DASHBOARD_API);
         if (!targets.includes(LOCAL_IP_API)) targets.push(LOCAL_IP_API);
 
-        // Also broadcast directly to any open TradeScout dashboard tabs in browser for instant 0-second sync
         try {
             chrome.tabs.query({ url: ["*://*.vercel.app/*", "*://localhost/*", "*://127.0.0.1/*", "*://*.onrender.com/*"] }, (dashboardTabs) => {
                 if (dashboardTabs && dashboardTabs.length > 0) {
@@ -375,10 +417,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ success: true, serverInfo });
         });
 
-        return true; // async sendResponse
+        return true;
     }
 
-    // 5. Query all open Rozetka tabs with live session statuses
+    // 6. Query all open Rozetka tabs
     if (message.action === 'GET_ALL_ROZETKA_TABS') {
         getAllRozetkaTabs().then(tabs => {
             sendResponse({ success: true, tabs });
@@ -386,9 +428,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // 6. Start scraping on ALL open Rozetka tabs in parallel
+    // 7. Start scraping on ALL open Rozetka tabs in parallel
     if (message.action === 'START_ALL_TABS') {
         const { webhookUrl } = message;
+        stoppedTabs.clear();
         getAllRozetkaTabs().then(async (tabs) => {
             const promises = tabs.map(t => startScrapingTab(t.id, webhookUrl));
             await Promise.all(promises);
@@ -397,9 +440,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // 7. Stop scraping on ALL tabs
+    // 8. Stop scraping on ALL tabs
     if (message.action === 'STOP_ALL_TABS') {
         getAllRozetkaTabs().then(async (tabs) => {
+            tabs.forEach(t => stoppedTabs.add(t.id));
             const promises = tabs.map(t => stopScrapingTab(t.id));
             await Promise.all(promises);
             await new Promise(resolve => {
@@ -410,8 +454,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // 8. Start/Stop single tab via tabId
+    // 9. Start/Stop single tab via tabId
     if (message.action === 'START_SINGLE_TAB' && message.targetTabId) {
+        stoppedTabs.delete(message.targetTabId);
         startScrapingTab(message.targetTabId, message.webhookUrl).then(res => {
             sendResponse(res);
         });
@@ -419,14 +464,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.action === 'STOP_SINGLE_TAB' && message.targetTabId) {
+        stoppedTabs.add(message.targetTabId);
         stopScrapingTab(message.targetTabId).then(res => {
             sendResponse(res);
         });
         return true;
     }
 
-    // 9. Reset all cached sessions
+    // 10. Reset all cached sessions
     if (message.action === 'RESET_ALL_SESSIONS') {
+        stoppedTabs.clear();
         chrome.storage.local.set({ tabSessions: {} }, () => {
             sendResponse({ success: true });
         });
