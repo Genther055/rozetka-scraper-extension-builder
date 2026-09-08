@@ -840,7 +840,53 @@
               <div class="flex items-center gap-2">
                 <span class="material-icons text-indigo-400 text-lg">bar_chart</span>
                 <div>
-                  <h3 class="text-sm font-bold text-white uppercase tracking-wider">Розподіл цін та попиту у ніші</h3>
+                  <div class="flex items-center gap-1.5">
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">Розподіл цін та попиту у ніші</h3>
+                    
+                    <!-- Interactive Info / Popover for Price Distribution & Demand-to-Supply Ratio -->
+                    <div class="relative inline-block group/disthelp">
+                      <span class="w-4 h-4 rounded-full bg-slate-900 hover:bg-amber-500 text-slate-400 hover:text-slate-950 text-[10px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">
+                        ?
+                      </span>
+                      <!-- Popover Tooltip -->
+                      <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-amber-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/disthelp:opacity-100 group-hover/disthelp:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80 backdrop-blur-md">
+                        <div class="font-bold text-white border-b border-slate-800 pb-1.5 mb-2 flex items-center justify-between">
+                          <div class="flex items-center gap-1.5">
+                            <span class="material-icons text-sm text-amber-400">trending_up</span>
+                            <span>Що таке «Віддача (в/SKU)» та Sweet Spot?</span>
+                          </div>
+                          <span class="text-[10px] font-mono font-bold bg-amber-950 text-amber-300 px-2 py-0.5 rounded border border-amber-800/60">
+                            Попит / Пропозиція
+                          </span>
+                        </div>
+                        <p class="text-[11px] text-slate-300 leading-relaxed mb-2">
+                          <b>Віддача (в/SKU)</b> — показник ефективності цінового сегменту. Він відображає середню кількість відгуків (замовлень), яку отримує одна виставлена картка товару в цьому діапазоні.
+                        </p>
+                        
+                        <div class="my-2 p-2.5 bg-slate-950/90 rounded-xl border border-slate-800 font-mono text-[11px] text-amber-300 space-y-1">
+                          <div><b>Формула:</b> Віддача = Сума відгуків / К-сть товарів (SKU)</div>
+                          <div class="text-[10px] text-slate-400">
+                            (<b>«в»</b> = відгуки/попит, <b>«SKU»</b> = картка товару/пропозиція)
+                          </div>
+                        </div>
+
+                        <div class="space-y-1.5 text-[10px] pt-1">
+                          <div class="flex items-center gap-1.5 text-emerald-400">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                            <span><b>Висока віддача (10+ в/SKU):</b> Високий попит при помірній конкуренції — найприбутковіша зона.</span>
+                          </div>
+                          <div class="flex items-center gap-1.5 text-slate-400">
+                            <span class="w-2 h-2 rounded-full bg-slate-500 shrink-0"></span>
+                            <span><b>Низька віддача (&lt; 3 в/SKU):</b> Перенасичений сегмент або відсутність інтересу покупців.</span>
+                          </div>
+                          <div class="flex items-center gap-1.5 text-amber-300">
+                            <span class="material-icons text-[12px] text-amber-400 shrink-0">star</span>
+                            <span><b>★ Sweet Spot (Ціновий оптимум):</b> Сегмент із максимальною віддачею на одиницю товару.</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                   <p class="text-xs text-slate-400">Співвідношення пропозиції (кількість SKU) та ринкового попиту (сума відгуків)</p>
                 </div>
               </div>
@@ -886,9 +932,21 @@
                       <b class="text-white">{{ bin.reviewsSum }}</b> відг. ({{ bin.reviewsShare }}%)
                     </span>
                     <span class="text-slate-500">|</span>
-                    <span class="text-slate-400 font-semibold">
-                      Віддача: <b class="text-amber-400">{{ bin.demandSupplyRatio }}</b> в/SKU
-                    </span>
+                    <div class="relative group/binratio flex items-center gap-1 text-slate-400 font-semibold cursor-help">
+                      <span>Віддача:</span>
+                      <b class="text-amber-400">{{ bin.demandSupplyRatio }}</b>
+                      <span class="border-b border-dotted border-slate-600">в/SKU</span>
+                      <!-- Mini Hover Tooltip -->
+                      <div class="absolute right-0 bottom-full mb-1.5 w-64 p-2.5 bg-[#0f172a] border border-amber-500/50 rounded-xl shadow-xl shadow-black text-[11px] text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/binratio:opacity-100 group-hover/binratio:pointer-events-auto transition-all duration-150 backdrop-blur-md">
+                        <div class="font-bold text-white mb-1 flex items-center justify-between">
+                          <span>Віддача на 1 товар</span>
+                          <span class="text-amber-400 font-mono">{{ bin.demandSupplyRatio }} в/SKU</span>
+                        </div>
+                        <p class="text-[10px] text-slate-300 leading-tight">
+                          У цьому діапазоні на 1 товар (SKU) припадає в середньому <b>{{ bin.demandSupplyRatio }}</b> відгуків (замовлень).
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1151,11 +1209,20 @@
                 </div>
 
                 <!-- Footer: Demand-Supply Ratio -->
-                <div class="pt-2 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-400">
-                  <span>Віддача на 1 SKU:</span>
+                <div class="pt-2 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-400 relative group/specratio">
+                  <div class="flex items-center gap-1">
+                    <span>Віддача на 1 SKU:</span>
+                    <span class="w-3.5 h-3.5 rounded-full bg-slate-900 hover:bg-indigo-600 text-slate-400 hover:text-white text-[9px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">?</span>
+                  </div>
                   <span class="font-mono font-bold text-indigo-300 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800">
                     {{ valStat.demandSupplyRatio }} відг/SKU
                   </span>
+                  <!-- Popover -->
+                  <div class="absolute right-0 bottom-full mb-1.5 w-64 p-2.5 bg-[#0f172a] border border-indigo-500/40 rounded-xl shadow-xl shadow-black text-[11px] text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/specratio:opacity-100 group-hover/specratio:pointer-events-auto transition-all duration-150 backdrop-blur-md">
+                    <p class="text-[10px] text-slate-300 leading-tight">
+                      <b>Віддача (відг/SKU):</b> Скільки відгуків (ринкового попиту) генерує кожна окрема картка товару з цією характеристикою.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
