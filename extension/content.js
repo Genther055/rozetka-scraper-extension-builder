@@ -421,6 +421,36 @@
 
         if (distinctTiles.length === 0) return [];
 
+        // Batch fetch official Rozetka product details (seller title, exact pricing, stock) for all items on this page
+        const apiSellerMap = new Map();
+        try {
+            const productIds = [];
+            for (const { link } of distinctTiles) {
+                const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
+                if (m && m[1]) productIds.push(m[1]);
+            }
+            if (productIds.length > 0) {
+                const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productIds.join(',')}`;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2500);
+                const res = await fetch(apiUrl, { signal: controller.signal }).catch(() => null);
+                clearTimeout(timeoutId);
+                if (res && res.ok) {
+                    const json = await res.json().catch(() => null);
+                    if (json && Array.isArray(json.data)) {
+                        for (const apiProd of json.data) {
+                            if (apiProd && apiProd.id && apiProd.seller) {
+                                const sTitle = (apiProd.seller.title || apiProd.seller.name || '').trim();
+                                if (sTitle) {
+                                    apiSellerMap.set(String(apiProd.id), sTitle);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_) {}
+
         const newItems = [];
 
         for (const { item, linkTag, link } of distinctTiles) {
@@ -459,7 +489,10 @@
                 const power = powerMatch ? `${powerMatch[1]}W` : '';
                 const specs = [capacity, power].filter(Boolean).join(', ') || 'Стандартні';
 
-                const seller = extractSeller(item);
+                const idMatch = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
+                const prodId = idMatch ? String(idMatch[1]) : '';
+                const apiSeller = prodId ? apiSellerMap.get(prodId) : null;
+                const seller = apiSeller || extractSeller(item) || 'Rozetka';
 
                 newItems.push({
                     name,
