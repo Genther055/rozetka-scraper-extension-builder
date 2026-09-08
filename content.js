@@ -143,16 +143,27 @@
         return currentDomTiles > 0 ? currentDomTiles : 60;
     }
 
-    // Strict filter: eliminate carousels, sliders, accessories, sidebars, banners, recommendation widgets
+    // Strict filter: eliminate carousels, sliders, accessories, sidebars, banners, recommendation widgets, and ads
     function isUnwantedTile(item) {
         if (!item || !(item instanceof Element)) return true;
         
+        // 1. Check all possible slider / carousel / recommendation / sidebar containers
         if (item.closest('rz-goods-carousel, rz-carousel, rz-goods-slider, rz-slider, app-goods-carousel, app-slider, .goods-carousel, .recently-viewed, rz-goods-section-slider, .slider, .carousel, rz-similar-goods, rz-recommended-goods, rz-viewed-goods, .catalog-banner, .advertising-slot, aside, .sidebar, rz-accessories, .goods-slider, .recommendations, [data-testid*="carousel"], [data-testid*="slider"], [class*="carousel"], [class*="slider"], [class*="section-slider"], rz-product-slider')) {
             return true;
         }
         
-        if (item.classList.contains('catalog-banner') || item.classList.contains('rz-banner') || item.classList.contains('banner-tile') || item.classList.contains('advertising-slot')) {
+        // 2. Check if tile itself is a banner or advertising slot
+        if (item.classList.contains('catalog-banner') || item.classList.contains('rz-banner') || item.classList.contains('banner-tile') || item.classList.contains('advertising-slot') || item.classList.contains('catalog-grid__cell--advertising')) {
             return true;
+        }
+
+        // 3. Check for promo/ad labels
+        const adLabel = item.querySelector('.goods-tile__label, [data-testid*="promo-label"], [class*="promo-label"], [class*="advert"]');
+        if (adLabel) {
+            const txt = (adLabel.textContent || '').trim().toLowerCase();
+            if (txt.includes('реклама') || txt.includes('ad')) {
+                return true;
+            }
         }
 
         const hasProductLink = !!item.querySelector('a[href*="/p/"], a[href*="/p-"], a[href*="/p"], a.goods-tile__heading, a.tile-title, [class*="heading"] a');
