@@ -1,10 +1,13 @@
 // TradeScout Content Script v3.0 (Multi-Tab, Silent Background Scraper & Live In-Page Floating HUD)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
+    if (window.__tradeScoutInjected) return; // Prevent duplicate injection
+    window.__tradeScoutInjected = true;
 
     console.log('TradeScout Content Script v3.0 active on:', window.location.href);
 
     let isTabScrapingActive = false;
+    window.__tradeScoutIsScrapingActive = false;
     let currentSessionId = null;
     let currentTabId = null;
     let webhookEndpoint = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
@@ -778,7 +781,7 @@
         let lastCount = sentLinks.size;
         const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"], [data-testid="goods-tile"]';
 
-        while (isTabScrapingActive) {
+        while (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
             // Re-evaluate estimated total in case it loaded asynchronously
             const latestEstimated = getEstimatedTotalFromPage();
             if (latestEstimated > estimatedTotal) {
@@ -787,20 +790,24 @@
 
             // 1. Silent background scroll to let all items & lazy elements on the current page render completely
             await silentBackgroundScroll();
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
             // 2. Scrape all items on the current page
             let newProducts = await scrapeCurrentDomItems(meta, pageCount);
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
             
             // Micro-sweep if more items were still mounting
             if (newProducts.length === 0 || (sentLinks.size < estimatedTotal && newProducts.length % 60 !== 0)) {
                 await new Promise(r => setTimeout(r, 300));
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
                 const extraSweep = await scrapeCurrentDomItems(meta, pageCount);
                 if (extraSweep.length > 0) {
                     newProducts = newProducts.concat(extraSweep);
                 }
             }
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
             
-            if (newProducts.length > 0) {
+            if (newProducts.length > 0 && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
                 const percent = Math.min(100, Math.round((sentLinks.size / Math.max(1, estimatedTotal)) * 100));
                 const statusMsg = `Зібрано ${sentLinks.size} з ${estimatedTotal} товарів (стор. ${pageCount})...`;
 
@@ -838,7 +845,7 @@
                 });
             }
 
-            if (!isTabScrapingActive) break;
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
             // Check if new items were added from this page
             if (sentLinks.size > lastCount) {
@@ -859,12 +866,14 @@
             const maxTransitionAttempts = 3;
 
             for (let attempt = 1; attempt <= maxTransitionAttempts; attempt++) {
-                if (!isTabScrapingActive) break;
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
                 const prevDomCount = document.querySelectorAll(tileSelectors).length;
                 const actionObj = findPaginationActionElements(pageCount);
 
                 if (actionObj) {
+                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+
                     if (actionObj.type === 'retry') {
                         console.log(`TradeScout Tab ${currentTabId}: Detected retry button. Clicking to recover...`);
                         updateHud({
@@ -884,7 +893,7 @@
 
                     // Wait for new elements of next page to populate into DOM
                     for (let w = 0; w < 16; w++) {
-                        if (!isTabScrapingActive) break;
+                        if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
                         await new Promise(r => setTimeout(r, 200));
                         const currentDomCount = document.querySelectorAll(tileSelectors).length;
                         if (currentDomCount > prevDomCount) {
@@ -892,6 +901,8 @@
                             break;
                         }
                     }
+
+                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
                     if (pageTransitionSuccess) {
                         pageCount++;
@@ -901,6 +912,7 @@
 
                     // Background Tab Fallback: If click was ignored because tab is inactive, navigate directly via URL
                     if (!pageTransitionSuccess && (actionObj.href || actionObj.type === 'nextPage' || actionObj.type === 'pageNum')) {
+                        if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
                         let targetUrl = actionObj.href;
                         if (!targetUrl || targetUrl === '#' || targetUrl === 'javascript:void(0)') {
                             const urlObj = new URL(window.location.href);
@@ -933,8 +945,9 @@
             }
         }
 
-        if (isTabScrapingActive) {
+        if (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
             isTabScrapingActive = false;
+            window.__tradeScoutIsScrapingActive = false;
             clearTabPersistedSession();
             stopHudTimer();
             console.log(`TradeScout Tab ${currentTabId}: Finished scrape with ${sentLinks.size} items.`);
@@ -960,6 +973,7 @@
     function startScrapingOnThisTab(tabId, customUrl) {
         stopHudTimer();
         isTabScrapingActive = true;
+        window.__tradeScoutIsScrapingActive = true;
         currentTabId = tabId || currentTabId || Date.now();
         currentSessionId = `session_${currentTabId}_${Date.now()}`;
         if (customUrl) webhookEndpoint = customUrl;
@@ -988,6 +1002,7 @@
 
     function stopScrapingOnThisTab() {
         isTabScrapingActive = false;
+        window.__tradeScoutIsScrapingActive = false;
         clearTabPersistedSession();
         stopHudTimer();
         const meta = getPageMetadata();

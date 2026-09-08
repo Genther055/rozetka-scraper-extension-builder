@@ -139,6 +139,14 @@ async function refreshTabsList() {
                         setTimeout(refreshTabsList, 200);
                     });
                 } else if (action === 'stop') {
+                    if (targetTabId === activeTabId) {
+                        btnStart.disabled = false;
+                        btnStop.disabled = true;
+                        tabBadgeEl.innerText = 'Готова до запуску';
+                        tabBadgeEl.style.color = '#10b981';
+                        stopTimer();
+                        updateProgress(0, 0, 'Скрейпінг зупинено.');
+                    }
                     chrome.runtime.sendMessage({
                         action: 'STOP_SINGLE_TAB',
                         targetTabId: targetTabId
@@ -315,6 +323,13 @@ btnMasterStart.addEventListener('click', async () => {
 
 // Master Stop (All Tabs)
 btnMasterStop.addEventListener('click', async () => {
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+    tabBadgeEl.innerText = 'Готова до запуску';
+    tabBadgeEl.style.color = '#10b981';
+    stopTimer();
+    updateProgress(0, 0, 'Всі вкладки зупинено.');
+
     chrome.runtime.sendMessage({ action: 'STOP_ALL_TABS' }, () => {
         setTimeout(() => {
             initPopup();

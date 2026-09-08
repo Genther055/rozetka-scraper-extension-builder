@@ -128,7 +128,8 @@ async function startScrapingTab(tabId, webhookUrl) {
 async function stopScrapingTab(tabId) {
     await updateTabSession(tabId, {
         isRunning: false,
-        statusMsg: 'Збір зупинено.'
+        percentProgress: 0,
+        statusMsg: 'Скрейпінг зупинено.'
     });
     notifyServerScrapingStatus({
         tabId,
@@ -139,20 +140,20 @@ async function stopScrapingTab(tabId) {
     });
     return new Promise(resolve => {
         chrome.tabs.sendMessage(tabId, { action: 'STOP_TAB_SCRAPE' }, () => {
-            const err = chrome.runtime.lastError;
-            if (err) {
-                chrome.scripting.executeScript({
-                    target: { tabId: tabId },
-                    func: () => {
+            const _ = chrome.runtime.lastError;
+            // Always run direct fail-safe script to guarantee immediate halting
+            chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                func: () => {
+                    try {
+                        window.__tradeScoutIsScrapingActive = false;
                         if (window.__tradeScoutStopScrape) window.__tradeScoutStopScrape();
-                    }
-                }, () => {
-                    const _ = chrome.runtime.lastError;
-                    resolve({ success: true });
-                });
-            } else {
-                resolve({ success: true });
-            }
+                        sessionStorage.removeItem('tradescout_tab_navigating');
+                        sessionStorage.removeItem('tradescout_tab_scraping');
+                    } catch (_) {}
+                }
+            }).catch(() => {});
+            resolve({ success: true });
         });
     });
 }
@@ -401,6 +402,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         getAllRozetkaTabs().then(async (tabs) => {
             const promises = tabs.map(t => stopScrapingTab(t.id));
             await Promise.all(promises);
+            await new Promise(resolve => {
+                chrome.storage.local.set({ tabSessions: {} }, resolve);
+            });
             sendResponse({ success: true, stoppedCount: tabs.length });
         });
         return true;
