@@ -731,25 +731,27 @@
         return newItems;
     }
 
-    // Helper to persist tab session for seamless multi-page & background tab survival
-    function persistTabSession(pageNumber, meta) {
+    // Helper to persist tab session ONLY for cross-page direct URL navigation
+    function persistTabNavTransit(nextPage, meta) {
         try {
-            sessionStorage.setItem('tradescout_tab_scraping', JSON.stringify({
-                isActive: isTabScrapingActive,
+            sessionStorage.setItem('tradescout_tab_navigating', JSON.stringify({
+                inTransit: true,
                 tabId: currentTabId,
                 sessionId: currentSessionId,
                 webhookEndpoint: webhookEndpoint,
                 sentLinks: Array.from(sentLinks),
-                pageCount: pageNumber || 1,
+                pageCount: nextPage || 1,
                 sessionTitle: meta.title,
                 category: meta.category,
-                startTime: hudStartTime
+                startTime: hudStartTime,
+                navTimestamp: Date.now()
             }));
         } catch (_) {}
     }
 
     function clearTabPersistedSession() {
         try {
+            sessionStorage.removeItem('tradescout_tab_navigating');
             sessionStorage.removeItem('tradescout_tab_scraping');
         } catch (_) {}
     }
@@ -783,8 +785,6 @@
                 estimatedTotal = latestEstimated;
             }
 
-            persistTabSession(pageCount, meta);
-
             // 1. Silent background scroll to let all items & lazy elements on the current page render completely
             await silentBackgroundScroll();
 
@@ -801,7 +801,6 @@
             }
             
             if (newProducts.length > 0) {
-                persistTabSession(pageCount, meta);
                 const percent = Math.min(100, Math.round((sentLinks.size / Math.max(1, estimatedTotal)) * 100));
                 const statusMsg = `Зібрано ${sentLinks.size} з ${estimatedTotal} товарів (стор. ${pageCount})...`;
 
@@ -912,7 +911,7 @@
                         }
 
                         console.log(`TradeScout Tab ${currentTabId}: Background tab navigating directly to page ${pageCount + 1}: ${targetUrl}`);
-                        persistTabSession(pageCount + 1, meta);
+                        persistTabNavTransit(pageCount + 1, meta);
                         window.location.href = targetUrl;
                         return; // Execution will resume seamlessly when the new page loads
                     }
@@ -970,7 +969,6 @@
 
         const meta = getPageMetadata();
         const estTotal = getEstimatedTotalFromPage();
-        persistTabSession(1, meta);
 
         sendTabMessage({
             action: 'tabProgress',
@@ -1027,24 +1025,29 @@
     window.__tradeScoutStartScrape = startScrapingOnThisTab;
     window.__tradeScoutStopScrape = stopScrapingOnThisTab;
 
-    // Check if this tab has an active persistent scraping session from a previous page navigation
+    // Check if this tab has an active in-flight pagination transition
     try {
-        const savedSessionStr = sessionStorage.getItem('tradescout_tab_scraping');
-        if (savedSessionStr) {
-            const saved = JSON.parse(savedSessionStr);
-            if (saved.isActive) {
-                console.log(`TradeScout: Resuming background scraping session on page ${saved.pageCount} (${saved.sentLinks?.length || 0} items)...`);
-                currentTabId = saved.tabId;
-                currentSessionId = saved.sessionId;
-                webhookEndpoint = saved.webhookEndpoint || webhookEndpoint;
-                hudStartTime = saved.startTime || Date.now();
-                if (Array.isArray(saved.sentLinks)) {
-                    saved.sentLinks.forEach(link => sentLinks.add(link));
+        const navTransitStr = sessionStorage.getItem('tradescout_tab_navigating');
+        sessionStorage.removeItem('tradescout_tab_navigating');
+        sessionStorage.removeItem('tradescout_tab_scraping');
+
+        if (navTransitStr) {
+            const transit = JSON.parse(navTransitStr);
+            const isRecent = transit.navTimestamp && (Date.now() - transit.navTimestamp < 15000);
+            if (transit.inTransit && isRecent) {
+                console.log(`TradeScout: Resuming active scraping sequence on page ${transit.pageCount} (${transit.sentLinks?.length || 0} items)...`);
+                currentTabId = transit.tabId;
+                currentSessionId = transit.sessionId;
+                webhookEndpoint = transit.webhookEndpoint || webhookEndpoint;
+                hudStartTime = transit.startTime || Date.now();
+                if (Array.isArray(transit.sentLinks)) {
+                    transit.sentLinks.forEach(link => sentLinks.add(link));
                 }
                 isTabScrapingActive = true;
+                startHudTimer(hudStartTime);
                 setTimeout(() => {
-                    runTabScraper(saved.pageCount || 1);
-                }, 400);
+                    runTabScraper(transit.pageCount || 1);
+                }, 500);
             }
         }
     } catch (_) {}

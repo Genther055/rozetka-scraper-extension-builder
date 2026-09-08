@@ -43,6 +43,21 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 async function getAllRozetkaTabs() {
     const tabs = await chrome.tabs.query({ url: "*://*.rozetka.com.ua/*" });
     const sessions = await getTabSessions();
+    const openTabIds = new Set(tabs.map(t => t.id));
+    
+    // Prune stale sessions for closed tabs
+    let pruned = false;
+    for (const id in sessions) {
+        if (!openTabIds.has(Number(id))) {
+            delete sessions[id];
+            pruned = true;
+        }
+    }
+    if (pruned) {
+        await new Promise(resolve => {
+            chrome.storage.local.set({ tabSessions: sessions }, resolve);
+        });
+    }
     
     return tabs.map(t => {
         const session = sessions[t.id] || null;
@@ -111,11 +126,15 @@ async function startScrapingTab(tabId, webhookUrl) {
 
 // Helper to safely stop scraping on a given tab
 async function stopScrapingTab(tabId) {
+    await updateTabSession(tabId, {
+        isRunning: false,
+        statusMsg: 'Збір зупинено.'
+    });
     notifyServerScrapingStatus({
         tabId,
         sessionId: `session_${tabId}`,
         status: 'stopped',
-        percent: 100,
+        percent: 0,
         statusMsg: 'Збір зупинено користувачем'
     });
     return new Promise(resolve => {
@@ -370,6 +389,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'STOP_SINGLE_TAB' && message.targetTabId) {
         stopScrapingTab(message.targetTabId).then(res => {
             sendResponse(res);
+        });
+        return true;
+    }
+
+    // 9. Reset all cached sessions
+    if (message.action === 'RESET_ALL_SESSIONS') {
+        chrome.storage.local.set({ tabSessions: {} }, () => {
+            sendResponse({ success: true });
         });
         return true;
     }

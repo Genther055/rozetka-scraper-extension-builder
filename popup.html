@@ -446,7 +446,10 @@
     <div class="tabs-list-card">
         <div class="tabs-list-header">
             <span>Відкриті вкладки Rozetka (<span id="tabs-found-count">0</span>)</span>
-            <button id="btn-refresh-tabs" class="btn-refresh-tabs" title="Оновити список">🔄 Оновити</button>
+            <div style="display: flex; gap: 8px;">
+                <button id="btn-reset-all" class="btn-refresh-tabs" style="color: #fca5a5;" title="Очистити всі сесії та скинути стан">🧹 Скинути стан</button>
+                <button id="btn-refresh-tabs" class="btn-refresh-tabs" title="Оновити список">🔄 Оновити</button>
+            </div>
         </div>
         <div id="tabs-list-container">
             <!-- Dynamic tab items rendered via popup.js -->

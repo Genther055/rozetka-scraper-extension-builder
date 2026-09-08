@@ -17,6 +17,7 @@ const tabBadgeEl = document.getElementById('tab-badge');
 const tabsListContainer = document.getElementById('tabs-list-container');
 const tabsFoundCountEl = document.getElementById('tabs-found-count');
 const btnRefreshTabs = document.getElementById('btn-refresh-tabs');
+const btnResetAll = document.getElementById('btn-reset-all');
 
 let activeTabId = null;
 let timerInterval = null;
@@ -238,7 +239,14 @@ async function initPopup() {
                         if (res.totalScraped > 0) {
                             updateProgress(100, res.totalScraped, `Збір завершено (${res.totalScraped} тов.)`, res.estimatedTotal);
                         } else {
-                            updateProgress(0, 0, 'Очікування запуску...');
+                            updateProgress(0, 0, 'Готова до запуску');
+                        }
+
+                        // Clean up stale session in storage if storage had isRunning: true
+                        if (currentSession && currentSession.isRunning) {
+                            currentSession.isRunning = false;
+                            sessions[activeTabId] = currentSession;
+                            chrome.storage.local.set({ tabSessions: sessions });
                         }
                     }
                 }
@@ -318,6 +326,21 @@ btnMasterStop.addEventListener('click', async () => {
 btnRefreshTabs.addEventListener('click', () => {
     refreshTabsList();
 });
+
+// Reset all sessions & states button
+if (btnResetAll) {
+    btnResetAll.addEventListener('click', () => {
+        chrome.storage.local.set({ tabSessions: {} }, () => {
+            stopTimer();
+            btnStart.disabled = false;
+            btnStop.disabled = true;
+            tabBadgeEl.innerText = 'Готова до запуску';
+            tabBadgeEl.style.color = '#10b981';
+            updateProgress(0, 0, 'Готова до запуску');
+            refreshTabsList();
+        });
+    });
+}
 
 // Start Scraping on THIS Active Tab
 btnStart.addEventListener('click', async () => {
