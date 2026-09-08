@@ -279,13 +279,13 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
             } else {
                 btnStart.disabled = false;
                 btnStop.disabled = true;
-                tabBadgeEl.innerText = currentSession.finishedAt ? '✓ Завершено' : 'Зупинено';
-                tabBadgeEl.style.color = currentSession.finishedAt ? '#10b981' : '#94a3b8';
+                tabBadgeEl.innerText = currentSession.finishedAt ? '✓ Завершено' : 'Готова до запуску';
+                tabBadgeEl.style.color = '#10b981';
                 stopTimer();
                 if (currentSession.finishedAt) {
                     updateProgress(100, currentSession.totalScraped || 0, `Збір завершено! (${currentSession.totalScraped || 0} тов.)`, currentSession.estimatedTotal);
                 } else {
-                    updateProgress(0, currentSession.totalScraped || 0, currentSession.statusMsg || 'Скрейпінг зупинено.', currentSession.estimatedTotal);
+                    updateProgress(0, 0, currentSession.statusMsg || 'Готова до запуску', currentSession.estimatedTotal);
                 }
             }
         }
@@ -381,16 +381,17 @@ btnStart.addEventListener('click', async () => {
 btnStop.addEventListener('click', async () => {
     if (!activeTabId) return;
 
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+    tabBadgeEl.innerText = 'Готова до запуску';
+    tabBadgeEl.style.color = '#10b981';
+    stopTimer();
+    updateProgress(0, 0, 'Скрейпінг зупинено.');
+
     chrome.runtime.sendMessage({
         action: 'STOP_SINGLE_TAB',
         targetTabId: activeTabId
     }, () => {
-        btnStart.disabled = false;
-        btnStop.disabled = true;
-        tabBadgeEl.innerText = 'Зупинено';
-        tabBadgeEl.style.color = '#94a3b8';
-        stopTimer();
-        updateProgress(0, 0, 'Скрейпінг цієї вкладки зупинено.');
         setTimeout(refreshTabsList, 300);
     });
 });

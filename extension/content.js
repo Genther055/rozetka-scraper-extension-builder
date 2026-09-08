@@ -999,7 +999,7 @@
         });
 
         sendTabMessage({
-            action: 'tabProgress',
+            action: 'tabStopped',
             total: sentLinks.size,
             page: 1,
             percent: 0,

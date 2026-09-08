@@ -234,7 +234,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // 2. Tab scraping completed
+    // 2. Tab stopped by user or completed stop
+    if (message.action === 'tabStopped' && tabId) {
+        updateTabSession(tabId, {
+            isRunning: false,
+            totalScraped: message.total || 0,
+            percentProgress: 0,
+            statusMsg: 'Скрейпінг зупинено.',
+            sessionTitle: message.sessionTitle || 'Каталог Rozetka',
+            category: message.category || 'Товари'
+        });
+
+        notifyServerScrapingStatus({
+            tabId,
+            sessionId: message.sessionId || `session_${tabId}`,
+            sessionTitle: message.sessionTitle || 'Каталог Rozetka',
+            category: message.category || 'Товари',
+            status: 'stopped',
+            pageIndex: 1,
+            currentCount: message.total || 0,
+            estimatedTotal: message.estimatedTotal || 0,
+            percent: 0,
+            statusMsg: 'Скрейпінг зупинено.'
+        });
+
+        sendResponse({ success: true });
+        return true;
+    }
+
+    // 3. Tab scraping completed
     if (message.action === 'tabFinished' && tabId) {
         updateTabSession(tabId, {
             isRunning: false,
