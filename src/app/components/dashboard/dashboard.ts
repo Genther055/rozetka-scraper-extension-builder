@@ -379,8 +379,9 @@ export class DashboardComponent implements OnInit {
   }
 
   getTaskTotalPages(task: LiveScrapingTask): number {
-    const est = task.estimatedTotal || 60;
-    return Math.max(1, Math.ceil(est / 60));
+    const est = task.estimatedTotal || (task.currentCount > 0 ? task.currentCount : 60);
+    const estPages = Math.max(1, Math.ceil(est / 60));
+    return Math.max(estPages, task.pageIndex || 1);
   }
 
   getTaskPageSteps(task: LiveScrapingTask): Array<{ pageNum: number, status: 'done' | 'current' | 'pending' }> {

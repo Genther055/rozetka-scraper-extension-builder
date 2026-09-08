@@ -57,81 +57,59 @@
         if (!text || typeof text !== 'string') return 0;
         const cleaned = text.replace(/&nbsp;/g, ' ').replace(/\u00A0/g, ' ').replace(/\u202F/g, ' ').trim();
         
-        const m1 = cleaned.match(/(?:знайдено|найдено)?\s*([\d\s\u00A0\u202F.,]+)\s*(?:товар|тов)/i);
+        // Match: "Знайдено 508 товарів" or "Знайдено 355 товарів"
+        const m1 = cleaned.match(/(?:знайдено|найдено)\s*([\d\s\u00A0\u202F.,]+)\s*(?:товар|тов)/i);
         if (m1 && m1[1]) {
             const num = parseInt(m1[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
-            if (!isNaN(num) && num > 0) return num;
+            if (!isNaN(num) && num > 0 && num < 1000000) return num;
         }
 
-        const m2 = cleaned.match(/([\d\s\u00A0\u202F.,]+)\s*(?:товарів|товари|товаров|товара)/i);
+        // Match: "508 товарів"
+        const m2 = cleaned.match(/\b([\d\s\u00A0\u202F.,]+)\s*(?:товарів|товари|товаров|товара)\b/i);
         if (m2 && m2[1]) {
             const num = parseInt(m2[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
-            if (!isNaN(num) && num > 0) return num;
+            if (!isNaN(num) && num > 0 && num < 1000000) return num;
         }
 
-        const digitsOnly = cleaned.replace(/[^\d]/g, '');
-        if (digitsOnly.length > 0) {
-            const num = parseInt(digitsOnly, 10);
-            if (!isNaN(num) && num > 0 && num < 10000000) return num;
+        // Match: "Знайдено 508"
+        const m3 = cleaned.match(/(?:знайдено|найдено)\s*([\d\s\u00A0\u202F.,]+)/i);
+        if (m3 && m3[1]) {
+            const num = parseInt(m3[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
+            if (!isNaN(num) && num > 0 && num < 1000000) return num;
         }
 
         return 0;
     }
 
     function getEstimatedTotalFromPage() {
-        const selectors = [
-            '[data-testid="filters-found-goods"]',
-            'p[data-testid="filters-found-goods"]',
-            '[data-testid*="found-goods"]',
-            '[data-testid*="filters-found"]',
-            '[data-testid="goods-counter"]',
-            '[data-testid*="counter"]',
-            '.catalog-heading__goods', 
-            '.catalog-selection__label',
-            '.goods-count',
-            '[class*="heading__goods"]',
-            '[class*="selection__label"]',
-            '[class*="found-goods"]',
-            '[class*="filters-found"]',
-            '[class*="goods-count"]',
-            'rz-catalog-settings [class*="found"]',
-            'rz-catalog-settings p',
-            'rz-catalog-counter',
-            'rz-goods-counter',
-            '.catalog-settings__goods-count'
-        ];
-        
-        for (const sel of selectors) {
-            try {
-                const elements = document.querySelectorAll(sel);
-                for (const el of elements) {
-                    const txt = el.textContent || el.innerText || '';
-                    const count = parseCountFromText(txt);
-                    if (count > 0) return count;
-                }
-            } catch (e) {}
+        // Priority 1: Top catalog counter text (e.g. "Знайдено 508 товарів")
+        const topElements = document.querySelectorAll('rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection, [data-testid*="found"], [data-testid*="counter"], [class*="found-goods"], [class*="goods-count"], [class*="heading__goods"], .catalog-selection__label, h1, h2, p, span, div');
+        for (const el of topElements) {
+            if (el.children.length > 5) continue;
+            const txt = (el.textContent || el.innerText || '').trim();
+            if (txt.toLowerCase().includes('знайдено') || txt.toLowerCase().includes('найдено') || txt.toLowerCase().includes('товар')) {
+                const count = parseCountFromText(txt);
+                if (count > 0 && count < 1000000) return count;
+            }
         }
 
+        // Priority 2: Check pagination links - find the real last page
         try {
-            const pTags = document.querySelectorAll('p, span, div, h1, h2');
-            for (const el of pTags) {
-                if (el.children.length > 3) continue;
-                const txt = el.textContent || el.innerText || '';
-                if (txt.includes('товар') || txt.includes('Знайдено') || txt.includes('знайдено') || txt.includes('найдено')) {
-                    const count = parseCountFromText(txt);
-                    if (count > 0 && count < 10000000) return count;
-                }
-            }
-        } catch (e) {}
-
-        try {
-            const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a');
+            const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a');
             let maxPage = 1;
             pageLinks.forEach(link => {
                 const txt = (link.textContent || '').trim();
                 const num = parseInt(txt, 10);
-                if (!isNaN(num) && num > maxPage && num < 1000) {
+                if (!isNaN(num) && num > maxPage && num < 500) {
                     maxPage = num;
+                }
+                const href = link.getAttribute('href') || '';
+                const m = href.match(/page=(\d+)/i) || href.match(/\/(\d+)\/?$/);
+                if (m && m[1]) {
+                    const hNum = parseInt(m[1], 10);
+                    if (!isNaN(hNum) && hNum > maxPage && hNum < 500) {
+                        maxPage = hNum;
+                    }
                 }
             });
             if (maxPage > 1) {
@@ -388,10 +366,14 @@
             rawTiles = Array.from(catalogContainer.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, [data-goods-id], .goods-tile'));
         }
 
-        // Calculate remaining items needed to exactly hit currentEstimatedTotal
-        const remainingNeeded = currentEstimatedTotal > 0 ? Math.max(0, currentEstimatedTotal - sentLinks.size) : 60;
-        if (currentEstimatedTotal > 0 && remainingNeeded === 0) return [];
-        const maxItemsThisPage = Math.min(60, remainingNeeded);
+        // Calculate max items for this page (standard Rozetka catalog page has up to 60 items)
+        let maxItemsThisPage = 60;
+        if (currentEstimatedTotal > 0 && pageIndex >= Math.ceil(currentEstimatedTotal / 60)) {
+            const remainder = currentEstimatedTotal - sentLinks.size;
+            if (remainder > 0 && remainder <= 60) {
+                maxItemsThisPage = remainder;
+            }
+        }
 
         // Filter out unwanted slider/carousel/banner elements and avoid nested child duplicates
         const distinctTiles = [];
@@ -600,20 +582,23 @@
                 consecutiveNoNew++;
             }
 
-            // 3. Strict Check: if all items in catalog are collected OR final expected page reached
-            if (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) {
-                console.log(`TradeScout Tab ${currentTabId}: Exact target count reached (${sentLinks.size}/${currentEstimatedTotal}). Finishing!`);
+            // Refresh estimated total if higher count is discovered on subsequent pages
+            const latestEstimated = getEstimatedTotalFromPage();
+            if (latestEstimated > currentEstimatedTotal) {
+                currentEstimatedTotal = latestEstimated;
+            }
+
+            const actionObj = findPaginationActionElements(currentPage);
+            const hasNextPage = !!actionObj;
+
+            // 3. Strict Check: finish only when target reached AND no further pages exist, or no next action
+            if (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal && !hasNextPage) {
+                console.log(`TradeScout Tab ${currentTabId}: Target count reached (${sentLinks.size}/${currentEstimatedTotal}) with no further pages. Finishing!`);
                 break;
             }
 
-            const calcTotalPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
-            if (currentEstimatedTotal > 0 && currentPage >= calcTotalPages) {
-                console.log(`TradeScout Tab ${currentTabId}: Reached final expected page ${currentPage}/${calcTotalPages}. Total items: ${sentLinks.size}`);
-                break;
-            }
-
-            if (consecutiveNoNew >= 3) {
-                console.log(`TradeScout Tab ${currentTabId}: Catalog ended (no new products). Total: ${sentLinks.size}`);
+            if (!hasNextPage && consecutiveNoNew >= 2) {
+                console.log(`TradeScout Tab ${currentTabId}: No next page button found and no new products. Catalog complete.`);
                 break;
             }
 
