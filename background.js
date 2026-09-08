@@ -37,18 +37,46 @@ async function removeTabSession(tabId) {
     }
 }
 
+// Clean up sessions on startup or reload
+chrome.runtime.onInstalled.addListener(async () => {
+    stoppedTabs.clear();
+    await chrome.storage.local.set({ tabSessions: {} });
+});
+
+chrome.runtime.onStartup.addListener(async () => {
+    stoppedTabs.clear();
+    await chrome.storage.local.set({ tabSessions: {} });
+});
+
+// Clear running flags on initial worker boot
+(async () => {
+    try {
+        const sessions = await getTabSessions();
+        let updated = false;
+        for (const k in sessions) {
+            if (sessions[k]?.isRunning) {
+                sessions[k].isRunning = false;
+                sessions[k].statusMsg = 'Готова до запуску';
+                updated = true;
+            }
+        }
+        if (updated) {
+            await chrome.storage.local.set({ tabSessions: sessions });
+        }
+    } catch (_) {}
+})();
+
 // Clean up sessions when a tab is closed
 chrome.tabs.onRemoved.addListener(async (tabId) => {
     stoppedTabs.delete(tabId);
     await removeTabSession(tabId);
 });
 
-// Clean up sessions when a tab navigates or refreshes (unless in transit)
+// Clean up sessions when a tab navigates or refreshes
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (changeInfo.status === 'loading' && tab.url && tab.url.includes('rozetka.com.ua')) {
-        // If tab was navigating without active transit flag, ensure it resets to idle
         const sessions = await getTabSessions();
-        if (sessions[tabId] && sessions[tabId].isRunning && stoppedTabs.has(tabId)) {
+        if (sessions[tabId]) {
             sessions[tabId].isRunning = false;
             sessions[tabId].percentProgress = 0;
             sessions[tabId].statusMsg = 'Готова до запуску';

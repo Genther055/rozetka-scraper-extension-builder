@@ -514,20 +514,9 @@
     function dispatchSafeClick(element) {
         if (!element) return;
         try {
-            element.scrollIntoView({ behavior: 'auto', block: 'center' });
-        } catch (_) {}
-
-        try {
-            element.focus();
-            element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
-            element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-            element.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
-            element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
             element.click();
             element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-        } catch (_) {
-            try { element.click(); } catch (__) {}
-        }
+        } catch (_) {}
     }
 
     async function sendWebhookPayload(payload) {
@@ -663,7 +652,7 @@
                 estimatedTotal = latestEstimated;
             }
 
-            // 1. Silent scroll
+            // 1. Silent scroll to trigger lazy mounting
             await silentBackgroundScroll();
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
@@ -671,8 +660,8 @@
             let newProducts = await scrapeCurrentDomItems(meta, pageCount);
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
             
-            if (newProducts.length === 0 || (sentLinks.size < estimatedTotal && newProducts.length % 60 !== 0)) {
-                await new Promise(r => setTimeout(r, 300));
+            if (newProducts.length === 0) {
+                await new Promise(r => setTimeout(r, 350));
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
                 const extraSweep = await scrapeCurrentDomItems(meta, pageCount);
                 if (extraSweep.length > 0) {
@@ -733,7 +722,12 @@
                 break;
             }
 
-            // 4. Trigger next page via DOM click
+            if (consecutiveNoNew >= 3) {
+                console.log(`TradeScout Tab ${currentTabId}: Catalog ended (no new products). Total: ${sentLinks.size}`);
+                break;
+            }
+
+            // 4. Trigger next page via DOM click or Show More
             let pageTransitionSuccess = false;
             const maxTransitionAttempts = 3;
 
@@ -754,17 +748,30 @@
 
                     dispatchSafeClick(actionObj.element);
 
-                    for (let w = 0; w < 16; w++) {
+                    for (let w = 0; w < 12; w++) {
                         if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                        await new Promise(r => setTimeout(r, 200));
+                        await new Promise(r => setTimeout(r, 250));
+                        
                         const currentDomCount = document.querySelectorAll(tileSelectors).length;
+                        // Check if DOM expanded (Show More)
                         if (currentDomCount > prevDomCount) {
                             pageTransitionSuccess = true;
                             break;
                         }
+                        // Check if new tiles loaded in DOM with unscraped links (Numbered Pagination)
+                        const freshItems = Array.from(document.querySelectorAll(tileSelectors));
+                        const hasUnscrapedLink = freshItems.some(tile => {
+                            const linkTag = tile.querySelector('a.goods-tile__heading, a.tile-title, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
+                            if (!linkTag) return false;
+                            let href = linkTag.getAttribute('href') || '';
+                            href = href.split('?')[0].split('#')[0];
+                            return href && !sentLinks.has(href) && !sentLinks.has(`https://rozetka.com.ua${href}`);
+                        });
+                        if (hasUnscrapedLink) {
+                            pageTransitionSuccess = true;
+                            break;
+                        }
                     }
-
-                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
                     if (pageTransitionSuccess) {
                         pageCount++;
@@ -775,16 +782,17 @@
 
                 if (attempt < maxTransitionAttempts) {
                     await silentBackgroundScroll();
-                    await new Promise(r => setTimeout(r, attempt * 600));
+                    await new Promise(r => setTimeout(r, 400));
                 }
             }
 
             if (!pageTransitionSuccess) {
+                consecutiveNoNew++;
                 if (consecutiveNoNew >= 2) {
                     console.log(`TradeScout Tab ${currentTabId}: Catalog finished with ${sentLinks.size} items.`);
                     break;
                 }
-                await new Promise(r => setTimeout(r, 800));
+                await new Promise(r => setTimeout(r, 500));
             }
         }
 
