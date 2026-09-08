@@ -3176,10 +3176,10 @@
 
   <!-- MODAL: DRILLDOWN PRODUCTS (ТОГО ЧИ ІНШОГО ПРОДАВЦЯ / ДІАПАЗОНУ) -->
   <div *ngIf="showDrilldownModal" class="fixed inset-0 z-50 bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-    <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/70 rounded-3xl p-5 sm:p-6 max-w-5xl w-full max-h-[90vh] shadow-2xl shadow-black/80 flex flex-col space-y-3.5 relative">
+    <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/70 rounded-3xl p-5 sm:p-6 max-w-6xl w-full max-h-[90vh] shadow-2xl shadow-black/80 flex flex-col space-y-3 relative">
       
       <!-- Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-2xl bg-indigo-950/80 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shadow-lg shadow-indigo-500/10 shrink-0">
             <span class="material-icons text-xl">inventory_2</span>
@@ -3221,7 +3221,7 @@
       </div>
 
       <!-- Category Filter Pills Bar (when categories exist) -->
-      <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 pt-0.5 select-none shrink-0">
+      <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5 pt-0.5 select-none shrink-0 flex-nowrap">
         <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1 mr-1">
           <span class="material-icons text-xs text-indigo-400">filter_alt</span>
           <span>Категорія:</span>
@@ -3268,8 +3268,8 @@
       </div>
 
       <!-- Quick Action Filter Chips -->
-      <div class="flex flex-wrap items-center gap-1.5 select-none shrink-0 text-xs">
-        <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1">Швидкі фільтри:</span>
+      <div class="flex items-center gap-1.5 select-none shrink-0 text-xs overflow-x-auto no-scrollbar pb-0.5 flex-nowrap">
+        <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1 shrink-0">Швидкі фільтри:</span>
         
         <button 
           (click)="toggleQuickFilter('inStock')"
@@ -3279,7 +3279,7 @@
           [class.bg-slate-900]="drilldownStockFilter !== 'inStock'"
           [class.text-slate-400]="drilldownStockFilter !== 'inStock'"
           [class.border-slate-800]="drilldownStockFilter !== 'inStock'"
-          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1"
+          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1 shrink-0"
         >
           <span>⚡ В наявності</span>
         </button>
@@ -3292,7 +3292,7 @@
           [class.bg-slate-900]="drilldownReviewsFilter !== 'topReviews'"
           [class.text-slate-400]="drilldownReviewsFilter !== 'topReviews'"
           [class.border-slate-800]="drilldownReviewsFilter !== 'topReviews'"
-          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1"
+          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1 shrink-0"
         >
           <span>🔥 Топ попит (10+ відг.)</span>
         </button>
@@ -3305,7 +3305,7 @@
           [class.bg-slate-900]="drilldownDiscountFilter !== 'discountOnly'"
           [class.text-slate-400]="drilldownDiscountFilter !== 'discountOnly'"
           [class.border-slate-800]="drilldownDiscountFilter !== 'discountOnly'"
-          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1"
+          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1 shrink-0"
         >
           <span>🏷️ Зі знижкою</span>
         </button>
@@ -3318,7 +3318,7 @@
           [class.bg-slate-900]="drilldownRatingFilter !== '4.5'"
           [class.text-slate-400]="drilldownRatingFilter !== '4.5'"
           [class.border-slate-800]="drilldownRatingFilter !== '4.5'"
-          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1"
+          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1 shrink-0"
         >
           <span>⭐ Рейтинг 4.5+</span>
         </button>
@@ -3331,7 +3331,7 @@
           [class.bg-slate-900]="drilldownSellerFilter !== 'rozetka'"
           [class.text-slate-400]="drilldownSellerFilter !== 'rozetka'"
           [class.border-slate-800]="drilldownSellerFilter !== 'rozetka'"
-          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1"
+          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1 shrink-0"
         >
           <span>🏢 Rozetka</span>
         </button>
@@ -3344,24 +3344,24 @@
           [class.bg-slate-900]="drilldownSellerFilter !== '3p'"
           [class.text-slate-400]="drilldownSellerFilter !== '3p'"
           [class.border-slate-800]="drilldownSellerFilter !== '3p'"
-          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1"
+          class="px-2.5 py-0.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1 shrink-0"
         >
           <span>👥 3P селери</span>
         </button>
       </div>
 
-      <!-- Secondary Multi-Filter Toolbar (Seller, Stock, Reviews, Price Range & Reset) -->
-      <div class="flex flex-wrap items-center justify-between gap-2.5 bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800/80 text-xs shrink-0">
-        <div class="flex flex-wrap items-center gap-3">
-          <!-- Seller Select -->
-          <div class="flex items-center gap-1.5">
-            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+      <!-- Secondary Multi-Filter Toolbar (Strict 1-Row Layout: Seller, Price Range, Stock, Reviews, Rating & Reset) -->
+      <div class="flex items-center justify-between gap-2 bg-slate-950/80 p-2 sm:p-2.5 rounded-2xl border border-slate-800/80 text-xs shrink-0 overflow-x-auto no-scrollbar">
+        <div class="flex items-center gap-2 sm:gap-3 shrink-0 flex-nowrap">
+          <!-- 1. Seller Select -->
+          <div class="flex items-center gap-1 shrink-0">
+            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1 shrink-0">
               <span class="material-icons text-xs text-indigo-400">store</span>
               <span>Продавець:</span>
             </span>
             <select 
               [(ngModel)]="drilldownSellerFilter"
-              class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-xs text-white rounded-xl px-2.5 py-1 outline-none cursor-pointer"
+              class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-[11px] text-white rounded-xl px-2 py-1 outline-none cursor-pointer max-w-[130px] truncate"
             >
               <option value="all">Всі продавці</option>
               <option value="rozetka">Rozetka (1P)</option>
@@ -3370,71 +3370,71 @@
             </select>
           </div>
 
-          <!-- Price Range Inputs -->
-          <div class="flex items-center gap-1.5">
-            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+          <!-- 2. Price Range Inputs -->
+          <div class="flex items-center gap-1 shrink-0">
+            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1 shrink-0">
               <span class="material-icons text-xs text-emerald-400">payments</span>
               <span>Ціна:</span>
             </span>
-            <div class="flex items-center gap-1">
+            <div class="flex items-center gap-1 shrink-0">
               <input 
                 type="number" 
                 [(ngModel)]="drilldownMinPrice"
                 placeholder="Від ₴" 
-                class="w-16 bg-slate-900 border border-slate-750 focus:border-indigo-500 text-xs text-white rounded-xl px-2 py-1 outline-none text-center placeholder-slate-600"
+                class="w-14 sm:w-16 bg-slate-900 border border-slate-750 focus:border-indigo-500 text-[11px] text-white rounded-xl px-1.5 py-1 outline-none text-center placeholder-slate-600 font-mono"
               />
               <span class="text-slate-500">-</span>
               <input 
                 type="number" 
                 [(ngModel)]="drilldownMaxPrice"
                 placeholder="До ₴" 
-                class="w-16 bg-slate-900 border border-slate-750 focus:border-indigo-500 text-xs text-white rounded-xl px-2 py-1 outline-none text-center placeholder-slate-600"
+                class="w-14 sm:w-16 bg-slate-900 border border-slate-750 focus:border-indigo-500 text-[11px] text-white rounded-xl px-1.5 py-1 outline-none text-center placeholder-slate-600 font-mono"
               />
             </div>
           </div>
 
-          <!-- Stock Select -->
-          <div class="flex items-center gap-1.5">
-            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+          <!-- 3. Stock Select -->
+          <div class="flex items-center gap-1 shrink-0">
+            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1 shrink-0">
               <span class="material-icons text-xs text-emerald-400">check_circle</span>
               <span>Наявність:</span>
             </span>
             <select 
               [(ngModel)]="drilldownStockFilter"
-              class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-xs text-white rounded-xl px-2.5 py-1 outline-none cursor-pointer"
+              class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-[11px] text-white rounded-xl px-2 py-1 outline-none cursor-pointer"
             >
               <option value="all">Вся наявність</option>
               <option value="inStock">В наявності</option>
-              <option value="outOfStock">Немає в наявності</option>
+              <option value="outOfStock">Немає</option>
             </select>
           </div>
 
-          <!-- Reviews Select -->
-          <div class="flex items-center gap-1.5">
-            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+          <!-- 4. Reviews Select -->
+          <div class="flex items-center gap-1 shrink-0">
+            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1 shrink-0">
               <span class="material-icons text-xs text-amber-400">star</span>
               <span>Відгуки:</span>
             </span>
             <select 
               [(ngModel)]="drilldownReviewsFilter"
-              class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-xs text-white rounded-xl px-2.5 py-1 outline-none cursor-pointer"
+              class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-[11px] text-white rounded-xl px-2 py-1 outline-none cursor-pointer"
             >
               <option value="all">Всі відгуки</option>
               <option value="withReviews">З відгуками (>0)</option>
-              <option value="topReviews">Топ попит (10+ відг.)</option>
+              <option value="topReviews">Топ попит (10+)</option>
               <option value="noReviews">0 відгуків</option>
             </select>
           </div>
 
-          <!-- Rating Select -->
-          <div class="flex items-center gap-1.5">
-            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+          <!-- 5. Rating Select -->
+          <div class="flex items-center gap-1 shrink-0">
+            <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1 shrink-0">
               <span class="material-icons text-xs text-amber-400">grade</span>
               <span>Рейтинг:</span>
             </span>
             <select 
               [(ngModel)]="drilldownRatingFilter"
-              class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-xs text-white rounded-xl px-2.5 py-1 outline-none cursor-pointer"
+              class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-[11px] text-white rounded-xl px-2 py-1 outline-none cursor-pointer"
             >
               <option value="all">Всі оцінки</option>
               <option value="4.5">4.5+ ★ Відмінні</option>
@@ -3447,11 +3447,11 @@
         <button 
           *ngIf="hasActiveDrilldownFilters()"
           (click)="resetDrilldownFilters()"
-          class="px-2.5 py-1 bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 hover:text-white border border-amber-600/40 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0"
+          class="px-2.5 py-1 bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 hover:text-white border border-amber-600/40 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ml-2"
           title="Скинути всі активні фільтри та пошук"
         >
           <span class="material-icons text-xs">restart_alt</span>
-          <span>Скинути фільтри</span>
+          <span>Скинути</span>
         </button>
       </div>
 
