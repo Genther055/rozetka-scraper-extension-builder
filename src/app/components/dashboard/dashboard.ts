@@ -1370,18 +1370,14 @@ export class DashboardComponent implements OnInit {
         this.autoSaveHistory = savedAuto === 'true';
       }
 
-      // Fast initial load from local storage cache
+      // Ensure clean state on startup - start with empty base
       try {
-        const cachedProducts = localStorage.getItem(this.STORAGE_PRODUCTS_KEY);
-        if (cachedProducts) {
-          const parsed = JSON.parse(cachedProducts);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            this.products = parsed;
-            this.applyFilters();
-            this.calculateMetrics();
-          }
-        }
-      } catch (e) {}
+        localStorage.removeItem(this.STORAGE_PRODUCTS_KEY);
+        localStorage.removeItem('tradescout_cached_products');
+      } catch (_) {}
+      this.products = [];
+      this.applyFilters();
+      this.calculateMetrics();
 
       // Listen for instant live updates from Chrome Extension
       this.productUpdateListener = (e: CustomEvent) => {
@@ -1414,9 +1410,6 @@ export class DashboardComponent implements OnInit {
           });
 
           this.products = Array.from(productMap.values());
-          try {
-            localStorage.setItem(this.STORAGE_PRODUCTS_KEY, JSON.stringify(this.products));
-          } catch (_) {}
           this.applyFilters();
           this.calculateMetrics();
           this.cdr.markForCheck();
@@ -1552,15 +1545,6 @@ export class DashboardComponent implements OnInit {
             if (res.success) {
               const newProds = res.products || [];
               this.products = newProds;
-              if (typeof window !== 'undefined') {
-                try {
-                  if (newProds.length > 0) {
-                    localStorage.setItem(this.STORAGE_PRODUCTS_KEY, JSON.stringify(newProds));
-                  } else {
-                    localStorage.removeItem(this.STORAGE_PRODUCTS_KEY);
-                  }
-                } catch (_) {}
-              }
               this.applyFilters();
               this.calculateMetrics();
             }
