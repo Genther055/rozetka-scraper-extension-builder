@@ -1385,7 +1385,22 @@ export class DashboardComponent implements OnInit {
       // Listen for instant live updates from Chrome Extension
       this.productUpdateListener = (e: CustomEvent) => {
         if (e && e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
-          this.products = e.detail;
+          const incoming = e.detail;
+          if (this.products.length > 0 && incoming.length < this.products.length) {
+            const productMap = new Map(this.products.map(p => [p.link || p.name, p]));
+            incoming.forEach(p => {
+              const key = p.link || p.name;
+              const existing = productMap.get(key);
+              if (existing) {
+                Object.assign(existing, p);
+              } else {
+                productMap.set(key, p);
+              }
+            });
+            this.products = Array.from(productMap.values());
+          } else {
+            this.products = incoming;
+          }
           try {
             localStorage.setItem(this.STORAGE_PRODUCTS_KEY, JSON.stringify(this.products));
           } catch (_) {}

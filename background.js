@@ -449,6 +449,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ success: true, serverInfo });
         });
 
+        // Trigger background asynchronous enrichment for full 30+ specifications & description (non-blocking)
+        if (payload?.products && payload.products.length > 0 && !payload.skipBackgroundEnrichment && !payload.isEnriched) {
+            queueProductsForEnrichment(payload.products, webhookUrl);
+        }
+
         return true;
     }
 
@@ -506,6 +511,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // 10. Reset all cached sessions & reset all open tabs
     if (message.action === 'RESET_ALL_SESSIONS' || message.action === 'CLEAR_ALL_DATA') {
         stoppedTabs.clear();
+        enrichmentQueue.length = 0;
         chrome.storage.local.set({ tabSessions: {} }, () => {
             chrome.tabs.query({ url: "*://*.rozetka.com.ua/*" }, (tabs) => {
                 if (tabs && tabs.length > 0) {
@@ -521,3 +527,145 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 });
+
+// =========================================================================
+// ASYNCHRONOUS BACKGROUND ENRICHMENT WORKER (Specs, Characteristics & Description)
+// =========================================================================
+const enrichmentQueue = [];
+let isEnrichmentWorkerRunning = false;
+const processedLinksSet = new Set();
+
+async function fetchProductDetails(product) {
+    if (!product || !product.link) return;
+    try {
+        const cleanLink = product.link.split('?')[0].split('#')[0];
+        const charUrl = cleanLink.endsWith('/') ? `${cleanLink}characteristics/` : `${cleanLink}/characteristics/`;
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(charUrl, { signal: controller.signal }).catch(() => null);
+        clearTimeout(timeoutId);
+        
+        if (!res || !res.ok) return;
+        const htmlText = await res.text().catch(() => '');
+        if (!htmlText) return;
+
+        // 1. Full Description
+        const descMatch = htmlText.match(/class="[^"]*(?:product-about__description|rz-product-description|product-page__description|about-product)[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+        if (descMatch) {
+            const cleanDesc = descMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            if (cleanDesc && cleanDesc.length > 5) {
+                product.description = cleanDesc;
+            }
+        }
+
+        // 2. Structured Characteristics / Specs Map
+        const detailedSpecsMap = {};
+        const specsList = [];
+
+        // Method A: parse characteristics__label and characteristics__value
+        const specMatches = htmlText.matchAll(/class="[^"]*characteristics__label[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>[\s\S]*?class="[^"]*characteristics__value[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>/gi);
+        for (const m of specMatches) {
+            const k = m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+            const v = m[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+            if (k && v) {
+                detailedSpecsMap[k] = v;
+                specsList.push(`${k}: ${v}`);
+            }
+        }
+
+        // Method B: parse dt / dd characteristic rows if Method A found few
+        if (specsList.length === 0) {
+            const dtMatches = htmlText.matchAll(/<dt[^>]*>([\s\S]*?)<\/dt>[\s\S]*?<dd[^>]*>([\s\S]*?)<\/dd>/gi);
+            for (const m of dtMatches) {
+                const k = m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+                const v = m[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+                if (k && v) {
+                    detailedSpecsMap[k] = v;
+                    specsList.push(`${k}: ${v}`);
+                }
+            }
+        }
+
+        if (specsList.length > 0) {
+            product.specs = specsList.join('; ');
+            product.detailedSpecsMap = detailedSpecsMap;
+        }
+    } catch (e) {
+        console.warn('TradeScout Background: Detail fetch error for', product.name, e);
+    }
+}
+
+async function processEnrichmentQueue(webhookUrl) {
+    if (isEnrichmentWorkerRunning) return;
+    isEnrichmentWorkerRunning = true;
+
+    const BATCH_SIZE = 5;
+    const RENDER_CLOUD_API = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
+    const targets = [];
+    if (webhookUrl && !targets.includes(webhookUrl)) targets.push(webhookUrl);
+    if (!targets.includes(RENDER_CLOUD_API)) targets.push(RENDER_CLOUD_API);
+    if (!targets.includes(LOCAL_DASHBOARD_API)) targets.push(LOCAL_DASHBOARD_API);
+    if (!targets.includes(LOCAL_IP_API)) targets.push(LOCAL_IP_API);
+
+    while (enrichmentQueue.length > 0) {
+        const batch = enrichmentQueue.splice(0, BATCH_SIZE);
+        await Promise.all(batch.map(p => fetchProductDetails(p)));
+
+        const enrichedProducts = batch.filter(p => (p.specs && p.specs.length > 0 && p.specs !== 'Стандартні') || (p.description && p.description.length > 0));
+        if (enrichedProducts.length > 0) {
+            const enrichedPayload = { 
+                products: enrichedProducts, 
+                isEnriched: true,
+                skipBackgroundEnrichment: true 
+            };
+
+            // Broadcast to open dashboard tabs to update memory/localStorage
+            try {
+                chrome.tabs.query({ url: ["*://*.vercel.app/*", "*://localhost/*", "*://127.0.0.1/*", "*://*.onrender.com/*"] }, (dashboardTabs) => {
+                    if (dashboardTabs && dashboardTabs.length > 0) {
+                        dashboardTabs.forEach(dTab => {
+                            chrome.scripting.executeScript({
+                                target: { tabId: dTab.id },
+                                func: (prods) => {
+                                    try {
+                                        window.dispatchEvent(new CustomEvent('tradescout_products_updated', { detail: prods }));
+                                    } catch (_) {}
+                                },
+                                args: [enrichedProducts]
+                            }).catch(() => {});
+                        });
+                    }
+                });
+            } catch (_) {}
+
+            // Send enriched updates to backend server
+            for (const targetUrl of targets) {
+                fetch(targetUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(enrichedPayload)
+                }).catch(() => {});
+            }
+        }
+
+        // Polite delay between background batches
+        await new Promise(r => setTimeout(r, 200));
+    }
+
+    isEnrichmentWorkerRunning = false;
+}
+
+function queueProductsForEnrichment(products, webhookUrl) {
+    if (!products || products.length === 0) return;
+    for (const p of products) {
+        if (!p.link) continue;
+        const key = p.link.split('?')[0].split('#')[0];
+        if (!processedLinksSet.has(key)) {
+            processedLinksSet.add(key);
+            enrichmentQueue.push(p);
+        }
+    }
+    processEnrichmentQueue(webhookUrl);
+}
+
