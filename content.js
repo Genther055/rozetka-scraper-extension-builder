@@ -321,6 +321,58 @@
         });
     }
 
+    function extractSeller(item) {
+        if (!item || !(item instanceof Element)) return 'Rozetka';
+        
+        const sellerSelectors = [
+            '.goods-tile__seller',
+            '.goods-tile__seller-name',
+            'rz-goods-seller',
+            'rz-seller',
+            '[class*="goods-tile__seller"]',
+            '[class*="seller-name"]',
+            '[class*="seller-title"]',
+            '.seller-title',
+            '.seller-name',
+            '.shop-name',
+            '.goods-tile__shop',
+            '[data-testid*="seller"]',
+            '[data-testid*="merchant"]',
+            '.goods-tile__merchant',
+            '[class*="merchant"]'
+        ];
+        
+        for (const sel of sellerSelectors) {
+            try {
+                const el = item.querySelector(sel);
+                if (el && el.innerText && el.innerText.trim().length > 1) {
+                    let s = el.innerText.trim();
+                    s = s.replace(/^продавець:?\s*/i, '')
+                         .replace(/^продавец:?\s*/i, '')
+                         .replace(/^seller:?\s*/i, '')
+                         .replace(/^магазин:?\s*/i, '')
+                         .trim();
+                    if (s && s.length > 1 && !s.includes('\n') && s.length < 60) {
+                        return s;
+                    }
+                }
+            } catch (_) {}
+        }
+        
+        try {
+            const itemText = item.innerText || '';
+            const match = itemText.match(/(?:продавець|продавец|seller)\s*:\s*([^\n\r\t,;]+)/i);
+            if (match && match[1]) {
+                let s = match[1].trim();
+                if (s && s.length > 1 && s.length < 60) {
+                    return s;
+                }
+            }
+        } catch (_) {}
+        
+        return 'Rozetka';
+    }
+
     async function scrapeCurrentDomItems(meta, pageIndex) {
         // 1. Locate strictly the main catalog grid container
         const mainGrid = document.querySelector('ul.catalog-grid, rz-grid ul, rz-catalog-grid ul, .catalog-grid > ul, ul[class*="catalog-grid"]');
@@ -407,8 +459,7 @@
                 const power = powerMatch ? `${powerMatch[1]}W` : '';
                 const specs = [capacity, power].filter(Boolean).join(', ') || 'Стандартні';
 
-                const merchantEl = item.querySelector('.goods-tile__merchant, [class*="merchant"], .seller-title');
-                const seller = merchantEl && merchantEl.innerText ? merchantEl.innerText.trim() : 'Rozetka';
+                const seller = extractSeller(item);
 
                 newItems.push({
                     name,
