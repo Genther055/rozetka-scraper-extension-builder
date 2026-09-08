@@ -1,4 +1,4 @@
-// TradeScout Content Script v3.5 Pro (Multi-Tab Background Worker & Precise Catalog Scraper)
+// TradeScout Content Script v3.5 Pro (Multi-Tab Background Worker & Strict 60-Items/Page Scraper)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
@@ -143,18 +143,22 @@
         return currentDomTiles > 0 ? currentDomTiles : 60;
     }
 
-    // Precise filter: ignore carousels, sliders, sidebars, recommendations, accessories
+    // Strict filter: eliminate carousels, sliders, accessories, sidebars, banners, recommendation widgets
     function isUnwantedTile(item) {
         if (!item || !(item instanceof Element)) return true;
-        if (item.closest('rz-goods-carousel, .goods-carousel, .recently-viewed, rz-goods-section-slider, .slider, rz-similar-goods, rz-recommended-goods, rz-viewed-goods, .catalog-banner, .advertising-slot, aside, .sidebar, rz-accessories, .goods-slider, .recommendations, [data-testid*="carousel"], [data-testid*="slider"]')) {
+        
+        if (item.closest('rz-goods-carousel, rz-carousel, rz-goods-slider, rz-slider, app-goods-carousel, app-slider, .goods-carousel, .recently-viewed, rz-goods-section-slider, .slider, .carousel, rz-similar-goods, rz-recommended-goods, rz-viewed-goods, .catalog-banner, .advertising-slot, aside, .sidebar, rz-accessories, .goods-slider, .recommendations, [data-testid*="carousel"], [data-testid*="slider"], [class*="carousel"], [class*="slider"], [class*="section-slider"], rz-product-slider')) {
             return true;
         }
+        
         if (item.classList.contains('catalog-banner') || item.classList.contains('rz-banner') || item.classList.contains('banner-tile') || item.classList.contains('advertising-slot')) {
             return true;
         }
+
         const hasProductLink = !!item.querySelector('a[href*="/p/"], a[href*="/p-"], a[href*="/p"], a.goods-tile__heading, a.tile-title, [class*="heading"] a');
         const hasPrice = !!item.querySelector('.goods-tile__price, .price, [class*="price"]');
         if (!hasProductLink && !hasPrice) return true;
+
         return false;
     }
 
@@ -286,44 +290,55 @@
     }
 
     async function scrapeCurrentDomItems(meta, pageIndex) {
-        // Look specifically for the main catalog container
-        const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, .catalog-grid, rz-catalog-grid, rz-catalog-tiles, .catalog-selection__goods, section.catalog-grid') || document.querySelector('main') || document.body;
+        // 1. Locate strictly the main catalog grid container
+        const mainGrid = document.querySelector('ul.catalog-grid, rz-grid ul, rz-catalog-grid ul, .catalog-grid > ul, ul[class*="catalog-grid"]');
         
-        // Find candidate product tiles inside the catalog container
-        const rawTiles = Array.from(catalogContainer.querySelectorAll('rz-catalog-tile, rz-product-tile, .goods-tile, [data-goods-id], li.catalog-grid__cell'));
-        
-        // Filter out unwanted elements and remove nested child tiles
-        const distinctTiles = rawTiles.filter(item => {
-            if (isUnwantedTile(item)) return false;
-            // Prevent picking both outer li and inner rz-catalog-tile
-            const parentTile = item.parentElement ? item.parentElement.closest('rz-catalog-tile, rz-product-tile, .goods-tile, [data-goods-id], li.catalog-grid__cell') : null;
-            return !parentTile || isUnwantedTile(parentTile);
-        });
+        let rawTiles = [];
+        if (mainGrid) {
+            rawTiles = Array.from(mainGrid.children).filter(child => child.tagName === 'LI' || child.classList.contains('catalog-grid__cell') || child.tagName === 'RZ-CATALOG-TILE');
+            if (rawTiles.length === 0) {
+                rawTiles = Array.from(mainGrid.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, .goods-tile'));
+            }
+        } else {
+            const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, .catalog-grid, rz-catalog-grid, rz-catalog-tiles, .catalog-selection__goods, section.catalog-grid') || document.querySelector('main') || document.body;
+            rawTiles = Array.from(catalogContainer.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, [data-goods-id], .goods-tile'));
+        }
+
+        // Filter out unwanted slider/carousel/banner elements and avoid nested child duplicates
+        const distinctTiles = [];
+        const seenElements = new Set();
+
+        for (const item of rawTiles) {
+            if (isUnwantedTile(item)) continue;
+            
+            const linkTag = item.tagName === 'A' ? item : (item.querySelector('a.goods-tile__heading, a.tile-title, [class*="heading"] a, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]') || item.querySelector('a[href]'));
+            if (!linkTag) continue;
+
+            const rawHref = linkTag.getAttribute('href');
+            if (!rawHref) continue;
+
+            let link = rawHref.split('?')[0].split('#')[0].replace(/\/+$/, '');
+            if (!link.startsWith('http')) {
+                link = link.startsWith('/') ? `https://rozetka.com.ua${link}` : `https://rozetka.com.ua/${link}`;
+            }
+
+            if (sentLinks.has(link) || seenElements.has(link)) continue;
+            seenElements.add(link);
+            distinctTiles.push({ item, linkTag, link });
+
+            // Strictly cap at exactly 60 items per page
+            if (distinctTiles.length >= 60) break;
+        }
 
         if (distinctTiles.length === 0) return [];
 
         const newItems = [];
 
-        distinctTiles.forEach((item) => {
+        for (const { item, linkTag, link } of distinctTiles) {
             try {
-                if (isUnwantedTile(item)) return;
-
-                const linkTag = item.tagName === 'A' ? item : (item.querySelector('a.goods-tile__heading, a.tile-title, [class*="heading"] a, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]') || item.querySelector('a[href]'));
-                if (!linkTag) return;
-                
-                const rawHref = linkTag.getAttribute('href');
-                if (!rawHref) return;
-
                 const titleEl = item.querySelector('a.tile-title, a.goods-tile__heading, .goods-tile__heading, .tile-title, [class*="heading"], [class*="title"]') || linkTag;
                 const name = titleEl && titleEl.innerText ? titleEl.innerText.trim() : (linkTag.innerText ? linkTag.innerText.trim() : '');
-                if (!name || name.length < 3) return;
-
-                let link = rawHref.split('?')[0].split('#')[0].replace(/\/+$/, '');
-                if (!link.startsWith('http')) {
-                    link = link.startsWith('/') ? `https://rozetka.com.ua${link}` : `https://rozetka.com.ua/${link}`;
-                }
-
-                if (sentLinks.has(link)) return;
+                if (!name || name.length < 3) continue;
 
                 const priceEl = item.querySelector('.goods-tile__price-value, .price, [class*="price-value"], [class*="price__current"]');
                 const priceText = priceEl && priceEl.innerText ? priceEl.innerText : '';
@@ -380,7 +395,7 @@
 
                 sentLinks.add(link);
             } catch (_) {}
-        });
+        }
 
         return newItems;
     }
@@ -397,7 +412,7 @@
 
         let consecutiveNoNew = 0;
         let lastCount = sentLinks.size;
-        const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"], [data-testid="goods-tile"]';
+        const tileSelectors = 'ul.catalog-grid, rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id]';
 
         while (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
             const latestEstimated = getEstimatedTotalFromPage();
@@ -409,7 +424,7 @@
             await silentBackgroundScroll();
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
-            // 2. Scrape all items on current page
+            // 2. Scrape all items on current page (strictly up to 60)
             let newProducts = await scrapeCurrentDomItems(meta, currentPage);
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
             
