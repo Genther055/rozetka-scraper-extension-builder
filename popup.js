@@ -180,60 +180,18 @@ async function initPopup() {
     stopTimer(true);
     updateProgress(0, 0, 'Готова до запуску');
 
-    // 1. Load saved webhook URL & sessions
-    chrome.storage.local.get(['webhookUrl', 'tabSessions'], (data) => {
+    chrome.storage.local.get(['webhookUrl'], (data) => {
         if (data.webhookUrl) {
             inputWebhook.value = data.webhookUrl;
         } else {
             inputWebhook.value = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
         }
 
-        const sessions = data.tabSessions || {};
-        const currentSession = sessions[activeTabId];
-
-        if (currentSession) {
-            if (currentSession.sessionTitle) {
-                tabTitleEl.innerText = currentSession.sessionTitle;
-            }
-
-            if (currentSession.isRunning && !currentSession.statusMsg?.includes('зупинено')) {
-                btnStart.disabled = true;
-                btnStop.disabled = false;
-                tabBadgeEl.innerText = '● Збирається...';
-                tabBadgeEl.style.color = '#38bdf8';
-                startTimer(currentSession.startTime || Date.now());
-                updateProgress(currentSession.percentProgress || 5, currentSession.totalScraped || 0, currentSession.statusMsg || 'Скрейпінг активний...', currentSession.estimatedTotal);
-            } else if (currentSession.finishedAt) {
-                btnStart.disabled = false;
-                btnStop.disabled = true;
-                tabBadgeEl.innerText = '✓ Завершено';
-                tabBadgeEl.style.color = '#10b981';
-                stopTimer(false);
-                updateProgress(100, currentSession.totalScraped || 0, `Збір завершено! (${currentSession.totalScraped || 0} тов.)`, currentSession.estimatedTotal);
-            }
-        }
-
-        // 2. Query tab directly to get actual live status
+        // Query active tab directly for live truth
         if (activeTabId) {
             chrome.tabs.sendMessage(activeTabId, { action: 'PING_TAB_STATUS' }, (res) => {
                 const err = chrome.runtime.lastError;
-                if (err) {
-                    btnStart.disabled = false;
-                    btnStop.disabled = true;
-                    tabBadgeEl.innerText = 'Готова до запуску';
-                    tabBadgeEl.style.color = '#10b981';
-                    stopTimer(true);
-                    if (tab && tab.url && tab.url.includes('rozetka.com.ua')) {
-                        chrome.scripting.executeScript({
-                            target: { tabId: activeTabId },
-                            files: ['content.js']
-                        }, () => {
-                            const _ = chrome.runtime.lastError;
-                        });
-                    }
-                    return;
-                }
-                if (res) {
+                if (!err && res) {
                     if (res.sessionTitle) tabTitleEl.innerText = res.sessionTitle;
                     if (res.isRunning) {
                         btnStart.disabled = true;
@@ -243,24 +201,21 @@ async function initPopup() {
                         const est = res.estimatedTotal || 0;
                         const pct = est > 0 ? Math.min(100, Math.round(((res.totalScraped || 0) / est) * 100)) : 5;
                         updateProgress(pct, res.totalScraped || 0, `Збір активний (${res.totalScraped || 0} тов.)`, est);
+                        startTimer(res.startTime || Date.now());
+                    } else if (res.totalScraped > 0) {
+                        btnStart.disabled = false;
+                        btnStop.disabled = true;
+                        tabBadgeEl.innerText = '✓ Завершено';
+                        tabBadgeEl.style.color = '#10b981';
+                        stopTimer(false);
+                        updateProgress(100, res.totalScraped, `Збір завершено (${res.totalScraped} тов.)`, res.estimatedTotal);
                     } else {
                         btnStart.disabled = false;
                         btnStop.disabled = true;
-                        tabBadgeEl.innerText = (res.totalScraped > 0) ? '✓ Завершено' : 'Готова до запуску';
+                        tabBadgeEl.innerText = 'Готова до запуску';
                         tabBadgeEl.style.color = '#10b981';
-                        stopTimer(res.totalScraped === 0);
-                        if (res.totalScraped > 0) {
-                            updateProgress(100, res.totalScraped, `Збір завершено (${res.totalScraped} тов.)`, res.estimatedTotal);
-                        } else {
-                            updateProgress(0, 0, 'Готова до запуску');
-                        }
-
-                        // Clean up stale session in storage if storage had isRunning: true
-                        if (currentSession && currentSession.isRunning) {
-                            currentSession.isRunning = false;
-                            sessions[activeTabId] = currentSession;
-                            chrome.storage.local.set({ tabSessions: sessions });
-                        }
+                        stopTimer(true);
+                        updateProgress(0, 0, 'Готова до запуску');
                     }
                 }
             });

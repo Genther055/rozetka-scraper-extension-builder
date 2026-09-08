@@ -87,29 +87,51 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     }
 });
 
-// Helper to query all open Rozetka tabs
+// Helper to query all open Rozetka tabs with live status verification
 async function getAllRozetkaTabs() {
     const tabs = await chrome.tabs.query({ url: "*://*.rozetka.com.ua/*" });
     const sessions = await getTabSessions();
     const openTabIds = new Set(tabs.map(t => t.id));
     
     // Prune stale sessions for closed tabs
-    let pruned = false;
     for (const id in sessions) {
         if (!openTabIds.has(Number(id))) {
             delete sessions[id];
-            pruned = true;
         }
     }
-    if (pruned) {
-        await new Promise(resolve => {
-            chrome.storage.local.set({ tabSessions: sessions }, resolve);
+
+    // Ping each tab for ground-truth live state
+    const pingPromises = tabs.map(t => {
+        return new Promise(resolve => {
+            chrome.tabs.sendMessage(t.id, { action: 'PING_TAB_STATUS' }, (res) => {
+                const err = chrome.runtime.lastError;
+                if (!err && res) {
+                    sessions[t.id] = {
+                        ...(sessions[t.id] || {}),
+                        isRunning: !!res.isRunning,
+                        totalScraped: res.totalScraped || 0,
+                        estimatedTotal: res.estimatedTotal || 0,
+                        sessionTitle: res.sessionTitle || t.title || 'Каталог Rozetka',
+                        category: res.category || 'Товари'
+                    };
+                } else {
+                    if (sessions[t.id]) {
+                        sessions[t.id].isRunning = false;
+                    }
+                }
+                resolve();
+            });
         });
-    }
-    
+    });
+
+    await Promise.all(pingPromises);
+    await new Promise(resolve => {
+        chrome.storage.local.set({ tabSessions: sessions }, resolve);
+    });
+
     return tabs.map(t => {
         const session = sessions[t.id] || null;
-        let cleanTitle = t.title ? t.title.split(/[-–—|]/)[0].replace(/купити|в києві|україна|ціни|rozetka/gi, '').trim() : 'Каталог Rozetka';
+        let cleanTitle = (session && session.sessionTitle) ? session.sessionTitle : (t.title ? t.title.split(/[-–—|]/)[0].replace(/купити|в києві|україна|ціни|rozetka/gi, '').trim() : 'Каталог Rozetka');
         if (!cleanTitle) cleanTitle = 'Каталог Rozetka';
         return {
             id: t.id,
