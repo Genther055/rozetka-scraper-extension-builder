@@ -1324,6 +1324,9 @@ export class DashboardComponent implements OnInit {
         localStorage.removeItem(this.STORAGE_PRODUCTS_KEY);
       } catch (e) {}
     }
+    this.products = [];
+    this.applyFilters();
+    this.calculateMetrics();
     this.showSettingsSavedToast();
   }
 
@@ -1492,24 +1495,18 @@ export class DashboardComponent implements OnInit {
           next: (res) => {
             if (res.success) {
               const newProds = res.products || [];
-              if (silent && newProds.length === 0 && this.products.length > 0) {
-                // Retain active products
-              } else {
-                if (newProds.length > 0) {
-                  this.products = newProds;
-                  if (typeof window !== 'undefined') {
-                    try {
-                      localStorage.setItem(this.STORAGE_PRODUCTS_KEY, JSON.stringify(newProds));
-                    } catch (_) {}
+              this.products = newProds;
+              if (typeof window !== 'undefined') {
+                try {
+                  if (newProds.length > 0) {
+                    localStorage.setItem(this.STORAGE_PRODUCTS_KEY, JSON.stringify(newProds));
+                  } else {
+                    localStorage.removeItem(this.STORAGE_PRODUCTS_KEY);
                   }
-                  this.applyFilters();
-                  this.calculateMetrics();
-                } else if (!silent && this.products.length === 0) {
-                  this.products = [];
-                  this.applyFilters();
-                  this.calculateMetrics();
-                }
+                } catch (_) {}
               }
+              this.applyFilters();
+              this.calculateMetrics();
             }
             if (!silent) this.loading = false;
             this.cdr.markForCheck();
@@ -2343,26 +2340,50 @@ export class DashboardComponent implements OnInit {
   }
 
   clearActiveDatabase() {
-    if (this.products.length === 0) return;
     this.openConfirmDialog({
       title: 'Очистити робочу базу?',
       message: 'Видалити всі товари з поточної робочої таблиці?\nЗбережені в історії знімки та створені папки залишаться неушкодженими.',
       actionText: 'Очистити робочу базу',
       actionType: 'danger',
       onConfirm: () => {
-        this.http.post<{ success: boolean }>(`${this.apiUrl}/api/products/clear`, {})
-          .subscribe({
-            next: (res) => {
-              if (res.success) {
-                this.products = [];
-                this.applyFilters();
-                this.calculateMetrics();
-                this.showNotification('Поточну робочу базу товарів успішно очищено');
-                this.cdr.markForCheck();
+        this.products = [];
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.removeItem(this.STORAGE_PRODUCTS_KEY);
+          } catch (_) {}
+        }
+        this.applyFilters();
+        this.calculateMetrics();
+        this.cdr.markForCheck();
+
+        const tryClear = (url: string) => {
+          this.http.post<{ success: boolean }>(url, {})
+            .subscribe({
+              next: (res) => {
+                if (res.success) {
+                  this.products = [];
+                  if (typeof window !== 'undefined') {
+                    try {
+                      localStorage.removeItem(this.STORAGE_PRODUCTS_KEY);
+                    } catch (_) {}
+                  }
+                  this.applyFilters();
+                  this.calculateMetrics();
+                  this.showNotification('Поточну робочу базу товарів успішно очищено');
+                  this.cdr.markForCheck();
+                }
+              },
+              error: () => {
+                if (url.startsWith('http')) {
+                  tryClear('/api/products/clear');
+                } else {
+                  this.showNotification('Поточну робочу базу очищено локально');
+                }
               }
-            },
-            error: () => this.showNotification('Помилка очищення бази', true)
-          });
+            });
+        };
+
+        tryClear(`${this.apiUrl}/api/products/clear`);
       }
     });
   }
@@ -2892,24 +2913,42 @@ export class DashboardComponent implements OnInit {
 
   clearAllData() {
     if (confirm('Ви впевнені, що хочете видалити всі зібрані товари?')) {
-      this.loading = true;
-      // Миттєве очищення інтерфейсу для відгуку користувачу (опимістичний апдейт)
       this.products = [];
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem(this.STORAGE_PRODUCTS_KEY);
+        } catch (_) {}
+      }
       this.applyFilters();
       this.calculateMetrics();
       this.cdr.markForCheck();
 
-      this.http.post(`${this.apiUrl}/api/products/clear`, {})
-        .subscribe({
-          next: () => {
-            this.loadProducts();
-          },
-          error: (err) => {
-            console.error('Failed to clear data:', err);
-            this.loading = false;
-            this.cdr.markForCheck();
-          }
-        });
+      const tryClear = (url: string) => {
+        this.http.post(url, {})
+          .subscribe({
+            next: () => {
+              this.products = [];
+              if (typeof window !== 'undefined') {
+                try {
+                  localStorage.removeItem(this.STORAGE_PRODUCTS_KEY);
+                } catch (_) {}
+              }
+              this.applyFilters();
+              this.calculateMetrics();
+              this.cdr.markForCheck();
+            },
+            error: (err) => {
+              if (url.startsWith('http')) {
+                tryClear('/api/products/clear');
+              } else {
+                console.error('Failed to clear data:', err);
+                this.cdr.markForCheck();
+              }
+            }
+          });
+      };
+
+      tryClear(`${this.apiUrl}/api/products/clear`);
     }
   }
 
