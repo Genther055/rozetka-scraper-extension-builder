@@ -458,42 +458,7 @@
           </div>
         </div>
 
-        <!-- 1. When ALL Categories are selected: Show Structured Breakdown by Category with their respective Rozetka Pages -->
-        <div *ngIf="selectedSessionTitle === 'all' && getCategoryPageBreakdowns().length > 1" class="space-y-2.5">
-          <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-            <span class="material-icons text-xs text-indigo-400">auto_stories</span>
-            <span>Розподіл за категоріями та їхніми сторінками на Rozetka:</span>
-          </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div *ngFor="let cat of getCategoryPageBreakdowns()" class="p-3 bg-[#0b101e] border border-slate-800/90 rounded-xl flex flex-col gap-2 shadow-inner">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-extrabold text-white flex items-center gap-1.5">
-                  <span class="material-icons text-xs text-cyan-400">label</span>
-                  <span>{{ cat.title }}</span>
-                </span>
-                <span class="text-[11px] font-mono text-slate-400 font-semibold">{{ cat.totalCount }} тов. • {{ cat.totalPages }} стор.</span>
-              </div>
-
-              <!-- Page Buttons for this specific category -->
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <button 
-                  (click)="selectCategoryAndPage(cat.title, 'all')"
-                  class="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold border border-slate-700 bg-slate-900 text-slate-300 hover:border-indigo-400 hover:text-white cursor-pointer transition-all"
-                >
-                  Всі ({{ cat.totalCount }})
-                </button>
-                <button 
-                  *ngFor="let p of cat.pages"
-                  (click)="selectCategoryAndPage(cat.title, p.pageNum)"
-                  class="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold border border-slate-800 bg-[#131b2e] text-cyan-300 hover:border-cyan-400 hover:bg-cyan-950/60 cursor-pointer transition-all"
-                >
-                  Стор. {{ p.pageNum }} ({{ p.count }})
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <!-- 2. When a SPECIFIC Category is selected: Show its exact Pages -->
         <div *ngIf="selectedSessionTitle !== 'all' && getAvailablePagesForActiveSession().length > 1" class="flex items-center gap-2 pt-1 overflow-x-auto custom-scrollbar">

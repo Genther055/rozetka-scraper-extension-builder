@@ -147,23 +147,44 @@
     function isUnwantedTile(item) {
         if (!item || !(item instanceof Element)) return true;
         
-        // 1. Check all possible slider / carousel / recommendation / sidebar containers
-        if (item.closest('rz-goods-carousel, rz-carousel, rz-goods-slider, rz-slider, app-goods-carousel, app-slider, .goods-carousel, .recently-viewed, rz-goods-section-slider, .slider, .carousel, rz-similar-goods, rz-recommended-goods, rz-viewed-goods, .catalog-banner, .advertising-slot, aside, .sidebar, rz-accessories, .goods-slider, .recommendations, [data-testid*="carousel"], [data-testid*="slider"], [class*="carousel"], [class*="slider"], [class*="section-slider"], rz-product-slider')) {
+        // 1. Check all possible slider / carousel / recommendation / sidebar / accessories containers
+        if (item.closest('rz-goods-carousel, rz-carousel, rz-goods-slider, rz-slider, app-goods-carousel, app-slider, .goods-carousel, .recently-viewed, rz-goods-section-slider, .slider, .carousel, rz-similar-goods, rz-recommended-goods, rz-viewed-goods, .catalog-banner, .advertising-slot, aside, .sidebar, rz-accessories, .goods-slider, .recommendations, [data-testid*="carousel"], [data-testid*="slider"], [class*="carousel"], [class*="slider"], [class*="section-slider"], rz-product-slider, .main-goods__cell--advertising')) {
             return true;
         }
         
-        // 2. Check if tile itself is a banner or advertising slot
-        if (item.classList.contains('catalog-banner') || item.classList.contains('rz-banner') || item.classList.contains('banner-tile') || item.classList.contains('advertising-slot') || item.classList.contains('catalog-grid__cell--advertising')) {
+        // 2. Check if tile itself is a banner, advertising slot, or marked as advert/sponsored
+        const tileClasses = (item.className || '').toLowerCase();
+        if (
+            tileClasses.includes('catalog-banner') || 
+            tileClasses.includes('rz-banner') || 
+            tileClasses.includes('banner-tile') || 
+            tileClasses.includes('advertising') || 
+            tileClasses.includes('advert') || 
+            tileClasses.includes('promoted') || 
+            tileClasses.includes('sponsored') ||
+            item.hasAttribute('data-ad') ||
+            item.hasAttribute('data-advertisement') ||
+            item.hasAttribute('data-sponsored') ||
+            item.hasAttribute('data-advert') ||
+            item.hasAttribute('data-promo-id') ||
+            item.hasAttribute('data-adv')
+        ) {
             return true;
         }
 
-        // 3. Check for promo/ad labels
-        const adLabel = item.querySelector('.goods-tile__label, [data-testid*="promo-label"], [class*="promo-label"], [class*="advert"]');
-        if (adLabel) {
-            const txt = (adLabel.textContent || '').trim().toLowerCase();
-            if (txt.includes('реклама') || txt.includes('ad')) {
+        // 3. Check for promo/ad labels, badges, or text anywhere inside tile
+        const promoElements = item.querySelectorAll('.goods-tile__label, .promo-label, [data-testid*="promo-label"], [data-testid*="advert"], [class*="promo-label"], [class*="advert"], [class*="sponsored"], [class*="promoted"], .goods-tile__badge, [class*="badge"]');
+        for (const el of promoElements) {
+            const txt = (el.textContent || '').trim().toLowerCase();
+            if (txt.includes('реклама') || txt.includes('спонсор') || txt.includes('ad') || txt.includes('sponsored') || txt.includes('promoted')) {
                 return true;
             }
+        }
+
+        // 4. Fallback check: if any text inside tile explicitly states "реклама" or "спонсорський"
+        const innerText = (item.innerText || '').toLowerCase();
+        if (innerText.includes('реклама') || innerText.includes('спонсорський') || innerText.includes('спонсоровано') || innerText.includes('спонсорский')) {
+            return true;
         }
 
         const hasProductLink = !!item.querySelector('a[href*="/p/"], a[href*="/p-"], a[href*="/p"], a.goods-tile__heading, a.tile-title, [class*="heading"] a');
@@ -315,6 +336,11 @@
             rawTiles = Array.from(catalogContainer.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, [data-goods-id], .goods-tile'));
         }
 
+        // Calculate remaining items needed to exactly hit currentEstimatedTotal
+        const remainingNeeded = currentEstimatedTotal > 0 ? Math.max(0, currentEstimatedTotal - sentLinks.size) : 60;
+        if (currentEstimatedTotal > 0 && remainingNeeded === 0) return [];
+        const maxItemsThisPage = Math.min(60, remainingNeeded);
+
         // Filter out unwanted slider/carousel/banner elements and avoid nested child duplicates
         const distinctTiles = [];
         const seenElements = new Set();
@@ -337,8 +363,8 @@
             seenElements.add(link);
             distinctTiles.push({ item, linkTag, link });
 
-            // Strictly cap at exactly 60 items per page
-            if (distinctTiles.length >= 60) break;
+            // Strictly cap at exactly max items needed for this page
+            if (distinctTiles.length >= maxItemsThisPage) break;
         }
 
         if (distinctTiles.length === 0) return [];
@@ -414,9 +440,11 @@
     // Main scraping runner
     async function runTabScraper(initialPage) {
         const meta = getPageMetadata();
-        currentEstimatedTotal = getEstimatedTotalFromPage();
+        if (currentEstimatedTotal <= 0) {
+            currentEstimatedTotal = getEstimatedTotalFromPage();
+        }
         currentPage = initialPage || 1;
-        console.log(`TradeScout Tab ${currentTabId}: Started scraping "${meta.title}"...`);
+        console.log(`TradeScout Tab ${currentTabId}: Started scraping "${meta.title}"... Target: ${currentEstimatedTotal}`);
 
         currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
         currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
@@ -426,20 +454,22 @@
         const tileSelectors = 'ul.catalog-grid, rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id]';
 
         while (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
-            const latestEstimated = getEstimatedTotalFromPage();
-            if (latestEstimated > currentEstimatedTotal) {
-                currentEstimatedTotal = latestEstimated;
+            if (currentEstimatedTotal <= 0) {
+                const latestEstimated = getEstimatedTotalFromPage();
+                if (latestEstimated > 0) {
+                    currentEstimatedTotal = latestEstimated;
+                }
             }
 
             // 1. Silent scroll to trigger lazy mounting
             await silentBackgroundScroll();
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
-            // 2. Scrape all items on current page (strictly up to 60)
+            // 2. Scrape all items on current page (strictly up to maxItemsThisPage)
             let newProducts = await scrapeCurrentDomItems(meta, currentPage);
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
             
-            if (newProducts.length === 0) {
+            if (newProducts.length === 0 && (currentEstimatedTotal <= 0 || sentLinks.size < currentEstimatedTotal)) {
                 await new Promise(r => setTimeout(r, 350));
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
                 const extraSweep = await scrapeCurrentDomItems(meta, currentPage);
@@ -486,9 +516,15 @@
                 consecutiveNoNew++;
             }
 
-            // 3. Check if all items in catalog are collected
+            // 3. Strict Check: if all items in catalog are collected OR final expected page reached
             if (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) {
-                console.log(`TradeScout Tab ${currentTabId}: All ${sentLinks.size}/${currentEstimatedTotal} items collected!`);
+                console.log(`TradeScout Tab ${currentTabId}: Exact target count reached (${sentLinks.size}/${currentEstimatedTotal}). Finishing!`);
+                break;
+            }
+
+            const calcTotalPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
+            if (currentEstimatedTotal > 0 && currentPage >= calcTotalPages) {
+                console.log(`TradeScout Tab ${currentTabId}: Reached final expected page ${currentPage}/${calcTotalPages}. Total items: ${sentLinks.size}`);
                 break;
             }
 
