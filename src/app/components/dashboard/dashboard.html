@@ -606,6 +606,14 @@
           <div>
             <p class="text-xl sm:text-2xl font-extrabold text-white font-mono tracking-tight">{{ analyticsSummary.kpi.totalProducts }} <span class="text-xs font-semibold text-slate-400 font-sans">тов.</span></p>
             <p class="text-[11px] text-indigo-400/90 font-mono font-medium truncate mt-0.5">{{ analyticsSummary.kpi.uniqueSellersCount }} унікальних продавців</p>
+            
+            <!-- Mini Frequency Bars Sparkline -->
+            <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-end justify-between gap-1 h-5">
+              <div *ngFor="let h of getMiniSampleDistributionBars()" 
+                   class="flex-1 bg-indigo-500/70 hover:bg-indigo-400 rounded-t-sm transition-all" 
+                   [style.height.px]="h"
+                   [title]="'Щільність вибірки'"></div>
+            </div>
           </div>
 
           <!-- Hover Popover: Обсяг вибірки -->
@@ -668,6 +676,20 @@
               <span class="px-1.5 py-0.2 rounded bg-slate-900 border border-slate-800 text-emerald-400 font-semibold" [title]="'Коефіцієнт варіації цін (волатильність)'">
                 Волатильність: ±{{ analyticsSummary.kpi.volatility.cv }}%
               </span>
+            </div>
+            
+            <!-- Mini Price Distribution Curve -->
+            <div class="mt-2.5 pt-2 border-t border-slate-800/80">
+              <svg viewBox="0 0 120 24" class="w-full h-5 overflow-visible">
+                <defs>
+                  <linearGradient id="miniPriceGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.35"/>
+                    <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+                  </linearGradient>
+                </defs>
+                <path [attr.d]="getMiniPriceDistributionAreaPath()" fill="url(#miniPriceGrad)"/>
+                <path [attr.d]="getMiniPriceDistributionPath()" fill="none" stroke="#10b981" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
             </div>
           </div>
 
@@ -765,6 +787,14 @@
           <div>
             <p class="text-base sm:text-lg font-extrabold text-purple-300 font-mono leading-tight">Сер: {{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</p>
             <p class="text-[11px] text-purple-200/90 font-mono font-medium truncate mt-0.5">Медіана: {{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</p>
+            
+            <!-- Mini Dual Curve Comparison -->
+            <div class="mt-2.5 pt-2 border-t border-purple-900/50">
+              <svg viewBox="0 0 120 24" class="w-full h-5 overflow-visible">
+                <path [attr.d]="getMiniDemandComparisonPaths().shelf" fill="none" stroke="#64748b" stroke-width="1" stroke-dasharray="2 2"/>
+                <path [attr.d]="getMiniDemandComparisonPaths().demand" fill="none" stroke="#c084fc" stroke-width="1.75" stroke-linecap="round"/>
+              </svg>
+            </div>
           </div>
 
           <!-- Hover Popover: Логарифмічне зважування цін за відгуками -->
@@ -852,6 +882,20 @@
                 Парето: 20% SKU = {{ analyticsSummary.kpi.pareto.top20SkusReviewsShare }}% попиту
               </span>
             </div>
+
+            <!-- Mini Pareto Curve Sparkline -->
+            <div class="mt-2.5 pt-2 border-t border-slate-800/80">
+              <svg viewBox="0 0 120 24" class="w-full h-5 overflow-visible">
+                <defs>
+                  <linearGradient id="miniParetoGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#14b8a6" stop-opacity="0.35"/>
+                    <stop offset="100%" stop-color="#14b8a6" stop-opacity="0.0"/>
+                  </linearGradient>
+                </defs>
+                <path [attr.d]="getMiniParetoCurvePath() + ' L 118 24 L 2 24 Z'" fill="url(#miniParetoGrad)"/>
+                <path [attr.d]="getMiniParetoCurvePath()" fill="none" stroke="#2dd4bf" stroke-width="1.75" stroke-linecap="round"/>
+              </svg>
+            </div>
           </div>
 
           <!-- Hover Popover: Обширні дані життєздатності ніші -->
@@ -936,6 +980,19 @@
                [class.text-rose-400]="analyticsSummary.kpi.cr3Level === 'HIGH'">
               {{ analyticsSummary.kpi.cr3Level === 'LOW' ? 'Низька' : analyticsSummary.kpi.cr3Level === 'MEDIUM' ? 'Помірна' : 'Висока' }} (HHI: {{ analyticsSummary.kpi.hhi }})
             </p>
+
+            <!-- Mini 3-Segment Donut / Proportion Bar -->
+            <div class="mt-2.5 pt-2 border-t border-slate-800/80">
+              <div class="h-2 w-full bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+                <div *ngFor="let s of analyticsSummary.kpi.top3Sellers; let idx = index" 
+                     [class.bg-violet-500]="idx === 0" 
+                     [class.bg-indigo-500]="idx === 1" 
+                     [class.bg-purple-400]="idx === 2"
+                     [style.width.%]="s.share" 
+                     [title]="s.name + ': ' + s.share + '%'"></div>
+                <div class="bg-slate-800 flex-1" title="Інші продавці"></div>
+              </div>
+            </div>
           </div>
 
           <!-- Hover Popover: Що таке CR3 та розкладка Топ-3 селерів -->
@@ -1011,6 +1068,20 @@
               {{ analyticsSummary.kpi.entryBarrier.level === 'LOW' ? 'Низький' : analyticsSummary.kpi.entryBarrier.level === 'MEDIUM' ? 'Середній' : 'Високий' }}
             </p>
             <p class="text-[11px] text-slate-400 font-mono font-medium truncate mt-0.5">Медіана топ-10: {{ analyticsSummary.kpi.entryBarrier.medianTop10Reviews }} відг.</p>
+
+            <!-- Mini Step Curve Sparkline -->
+            <div class="mt-2.5 pt-2 border-t border-slate-800/80">
+              <svg viewBox="0 0 120 24" class="w-full h-5 overflow-visible">
+                <defs>
+                  <linearGradient id="miniBarrierGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.35"/>
+                    <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.0"/>
+                  </linearGradient>
+                </defs>
+                <path [attr.d]="getMiniTop10ReviewsStepPath() + ' L 118 24 L 2 24 Z'" fill="url(#miniBarrierGrad)"/>
+                <path [attr.d]="getMiniTop10ReviewsStepPath()" fill="none" stroke="#fbbf24" stroke-width="1.75" stroke-linecap="round"/>
+              </svg>
+            </div>
           </div>
 
           <!-- Hover Popover: Як визначається бар'єр входу та статистика Топ-10 -->
@@ -1049,8 +1120,12 @@
               </div>
             </div>
 
+            <p class="text-[11px] text-slate-300 leading-relaxed">
+              {{ analyticsSummary.kpi.entryBarrier.level === 'LOW' ? '🟢 Легкий старт: товари в топі мають мало відгуків — можна швидко зайти в топ.' : analyticsSummary.kpi.entryBarrier.level === 'MEDIUM' ? '🟡 Помірний бар\'єр: потрібна якісна картка та стартові продажі/відгуки.' : '🔴 Високий бар\'єр: лідери накопичили сотні відгуків, потрібен значний маркетинговий бюджет.' }}
+            </p>
+
             <!-- Grade Criteria -->
-            <div class="space-y-1 text-[10px] pt-1">
+            <div class="space-y-1 text-[10px] pt-2 border-t border-slate-800/80 mt-2">
               <div class="flex items-center gap-1.5 text-emerald-400">
                 <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
                 <span><b>&le; 15 відг.</b> — <b>Низький:</b> швидкий вхід навіть без великої бази відгуків.</span>
@@ -1991,21 +2066,72 @@
                 stroke-linecap="round"
               />
 
-              <!-- Hover Vertical Guide Line & Crosshair Point -->
+              <!-- Hover Dual-Axis Intersecting Crosshair Guide Lines & Coordinate Indicators -->
               <g *ngIf="hoveredOverviewPoint">
+                <!-- Vertical Guide Line -->
                 <line 
                   [attr.x1]="hoveredOverviewPoint.x" 
                   y1="20" 
                   [attr.x2]="hoveredOverviewPoint.x" 
                   y2="190" 
-                  stroke="#818cf8" 
+                  [attr.stroke]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8'" 
                   stroke-width="1.5" 
-                  stroke-dasharray="2 2"
+                  stroke-dasharray="3 3"
+                  stroke-opacity="0.85"
+                />
+
+                <!-- Horizontal Intersecting Guide Line -->
+                <line 
+                  x1="60" 
+                  [attr.y1]="hoveredOverviewPoint.y" 
+                  x2="935" 
+                  [attr.y2]="hoveredOverviewPoint.y" 
+                  [attr.stroke]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8'" 
+                  stroke-width="1.5" 
+                  stroke-dasharray="3 3"
+                  stroke-opacity="0.85"
+                />
+
+                <!-- Dynamic Y-Axis Pill Badge -->
+                <g [attr.transform]="'translate(4, ' + (hoveredOverviewPoint.y - 10) + ')'">
+                  <rect width="52" height="20" rx="4" 
+                    [attr.fill]="overviewChartMetric === 'discounts' ? '#4c0519' : overviewChartMetric === 'rank_reviews' ? '#064e3b' : '#1e1b4b'" 
+                    [attr.stroke]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8'" 
+                    stroke-width="1"
+                  />
+                  <text x="26" y="14" text-anchor="middle" 
+                    [attr.fill]="overviewChartMetric === 'discounts' ? '#fecdd3' : overviewChartMetric === 'rank_reviews' ? '#a7f3d0' : '#c7d2fe'" 
+                    font-size="9.5" font-family="monospace" font-weight="bold">
+                    {{ getCrosshairYLabel() }}
+                  </text>
+                </g>
+
+                <!-- Dynamic X-Axis Pill Badge -->
+                <g [attr.transform]="'translate(' + Math.max(60, Math.min(875, hoveredOverviewPoint.x - 30)) + ', 192)'">
+                  <rect width="60" height="18" rx="4" 
+                    [attr.fill]="overviewChartMetric === 'discounts' ? '#4c0519' : overviewChartMetric === 'rank_reviews' ? '#064e3b' : '#1e1b4b'" 
+                    [attr.stroke]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8'" 
+                    stroke-width="1"
+                  />
+                  <text x="30" y="13" text-anchor="middle" 
+                    [attr.fill]="overviewChartMetric === 'discounts' ? '#fecdd3' : overviewChartMetric === 'rank_reviews' ? '#a7f3d0' : '#c7d2fe'" 
+                    font-size="9.5" font-family="monospace" font-weight="bold">
+                    {{ getCrosshairXLabel() }}
+                  </text>
+                </g>
+
+                <!-- Target Intersection Halo & Center Node -->
+                <circle 
+                  [attr.cx]="hoveredOverviewPoint.x" 
+                  [attr.cy]="hoveredOverviewPoint.y" 
+                  r="9" 
+                  [attr.fill]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8'" 
+                  fill-opacity="0.25"
                 />
                 <circle 
                   [attr.cx]="hoveredOverviewPoint.x" 
                   [attr.cy]="hoveredOverviewPoint.y" 
-                  r="4.5" 
+                  r="5" 
                   [attr.fill]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8'" 
                   stroke="#ffffff" 
                   stroke-width="2"

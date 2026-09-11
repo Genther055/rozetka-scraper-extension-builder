@@ -981,6 +981,80 @@ export class DashboardComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
+  getCrosshairYLabel(): string {
+    if (!this.hoveredOverviewPoint) return '';
+    if (this.overviewChartMetric === 'rank_price') {
+      return (this.hoveredOverviewPoint.price || 0).toLocaleString() + ' ₴';
+    } else if (this.overviewChartMetric === 'discounts') {
+      return '-' + (this.hoveredOverviewPoint.discount || 0) + '%';
+    } else {
+      return (this.hoveredOverviewPoint.reviews || 0).toLocaleString() + ' в.';
+    }
+  }
+
+  getCrosshairXLabel(): string {
+    if (!this.hoveredOverviewPoint) return '';
+    if (this.overviewChartMetric === 'price_reviews' || this.overviewChartMetric === 'discounts') {
+      return (this.hoveredOverviewPoint.price || 0).toLocaleString() + ' ₴';
+    } else {
+      return '#' + (this.hoveredOverviewPoint.rank || 1);
+    }
+  }
+
+  getMiniSampleDistributionBars(): number[] {
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    if (!list || list.length === 0) return [8, 12, 16, 14, 10, 8, 6, 4];
+    const buckets = [0, 0, 0, 0, 0, 0, 0, 0];
+    const chunkSize = Math.max(1, Math.ceil(list.length / 8));
+    for (let i = 0; i < 8; i++) {
+      const slice = list.slice(i * chunkSize, (i + 1) * chunkSize);
+      const inStockCount = slice.filter(p => p.inStock !== false).length;
+      buckets[i] = slice.length > 0 ? Math.max(4, Math.round((inStockCount / slice.length) * 16)) : 4;
+    }
+    return buckets;
+  }
+
+  getMiniPriceDistributionPath(): string {
+    const kpi = this.analyticsSummary?.kpi;
+    if (!kpi) return 'M 2 20 Q 60 4 118 20';
+    const skew = Math.min(25, Math.max(-25, (kpi.priceSkewPct || 0) * 0.5));
+    const peakX = Math.round(60 + skew);
+    return `M 2 22 Q ${peakX * 0.5} 20, ${peakX} 5 T 118 22`;
+  }
+
+  getMiniPriceDistributionAreaPath(): string {
+    const linePath = this.getMiniPriceDistributionPath();
+    return `${linePath} L 118 24 L 2 24 Z`;
+  }
+
+  getMiniDemandComparisonPaths(): { demand: string; shelf: string; diffPct: number } {
+    const kpi = this.analyticsSummary?.kpi;
+    const diff = kpi?.demandPriceDiffPct || 0;
+    const demandPeakY = diff < 0 ? 6 : 12;
+    const shelfPeakY = diff < 0 ? 12 : 6;
+    return {
+      demand: `M 2 22 Q 50 ${demandPeakY}, 60 ${demandPeakY + 2} T 118 22`,
+      shelf: `M 2 22 Q 50 ${shelfPeakY}, 60 ${shelfPeakY + 2} T 118 22`,
+      diffPct: diff
+    };
+  }
+
+  getMiniParetoCurvePath(): string {
+    const share = this.analyticsSummary?.kpi?.pareto?.top20SkusReviewsShare || 70;
+    const peakY = Math.max(4, 22 - Math.round((share / 100) * 18));
+    return `M 2 22 C 20 ${peakY}, 45 ${peakY + 2}, 118 4`;
+  }
+
+  getMiniTop10ReviewsStepPath(): string {
+    const kpi = this.analyticsSummary?.kpi;
+    if (!kpi || !kpi.entryBarrier) return 'M 2 22 L 30 18 L 60 14 L 90 8 L 118 4';
+    const med = kpi.entryBarrier.medianTop10Reviews || 20;
+    const max = kpi.entryBarrier.top10ReviewsMax || 100;
+    const h1 = Math.max(4, 22 - Math.min(18, Math.round((max / (max + 10)) * 18)));
+    const h2 = Math.max(6, 22 - Math.min(16, Math.round((med / (max + 10)) * 18)));
+    return `M 2 22 L 20 20 L 45 ${h2 + 3} L 75 ${h2} L 100 ${h1 + 2} L 118 ${h1}`;
+  }
+
   // --- History Tab Time-Series Chart Engine ---
   getHistoryChartPoints(): Array<{ x: number; y: number; snapshot: ScrapingSnapshot; dateLabel: string; avgPrice: number; productsCount: number }> {
     if (!this.snapshots || this.snapshots.length === 0) return [];
