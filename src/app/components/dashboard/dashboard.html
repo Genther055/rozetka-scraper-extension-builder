@@ -497,31 +497,41 @@
 
       <!-- Stats Grid (Hidden if no products or on settings/history tabs) -->
       <!-- Stats Grid (5 Deterministic Cards: Обсяг вибірки, Цінові орієнтири, Складські залишки, Концентрація CR3, Бар'єр входу) -->
-      <section *ngIf="products.length > 0 && analyticsSummary && activeTab !== 'settings' && activeTab !== 'history'" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 relative z-30">
+      <!-- Top KPI Stats Grid (6 Core Diagnostic Anchors) -->
+      <section *ngIf="products.length > 0 && analyticsSummary && activeTab !== 'settings' && activeTab !== 'history'" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 relative z-30">
+        
         <!-- 1. Обсяг вибірки -->
-        <div class="p-5 premium-card flex items-center justify-between transition-all">
-          <div>
-            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Обсяг вибірки</p>
-            <p class="text-2xl font-extrabold text-white mt-1">{{ analyticsSummary.kpi.totalProducts }} <span class="text-xs font-bold text-slate-400">тов.</span></p>
-            <p class="text-xs text-indigo-400/90 font-mono font-semibold mt-0.5">{{ analyticsSummary.kpi.uniqueSellersCount }} унікальних продавців</p>
+        <div class="p-4 sm:p-4.5 premium-card flex flex-col justify-between transition-all duration-200 hover:border-indigo-500/40 relative group/sample">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="w-2 h-2 rounded-full bg-indigo-400 shrink-0"></span>
+              <p class="text-[11px] text-slate-400 font-bold uppercase tracking-wider truncate">Обсяг вибірки</p>
+            </div>
+            <div class="w-8 h-8 bg-indigo-950/60 border border-indigo-500/30 text-indigo-300 rounded-lg flex items-center justify-center shrink-0 shadow-sm shadow-indigo-500/20">
+              <span class="material-icons text-base">inventory_2</span>
+            </div>
           </div>
-          <div class="w-10 h-10 bg-indigo-950/50 border border-indigo-500/20 text-indigo-300 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/10 shrink-0">
-            <span class="material-icons text-lg">inventory_2</span>
+          <div>
+            <p class="text-xl sm:text-2xl font-extrabold text-white font-mono tracking-tight">{{ analyticsSummary.kpi.totalProducts }} <span class="text-xs font-bold text-slate-400 font-sans">тов.</span></p>
+            <p class="text-[11px] text-indigo-400/90 font-mono font-medium truncate mt-0.5">{{ analyticsSummary.kpi.uniqueSellersCount }} унікальних продавців</p>
           </div>
         </div>
 
         <!-- 2. Подвійний ціновий орієнтир полиці (пропозиція) -->
-        <div class="p-5 premium-card flex items-center justify-between transition-all relative group/price hover:z-50 cursor-help">
-          <div>
-            <div class="flex items-center gap-1.5">
-              <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Ціни (Полиця)</p>
-              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/price:text-white group-hover/price:bg-emerald-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors">?</span>
+        <div class="p-4 sm:p-4.5 premium-card flex flex-col justify-between transition-all duration-200 relative group/price hover:z-50 cursor-help hover:border-emerald-500/40">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+              <p class="text-[11px] text-slate-400 font-bold uppercase tracking-wider truncate">Ціни (Полиця)</p>
+              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/price:text-white group-hover/price:bg-emerald-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors shrink-0">?</span>
             </div>
-            <p class="text-lg font-extrabold text-emerald-400 mt-1 font-mono">Сер: {{ analyticsSummary.kpi.avgPrice | number }} ₴</p>
-            <p class="text-xs text-slate-300 font-mono font-semibold mt-0.5">Медіана (P50): {{ analyticsSummary.kpi.medianPrice | number }} ₴</p>
+            <div class="w-8 h-8 bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 rounded-lg flex items-center justify-center shrink-0 shadow-sm shadow-emerald-500/20">
+              <span class="material-icons text-base">payments</span>
+            </div>
           </div>
-          <div class="w-10 h-10 bg-emerald-950/50 border border-emerald-500/20 text-emerald-300 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/10 shrink-0">
-            <span class="material-icons text-lg">payments</span>
+          <div>
+            <p class="text-base sm:text-lg font-extrabold text-emerald-400 font-mono leading-tight">Сер: {{ analyticsSummary.kpi.avgPrice | number }} ₴</p>
+            <p class="text-[11px] text-slate-300 font-mono font-medium truncate mt-0.5">Медіана (P50): {{ analyticsSummary.kpi.medianPrice | number }} ₴</p>
           </div>
 
           <!-- Hover Popover: Графік співвідношення цін та детальна статистика -->
@@ -597,17 +607,20 @@
         </div>
 
         <!-- 3. Зважені цінові орієнтири (Логарифмічне згладжування попиту) -->
-        <div class="p-5 premium-card flex items-center justify-between transition-all relative group/wprice hover:z-50 cursor-help border-l-2 border-l-purple-500/80">
-          <div>
-            <div class="flex items-center gap-1.5">
-              <p class="text-xs text-purple-300 font-bold uppercase tracking-wider">Зважений попит</p>
-              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-purple-400 group-hover/wprice:text-white group-hover/wprice:bg-purple-600 text-[9px] font-bold flex items-center justify-center border border-purple-800/80 transition-colors">?</span>
+        <div class="p-4 sm:p-4.5 premium-card flex flex-col justify-between transition-all duration-200 relative group/wprice hover:z-50 cursor-help border border-purple-500/30 hover:border-purple-500/60 bg-gradient-to-b from-purple-950/20 to-transparent">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="w-2 h-2 rounded-full bg-purple-400 shrink-0 animate-pulse"></span>
+              <p class="text-[11px] text-purple-300 font-bold uppercase tracking-wider truncate">Зважений попит</p>
+              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-purple-400 group-hover/wprice:text-white group-hover/wprice:bg-purple-600 text-[9px] font-bold flex items-center justify-center border border-purple-800/80 transition-colors shrink-0">?</span>
             </div>
-            <p class="text-lg font-extrabold text-purple-300 mt-1 font-mono">Сер: {{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</p>
-            <p class="text-xs text-purple-200/90 font-mono font-semibold mt-0.5">Медіана: {{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</p>
+            <div class="w-8 h-8 bg-purple-950/60 border border-purple-500/30 text-purple-300 rounded-lg flex items-center justify-center shrink-0 shadow-sm shadow-purple-500/20">
+              <span class="material-icons text-base">auto_graph</span>
+            </div>
           </div>
-          <div class="w-10 h-10 bg-purple-950/50 border border-purple-500/30 text-purple-300 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/15 shrink-0">
-            <span class="material-icons text-lg">auto_graph</span>
+          <div>
+            <p class="text-base sm:text-lg font-extrabold text-purple-300 font-mono leading-tight">Сер: {{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</p>
+            <p class="text-[11px] text-purple-200/90 font-mono font-medium truncate mt-0.5">Медіана: {{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</p>
           </div>
 
           <!-- Hover Popover: Логарифмічне зважування цін за відгуками -->
@@ -629,20 +642,20 @@
             <!-- Table of Log Weights -->
             <div class="grid grid-cols-4 gap-1.5 text-center text-[10px] font-mono mb-3">
               <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
-                <div class="text-slate-400">0 відгуків</div>
-                <div class="text-white font-bold mt-0.5">Вага 1.0</div>
+                <div class="text-slate-400 text-[9px]">0 відгуків</div>
+                <div class="text-white font-bold mt-0.5">1.0×</div>
               </div>
               <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
-                <div class="text-slate-400">10 відгуків</div>
-                <div class="text-purple-300 font-bold mt-0.5">Вага 3.4</div>
+                <div class="text-slate-400 text-[9px]">10 відг.</div>
+                <div class="text-purple-300 font-bold mt-0.5">3.4×</div>
               </div>
               <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
-                <div class="text-slate-400">100 відгуків</div>
-                <div class="text-purple-300 font-bold mt-0.5">Вага 5.6</div>
+                <div class="text-slate-400 text-[9px]">100 відг.</div>
+                <div class="text-purple-300 font-bold mt-0.5">5.6×</div>
               </div>
               <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
-                <div class="text-slate-400">1к відгуків</div>
-                <div class="text-purple-300 font-bold mt-0.5">Вага 7.9</div>
+                <div class="text-slate-400 text-[9px]">1к відг.</div>
+                <div class="text-purple-300 font-bold mt-0.5">7.9×</div>
               </div>
             </div>
 
@@ -676,21 +689,24 @@
         </div>
 
         <!-- 4. Оцінка життєздатності ніші (Частка активних SKU) -->
-        <div class="p-5 premium-card flex items-center justify-between transition-all relative group/sku hover:z-50 cursor-help">
-          <div>
-            <div class="flex items-center gap-1.5">
-              <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Активність SKU</p>
-              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/sku:text-white group-hover/sku:bg-teal-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors">?</span>
+        <div class="p-4 sm:p-4.5 premium-card flex flex-col justify-between transition-all duration-200 relative group/sku hover:z-50 cursor-help hover:border-teal-500/40">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="w-2 h-2 rounded-full bg-teal-400 shrink-0"></span>
+              <p class="text-[11px] text-slate-400 font-bold uppercase tracking-wider truncate">Активність SKU</p>
+              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/sku:text-white group-hover/sku:bg-teal-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors shrink-0">?</span>
             </div>
-            <p class="text-3xl font-extrabold text-teal-300 mt-1">{{ analyticsSummary.kpi.activeSkusPercentage }}%</p>
-            <p class="text-xs text-teal-400/90 font-mono font-semibold mt-0.5">{{ analyticsSummary.kpi.activeSkusCount }} шт з відгуками ({{ analyticsSummary.kpi.inStockPercentage }}% в наявності)</p>
+            <div class="w-8 h-8 bg-teal-950/60 border border-teal-500/30 text-teal-300 rounded-lg flex items-center justify-center shrink-0 shadow-sm shadow-teal-500/20">
+              <span class="material-icons text-base">trending_up</span>
+            </div>
           </div>
-          <div class="w-12 h-12 bg-teal-950/50 border border-teal-500/20 text-teal-300 rounded-xl flex items-center justify-center shadow-lg shadow-teal-500/10">
-            <span class="material-icons">trending_up</span>
+          <div>
+            <p class="text-xl sm:text-2xl font-extrabold text-teal-300 font-mono tracking-tight">{{ analyticsSummary.kpi.activeSkusPercentage }}%</p>
+            <p class="text-[11px] text-teal-400/90 font-mono font-medium truncate mt-0.5">{{ analyticsSummary.kpi.activeSkusCount }} шт з відг. · {{ analyticsSummary.kpi.inStockPercentage }}% наявні</p>
           </div>
 
           <!-- Hover Popover: Обширні дані життєздатності ніші -->
-          <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-teal-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/sku:opacity-100 group-hover/sku:pointer-events-auto transition-all duration-200 backdrop-blur-md ring-1 ring-slate-700/80">
+          <div class="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-teal-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/sku:opacity-100 group-hover/sku:pointer-events-auto transition-all duration-200 backdrop-blur-md ring-1 ring-slate-700/80">
             <div class="font-bold text-white border-b border-slate-800 pb-2 mb-2.5 flex items-center justify-between">
               <div class="flex items-center gap-1.5">
                 <span class="material-icons text-base text-teal-400">insights</span>
@@ -739,23 +755,26 @@
           </div>
         </div>
 
-        <!-- 4. Індекс концентрації (CR3) -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all relative group/cr3 hover:z-50 cursor-help">
-          <div>
-            <div class="flex items-center gap-1.5">
-              <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Концентрація (CR3)</p>
-              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/cr3:text-white group-hover/cr3:bg-violet-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors">?</span>
+        <!-- 5. Індекс концентрації (CR3) -->
+        <div class="p-4 sm:p-4.5 premium-card flex flex-col justify-between transition-all duration-200 relative group/cr3 hover:z-50 cursor-help hover:border-violet-500/40">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="w-2 h-2 rounded-full bg-violet-400 shrink-0"></span>
+              <p class="text-[11px] text-slate-400 font-bold uppercase tracking-wider truncate">Концентрація (CR3)</p>
+              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/cr3:text-white group-hover/cr3:bg-violet-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors shrink-0">?</span>
             </div>
-            <p class="text-3xl font-extrabold text-violet-300 mt-1">CR3: {{ analyticsSummary.kpi.cr3 }}%</p>
-            <p class="text-xs font-mono font-semibold mt-0.5" 
+            <div class="w-8 h-8 bg-violet-950/60 border border-violet-500/30 text-violet-300 rounded-lg flex items-center justify-center shrink-0 shadow-sm shadow-violet-500/20">
+              <span class="material-icons text-base">pie_chart</span>
+            </div>
+          </div>
+          <div>
+            <p class="text-xl sm:text-2xl font-extrabold text-violet-300 font-mono tracking-tight">CR3: {{ analyticsSummary.kpi.cr3 }}%</p>
+            <p class="text-[11px] font-mono font-medium truncate mt-0.5" 
                [class.text-emerald-400]="analyticsSummary.kpi.cr3Level === 'LOW'"
                [class.text-amber-400]="analyticsSummary.kpi.cr3Level === 'MEDIUM'"
                [class.text-rose-400]="analyticsSummary.kpi.cr3Level === 'HIGH'">
               {{ analyticsSummary.kpi.cr3Level === 'LOW' ? 'Низька' : analyticsSummary.kpi.cr3Level === 'MEDIUM' ? 'Помірна' : 'Висока' }} (HHI: {{ analyticsSummary.kpi.hhi }})
             </p>
-          </div>
-          <div class="w-12 h-12 bg-violet-950/50 border border-violet-500/20 text-violet-300 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/10">
-            <span class="material-icons">pie_chart</span>
           </div>
 
           <!-- Hover Popover: Що таке CR3 та розкладка Топ-3 селерів -->
@@ -811,23 +830,26 @@
           </div>
         </div>
 
-        <!-- 5. Бар'єр входу -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all col-span-2 lg:col-span-1 relative group/barrier hover:z-50 cursor-help">
-          <div>
-            <div class="flex items-center gap-1.5">
-              <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Бар'єр входу</p>
-              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/barrier:text-white group-hover/barrier:bg-amber-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors">?</span>
+        <!-- 6. Бар'єр входу -->
+        <div class="p-4 sm:p-4.5 premium-card flex flex-col justify-between transition-all duration-200 relative group/barrier hover:z-50 cursor-help hover:border-amber-500/40">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>
+              <p class="text-[11px] text-slate-400 font-bold uppercase tracking-wider truncate">Бар'єр входу</p>
+              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/barrier:text-white group-hover/barrier:bg-amber-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors shrink-0">?</span>
             </div>
-            <p class="text-2xl font-extrabold mt-1"
+            <div class="w-8 h-8 bg-amber-950/60 border border-amber-500/30 text-amber-300 rounded-lg flex items-center justify-center shrink-0 shadow-sm shadow-amber-500/20">
+              <span class="material-icons text-base">shield</span>
+            </div>
+          </div>
+          <div>
+            <p class="text-xl sm:text-2xl font-extrabold font-mono tracking-tight leading-tight"
                [class.text-emerald-400]="analyticsSummary.kpi.entryBarrier.level === 'LOW'"
                [class.text-amber-400]="analyticsSummary.kpi.entryBarrier.level === 'MEDIUM'"
                [class.text-rose-400]="analyticsSummary.kpi.entryBarrier.level === 'HIGH'">
               {{ analyticsSummary.kpi.entryBarrier.level === 'LOW' ? 'Низький' : analyticsSummary.kpi.entryBarrier.level === 'MEDIUM' ? 'Середній' : 'Високий' }}
             </p>
-            <p class="text-xs text-slate-400 font-mono font-semibold mt-0.5">Медіана топ-10: {{ analyticsSummary.kpi.entryBarrier.medianTop10Reviews }} відг.</p>
-          </div>
-          <div class="w-12 h-12 bg-amber-950/50 border border-amber-500/20 text-amber-300 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/10">
-            <span class="material-icons">shield</span>
+            <p class="text-[11px] text-slate-400 font-mono font-medium truncate mt-0.5">Медіана топ-10: {{ analyticsSummary.kpi.entryBarrier.medianTop10Reviews }} відг.</p>
           </div>
 
           <!-- Hover Popover: Як визначається бар'єр входу та статистика Топ-10 -->
@@ -916,8 +938,13 @@
       <div *ngIf="activeTab === 'overview' && products.length > 0 && analyticsSummary" class="space-y-6 animate-fadeIn relative z-10">
         
         <!-- Dedicated Demand Weighted Pricing Strategy Module -->
-        <div class="p-6 premium-card relative overflow-hidden border border-purple-500/30 bg-gradient-to-r from-[#0b0f19] via-[#12182c] to-[#0b0f19] shadow-xl">
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+        <div class="p-6 premium-card relative overflow-hidden border border-purple-500/30 bg-gradient-to-br from-[#0c101d] via-[#13192f] to-[#0c101d] shadow-2xl rounded-2xl">
+          <!-- Background Ambient Glow Orbs -->
+          <div class="absolute -right-20 -top-20 w-72 h-72 bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div class="absolute -left-20 -bottom-20 w-72 h-72 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+          <!-- Header Section -->
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800/80 relative z-10">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-xl bg-purple-950/80 border border-purple-500/40 text-purple-300 flex items-center justify-center shadow-lg shadow-purple-500/20 shrink-0">
                 <span class="material-icons text-xl">tune</span>
@@ -925,116 +952,185 @@
               <div>
                 <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 flex-wrap">
                   <span>Модель зваженого попиту: Логарифмічне ціноутворення</span>
-                  <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-950 text-purple-300 border border-purple-800/60">
+                  <span class="px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-purple-950/90 text-purple-300 border border-purple-700/60 shadow-inner">
                     Вага = 1 + ln(1 + Відгуки)
                   </span>
                 </h3>
                 <p class="text-xs text-slate-400 mt-0.5">
-                  Співвідношення цін виставленого асортименту (полиця) з реальною концентрацією купівельного попиту
+                  Порівняльний аналіз цін виставленого асортименту (полиця) з реальною концентрацією купівельних замовлень
                 </p>
               </div>
             </div>
 
-            <!-- Vector Delta Badge -->
-            <div class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 text-xs font-mono shrink-0">
+            <!-- Dynamic Price Vector Badge -->
+            <div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-950/90 border border-slate-800 text-xs font-mono shrink-0 shadow-sm">
               <span class="text-slate-400">Ціновий зсув ринку:</span>
               <span 
                 [class.text-amber-400]="analyticsSummary.kpi.demandPriceDiffPct < -3"
                 [class.text-emerald-400]="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3"
                 [class.text-purple-300]="analyticsSummary.kpi.demandPriceDiffPct > 3"
-                class="font-bold flex items-center gap-1"
+                class="font-bold flex items-center gap-1.5"
               >
-                <span class="material-icons text-xs">
-                  {{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'trending_down' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'trending_up' : 'trending_flat' }}
+                <span class="material-icons text-sm">
+                  {{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'trending_down' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'trending_up' : 'check_circle' }}
                 </span>
-                {{ analyticsSummary.kpi.demandPriceDiffPct > 0 ? '+' : '' }}{{ analyticsSummary.kpi.demandPriceDiffPct }}%
+                <span>{{ analyticsSummary.kpi.demandPriceDiffPct > 0 ? '+' : '' }}{{ analyticsSummary.kpi.demandPriceDiffPct }}%</span>
+                <span class="text-[10px] text-slate-500 font-sans font-normal">
+                  ({{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'до бюджету' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'до преміуму' : 'баланс' }})
+                </span>
               </span>
             </div>
           </div>
 
           <!-- Comparative 3-Column Metrics Grid -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 items-stretch">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 items-stretch relative z-10">
             
             <!-- Column 1: Shelf vs Weighted Average -->
-            <div class="p-4 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
+            <div class="p-4.5 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200">
               <div>
-                <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-                  <span class="font-bold text-slate-300">Середня ціна товару</span>
-                  <span class="text-[10px] font-mono uppercase text-slate-500">Avg vs Weighted</span>
+                <div class="flex items-center justify-between text-xs text-slate-400 mb-2.5">
+                  <span class="font-bold text-slate-200">Середня ціна товару</span>
+                  <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">Avg vs Weighted</span>
                 </div>
-                <div class="flex items-baseline gap-3 mt-2">
-                  <div>
-                    <div class="text-[10px] text-slate-400">Полиця:</div>
-                    <div class="text-lg font-extrabold text-emerald-400 font-mono">{{ analyticsSummary.kpi.avgPrice | number }} ₴</div>
+                
+                <!-- Dual Comparison Chips -->
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                  <!-- Shelf Avg -->
+                  <div class="p-2.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 flex flex-col justify-between">
+                    <div class="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      <span>Полиця</span>
+                    </div>
+                    <div class="text-base sm:text-lg font-extrabold text-emerald-400 font-mono mt-1">
+                      {{ analyticsSummary.kpi.avgPrice | number }} ₴
+                    </div>
                   </div>
-                  <div class="text-slate-600 font-bold text-lg">→</div>
-                  <div>
-                    <div class="text-[10px] text-purple-300 font-semibold">Зважена попитом:</div>
-                    <div class="text-lg font-extrabold text-purple-300 font-mono">{{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</div>
+
+                  <!-- Weighted Demand Avg -->
+                  <div class="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/50 flex flex-col justify-between shadow-md shadow-purple-950/30">
+                    <div class="flex items-center gap-1 text-[10px] text-purple-300 font-semibold">
+                      <span class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+                      <span>Зважена попитом</span>
+                    </div>
+                    <div class="text-base sm:text-lg font-extrabold text-purple-200 font-mono mt-1">
+                      {{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴
+                    </div>
                   </div>
                 </div>
               </div>
-              <p class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-900">
-                Сума цін з урахуванням логарифмічної ваги кожного товару
+
+              <p class="text-[11px] text-slate-400 mt-3 pt-2.5 border-t border-slate-900/90 flex items-center gap-1.5">
+                <span class="material-icons text-xs text-indigo-400">calculate</span>
+                <span>Сума цін з урахуванням логарифмічної ваги замовлень</span>
               </p>
             </div>
 
             <!-- Column 2: Shelf vs Weighted Median -->
-            <div class="p-4 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
+            <div class="p-4.5 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200">
               <div>
-                <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-                  <span class="font-bold text-slate-300">Медіанна ціна (P50)</span>
-                  <span class="text-[10px] font-mono uppercase text-slate-500">Median vs Weighted</span>
+                <div class="flex items-center justify-between text-xs text-slate-400 mb-2.5">
+                  <span class="font-bold text-slate-200">Медіанна ціна (P50)</span>
+                  <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">Median vs Weighted</span>
                 </div>
-                <div class="flex items-baseline gap-3 mt-2">
-                  <div>
-                    <div class="text-[10px] text-slate-400">Полиця:</div>
-                    <div class="text-lg font-extrabold text-indigo-300 font-mono">{{ analyticsSummary.kpi.medianPrice | number }} ₴</div>
+
+                <!-- Dual Comparison Chips -->
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                  <!-- Shelf Median -->
+                  <div class="p-2.5 rounded-xl bg-slate-900/90 border border-indigo-500/30 flex flex-col justify-between">
+                    <div class="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+                      <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                      <span>Полиця (P50)</span>
+                    </div>
+                    <div class="text-base sm:text-lg font-extrabold text-indigo-300 font-mono mt-1">
+                      {{ analyticsSummary.kpi.medianPrice | number }} ₴
+                    </div>
                   </div>
-                  <div class="text-slate-600 font-bold text-lg">→</div>
-                  <div>
-                    <div class="text-[10px] text-purple-300 font-semibold">Зважена попитом:</div>
-                    <div class="text-lg font-extrabold text-purple-300 font-mono">{{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</div>
+
+                  <!-- Weighted Demand Median -->
+                  <div class="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/50 flex flex-col justify-between shadow-md shadow-purple-950/30">
+                    <div class="flex items-center gap-1 text-[10px] text-purple-300 font-semibold">
+                      <span class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+                      <span>Зважена медіана</span>
+                    </div>
+                    <div class="text-base sm:text-lg font-extrabold text-purple-200 font-mono mt-1">
+                      {{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴
+                    </div>
                   </div>
                 </div>
               </div>
-              <p class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-900">
-                Точка, де зосереджено 50% сумарного накопиченого попиту ринку
+
+              <p class="text-[11px] text-slate-400 mt-3 pt-2.5 border-t border-slate-900/90 flex items-center gap-1.5">
+                <span class="material-icons text-xs text-purple-400">center_focus_strong</span>
+                <span>Точка, де зосереджено 50% накопиченого попиту</span>
               </p>
             </div>
 
             <!-- Column 3: Logarithmic Weighting Scale -->
-            <div class="p-4 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
+            <div class="p-4.5 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200">
               <div>
-                <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-                  <span class="font-bold text-slate-300">Шкала ваг логарифму</span>
-                  <span class="text-[10px] font-mono text-purple-400">1 + ln(1 + n)</span>
+                <div class="flex items-center justify-between text-xs text-slate-400 mb-2.5">
+                  <span class="font-bold text-slate-200">Шкала ваг логарифму</span>
+                  <span class="text-[10px] font-mono text-purple-400 font-bold px-2 py-0.5 rounded bg-purple-950/60 border border-purple-800/40">1 + ln(1 + n)</span>
                 </div>
-                <div class="grid grid-cols-4 gap-1.5 text-[10px] font-mono text-center mt-2">
-                  <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+
+                <!-- Stepping Progression Pills -->
+                <div class="grid grid-cols-4 gap-1.5 text-center mt-2 font-mono">
+                  <div class="bg-slate-900/90 p-2 rounded-xl border border-slate-800 flex flex-col items-center justify-center">
                     <span class="text-slate-400 block text-[9px]">0 відг.</span>
-                    <b class="text-white">1.0×</b>
+                    <b class="text-white text-sm my-0.5">1.0×</b>
+                    <span class="text-[8px] text-cyan-400/90 uppercase font-sans font-bold">База</span>
                   </div>
-                  <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+                  <div class="bg-indigo-950/30 p-2 rounded-xl border border-indigo-500/30 flex flex-col items-center justify-center">
                     <span class="text-slate-400 block text-[9px]">10 відг.</span>
-                    <b class="text-purple-300">3.4×</b>
+                    <b class="text-indigo-300 text-sm my-0.5">3.4×</b>
+                    <span class="text-[8px] text-indigo-400 uppercase font-sans font-bold">Старт</span>
                   </div>
-                  <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+                  <div class="bg-purple-950/40 p-2 rounded-xl border border-purple-500/40 flex flex-col items-center justify-center">
                     <span class="text-slate-400 block text-[9px]">100 відг.</span>
-                    <b class="text-purple-300">5.6×</b>
+                    <b class="text-purple-300 text-sm my-0.5">5.6×</b>
+                    <span class="text-[8px] text-purple-400 uppercase font-sans font-bold">Лідер</span>
                   </div>
-                  <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
-                    <span class="text-slate-400 block text-[9px]">1к відг.</span>
-                    <b class="text-purple-300">7.9×</b>
+                  <div class="bg-fuchsia-950/40 p-2 rounded-xl border border-fuchsia-500/40 flex flex-col items-center justify-center">
+                    <span class="text-slate-400 block text-[9px]">1к+ відг.</span>
+                    <b class="text-fuchsia-300 text-sm my-0.5">7.9×</b>
+                    <span class="text-[8px] text-fuchsia-400 uppercase font-sans font-bold">Суперхіт</span>
                   </div>
                 </div>
               </div>
-              <p class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-900">
-                Захищає від диктату монополій і водночас враховує всі новинки
+
+              <p class="text-[11px] text-slate-400 mt-3 pt-2.5 border-t border-slate-900/90 flex items-center gap-1.5">
+                <span class="material-icons text-xs text-fuchsia-400">shield</span>
+                <span>Захищає від диктату монополій і враховує новинки</span>
               </p>
             </div>
 
           </div>
+
+          <!-- Strategic Actionable Takeaway Banner -->
+          <div class="mt-4 p-3.5 rounded-xl bg-slate-950/90 border border-purple-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs relative z-10">
+            <div class="flex items-start sm:items-center gap-2.5">
+              <div class="w-7 h-7 rounded-lg bg-purple-900/50 border border-purple-500/40 text-purple-300 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+                <span class="material-icons text-sm">lightbulb</span>
+              </div>
+              <div class="text-slate-300 leading-relaxed">
+                <span class="font-bold text-white uppercase tracking-wider text-[11px] mr-1.5">Стратегічний орієнтир:</span>
+                <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct < -3">
+                  Попит зосереджений у доступнішому сегменті (зважена ціна <b>{{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</b> проти полиці <b>{{ analyticsSummary.kpi.avgPrice | number }} ₴</b>). Для швидкого старту встановлюйте ціну в коридорі <b>{{ analyticsSummary.kpi.weightedMedianPrice | number }} – {{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</b>.
+                </span>
+                <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct > 3">
+                  Покупці віддають перевагу якіснішим модифікаціям (попит тяжіє до <b>{{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</b>). Можна запускати преміальніші товари з підвищеною маржинальністю.
+                </span>
+                <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3">
+                  Ринковий баланс збалансований. Пропозиція полиці відповідає запитам покупців. Оптимальний ціновий якір входу — <b>{{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</b>.
+                </span>
+              </div>
+            </div>
+            <div class="shrink-0 flex items-center gap-1.5 text-[11px] font-mono text-purple-300 bg-purple-950/60 px-3 py-1.5 rounded-lg border border-purple-800/50 self-start sm:self-auto">
+              <span class="material-icons text-xs text-purple-400">check_circle</span>
+              <span>Товари в наявності</span>
+            </div>
+          </div>
+
         </div>
 
         <!-- Central Grid: Price & Demand Distribution (8 cols) + Niche Structure (4 cols) -->
