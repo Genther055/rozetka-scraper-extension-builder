@@ -269,8 +269,32 @@ export class DashboardComponent implements OnInit {
   filteredProducts: Product[] = [];
   
   getDiscountPercent(p: any): number {
-    if (!p || !p.price || !p.oldPrice || p.oldPrice <= p.price) return 0;
-    return Math.round(((p.oldPrice - p.price) / p.oldPrice) * 100);
+    if (!p) return 0;
+    const disc = typeof p.discount === 'number' ? p.discount : (parseFloat(p.discount) || 0);
+    if (disc > 0) return Math.round(disc);
+    const pr = Number(p.price) || 0;
+    const old = Number(p.oldPrice) || 0;
+    if (pr > 0 && old > pr) {
+      return Math.round(((old - pr) / old) * 100);
+    }
+    return 0;
+  }
+
+  getEffectiveOldPrice(p: any): number {
+    if (!p) return 0;
+    const pr = Number(p.price) || 0;
+    const old = Number(p.oldPrice) || 0;
+    if (old > pr) return old;
+    const disc = this.getDiscountPercent(p);
+    if (disc > 0 && pr > 0) {
+      return Math.round(pr / (1 - disc / 100));
+    }
+    return pr;
+  }
+
+  hasAnyDiscountsInDataset(): boolean {
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    return list.some(p => this.getDiscountPercent(p) > 0);
   }
 
   getHhiGaugePercent(): number {
@@ -2353,7 +2377,7 @@ export class DashboardComponent implements OnInit {
 
     // 6. Discount / Promo Filter
     if (this.drilldownDiscountFilter === 'discountOnly') {
-      list = list.filter(p => p.oldPrice && p.price && p.oldPrice > p.price);
+      list = list.filter(p => this.getDiscountPercent(p) > 0);
     }
 
     // 7. Min / Max Price Filter
@@ -3291,8 +3315,8 @@ export class DashboardComponent implements OnInit {
             valB = pB;
           }
         } else if (this.sortColumn === 'oldPrice') {
-          const pA = Number(a.oldPrice || a.price) || 0;
-          const pB = Number(b.oldPrice || b.price) || 0;
+          const pA = this.getEffectiveOldPrice(a);
+          const pB = this.getEffectiveOldPrice(b);
           if (this.sortDirection === 'asc') {
             valA = pA <= 0 ? 999999999 : pA;
             valB = pB <= 0 ? 999999999 : pB;
@@ -3301,8 +3325,8 @@ export class DashboardComponent implements OnInit {
             valB = pB;
           }
         } else if (this.sortColumn === 'discount') {
-          valA = a.discount || 0;
-          valB = b.discount || 0;
+          valA = this.getDiscountPercent(a);
+          valB = this.getDiscountPercent(b);
         } else if (this.sortColumn === 'rating') {
           valA = (a.reviews && a.reviews > 0) ? (a.rating || 0) : 0;
           valB = (b.reviews && b.reviews > 0) ? (b.rating || 0) : 0;
@@ -3636,6 +3660,13 @@ export class DashboardComponent implements OnInit {
       };
     });
 
+    const thinBorder = {
+      top: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+      left: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+      bottom: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+      right: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } }
+    };
+
     // 5. Додаємо та стилізуємо дані
     this.filteredProducts.forEach((p, index) => {
       const specsMap: Record<string, string> = {};
@@ -3648,9 +3679,9 @@ export class DashboardComponent implements OnInit {
       const inStockText = inStock ? 'В наявності' : 'Немає';
       const rowData: Record<string, any> = {
         name: p.name || '',
-        oldPrice: p.oldPrice || p.price || 0,
+        oldPrice: this.getEffectiveOldPrice(p),
         price: p.price || 0,
-        discount: p.discount ? `${p.discount}%` : '0%',
+        discount: this.getDiscountPercent(p) > 0 ? `${this.getDiscountPercent(p)}%` : '0%',
         rating: p.rating ? Number(p.rating) : 0,
         reviews: p.reviews ? Number(p.reviews) : 0,
         inStock: inStockText,
@@ -3666,31 +3697,23 @@ export class DashboardComponent implements OnInit {
       rowData['link'] = p.link ? { text: 'Відкрити 🔗', hyperlink: p.link } : '';
 
       const row = worksheet.addRow(rowData);
-      row.height = 22;
+      row.height = 24;
 
       const isEven = index % 2 === 0;
       const bgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC'; // Zebra striping
 
+      // Apply cell styles per column
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-        cell.font = { name: 'Segoe UI', size: 10, color: { argb: 'FF1E293B' } };
-        cell.alignment = { vertical: 'middle' };
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
-        };
+        cell.border = thinBorder;
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
           fgColor: { argb: bgArgb }
         };
-
-        // Спеціальні стилі для колонок
-        if (colNumber === 1) { // Назва
-          cell.alignment = { vertical: 'middle', horizontal: 'left' };
-          cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF0F172A' } };
-        } else if (colNumber === 2) { // Стара ціна
+        if (colNumber === 1) { // Назва товару
+          cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+          cell.font = { name: 'Segoe UI', size: 10, color: { argb: 'FF1E293B' } };
+        } else if (colNumber === 2) { // Стара ціна (без знижки)
           cell.alignment = { vertical: 'middle', horizontal: 'right' };
           cell.numFmt = '#,##0 "грн"';
           cell.font = { name: 'Segoe UI', size: 10, color: { argb: 'FF64748B' } };
@@ -3700,7 +3723,7 @@ export class DashboardComponent implements OnInit {
           cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF059669' } }; // Emerald Green
         } else if (colNumber === 4) { // Знижка
           cell.alignment = { vertical: 'middle', horizontal: 'center' };
-          if (p.discount && p.discount > 0) {
+          if (this.getDiscountPercent(p) > 0) {
             cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FFDC2626' } }; // Red
           }
         } else if (colNumber === 5) { // Рейтинг
@@ -3886,6 +3909,18 @@ export function computeSpecDistribution(products: any[], totalProductsCount: num
   return categories;
 }
 
+function extractProductDiscount(p: any): number {
+  if (!p) return 0;
+  const disc = typeof p.discount === 'number' ? p.discount : (parseFloat(p.discount) || 0);
+  if (disc > 0) return Math.round(disc);
+  const pr = Number(p.price) || 0;
+  const old = Number(p.oldPrice) || 0;
+  if (pr > 0 && old > pr) {
+    return Math.round(((old - pr) / old) * 100);
+  }
+  return 0;
+}
+
 export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary {
   const allProducts = products || [];
   const rawTotalCount = allProducts.length;
@@ -4033,13 +4068,13 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
     : 0;
 
   // 1.2. Промо-динаміка та коливання знижок
-  const discountedProducts = allProducts.filter(p => Number(p.price) > 0 && p.oldPrice && Number(p.oldPrice) > Number(p.price));
+  const discountedProducts = allProducts.filter(p => extractProductDiscount(p) > 0);
   const discountedCount = discountedProducts.length;
   const discountedRate = rawTotalCount > 0 ? Number(((discountedCount / rawTotalCount) * 100).toFixed(1)) : 0;
   let avgDiscountPct = 0;
   let maxDiscountPct = 0;
   if (discountedCount > 0) {
-    const discountsList = discountedProducts.map(p => ((Number(p.oldPrice) - Number(p.price)) / Number(p.oldPrice)) * 100);
+    const discountsList = discountedProducts.map(p => extractProductDiscount(p));
     avgDiscountPct = Number((discountsList.reduce((a, b) => a + b, 0) / discountedCount).toFixed(1));
     maxDiscountPct = Number(Math.max(...discountsList).toFixed(1));
   }
@@ -4088,7 +4123,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
 
       const chunkReviews = chunk.reduce((acc, p) => acc + (Number(p.reviews) || 0), 0);
       const chunkInStock = chunk.filter(p => p.inStock !== false).length;
-      const chunkDiscounted = chunk.filter(p => Number(p.price) > 0 && p.oldPrice && Number(p.oldPrice) > Number(p.price)).length;
+      const chunkDiscounted = chunk.filter(p => extractProductDiscount(p) > 0).length;
 
       positionFluctuations.push({
         label: quintileLabels[i].label,

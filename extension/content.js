@@ -403,8 +403,8 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // Batch fetch official Rozetka product details (seller title, exact pricing, stock) for all items on this page
-        const apiSellerMap = new Map();
+        // Batch fetch official Rozetka product details (seller title, exact pricing, old_price, discounts) for all items on this page
+        const apiProductMap = new Map();
         try {
             const productIds = [];
             for (const { link } of distinctTiles) {
@@ -414,18 +414,15 @@
             if (productIds.length > 0) {
                 const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productIds.join(',')}`;
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2500);
+                const timeoutId = setTimeout(() => controller.abort(), 3500);
                 const res = await fetch(apiUrl, { signal: controller.signal }).catch(() => null);
                 clearTimeout(timeoutId);
                 if (res && res.ok) {
                     const json = await res.json().catch(() => null);
                     if (json && Array.isArray(json.data)) {
                         for (const apiProd of json.data) {
-                            if (apiProd && apiProd.id && apiProd.seller) {
-                                const sTitle = (apiProd.seller.title || apiProd.seller.name || '').trim();
-                                if (sTitle) {
-                                    apiSellerMap.set(String(apiProd.id), sTitle);
-                                }
+                            if (apiProd && apiProd.id) {
+                                apiProductMap.set(String(apiProd.id), apiProd);
                             }
                         }
                     }
@@ -441,14 +438,101 @@
                 const name = titleEl && titleEl.innerText ? titleEl.innerText.trim() : (linkTag.innerText ? linkTag.innerText.trim() : '');
                 if (!name || name.length < 3) continue;
 
-                const priceEl = item.querySelector('.goods-tile__price-value, .price, [class*="price-value"], [class*="price__current"]');
-                const priceText = priceEl && priceEl.innerText ? priceEl.innerText : '';
-                const price = priceText ? parseInt(priceText.replace(/\D/g, ''), 10) || 0 : 0;
+                const idMatch = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
+                const prodId = idMatch ? String(idMatch[1]) : '';
+                const apiProd = prodId ? apiProductMap.get(prodId) : null;
 
-                const oldPriceEl = item.querySelector('.goods-tile__price.type_old, .goods-tile__price--old, .price--old, [class*="price--old"]');
-                const oldPriceText = oldPriceEl && oldPriceEl.innerText ? oldPriceEl.innerText : '';
-                const oldPrice = oldPriceText ? parseInt(oldPriceText.replace(/\D/g, ''), 10) || 0 : 0;
-                const discount = (oldPrice && oldPrice > price) ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0;
+                // --- 1. CURRENT PRICE EXTRACTION ---
+                let price = 0;
+                const priceEl = item.querySelector(
+                    '.goods-tile__price-value, .goods-tile__price--current, .goods-tile__price_color_red, ' +
+                    '.price--red, .price, [class*="price-value"], [class*="price__current"], [class*="price_color_red"], ' +
+                    '.product-price__big, [class*="price__main"]'
+                );
+                const priceText = priceEl && priceEl.innerText ? priceEl.innerText : '';
+                if (priceText) {
+                    price = parseInt(priceText.replace(/\D/g, ''), 10) || 0;
+                }
+                if (!price && apiProd && apiProd.price) {
+                    price = parseInt(String(apiProd.price).replace(/\D/g, ''), 10) || 0;
+                }
+
+                // --- 2. OLD (PRE-DISCOUNT) PRICE & DISCOUNT EXTRACTION ---
+                let oldPrice = 0;
+                let discount = 0;
+
+                // A. Official Rozetka API data
+                if (apiProd) {
+                    if (apiProd.old_price && Number(apiProd.old_price) > 0) {
+                        const parsedOld = parseInt(String(apiProd.old_price).replace(/\D/g, ''), 10) || 0;
+                        if (parsedOld > price) {
+                            oldPrice = parsedOld;
+                        }
+                    } else if (apiProd.oldPrice && Number(apiProd.oldPrice) > 0) {
+                        const parsedOld = parseInt(String(apiProd.oldPrice).replace(/\D/g, ''), 10) || 0;
+                        if (parsedOld > price) {
+                            oldPrice = parsedOld;
+                        }
+                    }
+
+                    if (apiProd.discount) {
+                        if (typeof apiProd.discount === 'number' && apiProd.discount > 0) {
+                            discount = apiProd.discount;
+                        } else if (typeof apiProd.discount === 'object' && apiProd.discount.value) {
+                            discount = parseInt(apiProd.discount.value, 10) || 0;
+                        }
+                    }
+                }
+
+                // B. DOM Old Price Element Search
+                if (!oldPrice) {
+                    const oldPriceEl = item.querySelector(
+                        '.goods-tile__price--old, .goods-tile__price_type_old, .goods-tile__price.type_old, ' +
+                        '.goods-tile__price_color_gray, .goods-tile__price-old, [class*="price_color_gray"], ' +
+                        '[class*="price--old"], [class*="price_type_old"], [class*="price-old"], [class*="old-price"], ' +
+                        '[class*="price__old"], [class*="old_price"], [class*="price-discount"], [class*="product-price__small"], ' +
+                        'del, s, strike, [style*="line-through"]'
+                    );
+                    if (oldPriceEl && oldPriceEl.innerText) {
+                        const parsed = parseInt(oldPriceEl.innerText.replace(/\D/g, ''), 10) || 0;
+                        if (parsed > price) {
+                            oldPrice = parsed;
+                        }
+                    }
+                }
+
+                // C. DOM Promo Badges / Discount Stickers
+                if (!discount) {
+                    const badgeEl = item.querySelector(
+                        'rz-badge, .goods-tile__badge, [class*="goods-tile__badge"], [class*="goods-tile__label"], ' +
+                        '[class*="badge"], [class*="promo"], [class*="discount"], [class*="sticker"], [class*="tag"]'
+                    );
+                    const badgeText = badgeEl && badgeEl.innerText ? badgeEl.innerText : '';
+                    const badgeMatch = badgeText.match(/(?:-|−|знижка\s*|скидка\s*)(\d{1,2})\s*%/i) || badgeText.match(/-(\d{1,2})%/);
+                    if (badgeMatch && badgeMatch[1]) {
+                        discount = parseInt(badgeMatch[1], 10) || 0;
+                    } else {
+                        const fullTileText = item.innerText || '';
+                        const tileMatch = fullTileText.match(/(?:-|−)(\d{1,2})%/);
+                        if (tileMatch && tileMatch[1]) {
+                            const pct = parseInt(tileMatch[1], 10) || 0;
+                            if (pct > 0 && pct < 90) {
+                                discount = pct;
+                            }
+                        }
+                    }
+                }
+
+                // D. Harmonize oldPrice & discount
+                if (oldPrice > price && !discount && price > 0) {
+                    discount = Math.round(((oldPrice - price) / oldPrice) * 100);
+                } else if (discount > 0 && (!oldPrice || oldPrice <= price) && price > 0) {
+                    oldPrice = Math.round(price / (1 - (discount / 100)));
+                }
+
+                if (!oldPrice || oldPrice < price) {
+                    oldPrice = price;
+                }
 
                 const reviewsEl = item.querySelector('.rating-block-rating, [class*="rating"], [class*="comments"], .goods-tile__reviews-link, [class*="reviews"]');
                 const reviewsText = reviewsEl && reviewsEl.innerText ? reviewsEl.innerText : '';
@@ -471,9 +555,7 @@
                 const power = powerMatch ? `${powerMatch[1]}W` : '';
                 const specs = [capacity, power].filter(Boolean).join(', ') || 'Стандартні';
 
-                const idMatch = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
-                const prodId = idMatch ? String(idMatch[1]) : '';
-                const apiSeller = prodId ? apiSellerMap.get(prodId) : null;
+                const apiSeller = apiProd && apiProd.seller ? ((apiProd.seller.title || apiProd.seller.name || '').trim()) : null;
                 const seller = apiSeller || extractSeller(item) || 'Rozetka';
 
                 newItems.push({

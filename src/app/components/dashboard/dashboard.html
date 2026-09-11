@@ -1896,6 +1896,12 @@
             </div>
           </div>
 
+          <!-- Note when 0 discounts are present in the current dataset -->
+          <div *ngIf="overviewChartMetric === 'discounts' && !hasAnyDiscountsInDataset()" class="flex items-center gap-2 p-3 bg-amber-950/30 border border-amber-800/40 rounded-xl text-xs text-amber-200">
+            <span class="material-icons text-amber-400 text-sm shrink-0">info</span>
+            <span>У поточній вибірці ({{ (filteredProducts.length || products.length) }} шт) активні акційні знижки відсутні — усі товари реалізуються за стандартною регулярною ціною (дисконт 0%). При зборі лістингів із промо-акціями тут відображатиметься векторна крива коливань знижок.</span>
+          </div>
+
           <!-- Interactive SVG Plot Canvas Container -->
           <div class="relative bg-slate-950/80 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none">
             <svg 
@@ -2531,12 +2537,12 @@
                       <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
                       <span>Архів / Немає ціни</span>
                     </div>
-                    <div class="flex items-center gap-2 mt-1" *ngIf="item.price > 0 && item.oldPrice && item.oldPrice > item.price">
+                    <div class="flex items-center gap-2 mt-1" *ngIf="getDiscountPercent(item) > 0">
                       <span class="line-through text-xs text-slate-400 font-mono font-medium">
-                        {{ item.oldPrice | number }} ₴
+                        {{ getEffectiveOldPrice(item) | number }} ₴
                       </span>
-                      <span *ngIf="item.discount" class="px-1.5 py-0.5 text-[10px] font-black bg-rose-950/60 text-rose-300 border border-rose-800/50 rounded-md">
-                        -{{ item.discount }}%
+                      <span class="px-1.5 py-0.5 text-[10px] font-black bg-rose-950/60 text-rose-300 border border-rose-800/50 rounded-md">
+                        -{{ getDiscountPercent(item) }}%
                       </span>
                     </div>
                   </td>
@@ -4543,12 +4549,12 @@
                 <div class="flex flex-col">
                   <span *ngIf="p.price && p.price > 0" class="text-sm font-extrabold text-emerald-400">{{ p.price | number }} ₴</span>
                   <span *ngIf="!p.price || p.price <= 0" class="px-2 py-0.5 text-[11px] font-semibold bg-slate-800 text-slate-400 rounded-md border border-slate-700 font-mono">Архів</span>
-                  <div class="flex items-center gap-1.5 mt-0.5" *ngIf="p.price > 0 && p.oldPrice && p.oldPrice > p.price">
+                  <div class="flex items-center gap-1.5 mt-0.5" *ngIf="getDiscountPercent(p) > 0">
                     <span class="text-[10px] text-slate-500 line-through">
-                      {{ p.oldPrice | number }} ₴
+                      {{ getEffectiveOldPrice(p) | number }} ₴
                     </span>
                     <span class="px-1 py-0.2 text-[9px] font-bold bg-rose-950 text-rose-300 rounded border border-rose-800/40">
-                      -{{ Math.round(((p.oldPrice - p.price) / p.oldPrice) * 100) }}%
+                      -{{ getDiscountPercent(p) }}%
                     </span>
                   </div>
                 </div>

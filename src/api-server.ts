@@ -183,8 +183,18 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
         const itemPrice = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
         const itemReviews = typeof item.reviews === 'number' ? item.reviews : parseInt(item.reviews) || 0;
         const itemRating = typeof item.rating === 'number' ? item.rating : parseFloat(item.rating) || 5.0;
-        const itemOldPrice = typeof item.oldPrice === 'number' ? item.oldPrice : (parseFloat(item.oldPrice) || itemPrice);
-        const itemDiscount = typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0);
+        let itemOldPrice = typeof item.oldPrice === 'number' ? item.oldPrice : (parseFloat(item.oldPrice) || itemPrice);
+        let itemDiscount = typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0);
+
+        if (itemOldPrice > itemPrice && !itemDiscount && itemPrice > 0) {
+          itemDiscount = Math.round(((itemOldPrice - itemPrice) / itemOldPrice) * 100);
+        } else if (itemDiscount > 0 && (!itemOldPrice || itemOldPrice <= itemPrice) && itemPrice > 0) {
+          itemOldPrice = Math.round(itemPrice / (1 - itemDiscount / 100));
+        }
+        if (!itemOldPrice || itemOldPrice < itemPrice) {
+          itemOldPrice = itemPrice;
+        }
+
         const itemSessionTitle = item.sessionTitle || sessionTitle || '';
         const itemSessionId = item.sessionId || sessionId || '';
 
