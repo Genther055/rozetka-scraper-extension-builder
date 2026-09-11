@@ -299,6 +299,17 @@ export class DashboardComponent implements OnInit {
   // Navigation & Tabs
   activeTab: 'overview' | 'explorer' | 'demand' | 'details' | 'history' | 'settings' = 'overview';
   settingsActiveSubTab: 'users' | 'profile' | 'storage' = 'users';
+  isSidebarCollapsed: boolean = false;
+
+  toggleSidebar(): void {
+    this.isSidebarCollapsed = !this.isSidebarCollapsed;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('tradescout_sidebar_collapsed', String(this.isSidebarCollapsed));
+      } catch (_) {}
+    }
+    this.cdr.markForCheck();
+  }
 
   // Team & Users Management State
   teamUsers: TeamUser[] = [];
@@ -1423,6 +1434,11 @@ export class DashboardComponent implements OnInit {
     if (typeof window !== 'undefined') {
       this.checkImpersonationState();
       this.loadUserSettings();
+
+      const savedSidebar = localStorage.getItem('tradescout_sidebar_collapsed');
+      if (savedSidebar !== null) {
+        this.isSidebarCollapsed = savedSidebar === 'true';
+      }
 
       const savedAuto = localStorage.getItem('tradescout_auto_save_history');
       if (savedAuto !== null) {

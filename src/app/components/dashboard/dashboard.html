@@ -1,70 +1,121 @@
 <div class="min-h-screen bg-[#0b0f19] text-slate-100 flex font-sans w-full">
   
-  <!-- Fixed Sidebar From Top To Bottom -->
-  <aside class="fixed top-0 bottom-0 left-0 w-64 bg-[#0e1424] border-r border-slate-800/80 flex flex-col shrink-0 shadow-2xl shadow-black/40 z-40 select-none">
-    <!-- Brand -->
-    <div class="p-6 border-b border-slate-800/80 flex items-center gap-3 shrink-0 bg-[#0e1424]">
-      <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
+  <!-- Fixed Sidebar From Top To Bottom (Collapsible) -->
+  <aside 
+    class="fixed top-0 bottom-0 left-0 bg-[#0e1424] border-r border-slate-800/80 flex flex-col shrink-0 shadow-2xl shadow-black/40 z-40 select-none transition-all duration-300 ease-in-out"
+    [class.w-64]="!isSidebarCollapsed"
+    [class.w-20]="isSidebarCollapsed"
+  >
+    <!-- Brand & Toggle Header -->
+    <div 
+      *ngIf="!isSidebarCollapsed"
+      class="p-4 px-5 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-[#0e1424]"
+    >
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/25 shrink-0">
+          <span class="material-icons text-white text-xl">query_stats</span>
+        </div>
+        <div class="truncate">
+          <h1 class="font-bold text-base text-white leading-tight truncate">TradeScout</h1>
+          <span class="text-[10px] text-slate-400 font-bold tracking-wider uppercase">Analytics OS</span>
+        </div>
+      </div>
+
+      <button 
+        (click)="toggleSidebar()" 
+        class="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors cursor-pointer shrink-0 ml-2"
+        title="Приховати бічну панель"
+      >
+        <span class="material-icons text-lg">menu_open</span>
+      </button>
+    </div>
+
+    <!-- Collapsed Brand & Expand Toggle -->
+    <div 
+      *ngIf="isSidebarCollapsed" 
+      class="py-3 px-2 border-b border-slate-800/80 flex flex-col items-center justify-center gap-2 shrink-0 bg-[#0e1424]"
+    >
+      <div 
+        (click)="toggleSidebar()" 
+        class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/25 shrink-0 cursor-pointer hover:scale-105 transition-transform" 
+        title="TradeScout Analytics OS (Натисніть для розгортання)"
+      >
         <span class="material-icons text-white text-xl">query_stats</span>
       </div>
-      <div>
-        <h1 class="font-bold text-lg text-white leading-tight">TradeScout</h1>
-        <span class="text-xs text-slate-400 font-bold tracking-wider uppercase">Analytics OS</span>
-      </div>
+      <button 
+        (click)="toggleSidebar()" 
+        class="p-1 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors cursor-pointer"
+        title="Розгорнути бічну панель"
+      >
+        <span class="material-icons text-base">menu</span>
+      </button>
     </div>
 
     <!-- Navigation (Scrollable if viewport is small) -->
-    <nav class="flex-1 p-4 space-y-2.5 overflow-y-auto custom-scrollbar">
+    <nav class="flex-1 p-3 space-y-2 overflow-y-auto custom-scrollbar" [class.px-2]="isSidebarCollapsed">
       <button 
         (click)="activeTab = 'overview'" 
         [class.premium-menu-btn-active]="activeTab === 'overview'"
         [class.premium-menu-btn-inactive]="activeTab !== 'overview'"
-        class="premium-menu-btn"
+        [class.premium-menu-btn-collapsed]="isSidebarCollapsed"
+        class="premium-menu-btn transition-all"
+        title="Панель огляду"
       >
-        <span class="material-icons text-lg">dashboard</span>
-        Панель огляду
+        <span class="material-icons text-lg shrink-0">dashboard</span>
+        <span *ngIf="!isSidebarCollapsed" class="truncate">Панель огляду</span>
       </button>
 
       <button 
         (click)="activeTab = 'explorer'" 
         [class.premium-menu-btn-active]="activeTab === 'explorer'"
         [class.premium-menu-btn-inactive]="activeTab !== 'explorer'"
-        class="premium-menu-btn"
+        [class.premium-menu-btn-collapsed]="isSidebarCollapsed"
+        class="premium-menu-btn transition-all"
+        title="Пошук товарів"
       >
-        <span class="material-icons text-lg">explore</span>
-        Пошук товарів
+        <span class="material-icons text-lg shrink-0">explore</span>
+        <span *ngIf="!isSidebarCollapsed" class="truncate">Пошук товарів</span>
       </button>
 
       <button 
         (click)="activeTab = 'demand'" 
         [class.premium-menu-btn-active]="activeTab === 'demand'"
         [class.premium-menu-btn-inactive]="activeTab !== 'demand'"
-        class="premium-menu-btn"
+        [class.premium-menu-btn-collapsed]="isSidebarCollapsed"
+        class="premium-menu-btn transition-all"
+        title="Оцінка попиту"
       >
-        <span class="material-icons text-lg">trending_up</span>
-        Оцінка попиту
+        <span class="material-icons text-lg shrink-0">trending_up</span>
+        <span *ngIf="!isSidebarCollapsed" class="truncate">Оцінка попиту</span>
       </button>
 
       <button 
         (click)="activeTab = 'details'" 
         [class.premium-menu-btn-active]="activeTab === 'details'"
         [class.premium-menu-btn-inactive]="activeTab !== 'details'"
-        class="premium-menu-btn"
+        [class.premium-menu-btn-collapsed]="isSidebarCollapsed"
+        class="premium-menu-btn transition-all"
+        title="Деталі & Описи"
       >
-        <span class="material-icons text-lg">read_more</span>
-        Деталі & Описи
+        <span class="material-icons text-lg shrink-0">read_more</span>
+        <span *ngIf="!isSidebarCollapsed" class="truncate">Деталі & Описи</span>
       </button>
 
       <button 
         (click)="activeTab = 'history'" 
         [class.premium-menu-btn-active]="activeTab === 'history'"
         [class.premium-menu-btn-inactive]="activeTab !== 'history'"
-        class="premium-menu-btn"
+        [class.premium-menu-btn-collapsed]="isSidebarCollapsed"
+        class="premium-menu-btn transition-all relative"
+        title="Історія & Папки"
       >
-        <span class="material-icons text-lg">folder_special</span>
-        <span>Історія & Папки</span>
-        <span *ngIf="snapshots.length > 0" class="ml-auto text-[10px] font-bold bg-indigo-950/80 border border-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full">
+        <span class="material-icons text-lg shrink-0">folder_special</span>
+        <span *ngIf="!isSidebarCollapsed" class="truncate">Історія & Папки</span>
+        <span *ngIf="snapshots.length > 0 && !isSidebarCollapsed" class="ml-auto text-[10px] font-bold bg-indigo-950/80 border border-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full shrink-0">
           {{ snapshots.length }}
+        </span>
+        <span *ngIf="snapshots.length > 0 && isSidebarCollapsed" class="absolute -top-1 -right-1 text-[9px] font-bold bg-indigo-600 text-white w-4 h-4 rounded-full flex items-center justify-center shadow">
+          {{ snapshots.length > 99 ? '99+' : snapshots.length }}
         </span>
       </button>
 
@@ -72,15 +123,18 @@
         (click)="activeTab = 'settings'" 
         [class.premium-menu-btn-active]="activeTab === 'settings'"
         [class.premium-menu-btn-inactive]="activeTab !== 'settings'"
-        class="premium-menu-btn"
+        [class.premium-menu-btn-collapsed]="isSidebarCollapsed"
+        class="premium-menu-btn transition-all"
+        title="Налаштування & Профіль"
       >
-        <span class="material-icons text-lg">settings</span>
-        <span>Налаштування & Профіль</span>
+        <span class="material-icons text-lg shrink-0">settings</span>
+        <span *ngIf="!isSidebarCollapsed" class="truncate">Налаштування & Профіль</span>
       </button>
     </nav>
 
-    <!-- Pinned User Profile Footer (Standard SaaS Profile Bar) -->
+    <!-- User Profile Footer (Expanded) -->
     <div 
+      *ngIf="!isSidebarCollapsed"
       class="p-3 border-t border-slate-800/80 bg-[#090d18] flex flex-col gap-2 shrink-0 mt-auto shadow-2xl transition-all"
     >
       <div 
@@ -111,14 +165,42 @@
 
       <!-- Subtle Sidebar Scraping Indicator -->
       <div *ngIf="getLastScrapedDate()" class="pt-1 text-[10px] text-slate-400 font-medium flex items-center justify-center gap-1.5 select-none" [title]="'Останній скрейпінг: ' + getLastScrapedText()">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
         <span>Збір: {{ getLastScrapedRelative() }}</span>
       </div>
+    </div>
+
+    <!-- User Profile Footer (Collapsed) -->
+    <div 
+      *ngIf="isSidebarCollapsed"
+      class="p-2 border-t border-slate-800/80 bg-[#090d18] flex flex-col items-center gap-2 shrink-0 mt-auto shadow-2xl transition-all"
+    >
+      <div 
+        (click)="activeTab = 'settings'" 
+        class="relative cursor-pointer hover:scale-105 transition-transform p-1 rounded-xl"
+        [title]="(userSettings.username || 'Адміністратор') + ' (' + (userSettings.role || 'Admin') + ') - Налаштування'"
+      >
+        <div class="w-9 h-9 rounded-full bg-gradient-to-tr {{ userSettings.avatarGradient || 'from-indigo-600 to-purple-600' }} flex items-center justify-center border border-indigo-400/40 text-white font-black text-sm shadow-md shadow-indigo-950">
+          {{ userSettings.avatarInitial || 'A' }}
+        </div>
+        <span class="absolute bottom-1 right-1 w-2.5 h-2.5 bg-emerald-400 border-2 border-[#090d18] rounded-full shadow-sm" title="Онлайн"></span>
+      </div>
+      <button 
+        (click)="logout()" 
+        class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+        title="Вийти з платформи"
+      >
+        <span class="material-icons text-base">logout</span>
+      </button>
     </div>
   </aside>
 
   <!-- Main Content Wrapper -->
-  <main class="flex-1 flex flex-col min-w-0 bg-[#0b0f19] ml-64 min-h-screen">
+  <main 
+    class="flex-1 flex flex-col min-w-0 bg-[#0b0f19] min-h-screen transition-all duration-300 ease-in-out"
+    [class.ml-64]="!isSidebarCollapsed"
+    [class.ml-20]="isSidebarCollapsed"
+  >
     
     <!-- TOP IMPERSONATION / SUPPORT MODE BANNER -->
     <div 
@@ -126,7 +208,7 @@
       class="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white px-8 py-2.5 flex items-center justify-between shadow-2xl z-40 sticky top-0 text-xs font-bold border-b border-amber-400/40 animate-fadeIn"
     >
       <div class="flex items-center gap-2.5">
-        <span class="material-icons text-white text-base animate-pulse">support_agent</span>
+        <span class="material-icons text-white text-base">support_agent</span>
         <span>
           Режим підтримки: Ви переглядаєте кабінет від імені <u>{{ impersonateTargetUser?.displayName || impersonateTargetUser?.username }}</u> (@{{ impersonateTargetUser?.username }}). Всі дії та збереження відбуваються в його просторі.
         </span>
@@ -148,16 +230,26 @@
       [class.top-0]="!isImpersonating"
       class="h-20 bg-[#0e1424] border-b border-slate-800/80 flex items-center justify-between px-8 z-30 shrink-0 sticky shadow-xl shadow-black/40"
     >
-      <div>
-        <h2 class="text-xl font-extrabold tracking-tight premium-title">
-          <span *ngIf="activeTab === 'overview'">Панель огляду ніші</span>
-          <span *ngIf="activeTab === 'explorer'">Пошук та аналіз товарів</span>
-          <span *ngIf="activeTab === 'demand'">Оцінка ринкового попиту</span>
-          <span *ngIf="activeTab === 'details'">Детальні характеристики & Описи</span>
-          <span *ngIf="activeTab === 'history'">Історія скрейпінгів & Папки зборів</span>
-          <span *ngIf="activeTab === 'settings'">Профіль користувача & Системні налаштування</span>
-        </h2>
-        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Збір та інтелектуальний аналіз товарів з Rozetka</p>
+      <div class="flex items-center gap-3.5">
+        <button 
+          (click)="toggleSidebar()" 
+          class="p-2 bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl border border-slate-800 hover:border-slate-700 transition-all cursor-pointer shadow-md flex items-center justify-center shrink-0"
+          [title]="isSidebarCollapsed ? 'Розгорнути бічну панель' : 'Приховати бічну панель'"
+        >
+          <span class="material-icons text-lg">{{ isSidebarCollapsed ? 'menu' : 'menu_open' }}</span>
+        </button>
+
+        <div>
+          <h2 class="text-xl font-extrabold tracking-tight premium-title">
+            <span *ngIf="activeTab === 'overview'">Панель огляду ніші</span>
+            <span *ngIf="activeTab === 'explorer'">Пошук та аналіз товарів</span>
+            <span *ngIf="activeTab === 'demand'">Оцінка ринкового попиту</span>
+            <span *ngIf="activeTab === 'details'">Детальні характеристики & Описи</span>
+            <span *ngIf="activeTab === 'history'">Історія скрейпінгів & Папки зборів</span>
+            <span *ngIf="activeTab === 'settings'">Профіль користувача & Системні налаштування</span>
+          </h2>
+          <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Збір та інтелектуальний аналіз товарів з Rozetka</p>
+        </div>
       </div>
 
       <div *ngIf="activeTab !== 'settings'" class="flex items-center gap-2.5">

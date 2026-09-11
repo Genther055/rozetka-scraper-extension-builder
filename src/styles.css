@@ -73,6 +73,17 @@ body {
   border-color: rgba(148, 163, 184, 0.15);
 }
 
+.premium-menu-btn-collapsed {
+  padding: 0.75rem 0 !important;
+  justify-content: center !important;
+  gap: 0 !important;
+  width: 3rem !important;
+  height: 3rem !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  border-radius: 0.85rem !important;
+}
+
 /* Premium Headers & Text */
 .premium-title {
   background: linear-gradient(to right, #ffffff 30%, #c084fc 100%);
