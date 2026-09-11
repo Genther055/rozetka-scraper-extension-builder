@@ -90,6 +90,10 @@ export interface AnalyticalSummary {
     uniqueSellersCount: number;
     avgPrice: number;
     medianPrice: number;
+    weightedAvgPrice: number;
+    weightedMedianPrice: number;
+    demandPriceDiffPct: number;
+    weightedMedianDiffPct: number;
     minPrice: number;
     maxPrice: number;
     p95Price: number;
@@ -741,6 +745,8 @@ export class DashboardComponent implements OnInit {
   // Metrics
   totalItems = 0;
   avgPrice = 0;
+  weightedAvgPrice = 0;
+  weightedMedianPrice = 0;
   avgRating = 0.0;
   inStockCount = 0;
   inStockPct = 0;
@@ -2510,11 +2516,15 @@ export class DashboardComponent implements OnInit {
 
     if (this.analyticsSummary) {
       this.avgPrice = this.analyticsSummary.kpi.avgPrice;
+      this.weightedAvgPrice = this.analyticsSummary.kpi.weightedAvgPrice;
+      this.weightedMedianPrice = this.analyticsSummary.kpi.weightedMedianPrice;
       this.inStockCount = this.analyticsSummary.kpi.inStockCount;
       this.inStockPct = this.analyticsSummary.kpi.inStockPercentage;
       this.sellersCount = this.analyticsSummary.kpi.uniqueSellersCount;
     } else {
       this.avgPrice = 0;
+      this.weightedAvgPrice = 0;
+      this.weightedMedianPrice = 0;
       this.inStockCount = 0;
       this.inStockPct = 0;
       this.sellersCount = 0;
@@ -3528,6 +3538,10 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
         uniqueSellersCount: 0,
         avgPrice: 0,
         medianPrice: 0,
+        weightedAvgPrice: 0,
+        weightedMedianPrice: 0,
+        demandPriceDiffPct: 0,
+        weightedMedianDiffPct: 0,
         minPrice: 0,
         maxPrice: 0,
         p95Price: 0,
@@ -3579,6 +3593,49 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
   const p95Index = Math.floor(0.95 * (Math.max(n, 1) - 1));
   const p95Price = sortedPrices[p95Index] || maxPrice;
   const priceSkewPct = medianPrice > 0 ? Number((((avgPrice - medianPrice) / medianPrice) * 100).toFixed(1)) : 0;
+
+  // 1.1. Логарифмічно зважені цінові орієнтири за попитом: Вага = 1 + ln(1 + кількість відгуків)
+  let totalWeight = 0;
+  let weightedPriceSum = 0;
+
+  const productsWithWeights = validProducts.map(p => {
+    const rev = Math.max(0, Number(p.reviews) || 0);
+    const weight = 1 + Math.log(1 + rev);
+    totalWeight += weight;
+    weightedPriceSum += (Number(p.price) || 0) * weight;
+    return {
+      price: Number(p.price) || 0,
+      reviews: rev,
+      weight
+    };
+  });
+
+  const weightedAvgPrice = totalWeight > 0 ? Math.round(weightedPriceSum / totalWeight) : avgPrice;
+
+  // Розрахунок зваженої медіани:
+  // Сортуємо товари за зростанням ціни та шукаємо товар, де накопичена сума ваг досягає >= 50% загальної ваги
+  const sortedByPriceWeights = [...productsWithWeights].sort((a, b) => a.price - b.price);
+  const targetHalfWeight = totalWeight * 0.5;
+  let accumulatedWeight = 0;
+  let weightedMedianPrice = medianPrice;
+
+  for (const item of sortedByPriceWeights) {
+    accumulatedWeight += item.weight;
+    if (accumulatedWeight >= targetHalfWeight) {
+      weightedMedianPrice = item.price;
+      break;
+    }
+  }
+
+  // Різниця між зваженою медіаною попиту та базовою медіаною пропозиції (%)
+  const weightedMedianDiffPct = medianPrice > 0
+    ? Number((((weightedMedianPrice - medianPrice) / medianPrice) * 100).toFixed(1))
+    : 0;
+
+  // Різниця між зваженою середньою та базовою середньою (%)
+  const demandPriceDiffPct = avgPrice > 0
+    ? Number((((weightedAvgPrice - avgPrice) / avgPrice) * 100).toFixed(1))
+    : 0;
 
   // 2. Агрегація за продавцями (за всіма зібраними товарами)
   const sellerColors = [
@@ -3786,6 +3843,10 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       uniqueSellersCount: sellersList.length,
       avgPrice,
       medianPrice: Math.round(medianPrice),
+      weightedAvgPrice,
+      weightedMedianPrice: Math.round(weightedMedianPrice),
+      demandPriceDiffPct,
+      weightedMedianDiffPct,
       minPrice,
       maxPrice,
       p95Price,

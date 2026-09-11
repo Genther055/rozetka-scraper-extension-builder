@@ -497,31 +497,31 @@
 
       <!-- Stats Grid (Hidden if no products or on settings/history tabs) -->
       <!-- Stats Grid (5 Deterministic Cards: Обсяг вибірки, Цінові орієнтири, Складські залишки, Концентрація CR3, Бар'єр входу) -->
-      <section *ngIf="products.length > 0 && analyticsSummary && activeTab !== 'settings' && activeTab !== 'history'" class="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6 relative z-30">
+      <section *ngIf="products.length > 0 && analyticsSummary && activeTab !== 'settings' && activeTab !== 'history'" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 relative z-30">
         <!-- 1. Обсяг вибірки -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all">
+        <div class="p-5 premium-card flex items-center justify-between transition-all">
           <div>
             <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Обсяг вибірки</p>
-            <p class="text-3xl font-extrabold text-white mt-1">{{ analyticsSummary.kpi.totalProducts }} <span class="text-xs font-bold text-slate-400">тов.</span></p>
+            <p class="text-2xl font-extrabold text-white mt-1">{{ analyticsSummary.kpi.totalProducts }} <span class="text-xs font-bold text-slate-400">тов.</span></p>
             <p class="text-xs text-indigo-400/90 font-mono font-semibold mt-0.5">{{ analyticsSummary.kpi.uniqueSellersCount }} унікальних продавців</p>
           </div>
-          <div class="w-12 h-12 bg-indigo-950/50 border border-indigo-500/20 text-indigo-300 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/10">
-            <span class="material-icons">inventory_2</span>
+          <div class="w-10 h-10 bg-indigo-950/50 border border-indigo-500/20 text-indigo-300 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/10 shrink-0">
+            <span class="material-icons text-lg">inventory_2</span>
           </div>
         </div>
 
-        <!-- 2. Подвійний ціновий орієнтир (з графіком співвідношення цін при наведенні) -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all relative group/price hover:z-50 cursor-help">
+        <!-- 2. Подвійний ціновий орієнтир полиці (пропозиція) -->
+        <div class="p-5 premium-card flex items-center justify-between transition-all relative group/price hover:z-50 cursor-help">
           <div>
             <div class="flex items-center gap-1.5">
-              <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Цінові орієнтири</p>
+              <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Ціни (Полиця)</p>
               <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/price:text-white group-hover/price:bg-emerald-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors">?</span>
             </div>
-            <p class="text-xl font-extrabold text-emerald-400 mt-1 font-mono">Сер: {{ analyticsSummary.kpi.avgPrice | number }} ₴</p>
+            <p class="text-lg font-extrabold text-emerald-400 mt-1 font-mono">Сер: {{ analyticsSummary.kpi.avgPrice | number }} ₴</p>
             <p class="text-xs text-slate-300 font-mono font-semibold mt-0.5">Медіана (P50): {{ analyticsSummary.kpi.medianPrice | number }} ₴</p>
           </div>
-          <div class="w-12 h-12 bg-emerald-950/50 border border-emerald-500/20 text-emerald-300 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/10">
-            <span class="material-icons">payments</span>
+          <div class="w-10 h-10 bg-emerald-950/50 border border-emerald-500/20 text-emerald-300 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/10 shrink-0">
+            <span class="material-icons text-lg">payments</span>
           </div>
 
           <!-- Hover Popover: Графік співвідношення цін та детальна статистика -->
@@ -596,8 +596,87 @@
           </div>
         </div>
 
-        <!-- 3. Оцінка життєздатності ніші (Частка активних SKU) -->
-        <div class="p-6 premium-card flex items-center justify-between transition-all relative group/sku hover:z-50 cursor-help">
+        <!-- 3. Зважені цінові орієнтири (Логарифмічне згладжування попиту) -->
+        <div class="p-5 premium-card flex items-center justify-between transition-all relative group/wprice hover:z-50 cursor-help border-l-2 border-l-purple-500/80">
+          <div>
+            <div class="flex items-center gap-1.5">
+              <p class="text-xs text-purple-300 font-bold uppercase tracking-wider">Зважений попит</p>
+              <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-purple-400 group-hover/wprice:text-white group-hover/wprice:bg-purple-600 text-[9px] font-bold flex items-center justify-center border border-purple-800/80 transition-colors">?</span>
+            </div>
+            <p class="text-lg font-extrabold text-purple-300 mt-1 font-mono">Сер: {{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</p>
+            <p class="text-xs text-purple-200/90 font-mono font-semibold mt-0.5">Медіана: {{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</p>
+          </div>
+          <div class="w-10 h-10 bg-purple-950/50 border border-purple-500/30 text-purple-300 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/15 shrink-0">
+            <span class="material-icons text-lg">auto_graph</span>
+          </div>
+
+          <!-- Hover Popover: Логарифмічне зважування цін за відгуками -->
+          <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-purple-500/60 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/wprice:opacity-100 group-hover/wprice:pointer-events-auto transition-all duration-200 backdrop-blur-md ring-1 ring-slate-700/80">
+            <div class="font-bold text-white border-b border-slate-800 pb-2 mb-2.5 flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="material-icons text-base text-purple-400">functions</span>
+                <span>Логарифмічна модель попиту (ln)</span>
+              </div>
+              <span class="text-[10px] font-mono font-bold bg-purple-950 text-purple-300 px-2 py-0.5 rounded border border-purple-800/60">
+                Вага = 1 + ln(1 + в)
+              </span>
+            </div>
+
+            <p class="text-[11px] text-slate-300 leading-relaxed mb-2.5">
+              Ціни зважуються за кількістю відгуків (реальних замовлень), але логарифм (\(\ln\)) згладжує монополію хітів, зберігаючи базову вагу 1.0 для новинок без відгуків.
+            </p>
+
+            <!-- Table of Log Weights -->
+            <div class="grid grid-cols-4 gap-1.5 text-center text-[10px] font-mono mb-3">
+              <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
+                <div class="text-slate-400">0 відгуків</div>
+                <div class="text-white font-bold mt-0.5">Вага 1.0</div>
+              </div>
+              <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
+                <div class="text-slate-400">10 відгуків</div>
+                <div class="text-purple-300 font-bold mt-0.5">Вага 3.4</div>
+              </div>
+              <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
+                <div class="text-slate-400">100 відгуків</div>
+                <div class="text-purple-300 font-bold mt-0.5">Вага 5.6</div>
+              </div>
+              <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
+                <div class="text-slate-400">1к відгуків</div>
+                <div class="text-purple-300 font-bold mt-0.5">Вага 7.9</div>
+              </div>
+            </div>
+
+            <!-- Comparison with Shelf Prices -->
+            <div class="bg-slate-950/90 p-2.5 rounded-xl border border-slate-800 text-[11px] font-mono space-y-1.5 mb-2">
+              <div class="flex justify-between items-center">
+                <span class="text-slate-400">Полиця (Пропозиція):</span>
+                <b class="text-slate-200">Сер: {{ analyticsSummary.kpi.avgPrice | number }} ₴ | Мед: {{ analyticsSummary.kpi.medianPrice | number }} ₴</b>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-purple-300 font-semibold">Попит (Зважена):</span>
+                <b class="text-purple-300">Сер: {{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴ | Мед: {{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</b>
+              </div>
+            </div>
+
+            <div class="text-[11px] text-slate-300">
+              <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct < -3" class="text-amber-300 flex items-center gap-1">
+                <span class="material-icons text-xs">south_west</span>
+                <span>Попит зміщений у доступніший сегмент (зважена ціна на <b>{{ Math.abs(analyticsSummary.kpi.demandPriceDiffPct) }}%</b> нижча за ціну полиці).</span>
+              </span>
+              <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct > 3" class="text-emerald-300 flex items-center gap-1">
+                <span class="material-icons text-xs">north_east</span>
+                <span>Попит тяжіє до вищого сегменту (зважена ціна на <b>{{ analyticsSummary.kpi.demandPriceDiffPct }}%</b> вища за полицю).</span>
+              </span>
+              <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3" class="text-emerald-300 flex items-center gap-1">
+                <span class="material-icons text-xs">check_circle</span>
+                <span>Ціна пропозиції та попит збігаються (ідеальний ринковий баланс).</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Оцінка життєздатності ніші (Частка активних SKU) -->
+        <div class="p-5 premium-card flex items-center justify-between transition-all relative group/sku hover:z-50 cursor-help">
           <div>
             <div class="flex items-center gap-1.5">
               <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Активність SKU</p>
@@ -836,6 +915,128 @@
       <!-- TAB 1: OVERVIEW (Deterministic Niche Analytics Module) -->
       <div *ngIf="activeTab === 'overview' && products.length > 0 && analyticsSummary" class="space-y-6 animate-fadeIn relative z-10">
         
+        <!-- Dedicated Demand Weighted Pricing Strategy Module -->
+        <div class="p-6 premium-card relative overflow-hidden border border-purple-500/30 bg-gradient-to-r from-[#0b0f19] via-[#12182c] to-[#0b0f19] shadow-xl">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-purple-950/80 border border-purple-500/40 text-purple-300 flex items-center justify-center shadow-lg shadow-purple-500/20 shrink-0">
+                <span class="material-icons text-xl">tune</span>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 flex-wrap">
+                  <span>Модель зваженого попиту: Логарифмічне ціноутворення</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-950 text-purple-300 border border-purple-800/60">
+                    Вага = 1 + ln(1 + Відгуки)
+                  </span>
+                </h3>
+                <p class="text-xs text-slate-400 mt-0.5">
+                  Співвідношення цін виставленого асортименту (полиця) з реальною концентрацією купівельного попиту
+                </p>
+              </div>
+            </div>
+
+            <!-- Vector Delta Badge -->
+            <div class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 text-xs font-mono shrink-0">
+              <span class="text-slate-400">Ціновий зсув ринку:</span>
+              <span 
+                [class.text-amber-400]="analyticsSummary.kpi.demandPriceDiffPct < -3"
+                [class.text-emerald-400]="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3"
+                [class.text-purple-300]="analyticsSummary.kpi.demandPriceDiffPct > 3"
+                class="font-bold flex items-center gap-1"
+              >
+                <span class="material-icons text-xs">
+                  {{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'trending_down' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'trending_up' : 'trending_flat' }}
+                </span>
+                {{ analyticsSummary.kpi.demandPriceDiffPct > 0 ? '+' : '' }}{{ analyticsSummary.kpi.demandPriceDiffPct }}%
+              </span>
+            </div>
+          </div>
+
+          <!-- Comparative 3-Column Metrics Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 items-stretch">
+            
+            <!-- Column 1: Shelf vs Weighted Average -->
+            <div class="p-4 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+                  <span class="font-bold text-slate-300">Середня ціна товару</span>
+                  <span class="text-[10px] font-mono uppercase text-slate-500">Avg vs Weighted</span>
+                </div>
+                <div class="flex items-baseline gap-3 mt-2">
+                  <div>
+                    <div class="text-[10px] text-slate-400">Полиця:</div>
+                    <div class="text-lg font-extrabold text-emerald-400 font-mono">{{ analyticsSummary.kpi.avgPrice | number }} ₴</div>
+                  </div>
+                  <div class="text-slate-600 font-bold text-lg">→</div>
+                  <div>
+                    <div class="text-[10px] text-purple-300 font-semibold">Зважена попитом:</div>
+                    <div class="text-lg font-extrabold text-purple-300 font-mono">{{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</div>
+                  </div>
+                </div>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-900">
+                Сума цін з урахуванням логарифмічної ваги кожного товару
+              </p>
+            </div>
+
+            <!-- Column 2: Shelf vs Weighted Median -->
+            <div class="p-4 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+                  <span class="font-bold text-slate-300">Медіанна ціна (P50)</span>
+                  <span class="text-[10px] font-mono uppercase text-slate-500">Median vs Weighted</span>
+                </div>
+                <div class="flex items-baseline gap-3 mt-2">
+                  <div>
+                    <div class="text-[10px] text-slate-400">Полиця:</div>
+                    <div class="text-lg font-extrabold text-indigo-300 font-mono">{{ analyticsSummary.kpi.medianPrice | number }} ₴</div>
+                  </div>
+                  <div class="text-slate-600 font-bold text-lg">→</div>
+                  <div>
+                    <div class="text-[10px] text-purple-300 font-semibold">Зважена попитом:</div>
+                    <div class="text-lg font-extrabold text-purple-300 font-mono">{{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</div>
+                  </div>
+                </div>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-900">
+                Точка, де зосереджено 50% сумарного накопиченого попиту ринку
+              </p>
+            </div>
+
+            <!-- Column 3: Logarithmic Weighting Scale -->
+            <div class="p-4 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+                  <span class="font-bold text-slate-300">Шкала ваг логарифму</span>
+                  <span class="text-[10px] font-mono text-purple-400">1 + ln(1 + n)</span>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5 text-[10px] font-mono text-center mt-2">
+                  <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+                    <span class="text-slate-400 block text-[9px]">0 відг.</span>
+                    <b class="text-white">1.0×</b>
+                  </div>
+                  <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+                    <span class="text-slate-400 block text-[9px]">10 відг.</span>
+                    <b class="text-purple-300">3.4×</b>
+                  </div>
+                  <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+                    <span class="text-slate-400 block text-[9px]">100 відг.</span>
+                    <b class="text-purple-300">5.6×</b>
+                  </div>
+                  <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+                    <span class="text-slate-400 block text-[9px]">1к відг.</span>
+                    <b class="text-purple-300">7.9×</b>
+                  </div>
+                </div>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-900">
+                Захищає від диктату монополій і водночас враховує всі новинки
+              </p>
+            </div>
+
+          </div>
+        </div>
+
         <!-- Central Grid: Price & Demand Distribution (8 cols) + Niche Structure (4 cols) -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           
