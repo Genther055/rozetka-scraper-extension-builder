@@ -981,306 +981,38 @@
       <!-- TAB 1: OVERVIEW (Deterministic Niche Analytics Module) -->
       <div *ngIf="activeTab === 'overview' && products.length > 0 && analyticsSummary" class="space-y-6 animate-fadeIn relative z-10">
         
-        <!-- Dedicated Demand Weighted Pricing Strategy Module -->
-        <div class="p-6 premium-card relative overflow-hidden border border-purple-500/25 bg-gradient-to-br from-[#0c101d] via-[#111628] to-[#0c101d] shadow-xl rounded-2xl">
-          
-          <!-- Header Section -->
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800/80 relative z-10">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-purple-950/60 border border-purple-500/30 text-purple-300 flex items-center justify-center shadow-sm shrink-0">
-                <span class="material-icons text-xl">tune</span>
-              </div>
-              <div>
-                <div class="flex items-center gap-2 flex-wrap">
-                  <h3 class="text-sm font-bold text-white tracking-wide">
-                    Аналітика зваженого попиту та ціноутворення
-                  </h3>
-                  
-                  <!-- Info popover for logarithmic demand model -->
-                  <div class="relative inline-block group/modelhelp">
-                    <span class="w-4 h-4 rounded-full bg-slate-900 hover:bg-purple-600 text-purple-300 hover:text-white text-[10px] font-bold flex items-center justify-center cursor-help border border-purple-800/60 transition-colors">
-                      ?
-                    </span>
-                    <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-purple-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/modelhelp:opacity-100 group-hover/modelhelp:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80 backdrop-blur-md">
-                      <div class="font-bold text-white border-b border-slate-800 pb-1.5 mb-2 flex items-center justify-between">
-                        <div class="flex items-center gap-1.5">
-                          <span class="material-icons text-sm text-purple-400">functions</span>
-                          <span>Як працює модель зваженого попиту?</span>
-                        </div>
-                        <span class="text-[10px] font-mono font-bold bg-purple-950 text-purple-300 px-2 py-0.5 rounded border border-purple-800/60">
-                          w = 1 + ln(1 + в)
-                        </span>
-                      </div>
-                      <p class="text-[11px] text-slate-300 leading-relaxed mb-2">
-                        Звичайна середня ціна показує лише те, що виставили продавці. Але покупці купують одні товари значно частіше за інші.
-                      </p>
-                      <p class="text-[11px] text-slate-300 leading-relaxed mb-2">
-                        <b>Модель зваженого попиту</b> надає кожному товару вагу пропорційно до кількості його відгуків (замовлень), застосовуючи натуральний логарифм (\(\ln\)).
-                      </p>
-                      <div class="space-y-1 text-[10px] bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-                        <div class="text-emerald-400">✓ <b>Захист від монополій:</b> Товар із 2000 відгуків має вагу 7.9× (а не 2000×) і не ламає статистику всієї ніші.</div>
-                        <div class="text-indigo-300">✓ <b>Врахування новинок:</b> Товари з 0 відгуків отримують базову вагу 1.0× і не відкидаються.</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <p class="text-xs text-slate-400 mt-0.5">
-                  Співвідношення цін вітрини (пропозиція) з реальною концентрацією купівельних замовлень (попит)
-                </p>
-              </div>
-            </div>
-
-            <!-- Dynamic Price Vector Badge with Hover Tooltip -->
-            <div class="relative group/vectorhelp shrink-0">
-              <div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-950/90 border border-slate-800 text-xs font-mono cursor-help shadow-sm">
-                <span class="text-slate-400 font-sans">Ціновий зсув ринку:</span>
-                <span 
-                  [class.text-amber-400]="analyticsSummary.kpi.demandPriceDiffPct < -3"
-                  [class.text-emerald-400]="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3"
-                  [class.text-purple-300]="analyticsSummary.kpi.demandPriceDiffPct > 3"
-                  class="font-bold flex items-center gap-1.5"
-                >
-                  <span class="material-icons text-sm">
-                    {{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'trending_down' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'trending_up' : 'check_circle' }}
-                  </span>
-                  <span>{{ analyticsSummary.kpi.demandPriceDiffPct > 0 ? '+' : '' }}{{ analyticsSummary.kpi.demandPriceDiffPct }}%</span>
-                  <span class="text-[10px] text-slate-500 font-sans font-normal">
-                    ({{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'до бюджету' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'до преміуму' : 'баланс' }})
-                  </span>
-                </span>
-              </div>
-
-              <!-- Vector Popover -->
-              <div class="absolute right-0 top-full mt-2 w-72 p-3 bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/vectorhelp:opacity-100 group-hover/vectorhelp:pointer-events-auto transition-all duration-200 backdrop-blur-md">
-                <div class="font-bold text-white mb-1">Що означає ціновий зсув?</div>
-                <p class="text-[11px] text-slate-300 leading-relaxed">
-                  Показує, на скільки відсотків реальний попит покупців відхиляється від середньої ціни полиці.
-                  {{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'Покупці частіше обирають дешевші моделі.' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'Покупці готові платити дорожче за якісніші модифікації.' : 'Попит і пропозиція перебувають у повній рівновазі.' }}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Comparative 3-Column Metrics Grid -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 items-stretch relative z-10">
-            
-            <!-- Column 1: Shelf vs Weighted Average -->
-            <div class="p-4.5 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200 relative group/col1">
-              <div>
-                <div class="flex items-center justify-between text-xs text-slate-400 mb-2.5">
-                  <div class="flex items-center gap-1.5">
-                    <span class="font-bold text-slate-200">Середня ціна товару</span>
-                    <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/col1:text-white group-hover/col1:bg-indigo-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors">?</span>
-                  </div>
-                  <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">Полиця vs Попит</span>
-                </div>
-                
-                <!-- Dual Comparison Chips -->
-                <div class="grid grid-cols-2 gap-2 mt-2">
-                  <!-- Shelf Avg -->
-                  <div class="p-2.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 flex flex-col justify-between">
-                    <div class="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                      <span>Полиця (Сер.)</span>
-                    </div>
-                    <div class="text-base sm:text-lg font-extrabold text-emerald-400 font-mono mt-1">
-                      {{ analyticsSummary.kpi.avgPrice | number }} ₴
-                    </div>
-                  </div>
-
-                  <!-- Weighted Demand Avg -->
-                  <div class="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/50 flex flex-col justify-between shadow-md shadow-purple-950/30">
-                    <div class="flex items-center gap-1 text-[10px] text-purple-300 font-semibold">
-                      <span class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
-                      <span>Зважена попитом</span>
-                    </div>
-                    <div class="text-base sm:text-lg font-extrabold text-purple-200 font-mono mt-1">
-                      {{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Mini Hover Tooltip for Column 1 -->
-              <div class="absolute left-0 bottom-full mb-2 w-72 p-3 bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/col1:opacity-100 group-hover/col1:pointer-events-auto transition-all duration-200 backdrop-blur-md">
-                <div class="font-bold text-white mb-1">Середня ціна: Полиця vs Попит</div>
-                <p class="text-[11px] text-slate-300 leading-relaxed">
-                  • <b>Полиця:</b> звичайне середнє арифметичне цін усіх карток у наявності.<br>
-                  • <b>Зважена:</b> середня ціна з урахуванням того, які товари продаються частіше.
-                </p>
-              </div>
-
-              <p class="text-[11px] text-slate-400 mt-3 pt-2.5 border-t border-slate-900/90 flex items-center gap-1.5">
-                <span class="material-icons text-xs text-indigo-400">calculate</span>
-                <span>Сума цін з урахуванням ваги замовлень кожного товару</span>
-              </p>
-            </div>
-
-            <!-- Column 2: Shelf vs Weighted Median -->
-            <div class="p-4.5 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200 relative group/col2">
-              <div>
-                <div class="flex items-center justify-between text-xs text-slate-400 mb-2.5">
-                  <div class="flex items-center gap-1.5">
-                    <span class="font-bold text-slate-200">Медіанна ціна (P50)</span>
-                    <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/col2:text-white group-hover/col2:bg-indigo-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors">?</span>
-                  </div>
-                  <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">Центр попиту</span>
-                </div>
-
-                <!-- Dual Comparison Chips -->
-                <div class="grid grid-cols-2 gap-2 mt-2">
-                  <!-- Shelf Median -->
-                  <div class="p-2.5 rounded-xl bg-slate-900/90 border border-indigo-500/30 flex flex-col justify-between">
-                    <div class="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-                      <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-                      <span>Полиця (P50)</span>
-                    </div>
-                    <div class="text-base sm:text-lg font-extrabold text-indigo-300 font-mono mt-1">
-                      {{ analyticsSummary.kpi.medianPrice | number }} ₴
-                    </div>
-                  </div>
-
-                  <!-- Weighted Demand Median -->
-                  <div class="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/50 flex flex-col justify-between shadow-md shadow-purple-950/30">
-                    <div class="flex items-center gap-1 text-[10px] text-purple-300 font-semibold">
-                      <span class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
-                      <span>Зважена медіана</span>
-                    </div>
-                    <div class="text-base sm:text-lg font-extrabold text-purple-200 font-mono mt-1">
-                      {{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Mini Hover Tooltip for Column 2 -->
-              <div class="absolute left-0 bottom-full mb-2 w-72 p-3 bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/col2:opacity-100 group-hover/col2:pointer-events-auto transition-all duration-200 backdrop-blur-md">
-                <div class="font-bold text-white mb-1">Медіана (P50): Базовий ціновий якір</div>
-                <p class="text-[11px] text-slate-300 leading-relaxed">
-                  Показує точну точку, де зосереджено 50% накопиченого попиту ринку. Нижче цієї ціни здійснюється рівно половина всіх замовлень у категорії.
-                </p>
-              </div>
-
-              <p class="text-[11px] text-slate-400 mt-3 pt-2.5 border-t border-slate-900/90 flex items-center gap-1.5">
-                <span class="material-icons text-xs text-purple-400">center_focus_strong</span>
-                <span>Точка, де зосереджено 50% накопиченого попиту</span>
-              </p>
-            </div>
-
-            <!-- Column 3: Logarithmic Weighting Scale -->
-            <div class="p-4.5 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200 relative group/col3">
-              <div>
-                <div class="flex items-center justify-between text-xs text-slate-400 mb-2.5">
-                  <div class="flex items-center gap-1.5">
-                    <span class="font-bold text-slate-200">Шкала впливу відгуків</span>
-                    <span class="w-3.5 h-3.5 rounded-full bg-slate-900 text-slate-400 group-hover/col3:text-white group-hover/col3:bg-indigo-600 text-[9px] font-bold flex items-center justify-center border border-slate-700 transition-colors">?</span>
-                  </div>
-                  <span class="text-[10px] font-mono text-purple-400 font-bold px-2 py-0.5 rounded bg-purple-950/60 border border-purple-800/40">Логарифм</span>
-                </div>
-
-                <!-- Stepping Progression Pills with individual hover tooltips -->
-                <div class="grid grid-cols-4 gap-1.5 text-center mt-2 font-mono">
-                  
-                  <!-- Tier 1 -->
-                  <div class="bg-slate-900/90 p-2 rounded-xl border border-slate-800 flex flex-col items-center justify-center relative group/t1 cursor-help" title="0 відгуків: базова вага 1.0× для новинок">
-                    <span class="text-slate-400 block text-[9px]">0 відг.</span>
-                    <b class="text-white text-sm my-0.5">1.0×</b>
-                    <span class="text-[8px] text-cyan-400/90 uppercase font-sans font-bold">База</span>
-                  </div>
-
-                  <!-- Tier 2 -->
-                  <div class="bg-indigo-950/30 p-2 rounded-xl border border-indigo-500/30 flex flex-col items-center justify-center relative group/t2 cursor-help" title="10 відгуків: початковий старт продажів">
-                    <span class="text-slate-400 block text-[9px]">10 відг.</span>
-                    <b class="text-indigo-300 text-sm my-0.5">3.4×</b>
-                    <span class="text-[8px] text-indigo-400 uppercase font-sans font-bold">Старт</span>
-                  </div>
-
-                  <!-- Tier 3 -->
-                  <div class="bg-purple-950/40 p-2 rounded-xl border border-purple-500/40 flex flex-col items-center justify-center relative group/t3 cursor-help" title="100 відгуків: стабільний лідер продажів">
-                    <span class="text-slate-400 block text-[9px]">100 відг.</span>
-                    <b class="text-purple-300 text-sm my-0.5">5.6×</b>
-                    <span class="text-[8px] text-purple-400 uppercase font-sans font-bold">Лідер</span>
-                  </div>
-
-                  <!-- Tier 4 -->
-                  <div class="bg-fuchsia-950/40 p-2 rounded-xl border border-fuchsia-500/40 flex flex-col items-center justify-center relative group/t4 cursor-help" title="1 000+ відгуків: топовий хіт, вага згладжена до 7.9×">
-                    <span class="text-slate-400 block text-[9px]">1к+ відг.</span>
-                    <b class="text-fuchsia-300 text-sm my-0.5">7.9×</b>
-                    <span class="text-[8px] text-fuchsia-400 uppercase font-sans font-bold">Суперхіт</span>
-                  </div>
-
-                </div>
-              </div>
-
-              <!-- Mini Hover Tooltip for Column 3 -->
-              <div class="absolute right-0 bottom-full mb-2 w-72 p-3 bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/col3:opacity-100 group-hover/col3:pointer-events-auto transition-all duration-200 backdrop-blur-md">
-                <div class="font-bold text-white mb-1">Як працює шкала логарифму?</div>
-                <p class="text-[11px] text-slate-300 leading-relaxed">
-                  Логарифм плавно збільшує вагу: товар з 10 відгуками впливає сильніше (3.4×), ніж новинка (1.0×), але товар з 1000 відгуків не отримує вагу 1000×, а лише 7.9×, щоб не викривляти ринок.
-                </p>
-              </div>
-
-              <p class="text-[11px] text-slate-400 mt-3 pt-2.5 border-t border-slate-900/90 flex items-center gap-1.5">
-                <span class="material-icons text-xs text-fuchsia-400">shield</span>
-                <span>Захищає від диктату монополій і враховує новинки</span>
-              </p>
-            </div>
-
-          </div>
-
-          <!-- Strategic Actionable Takeaway Banner -->
-          <div class="mt-4 p-3.5 rounded-xl bg-slate-950/90 border border-purple-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs relative z-10">
-            <div class="flex items-start sm:items-center gap-2.5">
-              <div class="w-7 h-7 rounded-lg bg-purple-900/50 border border-purple-500/40 text-purple-300 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
-                <span class="material-icons text-sm">lightbulb</span>
-              </div>
-              <div class="text-slate-300 leading-relaxed">
-                <span class="font-bold text-white uppercase tracking-wider text-[11px] mr-1.5">Стратегічний орієнтир:</span>
-                <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct < -3">
-                  Попит зосереджений у доступнішому сегменті (зважена ціна <b>{{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</b> проти полиці <b>{{ analyticsSummary.kpi.avgPrice | number }} ₴</b>). Для швидкого старту встановлюйте ціну в коридорі <b>{{ analyticsSummary.kpi.weightedMedianPrice | number }} – {{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</b>.
-                </span>
-                <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct > 3">
-                  Покупці віддають перевагу якіснішим модифікаціям (попит тяжіє до <b>{{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</b>). Можна запускати дорожчі товари з підвищеною маржинальністю.
-                </span>
-                <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3">
-                  Ринковий баланс збалансований. Пропозиція полиці відповідає запитам покупців. Оптимальний ціновий якір входу — <b>{{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</b>.
-                </span>
-              </div>
-            </div>
-            <div class="shrink-0 flex items-center gap-1.5 text-[11px] font-mono text-purple-300 bg-purple-950/60 px-3 py-1.5 rounded-lg border border-purple-800/50 self-start sm:self-auto">
-              <span class="material-icons text-xs text-purple-400">check_circle</span>
-              <span>Товари в наявності</span>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Central Grid: Price & Demand Distribution (8 cols) + Niche Structure (4 cols) -->
+        <!-- Central Grid: Integrated Hero Price & Demand Distribution (8 cols) + Niche Structure (4 cols) -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           
-          <!-- Left (8 cols): РОЗПОДІЛ ЦІН ТА ПОПИТУ У НІШІ -->
-          <div class="lg:col-span-8 p-6 premium-card flex flex-col justify-between space-y-5">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
-              <div class="flex items-center gap-2">
-                <span class="material-icons text-indigo-400 text-lg">bar_chart</span>
+          <!-- Left (8 cols): РОЗПОДІЛ ЦІН ТА ПОПИТУ У НІШІ + SWEET SPOT -->
+          <div class="lg:col-span-8 p-6 premium-card flex flex-col justify-between space-y-5 relative">
+            
+            <!-- Header Section -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shadow-sm shrink-0">
+                  <span class="material-icons text-xl">insights</span>
+                </div>
                 <div>
-                  <div class="flex items-center gap-1.5">
-                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">Розподіл цін та попиту у ніші</h3>
+                  <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">
+                      Розподіл цін, попиту та Sweet Spot
+                    </h3>
                     
-                    <!-- Interactive Info / Popover for Price Distribution & Demand-to-Supply Ratio -->
+                    <!-- Interactive Info Popover -->
                     <div class="relative inline-block group/disthelp">
-                      <span class="w-4 h-4 rounded-full bg-slate-900 hover:bg-amber-500 text-slate-400 hover:text-slate-950 text-[10px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">
+                      <span class="w-4 h-4 rounded-full bg-slate-900 hover:bg-indigo-600 text-slate-400 hover:text-white text-[10px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">
                         ?
                       </span>
-                      <!-- Popover Tooltip -->
-                      <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-amber-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/disthelp:opacity-100 group-hover/disthelp:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80 backdrop-blur-md">
+                      <!-- Popover Tooltip (opens downwards) -->
+                      <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-indigo-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/disthelp:opacity-100 group-hover/disthelp:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80 backdrop-blur-md">
                         <div class="font-bold text-white border-b border-slate-800 pb-1.5 mb-2 flex items-center justify-between">
                           <div class="flex items-center gap-1.5">
-                            <span class="material-icons text-sm text-amber-400">trending_up</span>
-                            <span>Що таке «Віддача (в/SKU)» та Sweet Spot?</span>
+                            <span class="material-icons text-sm text-indigo-400">trending_up</span>
+                            <span>Модель попиту, віддачі та Sweet Spot</span>
                           </div>
-                          <span class="text-[10px] font-mono font-bold bg-amber-950 text-amber-300 px-2 py-0.5 rounded border border-amber-800/60">
-                            Попит / Пропозиція
+                          <span class="text-[10px] font-mono font-bold bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-800/60">
+                            Попит vs Пропозиція
                           </span>
                         </div>
                         <p class="text-[11px] text-slate-300 leading-relaxed mb-2">
@@ -1301,7 +1033,7 @@
                           </div>
                           <div class="flex items-center gap-1.5 text-slate-400">
                             <span class="w-2 h-2 rounded-full bg-slate-500 shrink-0"></span>
-                            <span><b>Низька віддача (&lt; 3 в/SKU):</b> Перенасичений сегмент або відсутність інтересу покупців.</span>
+                            <span><b>Низька віддача (&lt; 3 в/SKU):</b> Перенасичений сегмент або брак інтересу покупців.</span>
                           </div>
                           <div class="flex items-center gap-1.5 text-amber-300">
                             <span class="material-icons text-[12px] text-amber-400 shrink-0">star</span>
@@ -1311,26 +1043,107 @@
                       </div>
                     </div>
                   </div>
-                  <p class="text-xs text-slate-400">Співвідношення пропозиції (кількість SKU) та ринкового попиту (сума відгуків)</p>
+                  <p class="text-xs text-slate-400">Співвідношення виставлених карток товару з реальними замовленнями</p>
                 </div>
               </div>
 
-              <!-- Visual Legend (Single shared legend) -->
-              <div class="flex items-center gap-4 text-xs font-semibold">
-                <div class="flex items-center gap-1.5">
-                  <span class="w-3 h-3 rounded-md bg-indigo-500 shadow-sm"></span>
-                  <span class="text-slate-300">Пропозиція (Товари)</span>
+              <!-- Price Vector Badge & Legend -->
+              <div class="flex flex-wrap items-center gap-3 shrink-0">
+                <!-- Market Shift Badge with Popover -->
+                <div class="relative group/vectorhelp">
+                  <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 text-xs font-mono cursor-help shadow-sm">
+                    <span class="text-slate-400 font-sans text-[11px]">Зсув:</span>
+                    <span 
+                      [class.text-amber-400]="analyticsSummary.kpi.demandPriceDiffPct < -3"
+                      [class.text-emerald-400]="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3"
+                      [class.text-purple-300]="analyticsSummary.kpi.demandPriceDiffPct > 3"
+                      class="font-bold flex items-center gap-1"
+                    >
+                      <span class="material-icons text-xs">
+                        {{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'trending_down' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'trending_up' : 'check_circle' }}
+                      </span>
+                      <span>{{ analyticsSummary.kpi.demandPriceDiffPct > 0 ? '+' : '' }}{{ analyticsSummary.kpi.demandPriceDiffPct }}%</span>
+                      <span class="text-[10px] text-slate-500 font-sans font-normal hidden sm:inline">
+                        ({{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'до бюджету' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'до преміуму' : 'баланс' }})
+                      </span>
+                    </span>
+                  </div>
+
+                  <!-- Vector Popover -->
+                  <div class="absolute right-0 top-full mt-2 w-72 p-3 bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/vectorhelp:opacity-100 group-hover/vectorhelp:pointer-events-auto transition-all duration-200 backdrop-blur-md">
+                    <div class="font-bold text-white mb-1">Що означає ціновий зсув?</div>
+                    <p class="text-[11px] text-slate-300 leading-relaxed">
+                      Показує, на скільки відсотків реальний попит покупців відхиляється від середньої ціни полиці.
+                      {{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'Покупці частіше обирають дешевші моделі.' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'Покупці готові платити дорожче за якісніші модифікації.' : 'Попит і пропозиція перебувають у повній рівновазі.' }}
+                    </p>
+                  </div>
                 </div>
-                <div class="flex items-center gap-1.5">
-                  <span class="w-3 h-3 rounded-md bg-emerald-400 shadow-sm"></span>
-                  <span class="text-slate-300">Попит (Відгуки)</span>
+
+                <!-- Legend -->
+                <div class="flex items-center gap-3 text-xs font-semibold bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-slate-800">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-sm bg-indigo-500 shadow-sm"></span>
+                    <span class="text-slate-300 text-[11px]">Пропозиція</span>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-sm bg-emerald-400 shadow-sm"></span>
+                    <span class="text-slate-300 text-[11px]">Попит</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Graphical Price Spectrum Meter (Шкала цінових орієнтирів) -->
+            <div class="p-3.5 bg-slate-950/80 border border-slate-800/90 rounded-2xl space-y-2">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-slate-400 font-semibold flex items-center gap-1.5">
+                  <span class="material-icons text-sm text-indigo-400">linear_scale</span>
+                  <span>Шкала цінових орієнтирів ринку</span>
+                </span>
+                <span class="text-[10px] font-mono text-slate-500">Товари в наявності</span>
+              </div>
+
+              <!-- Gradient Spectrum Bar -->
+              <div class="relative pt-1 pb-1">
+                <div class="h-3 w-full rounded-full bg-gradient-to-r from-slate-800 via-indigo-950/60 to-purple-950/80 p-0.5 border border-slate-700/60 flex items-center justify-between overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-indigo-500/30 via-purple-500/40 to-amber-500/40 w-full rounded-full"></div>
+                </div>
+
+                <!-- Markers Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2.5 text-xs font-mono">
+                  <!-- Marker 1: Min -->
+                  <div class="flex flex-col">
+                    <span class="text-[10px] text-slate-500 font-sans">Мінімум:</span>
+                    <span class="text-slate-300 font-bold">{{ analyticsSummary.kpi.minPrice | number }} ₴</span>
+                  </div>
+                  <!-- Marker 2: Shelf Median P50 -->
+                  <div class="flex flex-col">
+                    <span class="text-[10px] text-indigo-400 font-sans flex items-center gap-1">
+                      <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                      <span>Полиця P50:</span>
+                    </span>
+                    <span class="text-indigo-300 font-extrabold">{{ analyticsSummary.kpi.medianPrice | number }} ₴</span>
+                  </div>
+                  <!-- Marker 3: Weighted Demand Median -->
+                  <div class="flex flex-col">
+                    <span class="text-[10px] text-purple-400 font-sans flex items-center gap-1">
+                      <span class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+                      <span>Зважений попит:</span>
+                    </span>
+                    <span class="text-purple-200 font-extrabold">{{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</span>
+                  </div>
+                  <!-- Marker 4: P95 Outlier boundary -->
+                  <div class="flex flex-col">
+                    <span class="text-[10px] text-slate-500 font-sans">P95 межа:</span>
+                    <span class="text-slate-300 font-bold">{{ analyticsSummary.kpi.p95Price | number }} ₴</span>
+                  </div>
                 </div>
               </div>
             </div>
 
             <!-- Dynamic Bins List (P95 Outlier-clipped intervals) -->
-            <div class="space-y-3.5">
-              <div *ngFor="let bin of analyticsSummary.priceDistribution" class="p-3.5 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2.5 hover:border-slate-700 transition-colors">
+            <div class="space-y-3">
+              <div *ngFor="let bin of analyticsSummary.priceDistribution" class="p-3.5 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2 hover:border-slate-700 transition-colors" [class.border-amber-500/40]="bin.isSweetSpot" [class.bg-amber-950/10]="bin.isSweetSpot">
                 <!-- Bin Header Info -->
                 <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div class="flex items-center gap-2">
@@ -1360,8 +1173,8 @@
                       <span>Віддача:</span>
                       <b class="text-amber-400">{{ bin.demandSupplyRatio }}</b>
                       <span class="border-b border-dotted border-slate-600">в/SKU</span>
-                      <!-- Mini Hover Tooltip -->
-                      <div class="absolute right-0 bottom-full mb-1.5 w-64 p-2.5 bg-[#0f172a] border border-amber-500/50 rounded-xl shadow-xl shadow-black text-[11px] text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/binratio:opacity-100 group-hover/binratio:pointer-events-auto transition-all duration-150 backdrop-blur-md">
+                      <!-- Mini Hover Tooltip (opens downwards) -->
+                      <div class="absolute right-0 top-full mt-1.5 w-64 p-2.5 bg-[#0f172a] border border-amber-500/50 rounded-xl shadow-xl shadow-black text-[11px] text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/binratio:opacity-100 group-hover/binratio:pointer-events-auto transition-all duration-150 backdrop-blur-md">
                         <div class="font-bold text-white mb-1 flex items-center justify-between">
                           <span>Віддача на 1 товар</span>
                           <span class="text-amber-400 font-mono">{{ bin.demandSupplyRatio }} в/SKU</span>
@@ -1374,7 +1187,7 @@
                   </div>
                 </div>
 
-                <!-- Dual Progress Bars (Clean Layout without duplicate text prefixes) -->
+                <!-- Dual Progress Bars -->
                 <div class="space-y-1.5 pt-0.5">
                   <!-- Supply Bar (Products) -->
                   <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
@@ -1388,6 +1201,32 @@
                 </div>
               </div>
             </div>
+
+            <!-- Strategic Actionable Takeaway Banner -->
+            <div class="p-3.5 rounded-xl bg-slate-950/90 border border-purple-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div class="flex items-start sm:items-center gap-2.5">
+                <div class="w-7 h-7 rounded-lg bg-purple-900/50 border border-purple-500/40 text-purple-300 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+                  <span class="material-icons text-sm">lightbulb</span>
+                </div>
+                <div class="text-slate-300 leading-relaxed">
+                  <span class="font-bold text-white uppercase tracking-wider text-[11px] mr-1.5">Стратегічний орієнтир:</span>
+                  <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct < -3">
+                    Попит зосереджений у доступнішому сегменті (зважена ціна <b>{{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</b> проти полиці <b>{{ analyticsSummary.kpi.avgPrice | number }} ₴</b>). Для швидкого старту встановлюйте ціну в коридорі <b>{{ analyticsSummary.kpi.weightedMedianPrice | number }} – {{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</b>.
+                  </span>
+                  <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct > 3">
+                    Покупці віддають перевагу якіснішим модифікаціям (попит тяжіє до <b>{{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</b>). Можна запускати дорожчі товари з підвищеною маржинальністю.
+                  </span>
+                  <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3">
+                    Ринковий баланс збалансований. Пропозиція полиці відповідає запитам покупців. Оптимальний ціновий якір входу — <b>{{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</b>.
+                  </span>
+                </div>
+              </div>
+              <div class="shrink-0 flex items-center gap-1.5 text-[11px] font-mono text-purple-300 bg-purple-950/60 px-3 py-1.5 rounded-lg border border-purple-800/50 self-start sm:self-auto">
+                <span class="material-icons text-xs text-purple-400">check_circle</span>
+                <span>Товари в наявності</span>
+              </div>
+            </div>
+
           </div>
 
           <!-- Right (4 cols): СТРУКТУРА ТА МОНОПОЛІЗАЦІЯ НІШІ -->
@@ -1413,7 +1252,7 @@
                     <span class="w-4 h-4 rounded-full bg-slate-900 text-slate-400 hover:text-white text-[10px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">
                       ?
                     </span>
-                    <div class="absolute left-0 bottom-full mb-2 w-64 p-3 bg-[#0f172a] border border-indigo-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/split:opacity-100 group-hover/split:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80">
+                    <div class="absolute left-0 top-full mt-2 w-64 p-3 bg-[#0f172a] border border-indigo-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/split:opacity-100 group-hover/split:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80 backdrop-blur-md">
                       <p class="font-bold text-white mb-1">Що таке 1P та 3P?</p>
                       <ul class="space-y-1 text-[11px] text-slate-300">
                         <li>• <b class="text-emerald-400">1P (First Party):</b> Товари, які Rozetka купує та продає безпосередньо зі своїх складів.</li>
@@ -1453,8 +1292,8 @@
                     <span class="w-4 h-4 rounded-full bg-slate-900 hover:bg-indigo-600 text-slate-400 hover:text-white text-[10px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">
                       ?
                     </span>
-                    <!-- Popover Tooltip -->
-                    <div class="absolute left-0 bottom-full mb-2 w-72 p-3.5 bg-[#0f172a] border border-indigo-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/hhi:opacity-100 group-hover/hhi:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80">
+                    <!-- Popover Tooltip (opens downwards) -->
+                    <div class="absolute left-0 top-full mt-2 w-72 p-3.5 bg-[#0f172a] border border-indigo-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/hhi:opacity-100 group-hover/hhi:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80 backdrop-blur-md">
                       <div class="font-bold text-white border-b border-slate-800 pb-1.5 mb-2 flex items-center gap-1.5">
                         <span class="material-icons text-sm text-indigo-400">functions</span>
                         <span>Що таке індекс HHI?</span>
@@ -1506,6 +1345,20 @@
                       [class.border-rose-700]="analyticsSummary.kpi.hhiLevel === 'HIGH'">
                   {{ analyticsSummary.kpi.hhiLevel === 'LOW' ? 'Висока конкуренція' : analyticsSummary.kpi.hhiLevel === 'MODERATE' ? 'Помірна концентрація' : 'Монополізація' }}
                 </span>
+              </div>
+
+              <!-- Visual 3-Zone Monopolization Meter Bar -->
+              <div class="space-y-1">
+                <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+                  <div class="h-full bg-emerald-500/80 w-[30%]" title="Вільна конкуренція (< 1500)"></div>
+                  <div class="h-full bg-amber-500/80 w-[20%]" title="Помірна концентрація (1500-2500)"></div>
+                  <div class="h-full bg-rose-500/80 w-[50%]" title="Монополія (> 2500)"></div>
+                </div>
+                <div class="flex justify-between text-[9px] text-slate-500 font-mono">
+                  <span class="text-emerald-400">0 (Вільна)</span>
+                  <span class="text-amber-400">1500</span>
+                  <span class="text-rose-400">2500+ (Монополія)</span>
+                </div>
               </div>
 
               <!-- Inline Formula badge -->
