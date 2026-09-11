@@ -1011,10 +1011,10 @@
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           
           <!-- Left (8 cols): РОЗПОДІЛ ЦІН ТА ПОПИТУ У НІШІ + SWEET SPOT -->
-          <div class="lg:col-span-8 p-6 premium-card flex flex-col justify-between space-y-5 relative">
+          <div class="lg:col-span-8 p-6 premium-card flex flex-col gap-4 relative">
             
             <!-- Header Section -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
               <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shadow-sm shrink-0">
                   <span class="material-icons text-xl">insights</span>
@@ -1108,11 +1108,11 @@
                 <!-- Legend -->
                 <div class="flex items-center gap-3 text-xs font-semibold bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-slate-800">
                   <div class="flex items-center gap-1.5">
-                    <span class="w-2.5 h-2.5 rounded-sm bg-indigo-500 shadow-sm"></span>
+                    <span class="w-2.5 h-2.5 rounded-sm bg-indigo-500/80 shadow-sm"></span>
                     <span class="text-slate-300 text-[11px]">Пропозиція</span>
                   </div>
                   <div class="flex items-center gap-1.5">
-                    <span class="w-2.5 h-2.5 rounded-sm bg-emerald-400 shadow-sm"></span>
+                    <span class="w-2.5 h-2.5 rounded-sm bg-emerald-400/90 shadow-sm"></span>
                     <span class="text-slate-300 text-[11px]">Попит</span>
                   </div>
                 </div>
@@ -1120,16 +1120,22 @@
             </div>
 
             <!-- Dynamic Bins List (P95 Outlier-clipped intervals) -->
-            <div class="space-y-3.5">
-              <div *ngFor="let bin of analyticsSummary.priceDistribution" class="p-3.5 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2 hover:border-slate-700 transition-colors" [class.border-amber-500/40]="bin.isSweetSpot" [class.bg-amber-950/10]="bin.isSweetSpot">
+            <div class="space-y-2.5 flex-1">
+              <div *ngFor="let bin of analyticsSummary.priceDistribution" 
+                   class="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2 hover:border-indigo-500/40 hover:bg-slate-900/60 transition-all duration-300" 
+                   [class.border-amber-500/40]="bin.isSweetSpot" 
+                   [class.bg-amber-950/20]="bin.isSweetSpot"
+                   [class.shadow-sm]="bin.isSweetSpot">
                 <!-- Bin Header Info -->
                 <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div class="flex items-center gap-2">
-                    <span class="font-mono font-extrabold text-white text-sm bg-slate-900 px-2.5 py-0.5 rounded-lg border border-slate-750">
+                    <span class="font-mono font-extrabold text-white text-xs bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-750">
                       {{ bin.rangeLabel }}
                     </span>
-                    <span *ngIf="bin.isSweetSpot" class="px-2.5 py-0.5 text-[11px] font-black bg-amber-500 text-slate-950 rounded-full shadow-lg shadow-amber-500/30 flex items-center gap-1">
-                      ★ Ціновий оптимум (Sweet Spot)
+                    <span *ngIf="bin.isSweetSpot" class="px-2.5 py-0.5 text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/40 rounded-lg flex items-center gap-1.5 shadow-sm">
+                      <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+                      <span class="material-icons text-xs text-amber-400">star</span>
+                      <span>Ціновий оптимум (Sweet Spot)</span>
                     </span>
                   </div>
 
@@ -1165,23 +1171,23 @@
                   </div>
                 </div>
 
-                <!-- Dual Progress Bars -->
+                <!-- Dual Progress Bars with dynamic shimmering movement -->
                 <div class="space-y-1.5 pt-0.5">
                   <!-- Supply Bar (Products) -->
-                  <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
-                    <div class="h-full bg-indigo-500 rounded-full transition-all duration-500 shadow-sm" [style.width.%]="bin.productsShare" [title]="'Пропозиція: ' + bin.productsShare + '% (' + bin.productsCount + ' тов.)'"></div>
+                  <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
+                    <div class="h-full bg-indigo-500/80 rounded-full transition-all duration-700 ease-out chart-bar-animated shadow-sm" [style.width.%]="bin.productsShare" [title]="'Пропозиція: ' + bin.productsShare + '% (' + bin.productsCount + ' тов.)'"></div>
                   </div>
 
                   <!-- Demand Bar (Reviews) -->
-                  <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
-                    <div class="h-full bg-emerald-400 rounded-full transition-all duration-500 shadow-sm" [style.width.%]="bin.reviewsShare" [title]="'Попит: ' + bin.reviewsShare + '% (' + bin.reviewsSum + ' відг.)'"></div>
+                  <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
+                    <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-700 ease-out shadow-sm" [class.sweet-spot-bar-animated]="bin.isSweetSpot" [class.chart-bar-animated]="!bin.isSweetSpot" [style.width.%]="bin.reviewsShare" [title]="'Попит: ' + bin.reviewsShare + '% (' + bin.reviewsSum + ' відг.)'"></div>
                   </div>
                 </div>
               </div>
             </div>
 
             <!-- Strategic Actionable Takeaway Banner -->
-            <div class="p-3.5 rounded-xl bg-slate-950/90 border border-purple-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div class="p-3.5 rounded-xl bg-slate-950/90 border border-purple-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs mt-1">
               <div class="flex items-start sm:items-center gap-2.5">
                 <div class="w-7 h-7 rounded-lg bg-purple-900/50 border border-purple-500/40 text-purple-300 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
                   <span class="material-icons text-sm">lightbulb</span>
@@ -1208,7 +1214,7 @@
           </div>
 
           <!-- Right (4 cols): СТРУКТУРА ТА ОРІЄНТИРИ НІШІ -->
-          <div class="lg:col-span-4 p-6 premium-card flex flex-col justify-between space-y-4 relative z-10">
+          <div class="lg:col-span-4 p-6 premium-card flex flex-col gap-3.5 relative z-10">
             <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
               <div class="flex items-center gap-2">
                 <span class="material-icons text-amber-400 text-lg">domain</span>
@@ -1220,7 +1226,7 @@
             </div>
 
             <!-- Card 1: Шкала цінових орієнтирів (Шкаловий графік) -->
-            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3 relative group/pricescale hover:z-40">
+            <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2.5 relative group/pricescale hover:z-40 transition-colors hover:border-slate-700">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
                   <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Цінові орієнтири</span>
@@ -1244,10 +1250,10 @@
                 </span>
               </div>
 
-              <!-- Visual Scale Meter Bar -->
+              <!-- Visual Scale Meter Bar with dynamic shimmer -->
               <div class="space-y-2 pt-0.5">
-                <div class="h-3 w-full rounded-full bg-slate-900 p-0.5 border border-slate-800 relative overflow-hidden flex">
-                  <div class="h-full bg-gradient-to-r from-indigo-500/60 via-purple-500/70 to-emerald-400/80 w-full rounded-full"></div>
+                <div class="h-2.5 w-full rounded-full bg-slate-900 p-0.5 border border-slate-800 relative overflow-hidden flex">
+                  <div class="h-full bg-gradient-to-r from-indigo-500/70 via-purple-500/70 to-emerald-500/70 w-full rounded-full chart-bar-animated"></div>
                 </div>
 
                 <!-- 4 Key Anchor Markers -->
@@ -1273,7 +1279,7 @@
             </div>
 
             <!-- Card 2: Rozetka (1P) vs 3P Селери (Шкаловий графік часток) -->
-            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3 relative group/split hover:z-40">
+            <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2.5 relative group/split hover:z-40 transition-colors hover:border-slate-700">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
                   <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Rozetka (1P) vs 3P Селери</span>
@@ -1296,15 +1302,15 @@
                 <span class="material-icons text-indigo-400 text-sm">store</span>
               </div>
               
-              <!-- Split Scale Bar -->
+              <!-- Split Scale Bar with smooth movement -->
               <div class="space-y-1.5">
                 <div class="flex justify-between text-xs font-mono">
                   <span class="text-emerald-400 font-bold">1P: {{ analyticsSummary.kpi.vendorSplit.rozetkaShare }}% ({{ analyticsSummary.kpi.vendorSplit.rozetkaCount }} тов.)</span>
                   <span class="text-indigo-300 font-bold">3P: {{ analyticsSummary.kpi.vendorSplit.thirdPartyShare }}% ({{ analyticsSummary.kpi.vendorSplit.thirdPartyCount }} тов.)</span>
                 </div>
-                <div class="w-full h-3 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
-                  <div class="bg-emerald-500 h-full transition-all duration-500" [style.width.%]="analyticsSummary.kpi.vendorSplit.rozetkaShare" title="Rozetka (1P)"></div>
-                  <div class="bg-indigo-500 h-full transition-all duration-500" [style.width.%]="analyticsSummary.kpi.vendorSplit.thirdPartyShare" title="Сторонні селери (3P)"></div>
+                <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+                  <div class="bg-emerald-500/90 h-full transition-all duration-700 ease-out chart-bar-animated" [style.width.%]="analyticsSummary.kpi.vendorSplit.rozetkaShare" title="Rozetka (1P)"></div>
+                  <div class="bg-indigo-500/90 h-full transition-all duration-700 ease-out chart-bar-animated" [style.width.%]="analyticsSummary.kpi.vendorSplit.thirdPartyShare" title="Сторонні селери (3P)"></div>
                 </div>
                 <div class="flex justify-between text-[9px] text-slate-500 font-mono">
                   <span>0%</span>
@@ -1318,7 +1324,7 @@
             </div>
 
             <!-- Card 3: HHI & Monopolization Scale -->
-            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3 relative group/hhi hover:z-40">
+            <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2.5 relative group/hhi hover:z-40 transition-colors hover:border-slate-700">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
                   <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Індекс HHI (Герфіндаля)</span>
@@ -1386,14 +1392,14 @@
               <!-- Visual 3-Zone Monopolization Scale with Active Needle / Pointer Pin -->
               <div class="space-y-1.5 pt-1">
                 <div class="relative w-full">
-                  <div class="w-full h-3 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+                  <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
                     <div class="h-full bg-emerald-500/80 w-1/3" title="Вільна конкуренція (< 1500)"></div>
                     <div class="h-full bg-amber-500/80 w-1/3" title="Помірна концентрація (1500-2500)"></div>
                     <div class="h-full bg-rose-500/80 w-1/3" title="Монополія (> 2500)"></div>
                   </div>
-                  <!-- Active Indicator Needle -->
+                  <!-- Active Indicator Needle with animated pulse -->
                   <div 
-                    class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-slate-950 shadow-lg shadow-black flex items-center justify-center transition-all duration-500"
+                    class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-slate-950 shadow-lg shadow-black flex items-center justify-center transition-all duration-700 ease-out gauge-pin-animated"
                     [style.left.%]="getHhiGaugePercent()"
                     [title]="'Поточний HHI: ' + analyticsSummary.kpi.hhi"
                   >
@@ -1420,7 +1426,7 @@
             </div>
 
             <!-- Card 4: Лідери ринку ніші (Топ-3 селери з графічними шкалами) -->
-            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2.5">
+            <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2 relative transition-colors hover:border-slate-700">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Лідери ринку (Топ-3)</span>
                 <span class="material-icons text-amber-400 text-sm">workspace_premium</span>
@@ -1428,7 +1434,7 @@
               <div class="space-y-2">
                 <div *ngFor="let s of analyticsSummary.sellersTable.slice(0, 3)" 
                      (click)="openSellerProductsModal(s.sellerName)"
-                     class="p-2.5 rounded-xl bg-slate-900/60 hover:bg-indigo-950/60 border border-slate-800 hover:border-indigo-500/40 text-xs cursor-pointer transition-all group space-y-1.5"
+                     class="p-2 rounded-xl bg-slate-900/60 hover:bg-indigo-950/60 border border-slate-800 hover:border-indigo-500/40 text-xs cursor-pointer transition-all group space-y-1.5"
                      [title]="'Переглянути товари продавця ' + s.sellerName">
                   <div class="flex items-center justify-between gap-2 min-w-0">
                     <div class="flex items-center gap-2 min-w-0">
@@ -1442,9 +1448,9 @@
                       <span class="font-bold text-indigo-300 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800 group-hover:border-indigo-500/40">{{ s.marketShare }}%</span>
                     </div>
                   </div>
-                  <!-- Scale Bar for Seller Share -->
+                  <!-- Scale Bar for Seller Share with live animation -->
                   <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
-                    <div class="h-full rounded-full transition-all duration-500" [style.width.%]="s.marketShare" [style.backgroundColor]="s.color"></div>
+                    <div class="h-full rounded-full transition-all duration-700 ease-out chart-bar-animated" [style.width.%]="s.marketShare" [style.backgroundColor]="s.color"></div>
                   </div>
                 </div>
               </div>
@@ -1588,7 +1594,7 @@
                     <b class="text-indigo-300">{{ seg.reviewsShare }}%</b>
                   </div>
                   <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-                    <div class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all" [style.width.%]="seg.reviewsShare"></div>
+                    <div class="h-full bg-gradient-to-r from-indigo-500/80 to-purple-500/80 rounded-full transition-all duration-700 ease-out chart-bar-animated" [style.width.%]="seg.reviewsShare"></div>
                   </div>
                 </div>
 
@@ -1608,7 +1614,7 @@
           <!-- Bottom 3 Auxiliary Metric Cards: Volatility, Promo Depth, Pareto -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
             <!-- 1. Розрахунок волатильності та розмаху цін -->
-            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3 transition-colors hover:border-slate-700">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
                   <span class="material-icons text-indigo-400 text-sm">ssid_chart</span>
@@ -1652,7 +1658,7 @@
             </div>
 
             <!-- 2. Промо-активність та глибина знижок -->
-            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3 transition-colors hover:border-slate-700">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
                   <span class="material-icons text-rose-400 text-sm">local_offer</span>
@@ -1678,10 +1684,10 @@
                 </div>
               </div>
 
-              <!-- Discount Intensity Bar -->
+              <!-- Discount Intensity Bar with live animation -->
               <div class="space-y-1 pt-0.5">
                 <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-                  <div class="h-full bg-gradient-to-r from-rose-500 to-amber-500 rounded-full transition-all" [style.width.%]="analyticsSummary.kpi.discounts.discountedRate"></div>
+                  <div class="h-full bg-gradient-to-r from-rose-500/90 to-amber-500/90 rounded-full transition-all duration-700 ease-out chart-bar-animated" [style.width.%]="analyticsSummary.kpi.discounts.discountedRate"></div>
                 </div>
                 <div class="flex justify-between text-[9px] text-slate-500 font-mono">
                   <span>0% промо</span>
@@ -1692,7 +1698,7 @@
             </div>
 
             <!-- 3. Концентрація попиту Парето (80/20) -->
-            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3 transition-colors hover:border-slate-700">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
                   <span class="material-icons text-teal-400 text-sm">hub</span>
@@ -1714,11 +1720,11 @@
                 </div>
               </div>
 
-              <!-- Pareto Visual Bar -->
+              <!-- Pareto Visual Bar with live animation -->
               <div class="space-y-1 pt-0.5">
                 <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
-                  <div class="h-full bg-teal-500 transition-all" [style.width.%]="analyticsSummary.kpi.pareto.top20SkusReviewsShare" [title]="'Топ-20% товарів (' + analyticsSummary.kpi.pareto.top20SkusReviewsShare + '% відгуків)'"></div>
-                  <div class="h-full bg-slate-700 transition-all" [style.width.%]="100 - analyticsSummary.kpi.pareto.top20SkusReviewsShare" title="Решта 80% товарів"></div>
+                  <div class="h-full bg-teal-500/90 transition-all duration-700 ease-out chart-bar-animated" [style.width.%]="analyticsSummary.kpi.pareto.top20SkusReviewsShare" [title]="'Топ-20% товарів (' + analyticsSummary.kpi.pareto.top20SkusReviewsShare + '% відгуків)'"></div>
+                  <div class="h-full bg-slate-700 transition-all duration-700 ease-out" [style.width.%]="100 - analyticsSummary.kpi.pareto.top20SkusReviewsShare" title="Решта 80% товарів"></div>
                 </div>
                 <div class="flex justify-between text-[9px] text-slate-500 font-mono">
                   <span class="text-teal-400">Топ-20% SKU ({{ analyticsSummary.kpi.pareto.top20SkusReviewsShare }}%)</span>
