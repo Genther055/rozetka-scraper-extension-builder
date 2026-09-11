@@ -242,6 +242,29 @@ export class DashboardComponent implements OnInit {
     if (!p || !p.price || !p.oldPrice || p.oldPrice <= p.price) return 0;
     return Math.round(((p.oldPrice - p.price) / p.oldPrice) * 100);
   }
+
+  getHhiGaugePercent(): number {
+    if (!this.analyticsSummary || !this.analyticsSummary.kpi) return 0;
+    const hhi = this.analyticsSummary.kpi.hhi || 0;
+    let pct = 0;
+    if (hhi <= 1500) {
+      pct = (hhi / 1500) * 33.33;
+    } else if (hhi <= 2500) {
+      pct = 33.33 + ((hhi - 1500) / 1000) * 33.33;
+    } else {
+      pct = 66.66 + Math.min(33.33, ((hhi - 2500) / 5000) * 33.33);
+    }
+    return Math.max(3, Math.min(97, Math.round(pct * 10) / 10));
+  }
+
+  getPricePositionPercent(price: number): number {
+    if (!this.analyticsSummary || !this.analyticsSummary.kpi) return 50;
+    const min = this.analyticsSummary.kpi.minPrice || 0;
+    const p95 = this.analyticsSummary.kpi.p95Price || this.analyticsSummary.kpi.maxPrice || 1;
+    if (p95 <= min) return 50;
+    const pct = ((price - min) / (p95 - min)) * 100;
+    return Math.max(2, Math.min(98, Math.round(pct * 10) / 10));
+  }
   
   // Navigation & Tabs
   activeTab: 'overview' | 'explorer' | 'demand' | 'details' | 'history' | 'settings' = 'overview';
