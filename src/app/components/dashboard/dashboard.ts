@@ -714,6 +714,303 @@ export class DashboardComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
+  // --- Vector Fluctuation & Trendline Chart Engine (Keepa / Bloomberg / Helium 10 Style) ---
+  overviewChartMetric: 'price_reviews' | 'rank_price' | 'rank_reviews' | 'discounts' = 'price_reviews';
+  hoveredOverviewPoint: {
+    x: number;
+    y: number;
+    price: number;
+    reviews: number;
+    name: string;
+    seller?: string;
+    discount?: number;
+    rating?: number;
+    rank?: number;
+    xVal: number;
+    yVal: number;
+  } | null = null;
+  hoveredChartClientPos: { x: number; y: number } = { x: 0, y: 0 };
+
+  setOverviewChartMetric(m: 'price_reviews' | 'rank_price' | 'rank_reviews' | 'discounts'): void {
+    this.overviewChartMetric = m;
+    this.hoveredOverviewPoint = null;
+    this.cdr.markForCheck();
+  }
+
+  getOverviewChartProcessedPoints(): Array<{
+    x: number;
+    y: number;
+    price: number;
+    reviews: number;
+    name: string;
+    seller?: string;
+    discount?: number;
+    rating?: number;
+    rank?: number;
+    xVal: number;
+    yVal: number;
+  }> {
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    if (!list || list.length === 0) return [];
+
+    const SVG_W = 960;
+    const SVG_H = 220;
+    const PAD_L = 60;
+    const PAD_R = 25;
+    const PAD_T = 20;
+    const PAD_B = 30;
+    const PLOT_W = SVG_W - PAD_L - PAD_R;
+    const PLOT_H = SVG_H - PAD_T - PAD_B;
+
+    let sorted: Array<{ p: Product; rank: number }> = list.map((p, idx) => ({ p, rank: idx + 1 }));
+
+    if (this.overviewChartMetric === 'price_reviews' || this.overviewChartMetric === 'discounts') {
+      sorted.sort((a, b) => (a.p.price || 0) - (b.p.price || 0));
+    }
+
+    let rawPoints: Array<{
+      p: Product;
+      rank: number;
+      xVal: number;
+      yVal: number;
+    }> = [];
+
+    if (this.overviewChartMetric === 'price_reviews') {
+      rawPoints = sorted.map(item => ({
+        p: item.p,
+        rank: item.rank,
+        xVal: item.p.price || 0,
+        yVal: item.p.reviews || 0
+      }));
+    } else if (this.overviewChartMetric === 'rank_price') {
+      rawPoints = sorted.map((item, idx) => ({
+        p: item.p,
+        rank: idx + 1,
+        xVal: idx + 1,
+        yVal: item.p.price || 0
+      }));
+    } else if (this.overviewChartMetric === 'rank_reviews') {
+      rawPoints = sorted.map((item, idx) => ({
+        p: item.p,
+        rank: idx + 1,
+        xVal: idx + 1,
+        yVal: item.p.reviews || 0
+      }));
+    } else {
+      rawPoints = sorted.map((item, idx) => ({
+        p: item.p,
+        rank: idx + 1,
+        xVal: item.p.price || 0,
+        yVal: this.getDiscountPercent(item.p)
+      }));
+    }
+
+    if (rawPoints.length === 0) return [];
+
+    const minX = Math.min(...rawPoints.map(pt => pt.xVal));
+    const maxX = Math.max(...rawPoints.map(pt => pt.xVal)) || 1;
+    const minY = 0;
+    const maxY = Math.max(1, ...rawPoints.map(pt => pt.yVal));
+
+    return rawPoints.map(pt => {
+      const normX = maxX === minX ? 0.5 : (pt.xVal - minX) / (maxX - minX);
+      const normY = maxY === minY ? 0 : (pt.yVal - minY) / (maxY - minY);
+      
+      const x = PAD_L + normX * PLOT_W;
+      const y = PAD_T + (1 - normY) * PLOT_H;
+
+      return {
+        x: Math.round(x * 10) / 10,
+        y: Math.round(y * 10) / 10,
+        price: pt.p.price || 0,
+        reviews: pt.p.reviews || 0,
+        name: pt.p.name || 'Товар',
+        seller: pt.p.seller || 'Marketplace',
+        discount: this.getDiscountPercent(pt.p),
+        rating: pt.p.rating || 0,
+        rank: pt.rank,
+        xVal: pt.xVal,
+        yVal: pt.yVal
+      };
+    });
+  }
+
+  getOverviewChartPath(): string {
+    const pts = this.getOverviewChartProcessedPoints();
+    if (pts.length === 0) return '';
+    if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+
+    let path = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 1; i < pts.length; i++) {
+      path += ` L ${pts[i].x} ${pts[i].y}`;
+    }
+    return path;
+  }
+
+  getOverviewChartAreaPath(): string {
+    const pts = this.getOverviewChartProcessedPoints();
+    if (pts.length === 0) return '';
+    const bottomY = 220 - 30;
+    const firstX = pts[0].x;
+    const lastX = pts[pts.length - 1].x;
+
+    let path = `M ${firstX} ${bottomY} L ${pts[0].x} ${pts[0].y}`;
+    for (let i = 1; i < pts.length; i++) {
+      path += ` L ${pts[i].x} ${pts[i].y}`;
+    }
+    path += ` L ${lastX} ${bottomY} Z`;
+    return path;
+  }
+
+  getOverviewChartYTicks(): Array<{ y: number; label: string; rawVal: number }> {
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    if (!list || list.length === 0) return [];
+
+    let maxY = 1;
+    if (this.overviewChartMetric === 'price_reviews' || this.overviewChartMetric === 'rank_reviews') {
+      maxY = Math.max(1, ...list.map(p => p.reviews || 0));
+    } else if (this.overviewChartMetric === 'rank_price') {
+      maxY = Math.max(1, ...list.map(p => p.price || 0));
+    } else {
+      maxY = Math.max(10, ...list.map(p => this.getDiscountPercent(p)));
+    }
+
+    const SVG_H = 220;
+    const PAD_T = 20;
+    const PAD_B = 30;
+    const PLOT_H = SVG_H - PAD_T - PAD_B;
+
+    const ticks = [1, 0.75, 0.5, 0.25, 0];
+    return ticks.map(t => {
+      const val = Math.round(maxY * t);
+      const y = PAD_T + (1 - t) * PLOT_H;
+      let label = val.toLocaleString();
+      if (this.overviewChartMetric === 'rank_price') label += ' ₴';
+      else if (this.overviewChartMetric === 'discounts') label += '%';
+      else label += ' в.';
+      return { y: Math.round(y), label, rawVal: val };
+    });
+  }
+
+  getOverviewChartXTicks(): Array<{ x: number; label: string }> {
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    if (!list || list.length === 0) return [];
+
+    const SVG_W = 960;
+    const PAD_L = 60;
+    const PAD_R = 25;
+    const PLOT_W = SVG_W - PAD_L - PAD_R;
+
+    if (this.overviewChartMetric === 'price_reviews' || this.overviewChartMetric === 'discounts') {
+      const minP = Math.min(...list.map(p => p.price || 0));
+      const maxP = Math.max(...list.map(p => p.price || 0)) || 1;
+      const ratios = [0, 0.25, 0.5, 0.75, 1];
+      return ratios.map(r => {
+        const val = Math.round(minP + (maxP - minP) * r);
+        const x = PAD_L + r * PLOT_W;
+        return { x: Math.round(x), label: val.toLocaleString() + ' ₴' };
+      });
+    } else {
+      const count = list.length;
+      const ratios = [0, 0.25, 0.5, 0.75, 1];
+      return ratios.map(r => {
+        const val = Math.max(1, Math.round(count * r));
+        const x = PAD_L + r * PLOT_W;
+        return { x: Math.round(x), label: '#' + val };
+      });
+    }
+  }
+
+  onOverviewChartMouseMove(event: MouseEvent): void {
+    const target = event.currentTarget as HTMLElement;
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const svgWidth = rect.width;
+    const scale = 960 / svgWidth;
+    const svgMouseX = mouseX * scale;
+
+    const pts = this.getOverviewChartProcessedPoints();
+    if (pts.length === 0) return;
+
+    let closest = pts[0];
+    let minDiff = Math.abs(pts[0].x - svgMouseX);
+
+    for (let i = 1; i < pts.length; i++) {
+      const diff = Math.abs(pts[i].x - svgMouseX);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = pts[i];
+      }
+    }
+
+    this.hoveredOverviewPoint = closest;
+    this.hoveredChartClientPos = {
+      x: event.clientX,
+      y: event.clientY
+    };
+    this.cdr.markForCheck();
+  }
+
+  onOverviewChartMouseLeave(): void {
+    this.hoveredOverviewPoint = null;
+    this.cdr.markForCheck();
+  }
+
+  // --- History Tab Time-Series Chart Engine ---
+  getHistoryChartPoints(): Array<{ x: number; y: number; snapshot: ScrapingSnapshot; dateLabel: string; avgPrice: number; productsCount: number }> {
+    if (!this.snapshots || this.snapshots.length === 0) return [];
+    const sorted = [...this.snapshots].sort((a, b) => new Date(a.scrapedAt).getTime() - new Date(b.scrapedAt).getTime());
+
+    const SVG_W = 960;
+    const SVG_H = 200;
+    const PAD_L = 60;
+    const PAD_R = 30;
+    const PAD_T = 20;
+    const PAD_B = 30;
+    const PLOT_W = SVG_W - PAD_L - PAD_R;
+    const PLOT_H = SVG_H - PAD_T - PAD_B;
+
+    const maxPrice = Math.max(1, ...sorted.map(s => s.avgPrice || 0));
+    const minPrice = Math.min(...sorted.map(s => s.avgPrice || 0));
+
+    return sorted.map((s, idx) => {
+      const normX = sorted.length === 1 ? 0.5 : idx / (sorted.length - 1);
+      const normY = maxPrice === minPrice ? 0.5 : ((s.avgPrice || 0) - minPrice) / (maxPrice - minPrice || 1);
+      const x = PAD_L + normX * PLOT_W;
+      const y = PAD_T + (1 - normY) * PLOT_H;
+      const d = new Date(s.scrapedAt);
+      const dateLabel = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}`;
+      return {
+        x: Math.round(x),
+        y: Math.round(y),
+        snapshot: s,
+        dateLabel,
+        avgPrice: s.avgPrice || 0,
+        productsCount: s.itemCount || 0
+      };
+    });
+  }
+
+  getHistoryChartPath(): string {
+    const pts = this.getHistoryChartPoints();
+    if (pts.length === 0) return '';
+    if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+    let path = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 1; i < pts.length; i++) path += ` L ${pts[i].x} ${pts[i].y}`;
+    return path;
+  }
+
+  getHistoryChartAreaPath(): string {
+    const pts = this.getHistoryChartPoints();
+    if (pts.length === 0) return '';
+    const bottomY = 200 - 30;
+    let path = `M ${pts[0].x} ${bottomY} L ${pts[0].x} ${pts[0].y}`;
+    for (let i = 1; i < pts.length; i++) path += ` L ${pts[i].x} ${pts[i].y}`;
+    path += ` L ${pts[pts.length - 1].x} ${bottomY} Z`;
+    return path;
+  }
+
   getBadgeSpecs(product: any): { text: string; style: string }[] {
     if (!product) return [];
     const badges: { text: string; style: string }[] = [];

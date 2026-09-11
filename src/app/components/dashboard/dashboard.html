@@ -1830,6 +1830,224 @@
           </div>
         </div>
 
+        <!-- Interactive Vector Fluctuation & Trendline Chart (Графік коливань ринку та динаміки попиту) -->
+        <div *ngIf="products.length > 0" class="p-6 premium-card space-y-4 relative">
+          <!-- Chart Header & Mode Switcher -->
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-indigo-950/80 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shadow-sm shrink-0">
+                <span class="material-icons text-xl">show_chart</span>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider">
+                  Графік коливань ринку та трендів попиту
+                </h3>
+                <p class="text-xs text-slate-400">
+                  Векторний аналіз розподілу цін, кількості відгуків та коливань по каталогу лістингу
+                </p>
+              </div>
+            </div>
+
+            <!-- Metric Mode Switcher Tabs (Keepa / Bloomberg style) -->
+            <div class="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800 self-start lg:self-auto">
+              <button 
+                (click)="setOverviewChartMetric('price_reviews')"
+                [class.bg-indigo-600]="overviewChartMetric === 'price_reviews'"
+                [class.text-white]="overviewChartMetric === 'price_reviews'"
+                [class.text-slate-400]="overviewChartMetric !== 'price_reviews'"
+                class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer hover:text-white flex items-center gap-1.5"
+              >
+                <span class="material-icons text-xs">analytics</span>
+                <span>Ціна vs Попит</span>
+              </button>
+
+              <button 
+                (click)="setOverviewChartMetric('rank_price')"
+                [class.bg-indigo-600]="overviewChartMetric === 'rank_price'"
+                [class.text-white]="overviewChartMetric === 'rank_price'"
+                [class.text-slate-400]="overviewChartMetric !== 'rank_price'"
+                class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer hover:text-white flex items-center gap-1.5"
+              >
+                <span class="material-icons text-xs">payments</span>
+                <span>Ціна за позиціями</span>
+              </button>
+
+              <button 
+                (click)="setOverviewChartMetric('rank_reviews')"
+                [class.bg-indigo-600]="overviewChartMetric === 'rank_reviews'"
+                [class.text-white]="overviewChartMetric === 'rank_reviews'"
+                [class.text-slate-400]="overviewChartMetric !== 'rank_reviews'"
+                class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer hover:text-white flex items-center gap-1.5"
+              >
+                <span class="material-icons text-xs">forum</span>
+                <span>Попит за позиціями</span>
+              </button>
+
+              <button 
+                (click)="setOverviewChartMetric('discounts')"
+                [class.bg-indigo-600]="overviewChartMetric === 'discounts'"
+                [class.text-white]="overviewChartMetric === 'discounts'"
+                [class.text-slate-400]="overviewChartMetric !== 'discounts'"
+                class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer hover:text-white flex items-center gap-1.5"
+              >
+                <span class="material-icons text-xs">local_offer</span>
+                <span>Глибина знижок</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Interactive SVG Plot Canvas Container -->
+          <div class="relative bg-slate-950/80 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none">
+            <svg 
+              viewBox="0 0 960 220" 
+              class="w-full h-56 sm:h-64 cursor-crosshair overflow-visible"
+              (mousemove)="onOverviewChartMouseMove($event)"
+              (mouseleave)="onOverviewChartMouseLeave()"
+            >
+              <defs>
+                <linearGradient id="fluctuationAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.30"/>
+                  <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+                </linearGradient>
+                <linearGradient id="discountAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.30"/>
+                  <stop offset="100%" stop-color="#f43f5e" stop-opacity="0.0"/>
+                </linearGradient>
+                <linearGradient id="reviewsAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#10b981" stop-opacity="0.30"/>
+                  <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+                </linearGradient>
+              </defs>
+
+              <!-- Horizontal Gridlines & Y-Axis Labels -->
+              <g class="gridlines">
+                <g *ngFor="let tick of getOverviewChartYTicks()">
+                  <line 
+                    x1="60" 
+                    [attr.y1]="tick.y" 
+                    x2="935" 
+                    [attr.y2]="tick.y" 
+                    stroke="#1e293b" 
+                    stroke-width="1" 
+                    stroke-dasharray="3 3"
+                  />
+                  <text 
+                    x="50" 
+                    [attr.y]="tick.y + 4" 
+                    text-anchor="end" 
+                    fill="#64748b" 
+                    font-size="10" 
+                    font-family="monospace"
+                  >
+                    {{ tick.label }}
+                  </text>
+                </g>
+              </g>
+
+              <!-- X-Axis Baseline & Ticks -->
+              <line x1="60" y1="190" x2="935" y2="190" stroke="#334155" stroke-width="1"/>
+              <g class="x-labels">
+                <g *ngFor="let xtick of getOverviewChartXTicks()">
+                  <line 
+                    [attr.x1]="xtick.x" 
+                    y1="190" 
+                    [attr.x2]="xtick.x" 
+                    y2="195" 
+                    stroke="#475569" 
+                    stroke-width="1"
+                  />
+                  <text 
+                    [attr.x]="xtick.x" 
+                    y="210" 
+                    text-anchor="middle" 
+                    fill="#94a3b8" 
+                    font-size="10" 
+                    font-family="monospace"
+                  >
+                    {{ xtick.label }}
+                  </text>
+                </g>
+              </g>
+
+              <!-- Area Fill Under Curve -->
+              <path 
+                [attr.d]="getOverviewChartAreaPath()" 
+                [attr.fill]="overviewChartMetric === 'discounts' ? 'url(#discountAreaGrad)' : overviewChartMetric === 'rank_reviews' ? 'url(#reviewsAreaGrad)' : 'url(#fluctuationAreaGrad)'"
+              />
+
+              <!-- Smooth Polyline Trend Curve -->
+              <path 
+                [attr.d]="getOverviewChartPath()" 
+                fill="none" 
+                [attr.stroke]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8'" 
+                stroke-width="2" 
+                stroke-linejoin="round"
+                stroke-linecap="round"
+              />
+
+              <!-- Hover Vertical Guide Line & Crosshair Point -->
+              <g *ngIf="hoveredOverviewPoint">
+                <line 
+                  [attr.x1]="hoveredOverviewPoint.x" 
+                  y1="20" 
+                  [attr.x2]="hoveredOverviewPoint.x" 
+                  y2="190" 
+                  stroke="#818cf8" 
+                  stroke-width="1.5" 
+                  stroke-dasharray="2 2"
+                />
+                <circle 
+                  [attr.cx]="hoveredOverviewPoint.x" 
+                  [attr.cy]="hoveredOverviewPoint.y" 
+                  r="4.5" 
+                  [attr.fill]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8'" 
+                  stroke="#ffffff" 
+                  stroke-width="2"
+                />
+              </g>
+            </svg>
+
+            <!-- Floating Crosshair Info Tooltip on Hover -->
+            <div 
+              *ngIf="hoveredOverviewPoint" 
+              class="absolute z-30 p-3 bg-[#0f172a] border border-indigo-500/60 rounded-xl shadow-2xl text-xs text-white pointer-events-none transition-all duration-75 max-w-xs"
+              [style.left.px]="Math.min(700, Math.max(70, hoveredOverviewPoint.x - 120))"
+              [style.top.px]="Math.max(10, hoveredOverviewPoint.y - 80)"
+            >
+              <div class="font-bold text-white text-xs truncate max-w-[240px] mb-1">
+                {{ hoveredOverviewPoint.name }}
+              </div>
+              <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono text-slate-300">
+                <div>Ціна: <b class="text-white">{{ hoveredOverviewPoint.price | number }} ₴</b></div>
+                <div>Відгуки: <b class="text-emerald-400">{{ hoveredOverviewPoint.reviews }} в.</b></div>
+                <div>Продавець: <b class="text-indigo-300 truncate">{{ hoveredOverviewPoint.seller }}</b></div>
+                <div *ngIf="(hoveredOverviewPoint.discount || 0) > 0">Знижка: <b class="text-rose-400">-{{ hoveredOverviewPoint.discount }}%</b></div>
+                <div *ngIf="hoveredOverviewPoint.rank">Позиція: <b class="text-amber-400">#{{ hoveredOverviewPoint.rank }}</b></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Metric Badges Summary for Chart -->
+          <div *ngIf="analyticsSummary && analyticsSummary.kpi" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-xs font-mono">
+            <div class="p-2 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+              <span class="text-slate-400 font-sans text-[11px]">Точок на графіку:</span>
+              <b class="text-white">{{ filteredProducts.length || products.length }} SKU</b>
+            </div>
+            <div class="p-2 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+              <span class="text-slate-400 font-sans text-[11px]">Мінімальна ціна:</span>
+              <b class="text-slate-200">{{ analyticsSummary.kpi.minPrice | number }} ₴</b>
+            </div>
+            <div class="p-2 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+              <span class="text-slate-400 font-sans text-[11px]">Медіана полиці:</span>
+              <b class="text-indigo-300">{{ analyticsSummary.kpi.medianPrice | number }} ₴</b>
+            </div>
+            <div class="p-2 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+              <span class="text-slate-400 font-sans text-[11px]">Максимальна ціна:</span>
+              <b class="text-emerald-400">{{ analyticsSummary.kpi.maxPrice | number }} ₴</b>
+            </div>
+          </div>
+        </div>
+
         <!-- Spec & Variations Demand Breakdown (Розподіл попиту за характеристиками та конфігураціями) -->
         <div *ngIf="analyticsSummary.specAnalytics && analyticsSummary.specAnalytics.length > 0" class="p-6 premium-card space-y-5">
           <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
@@ -2925,6 +3143,79 @@
                 <span class="font-bold text-white bg-slate-900 px-2.5 py-0.5 rounded-full border border-slate-800">
                   {{ getFilteredSnapshots().length }}
                 </span>
+              </div>
+            </div>
+
+            <!-- Historical Time-Series Timeline Chart (Keepa/Trendline Chart) -->
+            <div *ngIf="snapshots.length > 1" class="p-5 premium-card space-y-3 relative">
+              <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                <div class="flex items-center gap-2.5">
+                  <span class="material-icons text-indigo-400 text-lg">timeline</span>
+                  <div>
+                    <h3 class="text-xs font-bold text-white uppercase tracking-wider">
+                      Часова динаміка зміни середніх цін у ніші
+                    </h3>
+                    <p class="text-[11px] text-slate-400">
+                      Хронологія коливань ринкової вартості за збереженими знімками збору
+                    </p>
+                  </div>
+                </div>
+
+                <div class="text-xs font-mono text-indigo-300 bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-500/30">
+                  {{ snapshots.length }} часових зрізів
+                </div>
+              </div>
+
+              <!-- SVG Timeline Plot -->
+              <div class="relative bg-slate-950/80 border border-slate-800/90 rounded-2xl p-3 select-none">
+                <svg viewBox="0 0 960 200" class="w-full h-44 sm:h-52 overflow-visible">
+                  <defs>
+                    <linearGradient id="historyTimelineGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.30"/>
+                      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+                    </linearGradient>
+                  </defs>
+
+                  <!-- Baseline & X-Axis -->
+                  <line x1="60" y1="170" x2="930" y2="170" stroke="#334155" stroke-width="1"/>
+
+                  <!-- X-Axis Labels (Dates) -->
+                  <g *ngFor="let pt of getHistoryChartPoints()">
+                    <line [attr.x1]="pt.x" y1="170" [attr.x2]="pt.x" y2="175" stroke="#475569" stroke-width="1"/>
+                    <text [attr.x]="pt.x" y="190" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="monospace">
+                      {{ pt.dateLabel }}
+                    </text>
+                  </g>
+
+                  <!-- Area Fill -->
+                  <path [attr.d]="getHistoryChartAreaPath()" fill="url(#historyTimelineGrad)" />
+
+                  <!-- Trend Line -->
+                  <path [attr.d]="getHistoryChartPath()" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+                  <!-- Data Point Circles with labels -->
+                  <g *ngFor="let pt of getHistoryChartPoints()">
+                    <circle 
+                      [attr.cx]="pt.x" 
+                      [attr.cy]="pt.y" 
+                      r="4" 
+                      fill="#38bdf8" 
+                      stroke="#0f172a" 
+                      stroke-width="2"
+                    />
+                    <text 
+                      [attr.x]="pt.x" 
+                      [attr.y]="pt.y - 8" 
+                      text-anchor="middle" 
+                      fill="#ffffff" 
+                      font-size="9" 
+                      font-family="monospace" 
+                      font-weight="bold"
+                    >
+                      {{ pt.avgPrice | number }} ₴
+                    </text>
+                  </g>
+                </svg>
               </div>
             </div>
 
