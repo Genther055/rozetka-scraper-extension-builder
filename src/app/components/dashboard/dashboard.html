@@ -573,6 +573,11 @@
           <div>
             <p class="text-base sm:text-lg font-extrabold text-emerald-400 font-mono leading-tight">Сер: {{ analyticsSummary.kpi.avgPrice | number }} ₴</p>
             <p class="text-[11px] text-slate-300 font-mono font-medium truncate mt-0.5">Медіана (P50): {{ analyticsSummary.kpi.medianPrice | number }} ₴</p>
+            <div class="flex items-center gap-1.5 mt-1 text-[10px] font-mono">
+              <span class="px-1.5 py-0.2 rounded bg-slate-900 border border-slate-800 text-emerald-400 font-semibold" [title]="'Коефіцієнт варіації цін (волатильність)'">
+                Волатильність: ±{{ analyticsSummary.kpi.volatility.cv }}%
+              </span>
+            </div>
           </div>
 
           <!-- Hover Popover: Графік співвідношення цін та детальна статистика -->
@@ -623,12 +628,20 @@
                 <b class="text-emerald-400">{{ analyticsSummary.kpi.avgPrice | number }} ₴</b>
               </div>
               <div class="flex justify-between">
-                <span class="text-slate-400">95-й перцентиль:</span>
-                <b class="text-amber-400">{{ analyticsSummary.kpi.p95Price | number }} ₴</b>
+                <span class="text-slate-400">Волатильність (CV):</span>
+                <b class="text-emerald-400">±{{ analyticsSummary.kpi.volatility.cv }}%</b>
               </div>
               <div class="flex justify-between">
-                <span class="text-slate-400">Діапазон:</span>
-                <b class="text-slate-200">{{ analyticsSummary.kpi.minPrice | number }} - {{ analyticsSummary.kpi.maxPrice | number }} ₴</b>
+                <span class="text-slate-400">Розмах (IQR):</span>
+                <b class="text-indigo-300">{{ analyticsSummary.kpi.volatility.iqr | number }} ₴</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Відхилення (&sigma;):</span>
+                <b class="text-amber-400">±{{ analyticsSummary.kpi.volatility.stdDev | number }} ₴</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">95-й перцентиль:</span>
+                <b class="text-slate-200">{{ analyticsSummary.kpi.p95Price | number }} ₴</b>
               </div>
             </div>
 
@@ -743,6 +756,11 @@
           <div>
             <p class="text-xl sm:text-2xl font-extrabold text-teal-300 font-mono tracking-tight">{{ analyticsSummary.kpi.activeSkusPercentage }}%</p>
             <p class="text-[11px] text-teal-400/90 font-mono font-medium truncate mt-0.5">{{ analyticsSummary.kpi.activeSkusCount }} шт з відг. · {{ analyticsSummary.kpi.inStockPercentage }}% наявні</p>
+            <div class="flex items-center gap-1.5 mt-1 text-[10px] font-mono">
+              <span class="px-1.5 py-0.2 rounded bg-teal-950/80 border border-teal-800/60 text-teal-300 font-semibold" [title]="'Концентрація попиту за принципом Парето'">
+                Парето: 20% SKU = {{ analyticsSummary.kpi.pareto.top20SkusReviewsShare }}% попиту
+              </span>
+            </div>
           </div>
 
           <!-- Hover Popover: Обширні дані життєздатності ніші -->
@@ -782,6 +800,14 @@
               <div class="flex justify-between">
                 <span class="text-slate-400">Товарів із реальними замовленнями:</span>
                 <b class="text-teal-300">{{ analyticsSummary.kpi.activeSkusCount }} шт ({{ analyticsSummary.kpi.activeSkusPercentage }}%)</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Парето (Топ-20% SKU):</span>
+                <b class="text-teal-300">{{ analyticsSummary.kpi.pareto.top20SkusReviewsShare }}% попиту</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Товари зі знижкою:</span>
+                <b class="text-rose-400">{{ analyticsSummary.kpi.discounts.discountedRate }}% (сер. -{{ analyticsSummary.kpi.discounts.avgDiscountPct }}%)</b>
               </div>
               <div class="flex justify-between">
                 <span class="text-slate-400">Наявність активних товарів:</span>
@@ -1426,6 +1452,285 @@
 
           </div>
 
+        </div>
+
+        <!-- Market Fluctuation & Position Dynamics Module (Аналітика коливань ринку та позиційна динаміка) -->
+        <div *ngIf="analyticsSummary.positionFluctuations && analyticsSummary.positionFluctuations.length > 0" class="p-6 premium-card space-y-6">
+          <!-- Section Header -->
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-950/80 to-purple-950/80 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shadow-sm shrink-0">
+                <span class="material-icons text-xl">waterfall_chart</span>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-bold text-white uppercase tracking-wider">
+                    Аналітика коливань цін та позиційної динаміки
+                  </h3>
+                  
+                  <!-- Info Popover -->
+                  <div class="relative inline-block group/fluchlp">
+                    <span class="w-4 h-4 rounded-full bg-slate-900 hover:bg-indigo-600 text-slate-400 hover:text-white text-[10px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">
+                      ?
+                    </span>
+                    <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-indigo-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/fluchlp:opacity-100 group-hover/fluchlp:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80 backdrop-blur-md">
+                      <div class="font-bold text-white border-b border-slate-800 pb-1.5 mb-2 flex items-center gap-1.5">
+                        <span class="material-icons text-sm text-indigo-400">show_chart</span>
+                        <span>Позиційний градієнт та волатильність</span>
+                      </div>
+                      <p class="text-[11px] text-slate-300 leading-relaxed mb-2">
+                        Показує, як змінюються ціни, попит та активність знижок у міру переходу від перших позицій пошукової видачі Rozetka до кінця каталогу (5 сегментів по 20% лістингу).
+                      </p>
+                      <div class="space-y-1.5 text-[10px] pt-1">
+                        <div class="flex items-center gap-1.5 text-indigo-300">
+                          <span class="w-2 h-2 rounded-full bg-indigo-400 shrink-0"></span>
+                          <span><b>±Δ% відхилення:</b> Різниця між середньою ціною сегмента та загальноринковою середньою.</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-emerald-400">
+                          <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                          <span><b>Частка відгуків:</b> Концентрація продажів на різних глибинах видачі.</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-rose-400">
+                          <span class="w-2 h-2 rounded-full bg-rose-400 shrink-0"></span>
+                          <span><b>Промо-тиск:</b> Відсоток товарів зі знижками на кожному поверсі видачі.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p class="text-xs text-slate-400">Розрахунок відхилень цін (±Δ%), концентрації замовлень та волатильності лістингу</p>
+              </div>
+            </div>
+
+            <!-- Fluctuation Summary Pills -->
+            <div class="flex flex-wrap items-center gap-2 font-mono text-xs">
+              <div class="px-3 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 text-slate-300 flex items-center gap-1.5 shadow-sm">
+                <span class="text-slate-500 font-sans text-[11px]">Волатильність:</span>
+                <b class="text-indigo-300">CV ±{{ analyticsSummary.kpi.volatility.cv }}%</b>
+              </div>
+              <div class="px-3 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 text-slate-300 flex items-center gap-1.5 shadow-sm">
+                <span class="text-slate-500 font-sans text-[11px]">Розмах IQR:</span>
+                <b class="text-emerald-400">{{ analyticsSummary.kpi.volatility.iqr | number }} ₴</b>
+              </div>
+              <div class="px-3 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 text-slate-300 flex items-center gap-1.5 shadow-sm">
+                <span class="text-slate-500 font-sans text-[11px]">Акційні:</span>
+                <b class="text-rose-400">{{ analyticsSummary.kpi.discounts.discountedRate }}% (сер. -{{ analyticsSummary.kpi.discounts.avgDiscountPct }}%)</b>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5 Position Quintile Gradient Cards (Waterfall / Grid) -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Градієнт цін за глибиною пошукової видачі</span>
+              <span class="text-[11px] font-mono text-slate-400">Базова середня лістингу: <b class="text-white">{{ analyticsSummary.kpi.avgPrice | number }} ₴</b></span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+              <div 
+                *ngFor="let seg of analyticsSummary.positionFluctuations; let i = index"
+                class="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/90 hover:border-indigo-500/50 transition-all space-y-3 relative overflow-hidden shadow-md group flex flex-col justify-between"
+              >
+                <!-- Top Header: Rank & Delta % -->
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between gap-1.5">
+                    <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md font-mono"
+                          [class.bg-indigo-950]="i === 0"
+                          [class.text-indigo-300]="i === 0"
+                          [class.border]="i === 0"
+                          [class.border-indigo-800/60]="i === 0"
+                          [class.bg-slate-900]="i > 0"
+                          [class.text-slate-400]="i > 0">
+                      {{ seg.rankRange }}
+                    </span>
+
+                    <!-- Fluctuation Delta Badge -->
+                    <span 
+                      class="px-2 py-0.5 text-[11px] font-mono font-black rounded-lg border flex items-center gap-0.5"
+                      [class.bg-amber-950/60]="seg.deltaPctFromAvg > 3"
+                      [class.text-amber-300]="seg.deltaPctFromAvg > 3"
+                      [class.border-amber-800/50]="seg.deltaPctFromAvg > 3"
+                      [class.bg-emerald-950/60]="seg.deltaPctFromAvg < -3"
+                      [class.text-emerald-300]="seg.deltaPctFromAvg < -3"
+                      [class.border-emerald-800/50]="seg.deltaPctFromAvg < -3"
+                      [class.bg-slate-900]="seg.deltaPctFromAvg >= -3 && seg.deltaPctFromAvg <= 3"
+                      [class.text-slate-300]="seg.deltaPctFromAvg >= -3 && seg.deltaPctFromAvg <= 3"
+                      [class.border-slate-750]="seg.deltaPctFromAvg >= -3 && seg.deltaPctFromAvg <= 3"
+                    >
+                      <span class="material-icons text-xs">
+                        {{ seg.deltaPctFromAvg > 3 ? 'arrow_upward' : seg.deltaPctFromAvg < -3 ? 'arrow_downward' : 'remove' }}
+                      </span>
+                      <span>{{ seg.deltaPctFromAvg > 0 ? '+' : '' }}{{ seg.deltaPctFromAvg }}%</span>
+                    </span>
+                  </div>
+
+                  <h4 class="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors truncate">
+                    {{ seg.label }}
+                  </h4>
+                </div>
+
+                <!-- Price Numbers -->
+                <div class="space-y-1 p-2.5 rounded-xl bg-slate-900/70 border border-slate-800/80 font-mono">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-400 text-[11px] font-sans">Сер. ціна:</span>
+                    <b class="text-emerald-400 font-extrabold">{{ seg.avgPrice | number }} ₴</b>
+                  </div>
+                  <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-slate-500 font-sans">Медіана:</span>
+                    <span class="text-slate-300">{{ seg.medianPrice | number }} ₴</span>
+                  </div>
+                </div>
+
+                <!-- Progress Scale Bar (Comparing segment avg to overall) -->
+                <div class="space-y-1">
+                  <div class="flex justify-between text-[10px] text-slate-400 font-mono">
+                    <span>Попит (відгуки):</span>
+                    <b class="text-indigo-300">{{ seg.reviewsShare }}%</b>
+                  </div>
+                  <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                    <div class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all" [style.width.%]="seg.reviewsShare"></div>
+                  </div>
+                </div>
+
+                <!-- Footer Mini Tags (In-Stock & Promo) -->
+                <div class="pt-2 border-t border-slate-900 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                  <span [title]="'Частка товарів у наявності'">
+                    <b class="text-slate-200">{{ seg.inStockRate }}%</b> наявні
+                  </span>
+                  <span [title]="'Частка товарів зі знижкою'" [class.text-rose-400]="seg.discountedRate > 0">
+                    <b [class.text-rose-300]="seg.discountedRate > 0">{{ seg.discountedRate }}%</b> промо
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom 3 Auxiliary Metric Cards: Volatility, Promo Depth, Pareto -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            <!-- 1. Розрахунок волатильності та розмаху цін -->
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                  <span class="material-icons text-indigo-400 text-sm">ssid_chart</span>
+                  <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Волатильність цін (CV)</span>
+                </div>
+                <span class="text-xs font-mono font-black px-2 py-0.5 rounded-lg"
+                      [class.bg-emerald-950]="analyticsSummary.kpi.volatility.cv < 25"
+                      [class.text-emerald-300]="analyticsSummary.kpi.volatility.cv < 25"
+                      [class.border]="analyticsSummary.kpi.volatility.cv < 25"
+                      [class.border-emerald-800/60]="analyticsSummary.kpi.volatility.cv < 25"
+                      [class.bg-amber-950]="analyticsSummary.kpi.volatility.cv >= 25 && analyticsSummary.kpi.volatility.cv <= 50"
+                      [class.text-amber-300]="analyticsSummary.kpi.volatility.cv >= 25 && analyticsSummary.kpi.volatility.cv <= 50"
+                      [class.border]="analyticsSummary.kpi.volatility.cv >= 25 && analyticsSummary.kpi.volatility.cv <= 50"
+                      [class.border-amber-800/60]="analyticsSummary.kpi.volatility.cv >= 25 && analyticsSummary.kpi.volatility.cv <= 50"
+                      [class.bg-rose-950]="analyticsSummary.kpi.volatility.cv > 50"
+                      [class.text-rose-300]="analyticsSummary.kpi.volatility.cv > 50"
+                      [class.border]="analyticsSummary.kpi.volatility.cv > 50"
+                      [class.border-rose-800/60]="analyticsSummary.kpi.volatility.cv > 50">
+                  {{ analyticsSummary.kpi.volatility.cv < 25 ? 'Низька' : analyticsSummary.kpi.volatility.cv <= 50 ? 'Помірна' : 'Висока' }}
+                </span>
+              </div>
+
+              <div class="space-y-1.5 font-mono text-xs">
+                <div class="flex justify-between items-center p-2 rounded-xl bg-slate-900/60 border border-slate-800/60">
+                  <span class="text-slate-400 font-sans text-[11px]">Коефіцієнт варіації:</span>
+                  <b class="text-indigo-300">±{{ analyticsSummary.kpi.volatility.cv }}%</b>
+                </div>
+                <div class="flex justify-between items-center p-2 rounded-xl bg-slate-900/60 border border-slate-800/60">
+                  <span class="text-slate-400 font-sans text-[11px]">Стандартне відхилення (&sigma;):</span>
+                  <b class="text-white">±{{ analyticsSummary.kpi.volatility.stdDev | number }} ₴</b>
+                </div>
+                <div class="flex justify-between items-center p-2 rounded-xl bg-slate-900/60 border border-slate-800/60">
+                  <span class="text-slate-400 font-sans text-[11px]">Міжквартильне ядро (IQR):</span>
+                  <b class="text-emerald-400">{{ analyticsSummary.kpi.volatility.p25Price | number }} – {{ analyticsSummary.kpi.volatility.p75Price | number }} ₴</b>
+                </div>
+              </div>
+
+              <p class="text-[11px] text-slate-400 leading-relaxed">
+                {{ analyticsSummary.kpi.volatility.cv < 25 ? 'Ціни в категорії скупчені навколо одного орієнтиру — легко формувати стратегію ціноутворення.' : analyticsSummary.kpi.volatility.cv <= 50 ? 'Помірний розкид цін: у ніші виділяються базові та просунуті модифікації.' : 'Широкий розкид вартості: велика диференціація товарів від ультрабюджетних до преміум.' }}
+              </p>
+            </div>
+
+            <!-- 2. Промо-активність та глибина знижок -->
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                  <span class="material-icons text-rose-400 text-sm">local_offer</span>
+                  <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Промо-динаміка та знижки</span>
+                </div>
+                <span class="text-xs font-mono font-bold text-rose-300 bg-rose-950/60 px-2 py-0.5 rounded-lg border border-rose-800/50">
+                  {{ analyticsSummary.kpi.discounts.discountedRate }}% акційні
+                </span>
+              </div>
+
+              <div class="space-y-1.5 font-mono text-xs">
+                <div class="flex justify-between items-center p-2 rounded-xl bg-slate-900/60 border border-slate-800/60">
+                  <span class="text-slate-400 font-sans text-[11px]">Товарів зі знижкою:</span>
+                  <b class="text-rose-300">{{ analyticsSummary.kpi.discounts.discountedCount }} шт ({{ analyticsSummary.kpi.discounts.discountedRate }}%)</b>
+                </div>
+                <div class="flex justify-between items-center p-2 rounded-xl bg-slate-900/60 border border-slate-800/60">
+                  <span class="text-slate-400 font-sans text-[11px]">Середня глибина знижки:</span>
+                  <b class="text-white">-{{ analyticsSummary.kpi.discounts.avgDiscountPct }}%</b>
+                </div>
+                <div class="flex justify-between items-center p-2 rounded-xl bg-slate-900/60 border border-slate-800/60">
+                  <span class="text-slate-400 font-sans text-[11px]">Максимальна знижка:</span>
+                  <b class="text-amber-400">-{{ analyticsSummary.kpi.discounts.maxDiscountPct }}%</b>
+                </div>
+              </div>
+
+              <!-- Discount Intensity Bar -->
+              <div class="space-y-1 pt-0.5">
+                <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                  <div class="h-full bg-gradient-to-r from-rose-500 to-amber-500 rounded-full transition-all" [style.width.%]="analyticsSummary.kpi.discounts.discountedRate"></div>
+                </div>
+                <div class="flex justify-between text-[9px] text-slate-500 font-mono">
+                  <span>0% промо</span>
+                  <span>50%</span>
+                  <span>100% промо</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Концентрація попиту Парето (80/20) -->
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                  <span class="material-icons text-teal-400 text-sm">hub</span>
+                  <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Концентрація Парето (80/20)</span>
+                </div>
+                <span class="text-xs font-mono font-bold text-teal-300 bg-teal-950/60 px-2 py-0.5 rounded-lg border border-teal-800/50">
+                  Топ-20% SKU
+                </span>
+              </div>
+
+              <div class="space-y-1.5 font-mono text-xs">
+                <div class="flex justify-between items-center p-2 rounded-xl bg-slate-900/60 border border-slate-800/60">
+                  <span class="text-slate-400 font-sans text-[11px]">Частка відгуків у Топ-20%:</span>
+                  <b class="text-teal-300">{{ analyticsSummary.kpi.pareto.top20SkusReviewsShare }}% попиту</b>
+                </div>
+                <div class="flex justify-between items-center p-2 rounded-xl bg-slate-900/60 border border-slate-800/60">
+                  <span class="text-slate-400 font-sans text-[11px]">Частка на решту 80% SKU:</span>
+                  <b class="text-slate-300">{{ (100 - analyticsSummary.kpi.pareto.top20SkusReviewsShare) | number:'1.1-1' }}% попиту</b>
+                </div>
+              </div>
+
+              <!-- Pareto Visual Bar -->
+              <div class="space-y-1 pt-0.5">
+                <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+                  <div class="h-full bg-teal-500 transition-all" [style.width.%]="analyticsSummary.kpi.pareto.top20SkusReviewsShare" [title]="'Топ-20% товарів (' + analyticsSummary.kpi.pareto.top20SkusReviewsShare + '% відгуків)'"></div>
+                  <div class="h-full bg-slate-700 transition-all" [style.width.%]="100 - analyticsSummary.kpi.pareto.top20SkusReviewsShare" title="Решта 80% товарів"></div>
+                </div>
+                <div class="flex justify-between text-[9px] text-slate-500 font-mono">
+                  <span class="text-teal-400">Топ-20% SKU ({{ analyticsSummary.kpi.pareto.top20SkusReviewsShare }}%)</span>
+                  <span>Решта 80% SKU</span>
+                </div>
+              </div>
+
+              <p class="text-[11px] text-slate-400 leading-relaxed">
+                {{ analyticsSummary.kpi.pareto.top20SkusReviewsShare >= 70 ? 'Висока концентрація лідерів: 20% топових товарів акумулюють майже весь трафік та замовлення ніші.' : 'Попит розподілений рівномірно між багатьма товарами — сприятливо для нових гравців.' }}
+              </p>
+            </div>
+          </div>
         </div>
 
         <!-- Spec & Variations Demand Breakdown (Розподіл попиту за характеристиками та конфігураціями) -->

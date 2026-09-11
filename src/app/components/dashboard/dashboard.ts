@@ -77,6 +77,19 @@ export interface SpecValueStat {
   products: any[];
 }
 
+export interface PriceFluctuationSegment {
+  label: string;
+  rankRange: string;
+  count: number;
+  avgPrice: number;
+  medianPrice: number;
+  deltaPctFromAvg: number;
+  reviewsSum: number;
+  reviewsShare: number;
+  inStockRate: number;
+  discountedRate: number;
+}
+
 export interface SpecCategoryAnalysis {
   specKey: string;
   totalProductsWithSpec: number;
@@ -112,6 +125,22 @@ export interface AnalyticalSummary {
     top3Sellers: Array<{ name: string; share: number; count: number; isRozetka: boolean }>;
     hhi: number;
     hhiLevel: 'LOW' | 'MODERATE' | 'HIGH';
+    volatility: {
+      stdDev: number;
+      cv: number;
+      iqr: number;
+      p25Price: number;
+      p75Price: number;
+    };
+    discounts: {
+      discountedCount: number;
+      discountedRate: number;
+      avgDiscountPct: number;
+      maxDiscountPct: number;
+    };
+    pareto: {
+      top20SkusReviewsShare: number;
+    };
     entryBarrier: {
       level: 'LOW' | 'MEDIUM' | 'HIGH';
       medianTop10Reviews: number;
@@ -127,6 +156,7 @@ export interface AnalyticalSummary {
       thirdPartyShare: number;
     };
   };
+  positionFluctuations: PriceFluctuationSegment[];
   priceDistribution: Array<{
     rangeLabel: string;
     minPrice: number;
@@ -3583,6 +3613,22 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
         top3Sellers: [],
         hhi: 0,
         hhiLevel: 'LOW',
+        volatility: {
+          stdDev: 0,
+          cv: 0,
+          iqr: 0,
+          p25Price: 0,
+          p75Price: 0
+        },
+        discounts: {
+          discountedCount: 0,
+          discountedRate: 0,
+          avgDiscountPct: 0,
+          maxDiscountPct: 0
+        },
+        pareto: {
+          top20SkusReviewsShare: 0
+        },
         entryBarrier: {
           level: 'LOW',
           medianTop10Reviews: 0,
@@ -3598,6 +3644,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
           thirdPartyShare: 0
         }
       },
+      positionFluctuations: [],
       priceDistribution: [],
       sellersTable: [],
       specAnalytics: []
@@ -3616,6 +3663,18 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
   const p95Index = Math.floor(0.95 * (Math.max(n, 1) - 1));
   const p95Price = sortedPrices[p95Index] || maxPrice;
   const priceSkewPct = medianPrice > 0 ? Number((((avgPrice - medianPrice) / medianPrice) * 100).toFixed(1)) : 0;
+
+  // 1.0. Математична волатильність та міжквартильний розмах (IQR & Standard Deviation)
+  const p25Index = Math.floor(0.25 * (Math.max(n, 1) - 1));
+  const p75Index = Math.floor(0.75 * (Math.max(n, 1) - 1));
+  const p25Price = sortedPrices[p25Index] || minPrice;
+  const p75Price = sortedPrices[p75Index] || maxPrice;
+  const iqr = Math.round(p75Price - p25Price);
+  const variance = n > 1 
+    ? sortedPrices.reduce((acc, p) => acc + Math.pow(p - avgPrice, 2), 0) / n 
+    : 0;
+  const stdDev = Math.round(Math.sqrt(variance));
+  const cv = avgPrice > 0 ? Number(((stdDev / avgPrice) * 100).toFixed(1)) : 0;
 
   // 1.1. Логарифмічно зважені цінові орієнтири за попитом: Вага = 1 + ln(1 + кількість відгуків)
   let totalWeight = 0;
@@ -3659,6 +3718,79 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
   const demandPriceDiffPct = avgPrice > 0
     ? Number((((weightedAvgPrice - avgPrice) / avgPrice) * 100).toFixed(1))
     : 0;
+
+  // 1.2. Промо-динаміка та коливання знижок
+  const discountedProducts = allProducts.filter(p => Number(p.price) > 0 && p.oldPrice && Number(p.oldPrice) > Number(p.price));
+  const discountedCount = discountedProducts.length;
+  const discountedRate = rawTotalCount > 0 ? Number(((discountedCount / rawTotalCount) * 100).toFixed(1)) : 0;
+  let avgDiscountPct = 0;
+  let maxDiscountPct = 0;
+  if (discountedCount > 0) {
+    const discountsList = discountedProducts.map(p => ((Number(p.oldPrice) - Number(p.price)) / Number(p.oldPrice)) * 100);
+    avgDiscountPct = Number((discountsList.reduce((a, b) => a + b, 0) / discountedCount).toFixed(1));
+    maxDiscountPct = Number(Math.max(...discountsList).toFixed(1));
+  }
+
+  // 1.3. Концентрація попиту за принципом Парето (Топ 20% SKU)
+  const sortedByReviewsAll = [...allProducts].sort((a, b) => (Number(b.reviews) || 0) - (Number(a.reviews) || 0));
+  const top20Count = Math.max(1, Math.round(rawTotalCount * 0.2));
+  const top20ReviewsSum = sortedByReviewsAll.slice(0, top20Count).reduce((acc, p) => acc + (Number(p.reviews) || 0), 0);
+  const totalAllReviews = sortedByReviewsAll.reduce((acc, p) => acc + (Number(p.reviews) || 0), 0);
+  const top20SkusReviewsShare = totalAllReviews > 0 ? Number(((top20ReviewsSum / totalAllReviews) * 100).toFixed(1)) : 0;
+
+  // 1.4. Позиційні коливання цін за рейтингом каталогу (5 квінтилів видачі)
+  const positionFluctuations: PriceFluctuationSegment[] = [];
+  if (rawTotalCount > 0) {
+    const quintileSize = rawTotalCount / 5;
+    const quintileLabels = [
+      { label: 'Топ 1–20% видачі', rank: '1–20%' },
+      { label: 'Сегмент 21–40%', rank: '21–40%' },
+      { label: 'Середина 41–60%', rank: '41–60%' },
+      { label: 'Сегмент 61–80%', rank: '61–80%' },
+      { label: 'Хвіст 81–100%', rank: '81–100%' }
+    ];
+
+    for (let i = 0; i < 5; i++) {
+      const startIdx = Math.floor(i * quintileSize);
+      const endIdx = i === 4 ? rawTotalCount : Math.floor((i + 1) * quintileSize);
+      const chunk = allProducts.slice(startIdx, endIdx);
+      const chunkInStockPrices = chunk.filter(p => Number(p.price) > 0 && p.inStock !== false).map(p => Number(p.price)).sort((a, b) => a - b);
+      const chunkPrices = chunkInStockPrices.length > 0 
+        ? chunkInStockPrices 
+        : chunk.filter(p => Number(p.price) > 0).map(p => Number(p.price)).sort((a, b) => a - b);
+      
+      const chunkAvgPrice = chunkPrices.length > 0 
+        ? Math.round(chunkPrices.reduce((a, b) => a + b, 0) / chunkPrices.length) 
+        : 0;
+      
+      const chunkMedPrice = chunkPrices.length > 0
+        ? (chunkPrices.length % 2 === 0
+            ? Math.round((chunkPrices[chunkPrices.length / 2 - 1] + chunkPrices[chunkPrices.length / 2]) / 2)
+            : chunkPrices[Math.floor(chunkPrices.length / 2)])
+        : 0;
+
+      const deltaPct = avgPrice > 0 && chunkAvgPrice > 0
+        ? Number((((chunkAvgPrice - avgPrice) / avgPrice) * 100).toFixed(1))
+        : 0;
+
+      const chunkReviews = chunk.reduce((acc, p) => acc + (Number(p.reviews) || 0), 0);
+      const chunkInStock = chunk.filter(p => p.inStock !== false).length;
+      const chunkDiscounted = chunk.filter(p => Number(p.price) > 0 && p.oldPrice && Number(p.oldPrice) > Number(p.price)).length;
+
+      positionFluctuations.push({
+        label: quintileLabels[i].label,
+        rankRange: `${startIdx + 1}–${endIdx} поз.`,
+        count: chunk.length,
+        avgPrice: chunkAvgPrice,
+        medianPrice: chunkMedPrice,
+        deltaPctFromAvg: deltaPct,
+        reviewsSum: chunkReviews,
+        reviewsShare: totalAllReviews > 0 ? Number(((chunkReviews / totalAllReviews) * 100).toFixed(1)) : 0,
+        inStockRate: chunk.length > 0 ? Number(((chunkInStock / chunk.length) * 100).toFixed(1)) : 0,
+        discountedRate: chunk.length > 0 ? Number(((chunkDiscounted / chunk.length) * 100).toFixed(1)) : 0
+      });
+    }
+  }
 
   // 2. Агрегація за продавцями (за всіма зібраними товарами)
   const sellerColors = [
@@ -3888,6 +4020,22 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       top3Sellers,
       hhi,
       hhiLevel,
+      volatility: {
+        stdDev,
+        cv,
+        iqr,
+        p25Price: Math.round(p25Price),
+        p75Price: Math.round(p75Price)
+      },
+      discounts: {
+        discountedCount,
+        discountedRate,
+        avgDiscountPct,
+        maxDiscountPct
+      },
+      pareto: {
+        top20SkusReviewsShare
+      },
       entryBarrier: {
         level: entryBarrierLevel,
         medianTop10Reviews,
@@ -3903,6 +4051,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
         thirdPartyShare
       }
     },
+    positionFluctuations,
     priceDistribution,
     sellersTable: sellersList,
     specAnalytics
