@@ -2162,7 +2162,9 @@ export class DashboardComponent implements OnInit {
   saveCurrentSnapshot() {
     if (this.products.length === 0) return;
 
-    const prices = this.products.map(p => p.price || 0).filter(pr => pr > 0);
+    const inStockProds = this.products.filter(p => p && p.inStock !== false && (p.price || 0) > 0);
+    const validProds = inStockProds.length > 0 ? inStockProds : this.products.filter(p => (p.price || 0) > 0);
+    const prices = validProds.map(p => p.price || 0);
     const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
     const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
     const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
@@ -3511,7 +3513,12 @@ export function computeSpecDistribution(products: any[], totalProductsCount: num
 export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary {
   const allProducts = products || [];
   const rawTotalCount = allProducts.length;
-  const validProducts = allProducts.filter(p => p && Number(p.price) > 0);
+  
+  // Фільтруємо товари ВИКЛЮЧНО в наявності з валідною ціною > 0 (з безпечним фолбеком, якщо весь лістинг тимчасово не в наявності)
+  const inStockValidProducts = allProducts.filter(p => p && Number(p.price) > 0 && p.inStock !== false);
+  const validProducts = inStockValidProducts.length > 0 
+    ? inStockValidProducts 
+    : allProducts.filter(p => p && Number(p.price) > 0);
   const n = validProducts.length;
 
   if (rawTotalCount === 0) {
@@ -3560,7 +3567,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
     };
   }
 
-  // 1. Сортування цін для медіани та розрахунку середнього (серед товарів з активною ціною > 0)
+  // 1. Сортування цін для медіани та розрахунку середнього (виключно серед актуальних товарів у наявності)
   const sortedPrices = n > 0 ? [...validProducts.map(p => Number(p.price))].sort((a, b) => a - b) : [0];
   const minPrice = sortedPrices[0] || 0;
   const maxPrice = sortedPrices[sortedPrices.length - 1] || 0;
@@ -3600,7 +3607,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
     };
     entry.productsCount++;
     entry.reviewsSum += (p.reviews && p.reviews > 0) ? Number(p.reviews) : 0;
-    if (Number(p.price) > 0) {
+    if (Number(p.price) > 0 && p.inStock !== false) {
       entry.prices.push(Number(p.price));
     }
     if (p.inStock !== false) entry.inStockCount++;
@@ -3608,7 +3615,10 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
   });
 
   const sellersList = Array.from(sellerMap.entries()).map(([sellerName, stats]) => {
-    const sortedSellerPrices = stats.prices.length > 0 ? [...stats.prices].sort((a, b) => a - b) : [0];
+    const rawPrices = stats.prices.length > 0 
+      ? stats.prices 
+      : allProducts.filter(p => (p.seller && String(p.seller).trim() === sellerName || (!p.seller && sellerName === 'Rozetka')) && Number(p.price) > 0).map(p => Number(p.price));
+    const sortedSellerPrices = rawPrices.length > 0 ? [...rawPrices].sort((a, b) => a - b) : [0];
     const sellerMedPrice = sortedSellerPrices.length % 2 === 0
       ? (sortedSellerPrices[sortedSellerPrices.length / 2 - 1] + sortedSellerPrices[sortedSellerPrices.length / 2]) / 2
       : sortedSellerPrices[Math.floor(sortedSellerPrices.length / 2)];

@@ -285,7 +285,9 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
         );
 
         if (sessionProducts.length > 0) {
-          const prices = sessionProducts.map((p: any) => p.price || 0).filter((pr: number) => pr > 0);
+          const inStockProds = sessionProducts.filter((p: any) => p && p.inStock !== false && Number(p.price) > 0);
+          const validProds = inStockProds.length > 0 ? inStockProds : sessionProducts.filter((p: any) => Number(p.price) > 0);
+          const prices = validProds.map((p: any) => Number(p.price) || 0);
           const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length) : 0;
           const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
           const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
