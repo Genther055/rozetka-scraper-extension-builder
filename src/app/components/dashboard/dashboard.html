@@ -1177,13 +1177,14 @@
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           
           <!-- Left (8 cols): РОЗПОДІЛ ЦІН ТА ПОПИТУ У НІШІ + SWEET SPOT -->
+          <!-- Left (8 cols): РОЗПОДІЛ ЦІН ТА ПОПИТУ У НІШІ + SWEET SPOT -->
           <div class="lg:col-span-8 p-6 premium-card flex flex-col gap-4 relative">
             
             <!-- Header Section -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
               <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shadow-sm shrink-0">
-                  <span class="material-icons text-xl">insights</span>
+                  <span class="material-icons text-xl">scatter_plot</span>
                 </div>
                 <div>
                   <div class="flex items-center gap-2">
@@ -1208,7 +1209,7 @@
                           </span>
                         </div>
                         <p class="text-[11px] text-slate-300 leading-relaxed mb-2">
-                          <b>Віддача (в/SKU)</b> — показник ефективності цінового сегменту. Він відображає середню кількість відгуків (замовлень), яку отримує одна виставлена картка товару в цьому діапазоні.
+                          <b>Точковий графік розподілу</b> демонструє кожен товар на площині ціни та обсягу відгуків (попиту), виділяючи зону найвищої віддачі на ринку (Sweet Spot).
                         </p>
                         
                         <div class="my-2 p-2.5 bg-slate-950/90 rounded-xl border border-slate-800 font-mono text-[11px] text-amber-300 space-y-1">
@@ -1219,23 +1220,23 @@
                         </div>
 
                         <div class="space-y-1.5 text-[10px] pt-1">
-                          <div class="flex items-center gap-1.5 text-emerald-400">
-                            <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-                            <span><b>Висока віддача (10+ в/SKU):</b> Високий попит при помірній конкуренції — найприбутковіша зона.</span>
+                          <div class="flex items-center gap-1.5 text-indigo-400">
+                            <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0"></span>
+                            <span><b>Сині/Фіолетові точки:</b> Товари вітрини без відгуків (пропозиція).</span>
                           </div>
-                          <div class="flex items-center gap-1.5 text-slate-400">
-                            <span class="w-2 h-2 rounded-full bg-slate-500 shrink-0"></span>
-                            <span><b>Низька віддача (&lt; 3 в/SKU):</b> Перенасичений сегмент або брак інтересу покупців.</span>
+                          <div class="flex items-center gap-1.5 text-emerald-400">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
+                            <span><b>Зелені точки:</b> Активні товари з реальними замовленнями (попит).</span>
                           </div>
                           <div class="flex items-center gap-1.5 text-amber-300">
                             <span class="material-icons text-[12px] text-amber-400 shrink-0">star</span>
-                            <span><b>★ Sweet Spot (Ціновий оптимум):</b> Сегмент із максимальною віддачею на одиницю товару.</span>
+                            <span><b>★ Sweet Spot:</b> Сегмент максимальної віддачі на одиницю SKU.</span>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <p class="text-xs text-slate-400">Співвідношення виставлених карток товару з реальними замовленнями</p>
+                  <p class="text-xs text-slate-400">Точковий спектр пропозиції та попиту за ціновими сегментами</p>
                 </div>
               </div>
 
@@ -1271,82 +1272,263 @@
                   </div>
                 </div>
 
-                <!-- Legend -->
+                <!-- 2-Color Legend -->
                 <div class="flex items-center gap-3 text-xs font-semibold bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-slate-800">
                   <div class="flex items-center gap-1.5">
-                    <span class="w-2.5 h-2.5 rounded-sm bg-indigo-500/80 shadow-sm"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-sm"></span>
                     <span class="text-slate-300 text-[11px]">Пропозиція</span>
                   </div>
                   <div class="flex items-center gap-1.5">
-                    <span class="w-2.5 h-2.5 rounded-sm bg-emerald-400/90 shadow-sm"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm"></span>
                     <span class="text-slate-300 text-[11px]">Попит</span>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm"></span>
+                    <span class="text-amber-300 text-[11px]">★ Sweet Spot</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Dynamic Bins List (P95 Outlier-clipped intervals) -->
-            <div class="space-y-2.5 flex-1">
-              <div *ngFor="let bin of analyticsSummary.priceDistribution" 
-                   class="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2 hover:border-indigo-500/40 hover:bg-slate-900/60 transition-all duration-300" 
-                   [class.border-amber-500/40]="bin.isSweetSpot" 
-                   [class.bg-amber-950/20]="bin.isSweetSpot"
-                   [class.shadow-sm]="bin.isSweetSpot">
-                <!-- Bin Header Info -->
-                <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div class="flex items-center gap-2">
-                    <span class="font-mono font-extrabold text-white text-xs bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-750">
-                      {{ bin.rangeLabel }}
-                    </span>
-                    <span *ngIf="bin.isSweetSpot" class="px-2.5 py-0.5 text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/40 rounded-lg flex items-center gap-1.5 shadow-sm">
-                      <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                      <span class="material-icons text-xs text-amber-400">star</span>
-                      <span>Ціновий оптимум (Sweet Spot)</span>
-                    </span>
-                  </div>
+            <!-- 1. Large 2-Color Scatter Distribution Chart Canvas -->
+            <div class="relative bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none" *ngIf="getScatterPlotData() as plot">
+              <svg 
+                viewBox="0 0 960 260" 
+                class="w-full h-64 sm:h-72 cursor-crosshair overflow-visible"
+                (mousemove)="onScatterMouseMove($event)"
+                (mouseleave)="onScatterMouseLeave()"
+              >
+                <defs>
+                  <linearGradient id="sweetSpotBandGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.18"/>
+                    <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.02"/>
+                  </linearGradient>
+                  <linearGradient id="regularBandGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#6366f1" stop-opacity="0.06"/>
+                    <stop offset="100%" stop-color="#6366f1" stop-opacity="0.01"/>
+                  </linearGradient>
+                </defs>
 
-                  <div class="flex items-center gap-3 font-mono text-xs">
-                    <button 
-                      (click)="openPriceBinProductsModal(bin)"
-                      class="text-indigo-300 hover:text-white font-semibold hover:underline cursor-pointer flex items-center gap-1.5 bg-slate-900/80 hover:bg-indigo-950/90 px-2.5 py-1 rounded-lg border border-slate-800 hover:border-indigo-500/40 transition-colors"
-                      [title]="'Переглянути всі ' + bin.productsCount + ' тов. у цьому діапазоні'"
+                <!-- Vertical Price Bin Background Bands -->
+                <g class="bin-bands">
+                  <g *ngFor="let band of plot.bands">
+                    <rect 
+                      [attr.x]="band.x" 
+                      y="25" 
+                      [attr.width]="band.width" 
+                      height="200" 
+                      [attr.fill]="band.isSweetSpot ? 'url(#sweetSpotBandGrad)' : 'url(#regularBandGrad)'"
+                      [attr.stroke]="band.isSweetSpot ? '#f59e0b' : '#334155'"
+                      stroke-width="1"
+                      [attr.stroke-dasharray]="band.isSweetSpot ? 'none' : '2 3'"
+                      stroke-opacity="0.4"
+                    />
+                    <!-- Sweet Spot Ribbon Label -->
+                    <g *ngIf="band.isSweetSpot">
+                      <rect 
+                        [attr.x]="band.x + 4" 
+                        y="28" 
+                        width="86" 
+                        height="18" 
+                        rx="4" 
+                        fill="#451a03" 
+                        stroke="#f59e0b" 
+                        stroke-width="1"
+                      />
+                      <text 
+                        [attr.x]="band.x + 47" 
+                        y="40" 
+                        text-anchor="middle" 
+                        fill="#fef3c7" 
+                        font-size="9" 
+                        font-weight="bold" 
+                        font-family="monospace"
+                      >
+                        ★ Sweet Spot
+                      </text>
+                    </g>
+                  </g>
+                </g>
+
+                <!-- Horizontal Y-Axis Gridlines & Labels -->
+                <g class="gridlines">
+                  <g *ngFor="let tick of plot.yTicks">
+                    <line 
+                      x1="60" 
+                      [attr.y1]="tick.y" 
+                      x2="930" 
+                      [attr.y2]="tick.y" 
+                      stroke="#1e293b" 
+                      stroke-width="1" 
+                      stroke-dasharray="3 3"
+                    />
+                    <text 
+                      x="52" 
+                      [attr.y]="tick.y + 4" 
+                      text-anchor="end" 
+                      fill="#64748b" 
+                      font-size="10" 
+                      font-family="monospace"
                     >
-                      <b class="text-white">{{ bin.productsCount }}</b> тов. ({{ bin.productsShare }}%)
-                      <span class="material-icons text-[11px] text-indigo-400">visibility</span>
-                    </button>
-                    <span class="text-slate-500">|</span>
-                    <span class="text-emerald-400">
-                      <b class="text-white">{{ bin.reviewsSum }}</b> відг. ({{ bin.reviewsShare }}%)
-                    </span>
-                    <span class="text-slate-500">|</span>
-                    <div class="relative group/binratio flex items-center gap-1 text-slate-400 font-semibold cursor-help">
-                      <span>Віддача:</span>
-                      <b class="text-amber-400">{{ bin.demandSupplyRatio }}</b>
-                      <span class="border-b border-dotted border-slate-600">в/SKU</span>
-                      <!-- Mini Hover Tooltip (opens downwards) -->
-                      <div class="absolute right-0 top-full mt-1.5 w-64 p-2.5 bg-[#0f172a] border border-amber-500/50 rounded-xl shadow-xl shadow-black text-[11px] text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/binratio:opacity-100 group-hover/binratio:pointer-events-auto transition-all duration-150 backdrop-blur-md">
-                        <div class="font-bold text-white mb-1 flex items-center justify-between">
-                          <span>Віддача на 1 товар</span>
-                          <span class="text-amber-400 font-mono">{{ bin.demandSupplyRatio }} в/SKU</span>
-                        </div>
-                        <p class="text-[10px] text-slate-300 leading-tight">
-                          У цьому діапазоні на 1 товар (SKU) припадає в середньому <b>{{ bin.demandSupplyRatio }}</b> відгуків (замовлень).
-                        </p>
-                      </div>
-                    </div>
+                      {{ tick.label }}
+                    </text>
+                  </g>
+                </g>
+
+                <!-- X-Axis Baseline & Ticks -->
+                <line x1="60" y1="225" x2="930" y2="225" stroke="#334155" stroke-width="1"/>
+                <g class="x-labels">
+                  <g *ngFor="let xtick of plot.xTicks">
+                    <line 
+                      [attr.x1]="xtick.x" 
+                      y1="225" 
+                      [attr.x2]="xtick.x" 
+                      y2="230" 
+                      stroke="#475569" 
+                      stroke-width="1"
+                    />
+                    <text 
+                      [attr.x]="xtick.x" 
+                      y="245" 
+                      text-anchor="middle" 
+                      fill="#94a3b8" 
+                      font-size="10" 
+                      font-family="monospace"
+                    >
+                      {{ xtick.label }}
+                    </text>
+                  </g>
+                </g>
+
+                <!-- Product Scatter Dots (2 Distinct Colors: Indigo for Supply, Emerald for Demand, Amber for Sweet Spot) -->
+                <g class="scatter-dots">
+                  <g *ngFor="let pt of plot.points">
+                    <circle 
+                      [attr.cx]="pt.x" 
+                      [attr.cy]="pt.y" 
+                      [attr.r]="pt.radius" 
+                      [attr.fill]="pt.reviews === 0 ? '#6366f1' : pt.isSweetSpot ? '#f59e0b' : '#10b981'"
+                      [attr.fill-opacity]="pt.reviews === 0 ? '0.65' : '0.88'"
+                      [attr.stroke]="pt.reviews === 0 ? '#818cf8' : pt.isSweetSpot ? '#fbbf24' : '#34d399'"
+                      stroke-width="1"
+                      class="transition-transform duration-100 hover:scale-125 cursor-pointer"
+                    />
+                  </g>
+                </g>
+
+                <!-- Active Hover Point Crosshair & Pulse Glow -->
+                <g *ngIf="hoveredScatterPoint">
+                  <!-- Vertical Crosshair Line -->
+                  <line 
+                    [attr.x1]="hoveredScatterPoint.x" 
+                    y1="25" 
+                    [attr.x2]="hoveredScatterPoint.x" 
+                    y2="225" 
+                    [attr.stroke]="hoveredScatterPoint.reviews === 0 ? '#818cf8' : hoveredScatterPoint.isSweetSpot ? '#f59e0b' : '#10b981'" 
+                    stroke-width="1.5" 
+                    stroke-dasharray="3 3"
+                    stroke-opacity="0.8"
+                  />
+                  <!-- Horizontal Crosshair Line -->
+                  <line 
+                    x1="60" 
+                    [attr.y1]="hoveredScatterPoint.y" 
+                    x2="930" 
+                    [attr.y2]="hoveredScatterPoint.y" 
+                    [attr.stroke]="hoveredScatterPoint.reviews === 0 ? '#818cf8' : hoveredScatterPoint.isSweetSpot ? '#f59e0b' : '#10b981'" 
+                    stroke-width="1.5" 
+                    stroke-dasharray="3 3"
+                    stroke-opacity="0.8"
+                  />
+                  <!-- Target Point Pulse Halo -->
+                  <circle 
+                    [attr.cx]="hoveredScatterPoint.x" 
+                    [attr.cy]="hoveredScatterPoint.y" 
+                    r="10" 
+                    [attr.fill]="hoveredScatterPoint.reviews === 0 ? '#6366f1' : hoveredScatterPoint.isSweetSpot ? '#f59e0b' : '#10b981'" 
+                    fill-opacity="0.3"
+                  />
+                  <circle 
+                    [attr.cx]="hoveredScatterPoint.x" 
+                    [attr.cy]="hoveredScatterPoint.y" 
+                    r="5.5" 
+                    [attr.fill]="hoveredScatterPoint.reviews === 0 ? '#6366f1' : hoveredScatterPoint.isSweetSpot ? '#f59e0b' : '#10b981'" 
+                    stroke="#ffffff" 
+                    stroke-width="2"
+                  />
+                </g>
+              </svg>
+
+              <!-- Hover Floating Product Tooltip -->
+              <div 
+                *ngIf="hoveredScatterPoint" 
+                class="absolute z-30 p-3 bg-[#0f172a] border border-indigo-500/60 rounded-xl shadow-2xl text-xs text-white pointer-events-none transition-all duration-75 max-w-xs"
+                [style.left.px]="Math.min(680, Math.max(70, hoveredScatterPoint.x - 120))"
+                [style.top.px]="Math.max(10, hoveredScatterPoint.y - 85)"
+              >
+                <div class="font-bold text-white text-xs truncate max-w-[240px] mb-1">
+                  {{ hoveredScatterPoint.name }}
+                </div>
+                <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono text-slate-300">
+                  <div>Ціна: <b class="text-white">{{ hoveredScatterPoint.price | number }} ₴</b></div>
+                  <div>Відгуки: <b [class.text-amber-400]="hoveredScatterPoint.isSweetSpot" [class.text-emerald-400]="!hoveredScatterPoint.isSweetSpot">{{ hoveredScatterPoint.reviews }} в.</b></div>
+                  <div>Продавець: <b class="text-indigo-300 truncate">{{ hoveredScatterPoint.seller }}</b></div>
+                  <div *ngIf="(hoveredScatterPoint.discount || 0) > 0">Знижка: <b class="text-rose-400">-{{ hoveredScatterPoint.discount }}%</b></div>
+                  <div class="col-span-2 text-[10px] text-slate-400 pt-1 border-t border-slate-800 flex items-center justify-between">
+                    <span>Сегмент: {{ hoveredScatterPoint.binLabel }}</span>
+                    <span *ngIf="hoveredScatterPoint.isSweetSpot" class="text-amber-400 font-bold">★ Sweet Spot</span>
                   </div>
                 </div>
+              </div>
+            </div>
 
-                <!-- Dual Progress Bars with clean solid representation -->
-                <div class="space-y-1.5 pt-0.5">
-                  <!-- Supply Bar (Products) -->
-                  <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
-                    <div class="h-full bg-indigo-500 rounded-full transition-all duration-500 ease-out" [style.width.%]="bin.productsShare" [title]="'Пропозиція: ' + bin.productsShare + '% (' + bin.productsCount + ' тов.)'"></div>
+            <!-- 2. Compact Footnote Cards Grid by Price Categories -->
+            <div class="space-y-2">
+              <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                <span>Цінові кошики та віддача (натисніть для перегляду списку товарів)</span>
+                <span class="text-[10px] font-mono text-slate-500">Всього {{ analyticsSummary.priceDistribution.length }} категорій</span>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5">
+                <div 
+                  *ngFor="let bin of analyticsSummary.priceDistribution" 
+                  (click)="openPriceBinProductsModal(bin)"
+                  class="p-3 bg-slate-950/70 border border-slate-800/90 hover:border-indigo-500/50 hover:bg-slate-900/80 rounded-xl transition-all duration-200 cursor-pointer group flex flex-col justify-between space-y-2 relative"
+                  [class.border-amber-500/50]="bin.isSweetSpot"
+                  [class.bg-amber-950/20]="bin.isSweetSpot"
+                  [title]="'Переглянути всі ' + bin.productsCount + ' тов. у діапазоні ' + bin.rangeLabel"
+                >
+                  <!-- Card Header: Price Range + Sweet Spot Icon -->
+                  <div class="flex items-center justify-between gap-1">
+                    <span class="font-mono font-extrabold text-white text-xs truncate group-hover:text-indigo-300">
+                      {{ bin.rangeLabel }}
+                    </span>
+                    <span *ngIf="bin.isSweetSpot" class="text-amber-400 material-icons text-sm" title="Ціновий оптимум (Sweet Spot)">
+                      star
+                    </span>
+                    <span *ngIf="!bin.isSweetSpot" class="material-icons text-slate-600 group-hover:text-indigo-400 text-sm transition-colors">
+                      visibility
+                    </span>
                   </div>
 
-                  <!-- Demand Bar (Reviews) -->
-                  <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
-                    <div class="h-full rounded-full transition-all duration-500 ease-out" [class.bg-amber-400]="bin.isSweetSpot" [class.bg-emerald-500]="!bin.isSweetSpot" [style.width.%]="bin.reviewsShare" [title]="'Попит: ' + bin.reviewsShare + '% (' + bin.reviewsSum + ' відг.)'"></div>
+                  <!-- Dual Progress Indicators -->
+                  <div class="space-y-1">
+                    <div class="flex justify-between text-[10px] font-mono">
+                      <span class="text-indigo-300">{{ bin.productsCount }} тов. ({{ bin.productsShare }}%)</span>
+                      <span class="text-emerald-400">{{ bin.reviewsSum }} в. ({{ bin.reviewsShare }}%)</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800/80">
+                      <div class="h-full bg-indigo-500 transition-all" [style.width.%]="bin.productsShare" title="Пропозиція"></div>
+                    </div>
+                    <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800/80">
+                      <div class="h-full transition-all" [class.bg-amber-400]="bin.isSweetSpot" [class.bg-emerald-400]="!bin.isSweetSpot" [style.width.%]="bin.reviewsShare" title="Попит"></div>
+                    </div>
+                  </div>
+
+                  <!-- Footer Ratio Badge & Action -->
+                  <div class="flex items-center justify-between pt-1 border-t border-slate-800/70 text-[10px] font-mono">
+                    <span class="text-slate-400">Віддача:</span>
+                    <b [class.text-amber-400]="bin.isSweetSpot" [class.text-slate-200]="!bin.isSweetSpot">{{ bin.demandSupplyRatio }} в/SKU</b>
                   </div>
                 </div>
               </div>

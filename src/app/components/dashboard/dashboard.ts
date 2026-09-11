@@ -1055,6 +1055,149 @@ export class DashboardComponent implements OnInit {
     return `M 2 22 L 20 20 L 45 ${h2 + 3} L 75 ${h2} L 100 ${h1 + 2} L 118 ${h1}`;
   }
 
+  // --- Price & Demand 2-Color Scatter Distribution Chart Engine ---
+  hoveredScatterPoint: {
+    x: number;
+    y: number;
+    radius: number;
+    price: number;
+    reviews: number;
+    name: string;
+    seller?: string;
+    discount?: number;
+    rating?: number;
+    binLabel?: string;
+    isSweetSpot?: boolean;
+    product: Product;
+  } | null = null;
+  selectedScatterBin: any = null;
+
+  getScatterPlotData() {
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    if (!list || list.length === 0) {
+      return { points: [], bands: [], xTicks: [], yTicks: [], minP: 0, maxP: 0, maxReviews: 0 };
+    }
+
+    const SVG_W = 960;
+    const SVG_H = 260;
+    const PAD_L = 60;
+    const PAD_R = 30;
+    const PAD_T = 25;
+    const PAD_B = 35;
+    const PLOT_W = SVG_W - PAD_L - PAD_R;
+    const PLOT_H = SVG_H - PAD_T - PAD_B;
+
+    const prices = list.map(p => p.price || 0);
+    const minP = Math.min(...prices);
+    let maxP = Math.max(...prices);
+    if (maxP <= minP) maxP = minP + 100;
+
+    const maxReviews = Math.max(5, ...list.map(p => p.reviews || 0));
+
+    const bins = this.analyticsSummary?.priceDistribution || [];
+
+    // 1. Calculate Bins Vertical Bands
+    const bands = bins.map(b => {
+      const normMin = Math.max(0, Math.min(1, (b.minPrice - minP) / (maxP - minP)));
+      const normMax = Math.max(0, Math.min(1, (b.maxPrice - minP) / (maxP - minP)));
+      const x = PAD_L + normMin * PLOT_W;
+      const w = Math.max(12, (normMax - normMin) * PLOT_W);
+      return {
+        bin: b,
+        x: Math.round(x * 10) / 10,
+        width: Math.round(w * 10) / 10,
+        isSweetSpot: b.isSweetSpot,
+        label: b.rangeLabel
+      };
+    });
+
+    // 2. Calculate Products Scatter Points
+    const points = list.map(p => {
+      const pr = p.price || 0;
+      const rev = p.reviews || 0;
+      const normX = Math.max(0, Math.min(1, (pr - minP) / (maxP - minP)));
+      const normY = Math.max(0, Math.min(1, rev / maxReviews));
+
+      const x = PAD_L + normX * PLOT_W;
+      const y = PAD_T + (1 - normY) * PLOT_H;
+
+      const matchingBin = bins.find(b => pr >= b.minPrice && pr <= b.maxPrice) || bins[0];
+      const isSweetSpot = matchingBin?.isSweetSpot || false;
+      const radius = rev === 0 ? 3.5 : Math.min(9, 4 + Math.sqrt(rev) * 0.7);
+
+      return {
+        x: Math.round(x * 10) / 10,
+        y: Math.round(y * 10) / 10,
+        radius: Math.round(radius * 10) / 10,
+        price: pr,
+        reviews: rev,
+        name: p.name || 'Товар',
+        seller: p.seller || 'Marketplace',
+        discount: this.getDiscountPercent(p),
+        rating: p.rating || 0,
+        binLabel: matchingBin?.rangeLabel || '',
+        isSweetSpot,
+        product: p
+      };
+    });
+
+    // 3. Y-Ticks (Reviews)
+    const yRatios = [1, 0.75, 0.5, 0.25, 0];
+    const yTicks = yRatios.map(r => {
+      const val = Math.round(maxReviews * r);
+      const y = PAD_T + (1 - r) * PLOT_H;
+      return { y: Math.round(y), label: val.toLocaleString() + ' в.' };
+    });
+
+    // 4. X-Ticks (Price)
+    const xRatios = [0, 0.25, 0.5, 0.75, 1];
+    const xTicks = xRatios.map(r => {
+      const val = Math.round(minP + (maxP - minP) * r);
+      const x = PAD_L + r * PLOT_W;
+      return { x: Math.round(x), label: val.toLocaleString() + ' ₴' };
+    });
+
+    return { points, bands, xTicks, yTicks, minP, maxP, maxReviews };
+  }
+
+  onScatterMouseMove(event: MouseEvent): void {
+    const target = event.currentTarget as HTMLElement;
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    const scaleX = 960 / rect.width;
+    const scaleY = 260 / rect.height;
+    const svgX = mouseX * scaleX;
+    const svgY = mouseY * scaleY;
+
+    const data = this.getScatterPlotData();
+    if (data.points.length === 0) return;
+
+    let closest = data.points[0];
+    let minDist = Math.hypot(data.points[0].x - svgX, data.points[0].y - svgY);
+
+    for (let i = 1; i < data.points.length; i++) {
+      const dist = Math.hypot(data.points[i].x - svgX, data.points[i].y - svgY);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = data.points[i];
+      }
+    }
+
+    if (minDist < 60) {
+      this.hoveredScatterPoint = closest;
+    } else {
+      this.hoveredScatterPoint = null;
+    }
+    this.cdr.markForCheck();
+  }
+
+  onScatterMouseLeave(): void {
+    this.hoveredScatterPoint = null;
+    this.cdr.markForCheck();
+  }
+
   // --- History Tab Time-Series Chart Engine ---
   getHistoryChartPoints(): Array<{ x: number; y: number; snapshot: ScrapingSnapshot; dateLabel: string; avgPrice: number; productsCount: number }> {
     if (!this.snapshots || this.snapshots.length === 0) return [];
