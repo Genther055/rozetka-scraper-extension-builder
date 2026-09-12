@@ -1177,116 +1177,170 @@
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           
           <!-- Left (8 cols): РОЗПОДІЛ ЦІН ТА ПОПИТУ У НІШІ + SWEET SPOT -->
-          <!-- Left (8 cols): РОЗПОДІЛ ЦІН ТА ПОПИТУ У НІШІ + SWEET SPOT -->
           <div class="lg:col-span-8 p-6 premium-card flex flex-col gap-4 relative">
             
-            <!-- Header Section -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shadow-sm shrink-0">
-                  <span class="material-icons text-xl">scatter_plot</span>
-                </div>
-                <div>
-                  <div class="flex items-center gap-2">
-                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">
-                      Розподіл цін, попиту та Sweet Spot
-                    </h3>
-                    
-                    <!-- Interactive Info Popover -->
-                    <div class="relative inline-block group/disthelp">
-                      <span class="w-4 h-4 rounded-full bg-slate-900 hover:bg-indigo-600 text-slate-400 hover:text-white text-[10px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">
-                        ?
-                      </span>
-                      <!-- Popover Tooltip (opens downwards) -->
-                      <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-indigo-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/disthelp:opacity-100 group-hover/disthelp:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80 backdrop-blur-md">
-                        <div class="font-bold text-white border-b border-slate-800 pb-1.5 mb-2 flex items-center justify-between">
-                          <div class="flex items-center gap-1.5">
-                            <span class="material-icons text-sm text-indigo-400">trending_up</span>
-                            <span>Модель попиту, віддачі та Sweet Spot</span>
+            <!-- Header Section with Store Filter Toggles -->
+            <div class="flex flex-col gap-3 border-b border-slate-800/80 pb-3">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shadow-sm shrink-0">
+                    <span class="material-icons text-xl">scatter_plot</span>
+                  </div>
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <h3 class="text-sm font-bold text-white uppercase tracking-wider">
+                        Розподіл цін, попиту та Sweet Spot
+                      </h3>
+                      
+                      <!-- Interactive Info Popover -->
+                      <div class="relative inline-block group/disthelp">
+                        <span class="w-4 h-4 rounded-full bg-slate-900 hover:bg-indigo-600 text-slate-400 hover:text-white text-[10px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">
+                          ?
+                        </span>
+                        <!-- Popover Tooltip -->
+                        <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-indigo-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/disthelp:opacity-100 group-hover/disthelp:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80 backdrop-blur-md">
+                          <div class="font-bold text-white border-b border-slate-800 pb-1.5 mb-2 flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                              <span class="material-icons text-sm text-indigo-400">trending_up</span>
+                              <span>Модель попиту, віддачі та Sweet Spot</span>
+                            </div>
+                            <span class="text-[10px] font-mono font-bold bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-800/60">
+                              Попит vs Пропозиція
+                            </span>
                           </div>
-                          <span class="text-[10px] font-mono font-bold bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-800/60">
-                            Попит vs Пропозиція
-                          </span>
-                        </div>
-                        <p class="text-[11px] text-slate-300 leading-relaxed mb-2">
-                          <b>Точковий графік розподілу</b> демонструє кожен товар на площині ціни та обсягу відгуків (попиту), виділяючи зону найвищої віддачі на ринку (Sweet Spot).
-                        </p>
-                        
-                        <div class="my-2 p-2.5 bg-slate-950/90 rounded-xl border border-slate-800 font-mono text-[11px] text-amber-300 space-y-1">
-                          <div><b>Формула:</b> Віддача = Сума відгуків / К-сть товарів (SKU)</div>
-                          <div class="text-[10px] text-slate-400">
-                            (<b>«в»</b> = відгуки/попит, <b>«SKU»</b> = картка товару/пропозиція)
+                          <p class="text-[11px] text-slate-300 leading-relaxed mb-2">
+                            <b>Точковий графік розподілу</b> демонструє кожен товар на площині ціни та обсягу відгуків (попиту), виділяючи зону найвищої віддачі на ринку (Sweet Spot). Клікніть на будь-яку точку, щоб переглянути повні характеристики товару.
+                          </p>
+                          
+                          <div class="my-2 p-2.5 bg-slate-950/90 rounded-xl border border-slate-800 font-mono text-[11px] text-amber-300 space-y-1">
+                            <div><b>Формула:</b> Віддача = Сума відгуків / К-сть товарів (SKU)</div>
+                            <div class="text-[10px] text-slate-400">
+                              (<b>«в»</b> = відгуки/попит, <b>«SKU»</b> = картка товару/пропозиція)
+                            </div>
                           </div>
-                        </div>
 
-                        <div class="space-y-1.5 text-[10px] pt-1">
-                          <div class="flex items-center gap-1.5 text-indigo-400">
-                            <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0"></span>
-                            <span><b>Сині/Фіолетові точки:</b> Товари вітрини без відгуків (пропозиція).</span>
-                          </div>
-                          <div class="flex items-center gap-1.5 text-emerald-400">
-                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
-                            <span><b>Зелені точки:</b> Активні товари з реальними замовленнями (попит).</span>
-                          </div>
-                          <div class="flex items-center gap-1.5 text-amber-300">
-                            <span class="material-icons text-[12px] text-amber-400 shrink-0">star</span>
-                            <span><b>★ Sweet Spot:</b> Сегмент максимальної віддачі на одиницю SKU.</span>
+                          <div class="space-y-1.5 text-[10px] pt-1">
+                            <div class="flex items-center gap-1.5 text-indigo-400">
+                              <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0"></span>
+                              <span><b>Сині/Фіолетові точки:</b> Товари вітрини без відгуків (пропозиція).</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-emerald-400">
+                              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
+                              <span><b>Зелені точки:</b> Активні товари з реальними замовленнями (попит).</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-amber-300">
+                              <span class="material-icons text-[12px] text-amber-400 shrink-0">star</span>
+                              <span><b>★ Sweet Spot:</b> Сегмент максимальної віддачі на одиницю SKU.</span>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
+                    <p class="text-xs text-slate-400">Точковий спектр пропозиції та попиту за ціновими сегментами (клікніть на точку для картки товару)</p>
                   </div>
-                  <p class="text-xs text-slate-400">Точковий спектр пропозиції та попиту за ціновими сегментами</p>
+                </div>
+
+                <!-- Price Vector Badge & Legend -->
+                <div class="flex flex-wrap items-center gap-3 shrink-0">
+                  <!-- Market Shift Badge -->
+                  <div class="relative group/vectorhelp">
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 text-xs font-mono cursor-help shadow-sm">
+                      <span class="text-slate-400 font-sans text-[11px]">Зсув:</span>
+                      <span 
+                        [class.text-amber-400]="analyticsSummary.kpi.demandPriceDiffPct < -3"
+                        [class.text-emerald-400]="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3"
+                        [class.text-purple-300]="analyticsSummary.kpi.demandPriceDiffPct > 3"
+                        class="font-bold flex items-center gap-1"
+                      >
+                        <span class="material-icons text-xs">
+                          {{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'trending_down' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'trending_up' : 'check_circle' }}
+                        </span>
+                        <span>{{ analyticsSummary.kpi.demandPriceDiffPct > 0 ? '+' : '' }}{{ analyticsSummary.kpi.demandPriceDiffPct }}%</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- 2-Color Legend -->
+                  <div class="flex items-center gap-3 text-xs font-semibold bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-slate-800">
+                    <div class="flex items-center gap-1.5">
+                      <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-sm"></span>
+                      <span class="text-slate-300 text-[11px]">Пропозиція</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm"></span>
+                      <span class="text-slate-300 text-[11px]">Попит</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm"></span>
+                      <span class="text-amber-300 text-[11px]">★ Sweet Spot</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <!-- Price Vector Badge & Legend -->
-              <div class="flex flex-wrap items-center gap-3 shrink-0">
-                <!-- Market Shift Badge with Popover -->
-                <div class="relative group/vectorhelp">
-                  <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 text-xs font-mono cursor-help shadow-sm">
-                    <span class="text-slate-400 font-sans text-[11px]">Зсув:</span>
-                    <span 
-                      [class.text-amber-400]="analyticsSummary.kpi.demandPriceDiffPct < -3"
-                      [class.text-emerald-400]="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3"
-                      [class.text-purple-300]="analyticsSummary.kpi.demandPriceDiffPct > 3"
-                      class="font-bold flex items-center gap-1"
-                    >
-                      <span class="material-icons text-xs">
-                        {{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'trending_down' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'trending_up' : 'check_circle' }}
-                      </span>
-                      <span>{{ analyticsSummary.kpi.demandPriceDiffPct > 0 ? '+' : '' }}{{ analyticsSummary.kpi.demandPriceDiffPct }}%</span>
-                      <span class="text-[10px] text-slate-500 font-sans font-normal hidden sm:inline">
-                        ({{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'до бюджету' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'до преміуму' : 'баланс' }})
-                      </span>
-                    </span>
-                  </div>
+              <!-- Store Filter Toggle Buttons (Всі продавці / Топ-3 разом / Топ-1 / Топ-2 / Топ-3) -->
+              <div class="flex flex-wrap items-center gap-2 pt-1">
+                <span class="text-xs font-semibold text-slate-400 flex items-center gap-1 mr-1">
+                  <span class="material-icons text-sm text-indigo-400">store</span>
+                  Фільтр магазинів:
+                </span>
 
-                  <!-- Vector Popover -->
-                  <div class="absolute right-0 top-full mt-2 w-72 p-3 bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/vectorhelp:opacity-100 group-hover/vectorhelp:pointer-events-auto transition-all duration-200 backdrop-blur-md">
-                    <div class="font-bold text-white mb-1">Що означає ціновий зсув?</div>
-                    <p class="text-[11px] text-slate-300 leading-relaxed">
-                      Показує, на скільки відсотків реальний попит покупців відхиляється від середньої ціни полиці.
-                      {{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'Покупці частіше обирають дешевші моделі.' : analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'Покупці готові платити дорожче за якісніші модифікації.' : 'Попит і пропозиція перебувають у повній рівновазі.' }}
-                    </p>
-                  </div>
-                </div>
+                <!-- All Stores Button -->
+                <button 
+                  (click)="setScatterStoreFilter('all')"
+                  class="px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1 cursor-pointer"
+                  [class.bg-indigo-600]="scatterStoreFilter === 'all'"
+                  [class.text-white]="scatterStoreFilter === 'all'"
+                  [class.shadow-md]="scatterStoreFilter === 'all'"
+                  [class.bg-slate-900]="scatterStoreFilter !== 'all'"
+                  [class.text-slate-400]="scatterStoreFilter !== 'all'"
+                  [class.hover:text-white]="scatterStoreFilter !== 'all'"
+                  [class.border]="true"
+                  [class.border-indigo-500]="scatterStoreFilter === 'all'"
+                  [class.border-slate-800]="scatterStoreFilter !== 'all'"
+                >
+                  <span>Вся ніша</span>
+                  <span class="text-[10px] opacity-80">({{ products.length }} тов.)</span>
+                </button>
 
-                <!-- 2-Color Legend -->
-                <div class="flex items-center gap-3 text-xs font-semibold bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-slate-800">
-                  <div class="flex items-center gap-1.5">
-                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-sm"></span>
-                    <span class="text-slate-300 text-[11px]">Пропозиція</span>
-                  </div>
-                  <div class="flex items-center gap-1.5">
-                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm"></span>
-                    <span class="text-slate-300 text-[11px]">Попит</span>
-                  </div>
-                  <div class="flex items-center gap-1.5">
-                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm"></span>
-                    <span class="text-amber-300 text-[11px]">★ Sweet Spot</span>
-                  </div>
-                </div>
+                <!-- Combined Top-3 Button -->
+                <button 
+                  (click)="setScatterStoreFilter('top3')"
+                  class="px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1 cursor-pointer"
+                  [class.bg-purple-600]="scatterStoreFilter === 'top3'"
+                  [class.text-white]="scatterStoreFilter === 'top3'"
+                  [class.shadow-md]="scatterStoreFilter === 'top3'"
+                  [class.bg-slate-900]="scatterStoreFilter !== 'top3'"
+                  [class.text-slate-400]="scatterStoreFilter !== 'top3'"
+                  [class.hover:text-white]="scatterStoreFilter !== 'top3'"
+                  [class.border]="true"
+                  [class.border-purple-500]="scatterStoreFilter === 'top3'"
+                  [class.border-slate-800]="scatterStoreFilter !== 'top3'"
+                >
+                  <span class="material-icons text-[12px] text-amber-400">workspace_premium</span>
+                  <span>Топ-3 разом</span>
+                  <span class="text-[10px] opacity-80">({{ analyticsSummary.kpi.cr3 }}%)</span>
+                </button>
+
+                <!-- Individual Top-3 Stores Chips -->
+                <button 
+                  *ngFor="let s of getTop3SellersList(); let idx = index"
+                  (click)="setScatterStoreFilter(s.name)"
+                  class="px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1.5 cursor-pointer max-w-[190px] truncate"
+                  [class.bg-indigo-950]="scatterStoreFilter.toLowerCase() === s.name.toLowerCase()"
+                  [class.text-indigo-200]="scatterStoreFilter.toLowerCase() === s.name.toLowerCase()"
+                  [class.border-indigo-400]="scatterStoreFilter.toLowerCase() === s.name.toLowerCase()"
+                  [class.bg-slate-900]="scatterStoreFilter.toLowerCase() !== s.name.toLowerCase()"
+                  [class.text-slate-300]="scatterStoreFilter.toLowerCase() !== s.name.toLowerCase()"
+                  [class.hover:text-white]="scatterStoreFilter.toLowerCase() !== s.name.toLowerCase()"
+                  [class.border]="true"
+                  [class.border-slate-800]="scatterStoreFilter.toLowerCase() !== s.name.toLowerCase()"
+                  [title]="'Фільтрувати за магазином ' + s.name + ' (' + s.count + ' тов., ' + s.share + '% частка)'"
+                >
+                  <span class="w-2 h-2 rounded-full shrink-0" [style.backgroundColor]="s.color"></span>
+                  <span class="truncate">#{{ idx + 1 }} {{ s.name }}</span>
+                  <span class="text-[10px] text-slate-400 font-normal shrink-0">{{ s.share }}%</span>
+                </button>
               </div>
             </div>
 
@@ -1400,18 +1454,20 @@
                   </g>
                 </g>
 
-                <!-- Product Scatter Dots (2 Distinct Colors: Indigo for Supply, Emerald for Demand, Amber for Sweet Spot) -->
+                <!-- Product Scatter Dots (With Click Handler to Open Product Specs & Highlight on Store Selection) -->
                 <g class="scatter-dots">
                   <g *ngFor="let pt of plot.points">
                     <circle 
+                      (click)="onScatterPointClick(pt, $event)"
                       [attr.cx]="pt.x" 
                       [attr.cy]="pt.y" 
                       [attr.r]="pt.radius" 
                       [attr.fill]="pt.reviews === 0 ? '#6366f1' : pt.isSweetSpot ? '#f59e0b' : '#10b981'"
-                      [attr.fill-opacity]="pt.reviews === 0 ? '0.65' : '0.88'"
-                      [attr.stroke]="pt.reviews === 0 ? '#818cf8' : pt.isSweetSpot ? '#fbbf24' : '#34d399'"
-                      stroke-width="1"
-                      class="transition-transform duration-100 hover:scale-125 cursor-pointer"
+                      [attr.fill-opacity]="pt.isDimmed ? '0.12' : (pt.reviews === 0 ? '0.70' : '0.90')"
+                      [attr.stroke]="pt.isHighlighted ? '#ffffff' : (pt.reviews === 0 ? '#818cf8' : pt.isSweetSpot ? '#fbbf24' : '#34d399')"
+                      [attr.stroke-width]="pt.isHighlighted ? '2' : '1'"
+                      [attr.opacity]="pt.isDimmed ? '0.22' : '1'"
+                      class="transition-all duration-150 hover:scale-150 cursor-pointer"
                     />
                   </g>
                 </g>
@@ -1459,12 +1515,12 @@
                 </g>
               </svg>
 
-              <!-- Hover Floating Product Tooltip -->
+              <!-- Hover Floating Product Tooltip with Direct Actions (Specs Modal & Rozetka Link) -->
               <div 
                 *ngIf="hoveredScatterPoint" 
-                class="absolute z-30 p-3 bg-[#0f172a] border border-indigo-500/60 rounded-xl shadow-2xl text-xs text-white pointer-events-none transition-all duration-75 max-w-xs"
-                [style.left.px]="Math.min(680, Math.max(70, hoveredScatterPoint.x - 120))"
-                [style.top.px]="Math.max(10, hoveredScatterPoint.y - 85)"
+                class="absolute z-30 p-3 bg-[#0f172a] border border-indigo-500/60 rounded-2xl shadow-2xl text-xs text-white transition-all duration-75 max-w-xs ring-1 ring-slate-700/80 backdrop-blur-md"
+                [style.left.px]="Math.min(660, Math.max(70, hoveredScatterPoint.x - 120))"
+                [style.top.px]="Math.max(10, hoveredScatterPoint.y - 100)"
               >
                 <div class="font-bold text-white text-xs truncate max-w-[240px] mb-1">
                   {{ hoveredScatterPoint.name }}
@@ -1472,21 +1528,56 @@
                 <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono text-slate-300">
                   <div>Ціна: <b class="text-white">{{ hoveredScatterPoint.price | number }} ₴</b></div>
                   <div>Відгуки: <b [class.text-amber-400]="hoveredScatterPoint.isSweetSpot" [class.text-emerald-400]="!hoveredScatterPoint.isSweetSpot">{{ hoveredScatterPoint.reviews }} в.</b></div>
-                  <div>Продавець: <b class="text-indigo-300 truncate">{{ hoveredScatterPoint.seller }}</b></div>
+                  <div class="col-span-2 flex items-center justify-between">
+                    <span class="text-slate-400">Продавець:</span>
+                    <button 
+                      (click)="openSellerProductsModal(hoveredScatterPoint.seller || '')"
+                      class="text-indigo-300 hover:text-white font-bold truncate hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <span>{{ hoveredScatterPoint.seller }}</span>
+                      <span class="material-icons text-[10px]">open_in_new</span>
+                    </button>
+                  </div>
                   <div *ngIf="(hoveredScatterPoint.discount || 0) > 0">Знижка: <b class="text-rose-400">-{{ hoveredScatterPoint.discount }}%</b></div>
                   <div class="col-span-2 text-[10px] text-slate-400 pt-1 border-t border-slate-800 flex items-center justify-between">
                     <span>Сегмент: {{ hoveredScatterPoint.binLabel }}</span>
                     <span *ngIf="hoveredScatterPoint.isSweetSpot" class="text-amber-400 font-bold">★ Sweet Spot</span>
                   </div>
                 </div>
+
+                <!-- Direct Action Buttons to Inspect SKU or Open on Rozetka -->
+                <div class="flex items-center gap-1.5 pt-2 mt-2 border-t border-slate-800/80">
+                  <button 
+                    (click)="openSpecsModal(hoveredScatterPoint.product)"
+                    class="flex-1 py-1.5 px-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-sm"
+                  >
+                    <span class="material-icons text-[12px]">tune</span>
+                    Характеристики
+                  </button>
+                  <a 
+                    *ngIf="hoveredScatterPoint.product.link"
+                    [href]="hoveredScatterPoint.product.link" 
+                    target="_blank" 
+                    class="py-1.5 px-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-[10.5px] font-bold flex items-center justify-center gap-1 border border-slate-700 transition-colors cursor-pointer"
+                    title="Відкрити сторінку товару на маркетплейсі"
+                  >
+                    <span class="material-icons text-[12px]">launch</span>
+                    Rozetka
+                  </a>
+                </div>
               </div>
             </div>
 
-            <!-- 2. Compact Footnote Cards Grid by Price Categories -->
+            <!-- 2. Compact Footnote Cards Grid by Price Categories (With Store-specific Stats) -->
             <div class="space-y-2">
               <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
                 <span>Цінові кошики та віддача (натисніть для перегляду списку товарів)</span>
-                <span class="text-[10px] font-mono text-slate-500">Всього {{ analyticsSummary.priceDistribution.length }} категорій</span>
+                <span class="text-[10px] font-mono text-indigo-400" *ngIf="scatterStoreFilter !== 'all'">
+                  Фільтр: {{ scatterStoreFilter === 'top3' ? 'Топ-3 магазини' : scatterStoreFilter }}
+                </span>
+                <span class="text-[10px] font-mono text-slate-500" *ngIf="scatterStoreFilter === 'all'">
+                  Всього {{ analyticsSummary.priceDistribution.length }} категорій
+                </span>
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5">
@@ -1511,14 +1602,18 @@
                     </span>
                   </div>
 
-                  <!-- Dual Progress Indicators -->
-                  <div class="space-y-1">
+                  <!-- Dual Progress Indicators with Store Adaptivity -->
+                  <div class="space-y-1" *ngIf="getBinStoreStats(bin) as storeStats">
                     <div class="flex justify-between text-[10px] font-mono">
-                      <span class="text-indigo-300">{{ bin.productsCount }} тов. ({{ bin.productsShare }}%)</span>
-                      <span class="text-emerald-400">{{ bin.reviewsSum }} в. ({{ bin.reviewsShare }}%)</span>
+                      <span class="text-indigo-300">
+                        {{ storeStats.count }} тов. 
+                        <span class="text-[9px] text-slate-500" *ngIf="scatterStoreFilter !== 'all'">({{ storeStats.pct }}%)</span>
+                        <span class="text-[9px] text-slate-500" *ngIf="scatterStoreFilter === 'all'">({{ bin.productsShare }}%)</span>
+                      </span>
+                      <span class="text-emerald-400">{{ storeStats.reviews }} в.</span>
                     </div>
                     <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800/80">
-                      <div class="h-full bg-indigo-500 transition-all" [style.width.%]="bin.productsShare" title="Пропозиція"></div>
+                      <div class="h-full bg-indigo-500 transition-all" [style.width.%]="scatterStoreFilter === 'all' ? bin.productsShare : storeStats.pct" title="Пропозиція"></div>
                     </div>
                     <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800/80">
                       <div class="h-full transition-all" [class.bg-amber-400]="bin.isSweetSpot" [class.bg-emerald-400]="!bin.isSweetSpot" [style.width.%]="bin.reviewsShare" title="Попит"></div>

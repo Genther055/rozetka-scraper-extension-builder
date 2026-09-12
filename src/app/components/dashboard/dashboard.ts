@@ -1056,6 +1056,7 @@ export class DashboardComponent implements OnInit {
   }
 
   // --- Price & Demand 2-Color Scatter Distribution Chart Engine ---
+  scatterStoreFilter: 'all' | 'top3' | string = 'all';
   hoveredScatterPoint: {
     x: number;
     y: number;
@@ -1068,9 +1069,71 @@ export class DashboardComponent implements OnInit {
     rating?: number;
     binLabel?: string;
     isSweetSpot?: boolean;
+    isDimmed?: boolean;
+    isHighlighted?: boolean;
     product: Product;
   } | null = null;
   selectedScatterBin: any = null;
+
+  setScatterStoreFilter(filter: string): void {
+    this.scatterStoreFilter = filter;
+    this.hoveredScatterPoint = null;
+    this.cdr.markForCheck();
+  }
+
+  getTop3SellersList(): Array<{ name: string; count: number; share: number; color: string; isRozetka: boolean }> {
+    if (!this.analyticsSummary?.sellersTable || this.analyticsSummary.sellersTable.length === 0) {
+      return [];
+    }
+    return this.analyticsSummary.sellersTable.slice(0, 3).map(s => ({
+      name: s.sellerName,
+      count: s.productsCount,
+      share: s.marketShare,
+      color: s.color || '#6366f1',
+      isRozetka: s.isRozetka
+    }));
+  }
+
+  getBinStoreStats(bin: any): { count: number; reviews: number; pct: number } {
+    if (!bin) return { count: 0, reviews: 0, pct: 0 };
+    if (this.scatterStoreFilter === 'all') {
+      return { count: bin.productsCount, reviews: bin.reviewsSum, pct: bin.productsShare };
+    }
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const top3Names = this.getTop3SellersList().map(s => s.name.toLowerCase());
+    
+    const binProds = list.filter(p => {
+      const pr = Number(p.price) || 0;
+      if (pr < bin.minPrice || pr > bin.maxPrice) return false;
+      const s = (p.seller || '').trim().toLowerCase();
+      if (this.scatterStoreFilter === 'top3') {
+        return top3Names.some(t => s === t || (t.includes('rozetka') && s.includes('rozetka')));
+      }
+      const target = this.scatterStoreFilter.toLowerCase();
+      return s === target || (target.includes('rozetka') && s.includes('rozetka'));
+    });
+
+    const count = binProds.length;
+    const reviews = binProds.reduce((acc, p) => acc + (p.reviews || 0), 0);
+    const totalMatching = list.filter(p => {
+      const s = (p.seller || '').trim().toLowerCase();
+      if (this.scatterStoreFilter === 'top3') {
+        return top3Names.some(t => s === t || (t.includes('rozetka') && s.includes('rozetka')));
+      }
+      const target = this.scatterStoreFilter.toLowerCase();
+      return s === target || (target.includes('rozetka') && s.includes('rozetka'));
+    }).length;
+    const pct = totalMatching > 0 ? Number(((count / totalMatching) * 100).toFixed(1)) : 0;
+
+    return { count, reviews, pct };
+  }
+
+  onScatterPointClick(pt: any, event?: Event): void {
+    if (event) event.stopPropagation();
+    if (pt && pt.product) {
+      this.openSpecsModal(pt.product);
+    }
+  }
 
   getScatterPlotData() {
     const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
@@ -1095,6 +1158,7 @@ export class DashboardComponent implements OnInit {
     const maxReviews = Math.max(5, ...list.map(p => p.reviews || 0));
 
     const bins = this.analyticsSummary?.priceDistribution || [];
+    const top3Names = this.getTop3SellersList().map(s => s.name.toLowerCase());
 
     // 1. Calculate Bins Vertical Bands
     const bands = bins.map(b => {
@@ -1125,10 +1189,25 @@ export class DashboardComponent implements OnInit {
       const isSweetSpot = matchingBin?.isSweetSpot || false;
       const radius = rev === 0 ? 3.5 : Math.min(9, 4 + Math.sqrt(rev) * 0.7);
 
+      const sellerLower = (p.seller || '').trim().toLowerCase();
+      let isDimmed = false;
+      let isHighlighted = false;
+
+      if (this.scatterStoreFilter === 'top3') {
+        const isTop3 = top3Names.some(t => sellerLower === t || (t.includes('rozetka') && sellerLower.includes('rozetka')));
+        isDimmed = !isTop3;
+        isHighlighted = isTop3;
+      } else if (this.scatterStoreFilter !== 'all') {
+        const target = this.scatterStoreFilter.toLowerCase();
+        const isTarget = sellerLower === target || (target.includes('rozetka') && sellerLower.includes('rozetka'));
+        isDimmed = !isTarget;
+        isHighlighted = isTarget;
+      }
+
       return {
         x: Math.round(x * 10) / 10,
         y: Math.round(y * 10) / 10,
-        radius: Math.round(radius * 10) / 10,
+        radius: isHighlighted ? Math.round((radius + 1.5) * 10) / 10 : Math.round(radius * 10) / 10,
         price: pr,
         reviews: rev,
         name: p.name || 'Товар',
@@ -1137,6 +1216,8 @@ export class DashboardComponent implements OnInit {
         rating: p.rating || 0,
         binLabel: matchingBin?.rangeLabel || '',
         isSweetSpot,
+        isDimmed,
+        isHighlighted,
         product: p
       };
     });
