@@ -731,7 +731,7 @@
             return pageHarvestedCount;
         }
 
-        // 2. Second priority: Sequential DOM Top-to-Bottom Scroll
+        // 2. Second priority: Sequential DOM Top-to-Bottom Scroll with Multi-Pass Lazy Loading
         if ('scrollRestoration' in history) {
             try { history.scrollRestoration = 'manual'; } catch (_) {}
         }
@@ -739,12 +739,8 @@
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
         window.dispatchEvent(new Event('scroll', { bubbles: true }));
+        window.dispatchEvent(new Event('resize', { bubbles: true }));
         await new Promise(r => setTimeout(r, 450));
-
-        let currentY = 0;
-        const stepPx = 300;
-        let stableRounds = 0;
-        const maxStableRounds = 3;
 
         // Initial DOM check at top
         const initialBatch = await scrapeCurrentDomItems(meta, pageIndex);
@@ -753,51 +749,72 @@
             await processAndReportHarvest(initialBatch, meta, pageIndex);
         }
 
+        let stableRounds = 0;
+        const maxStableRounds = 4;
+        const stepPx = 250;
+
         while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < targetPageCount && stableRounds < maxStableRounds) {
+            let passFoundAnyNew = false;
+            let currentY = 0;
             const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2000);
 
+            // Step-by-step top-to-bottom scroll pass
             while (currentY < docH && isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < targetPageCount) {
                 currentY = Math.min(docH, currentY + stepPx);
                 window.scrollTo({ top: currentY, behavior: 'smooth' });
                 window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                document.dispatchEvent(new Event('scroll', { bubbles: true }));
                 window.dispatchEvent(new WheelEvent('wheel', { deltaY: stepPx, bubbles: true }));
 
                 const batch = await scrapeCurrentDomItems(meta, pageIndex);
                 if (batch.length > 0) {
                     pageHarvestedCount += batch.length;
-                    stableRounds = 0;
+                    passFoundAnyNew = true;
                     await processAndReportHarvest(batch, meta, pageIndex);
                 }
 
-                await new Promise(r => setTimeout(r, 90));
+                await new Promise(r => setTimeout(r, 80));
             }
 
             if (pageHarvestedCount >= targetPageCount || (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal)) {
                 break;
             }
 
-            // At bottom of current DOM: click Show More & wait for AJAX
+            // Scroll last tile into view to trigger Angular IntersectionObserver
+            try {
+                const allTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, app-goods-tile-default');
+                if (allTiles.length > 0) {
+                    const lastTile = allTiles[allTiles.length - 1];
+                    lastTile.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                    window.dispatchEvent(new Event('resize', { bubbles: true }));
+                }
+            } catch (_) {}
+
+            // Try clicking "Показати ще" if present
             tryTriggerShowMoreOnCurrentPage();
 
-            window.scrollBy({ top: -250, behavior: 'smooth' });
+            // Nudge scroll up and down to wake up lazy loaders
+            window.scrollBy({ top: -300, behavior: 'smooth' });
             window.dispatchEvent(new Event('scroll', { bubbles: true }));
-            await new Promise(r => setTimeout(r, 200));
+            await new Promise(r => setTimeout(r, 250));
 
             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
             window.dispatchEvent(new Event('scroll', { bubbles: true }));
             window.dispatchEvent(new WheelEvent('wheel', { deltaY: 350, bubbles: true }));
+            window.dispatchEvent(new Event('resize', { bubbles: true }));
 
-            await new Promise(r => setTimeout(r, 1100));
+            // Wait for network / DOM injection
+            await new Promise(r => setTimeout(r, 1200));
 
             const freshBatch = await scrapeCurrentDomItems(meta, pageIndex);
             if (freshBatch.length > 0) {
                 pageHarvestedCount += freshBatch.length;
-                stableRounds = 0;
+                passFoundAnyNew = true;
                 await processAndReportHarvest(freshBatch, meta, pageIndex);
             }
 
-            const newDocH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2000);
-            if (newDocH > docH + 200) {
+            if (passFoundAnyNew) {
                 stableRounds = 0;
             } else {
                 stableRounds++;
