@@ -438,6 +438,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // 5. Send Webhook payload to server
     if (message.action === 'sendWebhook') {
+        sendResponse({ success: true });
+
         const { webhookUrl, payload } = message;
         const itemCount = payload?.products?.length || 0;
         console.log(`TradeScout Background: Tab ${tabId} sending ${itemCount} products for "${payload.sessionTitle || 'Каталог'}"...`);
@@ -490,11 +492,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         };
 
         const sendPromises = targets.map(url => postWithRetry(url, payload));
-
-        Promise.all(sendPromises).then((results) => {
-            const serverInfo = results.find(r => r && r.success) || null;
-            sendResponse({ success: true, serverInfo });
-        });
 
         // Trigger background asynchronous enrichment for full 30+ specifications & description (non-blocking)
         if (payload?.products && payload.products.length > 0 && !payload.skipBackgroundEnrichment && !payload.isEnriched) {

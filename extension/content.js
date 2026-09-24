@@ -1,4 +1,4 @@
-// TradeScout Content Script v3.8 Pro (Chunk-Aware Progressive Scroll Engine & Multi-Page Harvester)
+// TradeScout Content Script v3.8 Pro (Ultra-Fast Instant DOM Harvester & Chunk-Aware Progressive Scroll Engine)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
@@ -260,17 +260,17 @@
         } catch (_) {}
     }
 
-    async function sendWebhookPayload(payload) {
-        return new Promise(resolve => {
+    function sendWebhookPayload(payload) {
+        try {
             chrome.runtime.sendMessage({
                 action: 'sendWebhook',
                 webhookUrl: webhookEndpoint,
                 tabId: currentTabId,
                 payload: payload
-            }, (res) => {
-                resolve(res?.serverInfo || null);
+            }, () => {
+                if (chrome.runtime.lastError) {}
             });
-        });
+        } catch (_) {}
     }
 
     function extractSeller(item) {
@@ -325,7 +325,7 @@
         return 'Rozetka';
     }
 
-    async function scrapeCurrentDomItems(meta, pageIndex) {
+    function scrapeCurrentDomItems(meta, pageIndex) {
         const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, .catalog-grid, rz-catalog-grid, rz-catalog-tiles, .catalog-selection__goods, section.catalog-grid') || document.querySelector('main') || document.body;
         
         let rawTiles = Array.from(catalogContainer.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, rz-product-tile, [data-goods-id], .goods-tile, app-goods-tile-default'));
@@ -357,33 +357,6 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // Batch fetch official Rozetka product details (seller title, exact pricing, old_price, discounts) for all items on this page
-        const apiProductMap = new Map();
-        try {
-            const productIds = [];
-            for (const { link } of distinctTiles) {
-                const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
-                if (m && m[1]) productIds.push(m[1]);
-            }
-            if (productIds.length > 0) {
-                const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productIds.join(',')}`;
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3500);
-                const res = await fetch(apiUrl, { signal: controller.signal }).catch(() => null);
-                clearTimeout(timeoutId);
-                if (res && res.ok) {
-                    const json = await res.json().catch(() => null);
-                    if (json && Array.isArray(json.data)) {
-                        for (const apiProd of json.data) {
-                            if (apiProd && apiProd.id) {
-                                apiProductMap.set(String(apiProd.id), apiProd);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (_) {}
-
         const newItems = [];
 
         for (const { item, linkTag, link } of distinctTiles) {
@@ -391,10 +364,6 @@
                 const titleEl = item.querySelector('a.tile-title, a.goods-tile__heading, .goods-tile__heading, .tile-title, [class*="heading"], [class*="title"]') || linkTag;
                 const name = titleEl && titleEl.innerText ? titleEl.innerText.trim() : (linkTag.innerText ? linkTag.innerText.trim() : '');
                 if (!name || name.length < 3) continue;
-
-                const idMatch = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
-                const prodId = idMatch ? String(idMatch[1]) : '';
-                const apiProd = prodId ? apiProductMap.get(prodId) : null;
 
                 // --- 1. CURRENT PRICE EXTRACTION ---
                 let price = 0;
@@ -407,77 +376,45 @@
                 if (priceText) {
                     price = parseInt(priceText.replace(/\D/g, ''), 10) || 0;
                 }
-                if (!price && apiProd && apiProd.price) {
-                    price = parseInt(String(apiProd.price).replace(/\D/g, ''), 10) || 0;
-                }
 
                 // --- 2. OLD (PRE-DISCOUNT) PRICE & DISCOUNT EXTRACTION ---
                 let oldPrice = 0;
                 let discount = 0;
 
-                // A. Official Rozetka API data
-                if (apiProd) {
-                    if (apiProd.old_price && Number(apiProd.old_price) > 0) {
-                        const parsedOld = parseInt(String(apiProd.old_price).replace(/\D/g, ''), 10) || 0;
-                        if (parsedOld > price) {
-                            oldPrice = parsedOld;
-                        }
-                    } else if (apiProd.oldPrice && Number(apiProd.oldPrice) > 0) {
-                        const parsedOld = parseInt(String(apiProd.oldPrice).replace(/\D/g, ''), 10) || 0;
-                        if (parsedOld > price) {
-                            oldPrice = parsedOld;
-                        }
+                const oldPriceEl = item.querySelector(
+                    '.goods-tile__price--old, .goods-tile__price_type_old, .goods-tile__price.type_old, ' +
+                    '.goods-tile__price_color_gray, .goods-tile__price-old, [class*="price_color_gray"], ' +
+                    '[class*="price--old"], [class*="price_type_old"], [class*="price-old"], [class*="old-price"], ' +
+                    '[class*="price__old"], [class*="old_price"], [class*="price-discount"], [class*="product-price__small"], ' +
+                    'del, s, strike, [style*="line-through"]'
+                );
+                if (oldPriceEl && oldPriceEl.innerText) {
+                    const parsed = parseInt(oldPriceEl.innerText.replace(/\D/g, ''), 10) || 0;
+                    if (parsed > price) {
+                        oldPrice = parsed;
                     }
+                }
 
-                    if (apiProd.discount) {
-                        if (typeof apiProd.discount === 'number' && apiProd.discount > 0) {
-                            discount = apiProd.discount;
-                        } else if (typeof apiProd.discount === 'object' && apiProd.discount.value) {
-                            discount = parseInt(apiProd.discount.value, 10) || 0;
+                const badgeEl = item.querySelector(
+                    'rz-badge, .goods-tile__badge, [class*="goods-tile__badge"], [class*="goods-tile__label"], ' +
+                    '[class*="badge"], [class*="promo"], [class*="discount"], [class*="sticker"], [class*="tag"]'
+                );
+                const badgeText = badgeEl && badgeEl.innerText ? badgeEl.innerText : '';
+                const badgeMatch = badgeText.match(/(?:-|−|знижка\s*|скидка\s*)(\d{1,2})\s*%/i) || badgeText.match(/-(\d{1,2})%/);
+                if (badgeMatch && badgeMatch[1]) {
+                    discount = parseInt(badgeMatch[1], 10) || 0;
+                } else {
+                    const fullTileText = item.innerText || '';
+                    const tileMatch = fullTileText.match(/(?:-|−)(\d{1,2})%/);
+                    if (tileMatch && tileMatch[1]) {
+                        const pct = parseInt(tileMatch[1], 10) || 0;
+                        if (pct > 0 && pct < 90) {
+                            discount = pct;
                         }
                     }
                 }
 
-                // B. DOM Old Price Element Search
-                if (!oldPrice) {
-                    const oldPriceEl = item.querySelector(
-                        '.goods-tile__price--old, .goods-tile__price_type_old, .goods-tile__price.type_old, ' +
-                        '.goods-tile__price_color_gray, .goods-tile__price-old, [class*="price_color_gray"], ' +
-                        '[class*="price--old"], [class*="price_type_old"], [class*="price-old"], [class*="old-price"], ' +
-                        '[class*="price__old"], [class*="old_price"], [class*="price-discount"], [class*="product-price__small"], ' +
-                        'del, s, strike, [style*="line-through"]'
-                    );
-                    if (oldPriceEl && oldPriceEl.innerText) {
-                        const parsed = parseInt(oldPriceEl.innerText.replace(/\D/g, ''), 10) || 0;
-                        if (parsed > price) {
-                            oldPrice = parsed;
-                        }
-                    }
-                }
-
-                // C. DOM Promo Badges / Discount Stickers
-                if (!discount) {
-                    const badgeEl = item.querySelector(
-                        'rz-badge, .goods-tile__badge, [class*="goods-tile__badge"], [class*="goods-tile__label"], ' +
-                        '[class*="badge"], [class*="promo"], [class*="discount"], [class*="sticker"], [class*="tag"]'
-                    );
-                    const badgeText = badgeEl && badgeEl.innerText ? badgeEl.innerText : '';
-                    const badgeMatch = badgeText.match(/(?:-|−|знижка\s*|скидка\s*)(\d{1,2})\s*%/i) || badgeText.match(/-(\d{1,2})%/);
-                    if (badgeMatch && badgeMatch[1]) {
-                        discount = parseInt(badgeMatch[1], 10) || 0;
-                    } else {
-                        const fullTileText = item.innerText || '';
-                        const tileMatch = fullTileText.match(/(?:-|−)(\d{1,2})%/);
-                        if (tileMatch && tileMatch[1]) {
-                            const pct = parseInt(tileMatch[1], 10) || 0;
-                            if (pct > 0 && pct < 90) {
-                                discount = pct;
-                            }
-                        }
-                    }
-                }
-
-                // D. Harmonize oldPrice & discount
+                // Harmonize oldPrice & discount
                 if (oldPrice > price && !discount && price > 0) {
                     discount = Math.round(((oldPrice - price) / oldPrice) * 100);
                 } else if (discount > 0 && (!oldPrice || oldPrice <= price) && price > 0) {
@@ -509,8 +446,7 @@
                 const power = powerMatch ? `${powerMatch[1]}W` : '';
                 const specs = [capacity, power].filter(Boolean).join(', ') || 'Стандартні';
 
-                const apiSeller = apiProd && apiProd.seller ? ((apiProd.seller.title || apiProd.seller.name || '').trim()) : null;
-                const seller = apiSeller || extractSeller(item) || 'Rozetka';
+                const seller = extractSeller(item) || 'Rozetka';
 
                 newItems.push({
                     name,
@@ -539,7 +475,7 @@
         return newItems;
     }
 
-    async function processAndReportHarvest(items, meta, pageIndex) {
+    function processAndReportHarvest(items, meta, pageIndex) {
         if (!items || items.length === 0) return;
         currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100));
         currentStatusMsg = `Зібрано ${sentLinks.size} з ${currentEstimatedTotal} товарів (стор. ${pageIndex})...`;
@@ -560,7 +496,8 @@
             webhookUrl: webhookEndpoint
         });
 
-        await sendWebhookPayload({
+        // Fast non-blocking background dispatch
+        sendWebhookPayload({
             products: items,
             page: pageIndex,
             sessionId: currentSessionId,
@@ -586,13 +523,13 @@
         document.body.scrollTop = 0;
         window.dispatchEvent(new Event('scroll', { bubbles: true }));
         window.dispatchEvent(new Event('resize', { bubbles: true }));
-        await new Promise(r => setTimeout(r, 350));
+        await new Promise(r => setTimeout(r, 250));
 
         // 2. Initial top check
-        const topBatch = await scrapeCurrentDomItems(meta, pageIndex);
+        const topBatch = scrapeCurrentDomItems(meta, pageIndex);
         if (topBatch.length > 0) {
             harvestedThisPage += topBatch.length;
-            await processAndReportHarvest(topBatch, meta, pageIndex);
+            processAndReportHarvest(topBatch, meta, pageIndex);
         }
 
         // 3. Progressive chunk-aware scrolling
@@ -611,15 +548,15 @@
                 window.dispatchEvent(new Event('scroll', { bubbles: true }));
                 window.dispatchEvent(new WheelEvent('wheel', { deltaY: stepPx, bubbles: true }));
 
-                // Check for new items
-                const batch = await scrapeCurrentDomItems(meta, pageIndex);
+                // Instant DOM check
+                const batch = scrapeCurrentDomItems(meta, pageIndex);
                 if (batch.length > 0) {
                     harvestedThisPage += batch.length;
                     idleAtBottomRetries = 0;
-                    await processAndReportHarvest(batch, meta, pageIndex);
+                    processAndReportHarvest(batch, meta, pageIndex);
                 }
 
-                await new Promise(r => setTimeout(r, 180));
+                await new Promise(r => setTimeout(r, 160));
             } else {
                 // We reached the current bottom of the DOM!
                 // Trigger Angular lazy observers by scrolling bottom tile/observer into view
@@ -633,20 +570,20 @@
                 // Jiggle scroll to force trigger IntersectionObservers
                 window.scrollBy(0, -150);
                 window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                await new Promise(r => setTimeout(r, 200));
+                await new Promise(r => setTimeout(r, 180));
                 window.scrollBy(0, 150);
                 window.dispatchEvent(new Event('scroll', { bubbles: true }));
                 window.dispatchEvent(new Event('resize', { bubbles: true }));
 
-                await new Promise(r => setTimeout(r, 350));
+                await new Promise(r => setTimeout(r, 300));
 
                 // Check if new items loaded or DOM expanded
                 const newScrollH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1000);
-                const batch = await scrapeCurrentDomItems(meta, pageIndex);
+                const batch = scrapeCurrentDomItems(meta, pageIndex);
                 if (batch.length > 0) {
                     harvestedThisPage += batch.length;
                     idleAtBottomRetries = 0;
-                    await processAndReportHarvest(batch, meta, pageIndex);
+                    processAndReportHarvest(batch, meta, pageIndex);
                 }
 
                 if (newScrollH > prevScrollH + 100) {
@@ -664,10 +601,10 @@
         }
 
         // 4. Final bottom sweep
-        const finalBatch = await scrapeCurrentDomItems(meta, pageIndex);
+        const finalBatch = scrapeCurrentDomItems(meta, pageIndex);
         if (finalBatch.length > 0) {
             harvestedThisPage += finalBatch.length;
-            await processAndReportHarvest(finalBatch, meta, pageIndex);
+            processAndReportHarvest(finalBatch, meta, pageIndex);
         }
 
         return harvestedThisPage;
@@ -676,8 +613,7 @@
     // Main scraping runner
     async function runTabScraper(initialPage) {
         if (isScraperLoopRunning) {
-            console.log(`TradeScout Tab ${currentTabId}: Scraper loop is already running, skipping duplicate start.`);
-            return;
+            console.log(`TradeScout Tab ${currentTabId}: Scraper loop is already running, resetting and starting cleanly.`);
         }
         isScraperLoopRunning = true;
 
@@ -859,6 +795,7 @@
 
         isTabScrapingActive = true;
         window.__tradeScoutIsScrapingActive = true;
+        isScraperLoopRunning = false;
         currentTabId = tabId || currentTabId || Date.now();
         currentSessionId = `session_${currentTabId}_${Date.now()}`;
         if (customUrl) webhookEndpoint = customUrl;
@@ -900,6 +837,7 @@
 
         isTabScrapingActive = true;
         window.__tradeScoutIsScrapingActive = true;
+        isScraperLoopRunning = false;
         currentTabId = session.tabId || currentTabId || Date.now();
         currentSessionId = session.sessionId || `session_${currentTabId}_${Date.now()}`;
         if (session.webhookUrl) webhookEndpoint = session.webhookUrl;
