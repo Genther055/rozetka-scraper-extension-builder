@@ -8,6 +8,9 @@
     if ('scrollRestoration' in history) {
         try { history.scrollRestoration = 'manual'; } catch (_) {}
     }
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
 
     console.log('TradeScout Content Script v3.6 Pro loaded on:', window.location.href);
 
@@ -70,7 +73,7 @@
             if (!isNaN(num) && num > 0 && num < 1000000) return num;
         }
 
-        // Match: "531 товар", "508 товарів", "24 товари", "100 товаров", "350 товаров"
+        // Match: "531 товар", "508 товарів", "73 товари", "24 товари", "100 товаров", "350 товаров"
         const m2 = cleaned.match(/\b([\d\s\u00A0\u202F.,]+)\s*(?:товарів|товари|товаров|товара|товар)\b/i);
         if (m2 && m2[1]) {
             const num = parseInt(m2[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
@@ -124,14 +127,16 @@
             }
         }
 
-        // If top counter text was found and is consistent with the number of pages
+        // Strict mathematical consistency: validate parsedTopCount against detected maxPage
         if (parsedTopCount > 0) {
-            if (maxPage <= 1 || parsedTopCount >= (maxPage - 1) * 35) {
+            const minExpected = maxPage > 1 ? (maxPage - 1) * 20 : 1;
+            const maxExpected = maxPage * 65;
+            if (parsedTopCount >= minExpected && parsedTopCount <= maxExpected) {
                 return parsedTopCount;
             }
         }
 
-        // Fallback: maxPage * 60
+        // Fallback: maxPage * 60 (or current DOM tiles if single page)
         if (maxPage > 1) {
             return maxPage * 60;
         }
@@ -877,20 +882,7 @@
                     nextUrl = fallbackNextUrl;
                 }
 
-                // Scroll next button into view and click
-                if (actionObj && actionObj.element) {
-                    try {
-                        actionObj.element.scrollIntoView({ behavior: 'auto', block: 'center' });
-                        await new Promise(r => setTimeout(r, 200));
-                    } catch (_) {}
-                }
-
-                const prevHref = window.location.href;
-                if (actionObj && actionObj.element) {
-                    dispatchSafeClick(actionObj.element);
-                }
-
-                // Immediately force scroll restoration to manual and scroll to top
+                // Ensure manual scroll restoration and keep scroll locked at (0,0)
                 if ('scrollRestoration' in history) {
                     try { history.scrollRestoration = 'manual'; } catch (_) {}
                 }
@@ -898,44 +890,19 @@
                 document.documentElement.scrollTop = 0;
                 document.body.scrollTop = 0;
 
-                // Wait up to 2.5 seconds to check if Rozetka did an in-page SPA transition or page reload
-                let spaTransitionDetected = false;
-                for (let w = 0; w < 10; w++) {
-                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                    await new Promise(r => setTimeout(r, 250));
-
-                    if (window.location.href !== prevHref) {
-                        spaTransitionDetected = true;
-                        break;
-                    }
-                    const freshItems = Array.from(document.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, .goods-tile'));
-                    const hasUnscraped = freshItems.some(tile => {
-                        if (isUnwantedTile(tile)) return false;
-                        const linkTag = tile.querySelector('a.goods-tile__heading, a.tile-title, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
-                        if (!linkTag) return false;
-                        let href = (linkTag.getAttribute('href') || '').split('?')[0].split('#')[0].replace(/\/+$/, '');
-                        return href && !sentLinks.has(href) && !sentLinks.has(`https://rozetka.com.ua${href}`);
-                    });
-                    if (hasUnscraped) {
-                        spaTransitionDetected = true;
-                        break;
-                    }
-                }
-
-                if (spaTransitionDetected) {
-                    currentPage = nextPageNum;
-                    window.scrollTo(0, 0);
-                    document.documentElement.scrollTop = 0;
-                    document.body.scrollTop = 0;
-                    await new Promise(r => setTimeout(r, 450));
-                    continue;
-                }
-
-                // If click didn't trigger navigation within 2.5s, force direct URL navigation
-                if (nextUrl && nextUrl !== prevHref) {
+                // Direct URL navigation ensures the next page opens cleanly at top (0,0) without bottom jumping
+                if (nextUrl && nextUrl !== window.location.href) {
                     console.log(`TradeScout Tab ${currentTabId}: Navigating directly to next page: ${nextUrl}`);
                     window.location.href = nextUrl;
                     return;
+                } else if (actionObj && actionObj.element) {
+                    dispatchSafeClick(actionObj.element);
+                    await new Promise(r => setTimeout(r, 600));
+                    window.scrollTo(0, 0);
+                    document.documentElement.scrollTop = 0;
+                    document.body.scrollTop = 0;
+                    currentPage = nextPageNum;
+                    continue;
                 } else {
                     break;
                 }
@@ -1100,6 +1067,16 @@
         window.scrollTo(0, 0);
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
+
+        // Keep pinned at top during initial DOM hydration
+        const topTimer = setInterval(() => {
+            if (window.scrollY > 0) {
+                window.scrollTo(0, 0);
+                document.documentElement.scrollTop = 0;
+                document.body.scrollTop = 0;
+            }
+        }, 50);
+        setTimeout(() => clearInterval(topTimer), 400);
 
         try {
             chrome.runtime.sendMessage({ action: 'GET_TAB_SESSION_ON_LOAD' }, (res) => {
