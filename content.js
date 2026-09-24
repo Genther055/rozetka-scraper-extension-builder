@@ -851,23 +851,11 @@
 
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
-                // Check if catalog complete (either total items reached or reached max calculated page)
-                if (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) {
-                    console.log(`TradeScout Tab ${currentTabId}: Reached estimated total (${sentLinks.size}/${currentEstimatedTotal}). Catalog complete.`);
-                    break;
-                }
-
-                const maxCalculatedPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
-                if (currentPage >= maxCalculatedPages) {
-                    console.log(`TradeScout Tab ${currentTabId}: Reached max calculated page (${currentPage}/${maxCalculatedPages}). Catalog complete.`);
-                    break;
-                }
-
                 const actionObj = findNextPageElement(currentPage);
                 const fallbackNextUrl = constructNextPageUrl(window.location.href, currentPage + 1);
 
-                if (!actionObj && !fallbackNextUrl) {
-                    console.log(`TradeScout Tab ${currentTabId}: No next page link found. Catalog complete with ${sentLinks.size} items.`);
+                if (!actionObj) {
+                    console.log(`TradeScout Tab ${currentTabId}: No next page link found on page ${currentPage}. Catalog complete with ${sentLinks.size} items.`);
                     break;
                 }
 
