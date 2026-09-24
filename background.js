@@ -573,7 +573,96 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return true;
     }
+
+    // 11. Fetch Rozetka official catalog API data with full background host permissions (bypassing CSP/CORS)
+    if (message.action === 'FETCH_ROZETKA_CATALOG_API') {
+        const { url, page } = message;
+        fetchRozetkaCatalogData(url, page).then(result => {
+            sendResponse(result);
+        }).catch(() => {
+            sendResponse({ success: false, goods: [] });
+        });
+        return true;
+    }
 });
+
+async function fetchRozetkaCatalogData(urlStr, pageIndex) {
+    if (!urlStr) return { success: false, goods: [] };
+    try {
+        let categoryId = '';
+        const catMatch = urlStr.match(/\/c(\d+)/i) || urlStr.match(/category_id=(\d+)/i) || urlStr.match(/c_id=(\d+)/i);
+        if (catMatch && catMatch[1]) {
+            categoryId = catMatch[1];
+        }
+
+        const isUa = urlStr.includes('/ua/') || !urlStr.includes('/ru/');
+        const lang = isUa ? 'ua' : 'ru';
+
+        let params = [];
+        params.push('front-type=xl');
+        params.push('country=UA');
+        params.push(`lang=${lang}`);
+        params.push(`page=${pageIndex || 1}`);
+
+        if (categoryId) {
+            params.push(`category_id=${categoryId}`);
+        }
+
+        // Search text if present
+        const searchMatch = urlStr.match(/[?&]text=([^&#]+)/i);
+        if (searchMatch && searchMatch[1]) {
+            params.push(`text=${searchMatch[1]}`);
+        }
+
+        // Filters in path: /c80153/producer=xiaomi;.../
+        const filterPathMatch = urlStr.match(/\/c\d+\/([^/?#]+)/i);
+        if (filterPathMatch && filterPathMatch[1]) {
+            const rawParts = filterPathMatch[1].split(';');
+            for (const part of rawParts) {
+                if (part && !part.startsWith('page=')) {
+                    params.push(part);
+                }
+            }
+        }
+
+        const queryStr = params.join('&');
+        const candidateUrls = [
+            `https://xl-catalog-api.rozetka.com.ua/v4/goods/get?${queryStr}`,
+            `https://common-api.rozetka.com.ua/v2/api/v2/goods/get?${queryStr}`,
+            `https://catalog-api.rozetka.com.ua/v4/goods/get?${queryStr}`
+        ];
+
+        for (const endpoint of candidateUrls) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
+                const res = await fetch(endpoint, {
+                    signal: controller.signal,
+                    headers: {
+                        'Accept': 'application/json, text/plain, */*',
+                        'Accept-Language': 'uk,ru;q=0.9,en-US;q=0.8,en;q=0.7'
+                    }
+                });
+                clearTimeout(timeoutId);
+                if (res && res.ok) {
+                    const json = await res.json();
+                    if (json && json.data) {
+                        const rawGoods = json.data.goods || json.data.items || (Array.isArray(json.data) ? json.data : []);
+                        if (Array.isArray(rawGoods) && rawGoods.length > 0) {
+                            return {
+                                success: true,
+                                goods: rawGoods,
+                                totalGoods: Number(json.data.total_goods || json.data.total || json.data.count || 0),
+                                totalPages: Number(json.data.total_pages || json.data.totalPages || 0)
+                            };
+                        }
+                    }
+                }
+            } catch (_) {}
+        }
+    } catch (_) {}
+    return { success: false, goods: [] };
+}
 
 // =========================================================================
 // ASYNCHRONOUS BACKGROUND ENRICHMENT WORKER (Specs, Characteristics & Description)

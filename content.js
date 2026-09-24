@@ -359,74 +359,25 @@
         return 'Rozetka';
     }
 
-    // Direct Rozetka Catalog API fetcher for fast, authoritative batch data
+    // Direct Rozetka Catalog API fetcher via background service worker (bypassing CSP/CORS)
     async function tryFetchRozetkaCatalogApi(pageIndex) {
-        try {
-            const urlStr = window.location.href;
-            let categoryId = '';
-            const catMatch = urlStr.match(/\/c(\d+)/i) || urlStr.match(/category_id=(\d+)/i) || urlStr.match(/c_id=(\d+)/i);
-            if (catMatch && catMatch[1]) {
-                categoryId = catMatch[1];
-            }
-
-            const isUa = urlStr.includes('/ua/') || !urlStr.includes('/ru/');
-            const lang = isUa ? 'ua' : 'ru';
-
-            let params = [];
-            params.push('front-type=xl');
-            params.push('country=UA');
-            params.push(`lang=${lang}`);
-            params.push(`page=${pageIndex}`);
-
-            if (categoryId) {
-                params.push(`category_id=${categoryId}`);
-            }
-
-            // Search text
-            const searchMatch = urlStr.match(/[?&]text=([^&#]+)/i);
-            if (searchMatch && searchMatch[1]) {
-                params.push(`text=${searchMatch[1]}`);
-            }
-
-            // Filters in path: /c80153/producer=xiaomi;.../
-            const filterPathMatch = urlStr.match(/\/c\d+\/([^/?#]+)/i);
-            if (filterPathMatch && filterPathMatch[1]) {
-                const rawParts = filterPathMatch[1].split(';');
-                for (const part of rawParts) {
-                    if (part && !part.startsWith('page=')) {
-                        params.push(part);
+        return new Promise(resolve => {
+            try {
+                chrome.runtime.sendMessage({
+                    action: 'FETCH_ROZETKA_CATALOG_API',
+                    url: window.location.href,
+                    page: pageIndex
+                }, (res) => {
+                    if (chrome.runtime.lastError || !res || !res.success) {
+                        resolve(null);
+                    } else {
+                        resolve(res);
                     }
-                }
+                });
+            } catch (_) {
+                resolve(null);
             }
-
-            const endpoints = [
-                `https://xl-catalog-api.rozetka.com.ua/v4/goods/get?${params.join('&')}`,
-                `https://common-api.rozetka.com.ua/v2/api/v2/goods/get?${params.join('&')}`,
-                `https://catalog-api.rozetka.com.ua/v4/goods/get?${params.join('&')}`
-            ];
-
-            for (const ep of endpoints) {
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 3500);
-                    const res = await fetch(ep, { signal: controller.signal });
-                    clearTimeout(timeoutId);
-                    if (res && res.ok) {
-                        const json = await res.json().catch(() => null);
-                        if (json && json.data) {
-                            const rawGoods = json.data.goods || json.data.items || (Array.isArray(json.data) ? json.data : []);
-                            if (Array.isArray(rawGoods) && rawGoods.length > 0) {
-                                return {
-                                    goods: rawGoods,
-                                    total: json.data.total_goods || json.data.total || json.data.count || 0
-                                };
-                            }
-                        }
-                    }
-                } catch (_) {}
-            }
-        } catch (_) {}
-        return null;
+        });
     }
 
     function buildProductsFromApiGoods(goods, meta) {
