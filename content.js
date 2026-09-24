@@ -120,7 +120,7 @@
         // Priority 1: Top catalog counter text (e.g. "Знайдено 531 товар")
         const topElements = document.querySelectorAll('rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection, [data-testid*="found"], [data-testid*="counter"], [class*="found-goods"], [class*="goods-count"], [class*="heading__goods"], .catalog-selection__label, h1, h2, p, span, div');
         for (const el of topElements) {
-            if (el.closest('aside, .sidebar, rz-filter-stack, .sidebar-block')) continue;
+            if (el.closest('aside, .sidebar, rz-filter-stack, .sidebar-block, rz-viewed-goods, [class*="viewed"], .recently-viewed')) continue;
             if (el.children.length > 5) continue;
             const txt = (el.textContent || el.innerText || '').trim();
             if (txt.toLowerCase().includes('знайдено') || txt.toLowerCase().includes('найдено') || txt.toLowerCase().includes('товар')) {
@@ -157,25 +157,56 @@
         return currentDomTiles > 0 ? currentDomTiles : 60;
     }
 
-    // Precise filter: eliminate only non-catalog containers (carousels, viewed items, sidebars, ads)
+    // Precise filter: eliminate recently viewed items, recommendation carousels, sidebars, banners and ads
     function isUnwantedTile(item) {
         if (!item || !(item instanceof Element)) return true;
         
-        // Exclude sidebars, recommendation carousels, accessories, viewed goods
-        if (item.closest('rz-goods-carousel, rz-carousel, rz-goods-slider, rz-slider, app-goods-carousel, app-slider, .goods-carousel, .recently-viewed, rz-goods-section-slider, .slider, .carousel, rz-similar-goods, rz-recommended-goods, rz-viewed-goods, .catalog-banner, .advertising-slot, aside, .sidebar, rz-accessories, .goods-slider, .recommendations, [data-testid*="carousel"], [data-testid*="slider"], [class*="section-slider"], rz-product-slider, .main-goods__cell--advertising')) {
-            return true;
-        }
+        // 1. Strictly exclude non-catalog containers (recently viewed, recommendations, sidebars, carousels, footers, headers)
+        const unwantedContainer = item.closest(`
+            aside, .sidebar, rz-sidebar, 
+            rz-viewed-goods, [class*="viewed"], .recently-viewed, .goods-viewed, rz-recent-goods, [data-testid*="viewed"], [data-testid*="recently"],
+            rz-goods-carousel, rz-carousel, rz-goods-slider, rz-slider, app-goods-carousel, app-slider, .goods-carousel,
+            rz-similar-goods, rz-recommended-goods, rz-accessories, .recommendations, [data-testid*="carousel"], [data-testid*="slider"],
+            .catalog-banner, .advertising-slot, .main-goods__cell--advertising,
+            footer, header
+        `);
+        if (unwantedContainer) return true;
         
+        // 2. Exclude sponsored / advertising classes and attributes
         const tileClasses = (item.className || '').toLowerCase();
         if (
             tileClasses.includes('catalog-banner') || 
             tileClasses.includes('rz-banner') || 
             tileClasses.includes('banner-tile') || 
-            tileClasses.includes('advertising-slot')
+            tileClasses.includes('advertising-slot') ||
+            tileClasses.includes('goods-tile--ad') ||
+            tileClasses.includes('goods-tile_ad') ||
+            item.hasAttribute('data-ad') ||
+            item.hasAttribute('data-advertisement') ||
+            item.hasAttribute('data-advert') ||
+            item.hasAttribute('data-sponsored')
         ) {
             return true;
         }
 
+        // 3. Check for explicit "Реклама" / "Спонсор" text inside promo badges or labels
+        const promoElements = item.querySelectorAll('.goods-tile__label, .promo-label, [data-testid*="promo-label"], [data-testid*="ad-badge"], .goods-tile__badge, [class*="badge"], [class*="label"]');
+        for (const el of promoElements) {
+            const txt = (el.textContent || '').trim().toLowerCase();
+            if (
+                txt === 'реклама' || 
+                txt.includes('реклама') || 
+                txt.includes('спонсор') || 
+                txt.includes('спонсоровано') || 
+                txt.includes('sponsored') || 
+                txt === 'ad' || 
+                txt === 'adv'
+            ) {
+                return true;
+            }
+        }
+
+        // 4. Must have a valid product link and price
         const hasProductLink = !!item.querySelector('a[href*="/p/"], a[href*="/p-"], a[href*="/p"], a.goods-tile__heading, a.tile-title, [class*="heading"] a');
         const hasPrice = !!item.querySelector('.goods-tile__price, .price, [class*="price"]');
         if (!hasProductLink && !hasPrice) return true;
@@ -305,8 +336,9 @@
     }
 
     async function scrapeCurrentDomItems(meta, pageIndex) {
-        // Query all catalog tiles across the catalog grid
-        let rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
+        // Query strictly within the main catalog grid container
+        const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, rz-catalog-grid, rz-catalog, .catalog-grid') || document.body;
+        let rawTiles = Array.from(catalogContainer.querySelectorAll(TILE_SELECTORS));
         
         if (rawTiles.length === 0) {
             const grids = document.querySelectorAll('ul.catalog-grid, rz-grid ul, rz-catalog-grid ul, .catalog-grid');
@@ -315,7 +347,7 @@
             });
         }
 
-        // Filter out unwanted slider/carousel/banner elements and avoid duplicates
+        // Filter out unwanted slider/carousel/banner/viewed elements and avoid duplicates
         const distinctTiles = [];
         const seenElements = new Set();
 
