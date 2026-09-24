@@ -54,17 +54,35 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
     await removeTabSession(tabId);
 });
 
-// Clean up sessions when a tab navigates or refreshes
+// Manage sessions when a tab navigates or refreshes
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'loading' && tab.url && tab.url.includes('rozetka.com.ua')) {
+    if (changeInfo.status === 'complete' && tab.url && tab.url.includes('rozetka.com.ua')) {
         const sessions = await getTabSessions();
-        if (sessions[tabId]) {
-            sessions[tabId].isRunning = false;
-            sessions[tabId].percentProgress = 0;
-            sessions[tabId].statusMsg = 'Готова до запуску';
-            await new Promise(resolve => {
-                chrome.storage.local.set({ tabSessions: sessions }, resolve);
-            });
+        const session = sessions[tabId];
+        if (session && session.isRunning && !stoppedTabs.has(tabId)) {
+            console.log(`TradeScout Background: Tab ${tabId} loaded page, auto-resuming session...`);
+            setTimeout(() => {
+                chrome.tabs.sendMessage(tabId, {
+                    action: 'RESUME_TAB_SCRAPE',
+                    tabId: tabId,
+                    session: session
+                }, () => {
+                    if (chrome.runtime.lastError) {
+                        chrome.scripting.executeScript({
+                            target: { tabId: tabId },
+                            files: ['content.js']
+                        }, () => {
+                            setTimeout(() => {
+                                chrome.tabs.sendMessage(tabId, {
+                                    action: 'RESUME_TAB_SCRAPE',
+                                    tabId: tabId,
+                                    session: session
+                                }).catch(() => {});
+                            }, 250);
+                        }).catch(() => {});
+                    }
+                });
+            }, 500);
         }
     }
 });
@@ -132,6 +150,18 @@ async function startScrapingTab(tabId, webhookUrl) {
     stoppedTabs.delete(tabId);
     const now = Date.now();
     const sessionId = `session_${tabId}_${now}`;
+
+    await updateTabSession(tabId, {
+        isRunning: true,
+        sessionId: sessionId,
+        webhookUrl: webhookUrl,
+        sentLinks: [],
+        currentPage: 1,
+        totalScraped: 0,
+        percentProgress: 1,
+        statusMsg: 'Запуск скрейпінгу...',
+        startTime: now
+    });
 
     return new Promise(resolve => {
         chrome.tabs.sendMessage(tabId, {
@@ -254,17 +284,33 @@ async function notifyServerScrapingStatus(taskData) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = message.tabId || (sender && sender.tab ? sender.tab.id : null);
 
-    // 0. Tab reports it is idle on load
+    // 0. Tab checks if it has an active session on initial load
+    if (message.action === 'GET_TAB_SESSION_ON_LOAD') {
+        getTabSessions().then(sessions => {
+            const sess = tabId ? sessions[tabId] : null;
+            if (sess && sess.isRunning && !stoppedTabs.has(tabId)) {
+                sendResponse({ isRunning: true, session: sess });
+            } else {
+                sendResponse({ isRunning: false, session: sess });
+            }
+        });
+        return true;
+    }
+
+    // Tab reports it is idle on load (only if not already running)
     if (message.action === 'tabIdle' && tabId) {
-        if (!stoppedTabs.has(tabId)) {
-            updateTabSession(tabId, {
-                isRunning: false,
-                percentProgress: 0,
-                statusMsg: 'Готова до запуску',
-                sessionTitle: message.sessionTitle || 'Каталог Rozetka',
-                category: message.category || 'Товари'
-            });
-        }
+        getTabSessions().then(sessions => {
+            const sess = sessions[tabId];
+            if (!sess || (!sess.isRunning && !stoppedTabs.has(tabId))) {
+                updateTabSession(tabId, {
+                    isRunning: false,
+                    percentProgress: 0,
+                    statusMsg: 'Готова до запуску',
+                    sessionTitle: message.sessionTitle || 'Каталог Rozetka',
+                    category: message.category || 'Товари'
+                });
+            }
+        });
         sendResponse({ success: true });
         return true;
     }
@@ -287,6 +333,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sessionTitle: message.sessionTitle || 'Каталог Rozetka',
             category: message.category || 'Товари',
             sessionId: message.sessionId || `session_${tabId}`,
+            webhookUrl: message.webhookUrl,
+            sentLinks: Array.isArray(message.sentLinks) ? message.sentLinks : undefined,
             startTime: message.startTime || Date.now()
         });
 

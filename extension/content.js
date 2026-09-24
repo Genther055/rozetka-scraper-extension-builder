@@ -548,264 +548,200 @@
         return newItems;
     }
 
+    async function processAndReportHarvest(items, meta, pageIndex) {
+        if (!items || items.length === 0) return;
+        currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100));
+        currentStatusMsg = `Зібрано ${sentLinks.size} з ${currentEstimatedTotal} товарів (стор. ${pageIndex})...`;
+
+        sendTabMessage({
+            action: 'tabProgress',
+            total: sentLinks.size,
+            page: pageIndex,
+            percent: currentPercent,
+            statusMsg: currentStatusMsg,
+            syncedCount: sentLinks.size,
+            estimatedTotal: currentEstimatedTotal,
+            sessionTitle: meta.title,
+            category: meta.category,
+            sessionId: currentSessionId,
+            startTime: sessionStartTime,
+            sentLinks: Array.from(sentLinks),
+            webhookUrl: webhookEndpoint
+        });
+
+        await sendWebhookPayload({
+            products: items,
+            page: pageIndex,
+            sessionId: currentSessionId,
+            sessionTitle: meta.title,
+            category: meta.category,
+            tabId: currentTabId
+        });
+    }
+
     // Main scraping runner
     async function runTabScraper(initialPage) {
         const meta = getPageMetadata();
         if (currentEstimatedTotal <= 0) {
             currentEstimatedTotal = getEstimatedTotalFromPage();
         }
-        currentPage = initialPage || 1;
-        console.log(`TradeScout Tab ${currentTabId}: Started scraping "${meta.title}"... Target: ${currentEstimatedTotal}`);
-
-        currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
-        currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
-
-        let consecutiveNoNew = 0;
-        let lastCount = sentLinks.size;
-        const tileSelectors = 'ul.catalog-grid, rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id]';
+        currentPage = initialPage || currentPage || 1;
+        console.log(`TradeScout Tab ${currentTabId}: Running page ${currentPage}... Total scraped so far: ${sentLinks.size}/${currentEstimatedTotal}`);
 
         while (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
             if (currentEstimatedTotal <= 0) {
                 const latestEstimated = getEstimatedTotalFromPage();
-                if (latestEstimated > 0) {
-                    currentEstimatedTotal = latestEstimated;
-                }
+                if (latestEstimated > 0) currentEstimatedTotal = latestEstimated;
             }
 
-            // Always reset viewport to TOP at the beginning of every page
+            // Always reset viewport to top first
             window.scrollTo({ top: 0, behavior: 'auto' });
-            window.dispatchEvent(new Event('scroll'));
-            await new Promise(r => setTimeout(r, 450));
+            window.dispatchEvent(new Event('scroll', { bubbles: true }));
+            await new Promise(r => setTimeout(r, 350));
 
-            // 1. Thoroughly scroll & harvest up to 60 items on the CURRENT page
+            // Harvest initially visible items
             let pageHarvestedCount = 0;
-            let attemptsWithoutNew = 0;
-            const maxAttemptsWithoutNew = 7;
-            let expectedPageLimit = 60;
-            if (currentEstimatedTotal > 0 && currentPage >= Math.ceil(currentEstimatedTotal / 60)) {
-                const rem = currentEstimatedTotal - sentLinks.size;
-                if (rem > 0 && rem <= 60) {
-                    expectedPageLimit = rem;
-                }
-            }
+            const expectedPageLimit = 60;
 
-            // Harvest initially visible items first
             const initialProducts = await scrapeCurrentDomItems(meta, currentPage);
             if (initialProducts.length > 0) {
                 pageHarvestedCount += initialProducts.length;
-
-                currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100));
-                currentStatusMsg = `Зібрано ${sentLinks.size} з ${currentEstimatedTotal} товарів (стор. ${currentPage})...`;
-
-                sendTabMessage({
-                    action: 'tabProgress',
-                    total: sentLinks.size,
-                    page: currentPage,
-                    percent: currentPercent,
-                    statusMsg: currentStatusMsg,
-                    syncedCount: sentLinks.size,
-                    estimatedTotal: currentEstimatedTotal,
-                    sessionTitle: meta.title,
-                    category: meta.category,
-                    sessionId: currentSessionId,
-                    startTime: sessionStartTime
-                });
-
-                await sendWebhookPayload({
-                    products: initialProducts,
-                    page: currentPage,
-                    sessionId: currentSessionId,
-                    sessionTitle: meta.title,
-                    category: meta.category,
-                    tabId: currentTabId
-                });
+                await processAndReportHarvest(initialProducts, meta, currentPage);
             }
 
-            while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < expectedPageLimit && attemptsWithoutNew < maxAttemptsWithoutNew) {
-                // Progressive scroll down to trigger Rozetka's IntersectionObserver & lazy loading
-                const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-                const viewH = window.innerHeight || 800;
-                
-                const scrollPcts = [0.25, 0.5, 0.75, 1.0];
-                for (const pct of scrollPcts) {
-                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                    const targetY = Math.max(0, Math.round((totalHeight - viewH) * pct));
-                    window.scrollTo({ top: targetY, behavior: 'smooth' });
-                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    document.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    await new Promise(r => setTimeout(r, 150));
-                }
+            // Thorough progressive step-scroll down the page to trigger Rozetka's lazy-load
+            const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 3500);
+            const stepSize = 400;
+            const totalSteps = Math.ceil(totalHeight / stepSize);
 
-                // Try clicking in-page "Показати ще" if Rozetka has it
-                tryTriggerShowMoreOnCurrentPage();
-
-                // Wait at bottom for Rozetka lazy-load network request & DOM render
-                await new Promise(r => setTimeout(r, 700));
-
+            for (let step = 1; step <= totalSteps; step++) {
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+                if (pageHarvestedCount >= expectedPageLimit) break;
+
+                const targetY = Math.min(totalHeight, step * stepSize);
+                window.scrollTo({ top: targetY, behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                document.dispatchEvent(new Event('scroll', { bubbles: true }));
+                
+                await new Promise(r => setTimeout(r, 160));
 
                 const stepProducts = await scrapeCurrentDomItems(meta, currentPage);
                 if (stepProducts.length > 0) {
-                    attemptsWithoutNew = 0;
                     pageHarvestedCount += stepProducts.length;
-
-                    currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100));
-                    currentStatusMsg = `Зібрано ${sentLinks.size} з ${currentEstimatedTotal} товарів (стор. ${currentPage})...`;
-
-                    sendTabMessage({
-                        action: 'tabProgress',
-                        total: sentLinks.size,
-                        page: currentPage,
-                        percent: currentPercent,
-                        statusMsg: currentStatusMsg,
-                        syncedCount: sentLinks.size,
-                        estimatedTotal: currentEstimatedTotal,
-                        sessionTitle: meta.title,
-                        category: meta.category,
-                        sessionId: currentSessionId,
-                        startTime: sessionStartTime
-                    });
-
-                    await sendWebhookPayload({
-                        products: stepProducts,
-                        page: currentPage,
-                        sessionId: currentSessionId,
-                        sessionTitle: meta.title,
-                        category: meta.category,
-                        tabId: currentTabId
-                    });
-                } else {
-                    attemptsWithoutNew++;
-                    // Try nudging the scroll slightly up and down and trigger show more again
-                    window.scrollBy({ top: -350, behavior: 'smooth' });
-                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    await new Promise(r => setTimeout(r, 220));
-                    window.scrollBy({ top: 400, behavior: 'smooth' });
-                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    tryTriggerShowMoreOnCurrentPage();
-                    await new Promise(r => setTimeout(r, 350));
+                    await processAndReportHarvest(stepProducts, meta, currentPage);
                 }
+            }
 
-                if (pageHarvestedCount >= expectedPageLimit || (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal)) {
-                    break;
+            // Quick second pass at bottom
+            if (pageHarvestedCount < expectedPageLimit && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 400));
+                window.scrollBy({ top: -500, behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 200));
+
+                const endProducts = await scrapeCurrentDomItems(meta, currentPage);
+                if (endProducts.length > 0) {
+                    pageHarvestedCount += endProducts.length;
+                    await processAndReportHarvest(endProducts, meta, currentPage);
                 }
             }
 
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
-            if (pageHarvestedCount > 0) {
-                consecutiveNoNew = 0;
-                lastCount = sentLinks.size;
-            } else {
-                consecutiveNoNew++;
-            }
-
-            // Refresh estimated total if higher count is discovered on subsequent pages
-            const latestEstimated = getEstimatedTotalFromPage();
-            if (latestEstimated > currentEstimatedTotal) {
-                currentEstimatedTotal = latestEstimated;
-            }
-
+            // Check if catalog complete
             const actionObj = findNextPageElement(currentPage);
             const hasNextPage = !!actionObj;
 
-            // 2. Strict Check: finish only when target reached AND no further pages exist, or no next action
-            if (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal && !hasNextPage) {
-                console.log(`TradeScout Tab ${currentTabId}: Target count reached (${sentLinks.size}/${currentEstimatedTotal}) with no further pages. Finishing!`);
+            if ((currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || (!hasNextPage && pageHarvestedCount === 0)) {
+                console.log(`TradeScout Tab ${currentTabId}: Target reached or no next page (${sentLinks.size}/${currentEstimatedTotal}). Finishing!`);
                 break;
             }
 
-            if (!hasNextPage && consecutiveNoNew >= 2) {
-                console.log(`TradeScout Tab ${currentTabId}: No next page button found and no new products. Catalog complete.`);
+            if (!hasNextPage) {
+                console.log(`TradeScout Tab ${currentTabId}: No next page button found. Catalog complete.`);
                 break;
             }
 
-            // 3. Trigger next page via DOM click
-            let pageTransitionSuccess = false;
-            const maxTransitionAttempts = 3;
+            // Proceed to Next Page
+            const nextPageNum = currentPage + 1;
+            currentStatusMsg = `Завантаження стор. ${nextPageNum}...`;
+            sendTabMessage({
+                action: 'tabProgress',
+                total: sentLinks.size,
+                page: nextPageNum,
+                percent: currentPercent,
+                statusMsg: currentStatusMsg,
+                syncedCount: sentLinks.size,
+                estimatedTotal: currentEstimatedTotal,
+                sessionTitle: meta.title,
+                category: meta.category,
+                sessionId: currentSessionId,
+                startTime: sessionStartTime,
+                sentLinks: Array.from(sentLinks),
+                webhookUrl: webhookEndpoint
+            });
 
-            for (let attempt = 1; attempt <= maxTransitionAttempts; attempt++) {
+            // If actionObj has an href, construct full URL
+            let nextUrl = actionObj.href || '';
+            if (nextUrl && !nextUrl.startsWith('http')) {
+                nextUrl = nextUrl.startsWith('/') ? `https://rozetka.com.ua${nextUrl}` : `https://rozetka.com.ua/${nextUrl}`;
+            }
+
+            // Scroll next button into view and click
+            try {
+                actionObj.element.scrollIntoView({ behavior: 'auto', block: 'center' });
+                await new Promise(r => setTimeout(r, 200));
+            } catch (_) {}
+
+            const prevHref = window.location.href;
+            dispatchSafeClick(actionObj.element);
+
+            // Wait up to 2 seconds to check if Rozetka did an in-page SPA transition or page reload
+            let spaTransitionDetected = false;
+            for (let w = 0; w < 8; w++) {
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+                await new Promise(r => setTimeout(r, 250));
 
-                const prevDomCount = document.querySelectorAll(tileSelectors).length;
-                const nextPageAction = findNextPageElement(currentPage);
-
-                if (nextPageAction) {
-                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-
-                    currentStatusMsg = `Завантаження стор. ${currentPage + 1}...`;
-                    sendTabMessage({
-                        action: 'tabProgress',
-                        total: sentLinks.size,
-                        page: currentPage,
-                        percent: currentPercent,
-                        statusMsg: currentStatusMsg,
-                        syncedCount: sentLinks.size,
-                        estimatedTotal: currentEstimatedTotal,
-                        sessionTitle: meta.title,
-                        category: meta.category,
-                        sessionId: currentSessionId,
-                        startTime: sessionStartTime
-                    });
-
-                    // Scroll element into view before clicking
-                    try {
-                        nextPageAction.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        await new Promise(r => setTimeout(r, 200));
-                    } catch (_) {}
-
-                    dispatchSafeClick(nextPageAction.element);
-
-                    for (let w = 0; w < 16; w++) {
-                        if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                        await new Promise(r => setTimeout(r, 250));
-                        
-                        const currentDomCount = document.querySelectorAll(tileSelectors).length;
-                        if (currentDomCount > prevDomCount) {
-                            pageTransitionSuccess = true;
-                            break;
-                        }
-                        const freshItems = Array.from(document.querySelectorAll(tileSelectors));
-                        const hasUnscrapedLink = freshItems.some(tile => {
-                            if (isUnwantedTile(tile)) return false;
-                            const linkTag = tile.querySelector('a.goods-tile__heading, a.tile-title, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
-                            if (!linkTag) return false;
-                            let href = linkTag.getAttribute('href') || '';
-                            href = href.split('?')[0].split('#')[0].replace(/\/+$/, '');
-                            return href && !sentLinks.has(href) && !sentLinks.has(`https://rozetka.com.ua${href}`);
-                        });
-                        if (hasUnscrapedLink) {
-                            pageTransitionSuccess = true;
-                            break;
-                        }
-                    }
-
-                    if (pageTransitionSuccess) {
-                        currentPage++;
-                        consecutiveNoNew = 0;
-                        window.scrollTo({ top: 0, behavior: 'auto' });
-                        window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                        await new Promise(r => setTimeout(r, 450));
-                        break;
-                    }
-                }
-
-                if (attempt < maxTransitionAttempts) {
-                    await silentBackgroundScroll();
-                    await new Promise(r => setTimeout(r, 500));
-                }
-            }
-
-            if (!pageTransitionSuccess) {
-                consecutiveNoNew++;
-                if (consecutiveNoNew >= 2) {
-                    console.log(`TradeScout Tab ${currentTabId}: Catalog finished with ${sentLinks.size} items.`);
+                if (window.location.href !== prevHref) {
+                    spaTransitionDetected = true;
                     break;
                 }
-                await new Promise(r => setTimeout(r, 500));
+                const freshItems = Array.from(document.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, .goods-tile'));
+                const hasUnscraped = freshItems.some(tile => {
+                    if (isUnwantedTile(tile)) return false;
+                    const linkTag = tile.querySelector('a.goods-tile__heading, a.tile-title, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
+                    if (!linkTag) return false;
+                    let href = (linkTag.getAttribute('href') || '').split('?')[0].split('#')[0].replace(/\/+$/, '');
+                    return href && !sentLinks.has(href) && !sentLinks.has(`https://rozetka.com.ua${href}`);
+                });
+                if (hasUnscraped) {
+                    spaTransitionDetected = true;
+                    break;
+                }
+            }
+
+            if (spaTransitionDetected) {
+                currentPage = nextPageNum;
+                window.scrollTo({ top: 0, behavior: 'auto' });
+                await new Promise(r => setTimeout(r, 450));
+                continue;
+            }
+
+            // If click didn't trigger navigation within 2s, force direct URL navigation
+            if (nextUrl && nextUrl !== prevHref) {
+                console.log(`TradeScout Tab ${currentTabId}: Navigating directly to next page: ${nextUrl}`);
+                window.location.href = nextUrl;
+                // Execution pauses here and auto-resumes on new page load via checkAndResumeSessionOnLoad
+                return;
+            } else {
+                // If no next URL found and click didn't change page, finish
+                break;
             }
         }
 
+        // Scraping completed
         if (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
             isTabScrapingActive = false;
             window.__tradeScoutIsScrapingActive = false;
@@ -823,7 +759,9 @@
                 estimatedTotal: sentLinks.size,
                 sessionTitle: meta.title,
                 category: meta.category,
-                sessionId: currentSessionId
+                sessionId: currentSessionId,
+                sentLinks: Array.from(sentLinks),
+                webhookUrl: webhookEndpoint
             });
         }
     }
@@ -853,10 +791,56 @@
             category: meta.category,
             sessionId: currentSessionId,
             estimatedTotal: currentEstimatedTotal,
-            startTime: sessionStartTime
+            startTime: sessionStartTime,
+            sentLinks: [],
+            webhookUrl: webhookEndpoint
         });
 
         runTabScraper(1);
+    }
+
+    function resumeScrapingSession(session) {
+        if (!session) return;
+        isTabScrapingActive = true;
+        window.__tradeScoutIsScrapingActive = true;
+        currentTabId = session.tabId || currentTabId || Date.now();
+        currentSessionId = session.sessionId || `session_${currentTabId}_${Date.now()}`;
+        if (session.webhookUrl) webhookEndpoint = session.webhookUrl;
+
+        sentLinks.clear();
+        if (Array.isArray(session.sentLinks)) {
+            session.sentLinks.forEach(link => sentLinks.add(link));
+        }
+
+        // Detect page number from URL or fallback to session
+        let urlPage = 1;
+        const pageMatch = window.location.href.match(/page=(\d+)/i) || window.location.href.match(/\/page-(\d+)/i);
+        if (pageMatch && pageMatch[1]) {
+            urlPage = parseInt(pageMatch[1], 10) || 1;
+        }
+        currentPage = urlPage > 1 ? urlPage : (session.currentPage || 1);
+
+        sessionStartTime = session.startTime || Date.now();
+        currentEstimatedTotal = session.estimatedTotal || getEstimatedTotalFromPage();
+        currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
+        currentStatusMsg = `Збір (стор. ${currentPage}): ${sentLinks.size}/${currentEstimatedTotal}...`;
+
+        sendTabMessage({
+            action: 'tabProgress',
+            total: sentLinks.size,
+            page: currentPage,
+            percent: currentPercent,
+            statusMsg: currentStatusMsg,
+            sessionTitle: session.sessionTitle || getPageMetadata().title,
+            category: session.category || getPageMetadata().category,
+            sessionId: currentSessionId,
+            estimatedTotal: currentEstimatedTotal,
+            startTime: sessionStartTime,
+            sentLinks: Array.from(sentLinks),
+            webhookUrl: webhookEndpoint
+        });
+
+        runTabScraper(currentPage);
     }
 
     function stopScrapingOnThisTab() {
@@ -890,12 +874,34 @@
         sendTabMessage({ action: 'tabIdle', sessionTitle: meta.title, category: meta.category });
     }
 
-    // Default 100% idle on page load
-    const initialMeta = getPageMetadata();
-    sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
+    // Check on page load if this tab was in an active scraping session
+    function checkAndResumeSessionOnLoad() {
+        try {
+            chrome.runtime.sendMessage({ action: 'GET_TAB_SESSION_ON_LOAD' }, (res) => {
+                if (chrome.runtime.lastError) {
+                    const meta = getPageMetadata();
+                    sendTabMessage({ action: 'tabIdle', sessionTitle: meta.title, category: meta.category });
+                    return;
+                }
+                if (res && res.isRunning && res.session) {
+                    console.log('TradeScout Content Script: Resuming existing scrape session on page load...', res.session);
+                    resumeScrapingSession(res.session);
+                } else {
+                    const meta = getPageMetadata();
+                    sendTabMessage({ action: 'tabIdle', sessionTitle: meta.title, category: meta.category });
+                }
+            });
+        } catch (_) {
+            const meta = getPageMetadata();
+            sendTabMessage({ action: 'tabIdle', sessionTitle: meta.title, category: meta.category });
+        }
+    }
+
+    checkAndResumeSessionOnLoad();
 
     // Expose direct window handlers for fail-safe invocation
     window.__tradeScoutStartScrape = startScrapingOnThisTab;
+    window.__tradeScoutResumeScrape = resumeScrapingSession;
     window.__tradeScoutStopScrape = stopScrapingOnThisTab;
     window.__tradeScoutResetState = resetTabState;
 
@@ -913,6 +919,12 @@
             startScrapingOnThisTab(message.tabId, message.webhookUrl);
             const meta = getPageMetadata();
             sendResponse({ success: true, sessionTitle: meta.title });
+            return true;
+        }
+
+        if (message.action === 'RESUME_TAB_SCRAPE') {
+            resumeScrapingSession(message.session);
+            sendResponse({ success: true });
             return true;
         }
 
