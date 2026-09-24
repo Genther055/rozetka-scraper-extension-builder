@@ -1,4 +1,4 @@
-// TradeScout Content Script v3.8 Pro (Ultra-Fast Instant DOM Harvester & Chunk-Aware Progressive Scroll Engine)
+// TradeScout Content Script v3.8 Pro (Silky Smooth Linear Downward Scroll & Full Multi-Page Catalog Harvester)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
@@ -87,7 +87,7 @@
         try {
             const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a, rz-paginator a');
             for (const link of pageLinks) {
-                if (link.closest('aside, .sidebar, header, footer')) continue;
+                if (link.closest('aside, .sidebar, header, footer, rz-recommended-goods, .recently-viewed')) continue;
                 const txt = (link.textContent || '').trim();
                 const num = parseInt(txt, 10);
                 if (!isNaN(num) && num > maxPage && num < 500) {
@@ -119,16 +119,10 @@
             }
         }
 
-        // Validate parsedTopCount against detected maxPage
         if (parsedTopCount > 0) {
-            const minExpected = maxPage > 1 ? (maxPage - 1) * 20 : 1;
-            const maxExpected = maxPage * 65;
-            if (parsedTopCount >= minExpected && parsedTopCount <= maxExpected) {
-                return parsedTopCount;
-            }
+            return parsedTopCount;
         }
 
-        // Fallback: maxPage * 60 (or current DOM tiles if single page)
         if (maxPage > 1) {
             return maxPage * 60;
         }
@@ -137,12 +131,12 @@
         return currentDomTiles > 0 ? currentDomTiles : 60;
     }
 
-    // Filter: eliminate sidebars, recommendation widgets, recently viewed, and banners (NEVER filter promo items or items with image sliders)
+    // Filter: strictly eliminate non-catalog containers (sidebar, recommendations, recently viewed, carousels, banners)
     function isUnwantedTile(item) {
         if (!item || !(item instanceof Element)) return true;
         
-        // 1. Check all non-catalog containers (sidebar, header, footer, recently viewed, recommendations, banners)
-        if (item.closest('aside, .sidebar, header, footer, rz-viewed-goods, .recently-viewed, rz-similar-goods, rz-recommended-goods, rz-accessories, .catalog-banner, .advertising-slot, .main-goods__cell--advertising')) {
+        // 1. Exclude all recommendation blocks, carousels, sidebar, recently viewed, and banners
+        if (item.closest('aside, .sidebar, header, footer, rz-viewed-goods, .recently-viewed, rz-similar-goods, rz-recommended-goods, rz-accessories, .catalog-banner, .advertising-slot, .main-goods__cell--advertising, rz-goods-sections, app-slider-goods, app-goods-carousel, rz-carousel')) {
             return true;
         }
         
@@ -152,7 +146,7 @@
             return true;
         }
 
-        // 3. Must have a product link
+        // 3. Must have a valid product link
         const linkTag = item.tagName === 'A' ? item : (item.querySelector('a.goods-tile__heading, a.tile-title, [class*="heading"] a, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]') || item.querySelector('a[href]'));
         if (!linkTag) return true;
 
@@ -183,7 +177,7 @@
             try {
                 const btn = document.querySelector(sel);
                 if (btn && !btn.disabled && !btn.classList.contains('button--loading') && !btn.classList.contains('disabled')) {
-                    if (btn.closest('aside, .sidebar, .filter, .recently-viewed, header')) continue;
+                    if (btn.closest('aside, .sidebar, .filter, .recently-viewed, header, rz-recommended-goods')) continue;
                     return { type: 'showMore', element: btn };
                 }
             } catch (e) {}
@@ -193,7 +187,7 @@
         for (const el of allButtons) {
             const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
             if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more') {
-                if (el.closest('aside, .sidebar, .filter, .recently-viewed, header')) continue;
+                if (el.closest('aside, .sidebar, .filter, .recently-viewed, header, rz-recommended-goods')) continue;
                 if (el.disabled || el.classList.contains('button--loading') || el.classList.contains('disabled')) continue;
                 return { type: 'showMore', element: el };
             }
@@ -212,7 +206,7 @@
             try {
                 const links = document.querySelectorAll(sel);
                 for (const link of links) {
-                    if (link.closest('aside, .sidebar, header, footer')) continue;
+                    if (link.closest('aside, .sidebar, header, footer, rz-recommended-goods')) continue;
                     const txt = (link.innerText || link.textContent || '').trim();
                     const href = link.getAttribute('href') || '';
                     if (txt === String(nextPageNum) || href.includes(`page=${nextPageNum}`) || href.includes(`;page=${nextPageNum}`) || href.includes(`page-${nextPageNum}`)) {
@@ -238,7 +232,7 @@
             try {
                 const btn = document.querySelector(sel);
                 if (btn && !btn.disabled && !btn.classList.contains('disabled') && !btn.classList.contains('pagination__direction--disabled')) {
-                    if (btn.closest('aside, .sidebar, header, footer')) continue;
+                    if (btn.closest('aside, .sidebar, header, footer, rz-recommended-goods')) continue;
                     const href = btn.getAttribute('href') || '';
                     return { type: 'nextPage', element: btn, href };
                 }
@@ -477,8 +471,9 @@
 
     function processAndReportHarvest(items, meta, pageIndex) {
         if (!items || items.length === 0) return;
-        currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100));
-        currentStatusMsg = `Зібрано ${sentLinks.size} з ${currentEstimatedTotal} товарів (стор. ${pageIndex})...`;
+        const estimated = currentEstimatedTotal > 0 ? currentEstimatedTotal : Math.max(sentLinks.size, 60);
+        currentPercent = Math.min(100, Math.round((sentLinks.size / estimated) * 100));
+        currentStatusMsg = `Зібрано ${sentLinks.size} з ${estimated} товарів (стор. ${pageIndex})...`;
 
         sendTabMessage({
             action: 'tabProgress',
@@ -487,7 +482,7 @@
             percent: currentPercent,
             statusMsg: currentStatusMsg,
             syncedCount: sentLinks.size,
-            estimatedTotal: currentEstimatedTotal,
+            estimatedTotal: estimated,
             sessionTitle: meta.title,
             category: meta.category,
             sessionId: currentSessionId,
@@ -507,100 +502,73 @@
         });
     }
 
-    // Chunk-Aware Progressive Scroll Engine (Accurately triggers Angular lazy-rendering chunk by chunk)
+    // Silky Smooth Linear Progressive Downward Scroll Engine (100% human-like, zero jumping)
     async function progressivePageHarvest(meta, pageIndex) {
         let harvestedThisPage = 0;
-        const targetPageCapacity = 60; // Rozetka default catalog capacity per page
-        let idleAtBottomRetries = 0;
-        const maxBottomRetries = 4;
+        let consecutiveNoGrowthSteps = 0;
 
-        // 1. Always start strictly at top (0, 0)
-        if ('scrollRestoration' in history) {
-            try { history.scrollRestoration = 'manual'; } catch (_) {}
-        }
-        window.scrollTo(0, 0);
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
-        window.dispatchEvent(new Event('scroll', { bubbles: true }));
-        window.dispatchEvent(new Event('resize', { bubbles: true }));
-        await new Promise(r => setTimeout(r, 250));
-
-        // 2. Initial top check
-        const topBatch = scrapeCurrentDomItems(meta, pageIndex);
-        if (topBatch.length > 0) {
-            harvestedThisPage += topBatch.length;
-            processAndReportHarvest(topBatch, meta, pageIndex);
+        // 1. Initial harvest at current top position
+        const initialBatch = scrapeCurrentDomItems(meta, pageIndex);
+        if (initialBatch.length > 0) {
+            harvestedThisPage += initialBatch.length;
+            processAndReportHarvest(initialBatch, meta, pageIndex);
         }
 
-        // 3. Progressive chunk-aware scrolling
-        let currentY = 0;
-        const stepPx = 350;
+        // 2. Smooth downward stepping
+        const stepPx = 300;
+        const stepDelay = 120; // 120ms per step = smooth, fast and reliable
 
-        while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && harvestedThisPage < targetPageCapacity) {
-            const prevScrollH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1000);
-            const maxScrollY = Math.max(0, prevScrollH - window.innerHeight);
+        while (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
+            const currentScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+            const docHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1000);
+            const maxScrollY = Math.max(0, docHeight - window.innerHeight);
 
-            if (currentY < maxScrollY) {
-                currentY = Math.min(currentY + stepPx, maxScrollY);
-                window.scrollTo({ top: currentY, behavior: 'smooth' });
-                document.documentElement.scrollTop = currentY;
-                document.body.scrollTop = currentY;
+            // If we have room to scroll down smoothly:
+            if (currentScrollY < maxScrollY - 20) {
+                const targetY = Math.min(currentScrollY + stepPx, maxScrollY);
+                window.scrollTo({ top: targetY, behavior: 'smooth' });
+                document.documentElement.scrollTop = targetY;
+                document.body.scrollTop = targetY;
                 window.dispatchEvent(new Event('scroll', { bubbles: true }));
                 window.dispatchEvent(new WheelEvent('wheel', { deltaY: stepPx, bubbles: true }));
 
-                // Instant DOM check
                 const batch = scrapeCurrentDomItems(meta, pageIndex);
                 if (batch.length > 0) {
                     harvestedThisPage += batch.length;
-                    idleAtBottomRetries = 0;
+                    consecutiveNoGrowthSteps = 0;
                     processAndReportHarvest(batch, meta, pageIndex);
                 }
 
-                await new Promise(r => setTimeout(r, 160));
+                await new Promise(r => setTimeout(r, stepDelay));
             } else {
-                // We reached the current bottom of the DOM!
-                // Trigger Angular lazy observers by scrolling bottom tile/observer into view
-                const lastTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, rz-catalog-tiles-observer, app-goods-tile-default');
-                if (lastTiles.length > 0) {
-                    try {
-                        lastTiles[lastTiles.length - 1].scrollIntoView({ behavior: 'auto', block: 'end' });
-                    } catch (_) {}
-                }
-
-                // Jiggle scroll to force trigger IntersectionObservers
-                window.scrollBy(0, -150);
-                window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                await new Promise(r => setTimeout(r, 180));
-                window.scrollBy(0, 150);
+                // We reached the bottom of current rendered height!
+                // Wait briefly for Angular lazy loading to render new rows:
+                await new Promise(r => setTimeout(r, 350));
                 window.dispatchEvent(new Event('scroll', { bubbles: true }));
                 window.dispatchEvent(new Event('resize', { bubbles: true }));
 
-                await new Promise(r => setTimeout(r, 300));
-
-                // Check if new items loaded or DOM expanded
-                const newScrollH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1000);
                 const batch = scrapeCurrentDomItems(meta, pageIndex);
                 if (batch.length > 0) {
                     harvestedThisPage += batch.length;
-                    idleAtBottomRetries = 0;
+                    consecutiveNoGrowthSteps = 0;
                     processAndReportHarvest(batch, meta, pageIndex);
                 }
 
-                if (newScrollH > prevScrollH + 100) {
-                    // DOM expanded with new product rows! Continue scrolling down!
-                    idleAtBottomRetries = 0;
-                } else if (batch.length === 0) {
-                    // No new items and DOM did not expand
-                    idleAtBottomRetries++;
-                    if (idleAtBottomRetries >= maxBottomRetries) {
-                        // Truly reached the end of this page
+                const newDocHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1000);
+                if (newDocHeight > docHeight + 50) {
+                    // New rows mounted! Reset counter and continue scrolling down
+                    consecutiveNoGrowthSteps = 0;
+                } else {
+                    consecutiveNoGrowthSteps++;
+                    if (consecutiveNoGrowthSteps >= 3) {
+                        // Truly reached bottom of page
                         break;
                     }
                 }
             }
         }
 
-        // 4. Final bottom sweep
+        // 3. Final sweep at bottom
         const finalBatch = scrapeCurrentDomItems(meta, pageIndex);
         if (finalBatch.length > 0) {
             harvestedThisPage += finalBatch.length;
@@ -623,7 +591,7 @@
                 currentEstimatedTotal = getEstimatedTotalFromPage();
             }
             currentPage = initialPage || 1;
-            console.log(`TradeScout Tab ${currentTabId}: Started scraping "${meta.title}"... Target: ${currentEstimatedTotal}`);
+            console.log(`TradeScout Tab ${currentTabId}: Started scraping "${meta.title}"... Estimated total: ${currentEstimatedTotal}`);
 
             currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
             currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
@@ -633,14 +601,12 @@
             const tileSelectors = 'ul.catalog-grid, rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default';
 
             while (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
-                if (currentEstimatedTotal <= 0) {
-                    const latestEstimated = getEstimatedTotalFromPage();
-                    if (latestEstimated > 0) {
-                        currentEstimatedTotal = latestEstimated;
-                    }
+                const latestEstimated = getEstimatedTotalFromPage();
+                if (latestEstimated > currentEstimatedTotal) {
+                    currentEstimatedTotal = latestEstimated;
                 }
 
-                // 1. Progressive row-by-row scroll down from top
+                // 1. Progressive smooth downward scroll
                 await progressivePageHarvest(meta, currentPage);
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
@@ -651,18 +617,7 @@
                     consecutiveNoNew++;
                 }
 
-                // Refresh estimated total if higher count is discovered
-                const latestEstimated = getEstimatedTotalFromPage();
-                if (latestEstimated > currentEstimatedTotal) {
-                    currentEstimatedTotal = latestEstimated;
-                }
-
-                // If collected target total, finish
-                if (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) {
-                    console.log(`TradeScout Tab ${currentTabId}: Reached estimated total (${sentLinks.size}/${currentEstimatedTotal}). Finished!`);
-                    break;
-                }
-
+                // 2. Check for next page
                 const actionObj = findPaginationActionElements(currentPage);
                 const hasNextPage = !!actionObj;
 
@@ -671,7 +626,12 @@
                     break;
                 }
 
-                // 2. Trigger next page via DOM click on Show More (in-place) or next page button
+                if (!hasNextPage) {
+                    console.log(`TradeScout Tab ${currentTabId}: Reached final page of catalog.`);
+                    break;
+                }
+
+                // 3. Trigger next page via DOM click on Show More (in-place) or next page button
                 let pageTransitionSuccess = false;
                 const maxTransitionAttempts = 3;
 
@@ -786,13 +746,6 @@
     }
 
     function startScrapingOnThisTab(tabId, customUrl) {
-        if ('scrollRestoration' in history) {
-            try { history.scrollRestoration = 'manual'; } catch (_) {}
-        }
-        window.scrollTo(0, 0);
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
-
         isTabScrapingActive = true;
         window.__tradeScoutIsScrapingActive = true;
         isScraperLoopRunning = false;
@@ -828,13 +781,6 @@
 
     function resumeScrapingSession(session) {
         if (!session) return;
-        if ('scrollRestoration' in history) {
-            try { history.scrollRestoration = 'manual'; } catch (_) {}
-        }
-        window.scrollTo(0, 0);
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
-
         isTabScrapingActive = true;
         window.__tradeScoutIsScrapingActive = true;
         isScraperLoopRunning = false;
