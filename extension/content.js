@@ -154,14 +154,14 @@
         const promoElements = item.querySelectorAll('.goods-tile__label, .promo-label, [data-testid*="promo-label"], [data-testid*="advert"], [class*="promo-label"], [class*="advert"], [class*="sponsored"], [class*="promoted"], .goods-tile__badge, [class*="badge"]');
         for (const el of promoElements) {
             const txt = (el.textContent || '').trim().toLowerCase();
-            if (txt.includes('реклама') || txt.includes('спонсор') || txt.includes('ad') || txt.includes('sponsored') || txt.includes('promoted')) {
+            if (/(?:^|\s|\b)(?:реклама|спонсор|спонсорський|спонсоровано|ad|ads|sponsored|promoted)(?:\s|$|\b|[.,!?:])/i.test(txt)) {
                 return true;
             }
         }
 
         // 4. Fallback check: if any text inside tile explicitly states "реклама" or "спонсорський"
         const innerText = (item.innerText || '').toLowerCase();
-        if (innerText.includes('реклама') || innerText.includes('спонсорський') || innerText.includes('спонсоровано') || innerText.includes('спонсорский')) {
+        if (/(?:^|\s|\b)(?:реклама|спонсорський|спонсорский|спонсоровано)(?:\s|$|\b|[.,!?:])/i.test(innerText)) {
             return true;
         }
 
@@ -174,12 +174,15 @@
 
     async function silentBackgroundScroll() {
         try {
-            const midY = Math.round(document.body.scrollHeight / 2);
-            window.scrollTo({ top: midY, behavior: 'auto' });
-            await new Promise(r => setTimeout(r, 200));
-            const targetY = Math.max(0, document.body.scrollHeight - window.innerHeight);
-            window.scrollTo({ top: targetY, behavior: 'auto' });
-            await new Promise(r => setTimeout(r, 300));
+            const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            const viewH = window.innerHeight || 800;
+            const steps = [0.25, 0.50, 0.75, 1.0];
+            for (const step of steps) {
+                const targetY = Math.max(0, Math.round((totalHeight - viewH) * step));
+                window.scrollTo({ top: targetY, behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll'));
+                await new Promise(r => setTimeout(r, 120));
+            }
         } catch (_) {}
     }
 
@@ -609,55 +612,64 @@
                 }
             }
 
-            // 1. Silent scroll to trigger lazy mounting
-            await silentBackgroundScroll();
-            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+            // 1. Progressive multi-step scroll & harvest on the CURRENT page
+            // Standard Rozetka catalog pages mount up to 60 items as the user scrolls.
+            let pageHarvestedCount = 0;
+            const scrollSteps = [0.2, 0.45, 0.7, 0.95, 1.0, 0.5, 1.0];
 
-            // 2. Scrape all items on current page (strictly up to maxItemsThisPage)
-            let newProducts = await scrapeCurrentDomItems(meta, currentPage);
-            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-            
-            if (newProducts.length === 0 && (currentEstimatedTotal <= 0 || sentLinks.size < currentEstimatedTotal)) {
-                await new Promise(r => setTimeout(r, 350));
+            for (const stepPct of scrollSteps) {
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                const extraSweep = await scrapeCurrentDomItems(meta, currentPage);
-                if (extraSweep.length > 0) {
-                    newProducts = newProducts.concat(extraSweep);
+
+                const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+                const viewH = window.innerHeight || 800;
+                const targetY = Math.max(0, Math.round((totalHeight - viewH) * stepPct));
+                
+                window.scrollTo({ top: targetY, behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll'));
+                await new Promise(r => setTimeout(r, 220));
+
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+
+                const stepProducts = await scrapeCurrentDomItems(meta, currentPage);
+                if (stepProducts.length > 0) {
+                    pageHarvestedCount += stepProducts.length;
+
+                    currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100));
+                    currentStatusMsg = `Зібрано ${sentLinks.size} з ${currentEstimatedTotal} товарів (стор. ${currentPage})...`;
+
+                    sendTabMessage({
+                        action: 'tabProgress',
+                        total: sentLinks.size,
+                        page: currentPage,
+                        percent: currentPercent,
+                        statusMsg: currentStatusMsg,
+                        syncedCount: sentLinks.size,
+                        estimatedTotal: currentEstimatedTotal,
+                        sessionTitle: meta.title,
+                        category: meta.category,
+                        sessionId: currentSessionId,
+                        startTime: sessionStartTime
+                    });
+
+                    await sendWebhookPayload({
+                        products: stepProducts,
+                        page: currentPage,
+                        sessionId: currentSessionId,
+                        sessionTitle: meta.title,
+                        category: meta.category,
+                        tabId: currentTabId
+                    });
+                }
+
+                // If we collected 60 items on this page or reached the total catalog estimate, we are ready for next page
+                if (pageHarvestedCount >= 60 || (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal)) {
+                    break;
                 }
             }
-            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-            
-            if (newProducts.length > 0 && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
-                currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100));
-                currentStatusMsg = `Зібрано ${sentLinks.size} з ${currentEstimatedTotal} товарів (стор. ${currentPage})...`;
-
-                sendTabMessage({
-                    action: 'tabProgress',
-                    total: sentLinks.size,
-                    page: currentPage,
-                    percent: currentPercent,
-                    statusMsg: currentStatusMsg,
-                    syncedCount: sentLinks.size,
-                    estimatedTotal: currentEstimatedTotal,
-                    sessionTitle: meta.title,
-                    category: meta.category,
-                    sessionId: currentSessionId,
-                    startTime: sessionStartTime
-                });
-
-                await sendWebhookPayload({
-                    products: newProducts,
-                    page: currentPage,
-                    sessionId: currentSessionId,
-                    sessionTitle: meta.title,
-                    category: meta.category,
-                    tabId: currentTabId
-                });
-            }
 
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
-            if (sentLinks.size > lastCount) {
+            if (pageHarvestedCount > 0) {
                 consecutiveNoNew = 0;
                 lastCount = sentLinks.size;
             } else {
@@ -673,7 +685,7 @@
             const actionObj = findPaginationActionElements(currentPage);
             const hasNextPage = !!actionObj;
 
-            // 3. Strict Check: finish only when target reached AND no further pages exist, or no next action
+            // 2. Strict Check: finish only when target reached AND no further pages exist, or no next action
             if (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal && !hasNextPage) {
                 console.log(`TradeScout Tab ${currentTabId}: Target count reached (${sentLinks.size}/${currentEstimatedTotal}) with no further pages. Finishing!`);
                 break;
@@ -684,7 +696,7 @@
                 break;
             }
 
-            // 4. Trigger next page via DOM click or Show More
+            // 3. Trigger next page via DOM click or Show More
             let pageTransitionSuccess = false;
             const maxTransitionAttempts = 3;
 
