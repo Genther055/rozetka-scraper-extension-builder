@@ -286,6 +286,9 @@
     function dispatchSafeClick(element) {
         if (!element) return;
         try {
+            element.scrollIntoView({ behavior: 'auto', block: 'center' });
+            element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+            element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
             element.click();
             element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
         } catch (_) {}
@@ -354,6 +357,145 @@
         } catch (_) {}
         
         return 'Rozetka';
+    }
+
+    // Direct Rozetka Catalog API fetcher for fast, authoritative batch data
+    async function tryFetchRozetkaCatalogApi(pageIndex) {
+        try {
+            const urlStr = window.location.href;
+            let categoryId = '';
+            const catMatch = urlStr.match(/\/c(\d+)/i) || urlStr.match(/category_id=(\d+)/i) || urlStr.match(/c_id=(\d+)/i);
+            if (catMatch && catMatch[1]) {
+                categoryId = catMatch[1];
+            }
+
+            const isUa = urlStr.includes('/ua/') || !urlStr.includes('/ru/');
+            const lang = isUa ? 'ua' : 'ru';
+
+            let params = [];
+            params.push('front-type=xl');
+            params.push('country=UA');
+            params.push(`lang=${lang}`);
+            params.push(`page=${pageIndex}`);
+
+            if (categoryId) {
+                params.push(`category_id=${categoryId}`);
+            }
+
+            // Search text
+            const searchMatch = urlStr.match(/[?&]text=([^&#]+)/i);
+            if (searchMatch && searchMatch[1]) {
+                params.push(`text=${searchMatch[1]}`);
+            }
+
+            // Filters in path: /c80153/producer=xiaomi;.../
+            const filterPathMatch = urlStr.match(/\/c\d+\/([^/?#]+)/i);
+            if (filterPathMatch && filterPathMatch[1]) {
+                const rawParts = filterPathMatch[1].split(';');
+                for (const part of rawParts) {
+                    if (part && !part.startsWith('page=')) {
+                        params.push(part);
+                    }
+                }
+            }
+
+            const endpoints = [
+                `https://xl-catalog-api.rozetka.com.ua/v4/goods/get?${params.join('&')}`,
+                `https://common-api.rozetka.com.ua/v2/api/v2/goods/get?${params.join('&')}`,
+                `https://catalog-api.rozetka.com.ua/v4/goods/get?${params.join('&')}`
+            ];
+
+            for (const ep of endpoints) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3500);
+                    const res = await fetch(ep, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    if (res && res.ok) {
+                        const json = await res.json().catch(() => null);
+                        if (json && json.data) {
+                            const rawGoods = json.data.goods || json.data.items || (Array.isArray(json.data) ? json.data : []);
+                            if (Array.isArray(rawGoods) && rawGoods.length > 0) {
+                                return {
+                                    goods: rawGoods,
+                                    total: json.data.total_goods || json.data.total || json.data.count || 0
+                                };
+                            }
+                        }
+                    }
+                } catch (_) {}
+            }
+        } catch (_) {}
+        return null;
+    }
+
+    function buildProductsFromApiGoods(goods, meta) {
+        const items = [];
+        if (!Array.isArray(goods)) return items;
+
+        for (const g of goods) {
+            if (!g) continue;
+            const name = (g.title || g.name || '').trim();
+            if (!name || name.length < 3) continue;
+
+            let link = g.href || g.link || '';
+            if (!link && g.id) {
+                link = `https://rozetka.com.ua/p${g.id}/`;
+            }
+            if (link && !link.startsWith('http')) {
+                link = link.startsWith('/') ? `https://rozetka.com.ua${link}` : `https://rozetka.com.ua/${link}`;
+            }
+            link = link.split('?')[0].split('#')[0].replace(/\/+$/, '');
+            if (!link || sentLinks.has(link)) continue;
+
+            const price = Number(g.price) || 0;
+            let oldPrice = Number(g.old_price || g.oldPrice) || price;
+            let discount = 0;
+            if (g.discount) {
+                if (typeof g.discount === 'number') discount = g.discount;
+                else if (typeof g.discount === 'object' && g.discount.value) discount = Number(g.discount.value) || 0;
+            }
+            if (oldPrice > price && !discount && price > 0) {
+                discount = Math.round(((oldPrice - price) / oldPrice) * 100);
+            } else if (discount > 0 && (!oldPrice || oldPrice <= price) && price > 0) {
+                oldPrice = Math.round(price / (1 - (discount / 100)));
+            }
+            if (!oldPrice || oldPrice < price) oldPrice = price;
+
+            const rating = Number(g.stars || g.rating) || 5.0;
+            const reviews = Number(g.comments_amount || g.reviews || g.comments || g.reviews_count) || 0;
+            const seller = (g.seller && (g.seller.title || g.seller.name)) ? (g.seller.title || g.seller.name).trim() : 'Rozetka';
+            const inStock = g.status !== 'unavailable' && g.status !== 'disabled' && g.sell_status !== 'unavailable';
+
+            const capacityMatch = name.match(/(\d+)\s*(?:mah|мАг)/i);
+            const capacity = capacityMatch ? `${capacityMatch[1]} mAh` : '';
+            const powerMatch = name.match(/(\d+(?:\.\d+)?)\s*W/i);
+            const power = powerMatch ? `${powerMatch[1]}W` : '';
+            const specs = [capacity, power].filter(Boolean).join(', ') || 'Стандартні';
+
+            items.push({
+                name,
+                price,
+                oldPrice,
+                discount,
+                rating,
+                reviews,
+                inStock,
+                category: meta.category,
+                sessionTitle: meta.title,
+                sessionId: currentSessionId,
+                specs,
+                description: '',
+                seller,
+                sellersCount: 1,
+                priceChange: 0,
+                reviewsGrowth: 0,
+                link
+            });
+
+            sentLinks.add(link);
+        }
+        return items;
     }
 
     async function scrapeCurrentDomItems(meta, pageIndex) {
@@ -609,46 +751,61 @@
         });
     }
 
-    // Sequential top-to-bottom smooth scrolling function that genuinely triggers Rozetka's lazy loading chunk by chunk
+    // Hybrid page harvester: tries fast direct API first, then falls back to sequential DOM scroll
     async function sequentialPageHarvest(meta, pageIndex) {
-        // 1. Force manual scroll restoration so Chrome/Angular doesn't remember bottom
+        let pageHarvestedCount = 0;
+        const targetPageCount = 60;
+
+        // 1. First priority: Direct Rozetka Catalog API fetch
+        const apiData = await tryFetchRozetkaCatalogApi(pageIndex);
+        if (apiData && Array.isArray(apiData.goods) && apiData.goods.length > 0) {
+            if (apiData.total > 0 && currentEstimatedTotal <= 0) {
+                currentEstimatedTotal = apiData.total;
+            }
+            const apiItems = buildProductsFromApiGoods(apiData.goods, meta);
+            if (apiItems.length > 0) {
+                pageHarvestedCount += apiItems.length;
+                await processAndReportHarvest(apiItems, meta, pageIndex);
+                console.log(`TradeScout Tab ${currentTabId}: Page ${pageIndex} API harvest yielded ${apiItems.length} items (Total: ${sentLinks.size}/${currentEstimatedTotal})`);
+            }
+        }
+
+        // If API already provided full 60 items (or reached catalog end), return immediately
+        if (pageHarvestedCount >= targetPageCount || (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal)) {
+            return pageHarvestedCount;
+        }
+
+        // 2. Second priority: Sequential DOM Top-to-Bottom Scroll
         if ('scrollRestoration' in history) {
             try { history.scrollRestoration = 'manual'; } catch (_) {}
         }
-
-        // 2. Start strictly at the top of the page (0, 0)
         window.scrollTo(0, 0);
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
         window.dispatchEvent(new Event('scroll', { bubbles: true }));
         await new Promise(r => setTimeout(r, 450));
 
-        let pageHarvestedCount = 0;
-        const targetPageCount = 60;
         let currentY = 0;
         const stepPx = 300;
         let stableRounds = 0;
         const maxStableRounds = 3;
 
-        // A. Initial harvest at the very top (SSR batch 1)
+        // Initial DOM check at top
         const initialBatch = await scrapeCurrentDomItems(meta, pageIndex);
         if (initialBatch.length > 0) {
             pageHarvestedCount += initialBatch.length;
             await processAndReportHarvest(initialBatch, meta, pageIndex);
         }
 
-        // B. Sequential scroll-down loop
         while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < targetPageCount && stableRounds < maxStableRounds) {
             const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2000);
 
-            // Step down from current position to bottom of currently rendered content
             while (currentY < docH && isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < targetPageCount) {
                 currentY = Math.min(docH, currentY + stepPx);
                 window.scrollTo({ top: currentY, behavior: 'smooth' });
                 window.dispatchEvent(new Event('scroll', { bubbles: true }));
                 window.dispatchEvent(new WheelEvent('wheel', { deltaY: stepPx, bubbles: true }));
 
-                // Check DOM periodically as we scroll down
                 const batch = await scrapeCurrentDomItems(meta, pageIndex);
                 if (batch.length > 0) {
                     pageHarvestedCount += batch.length;
@@ -663,11 +820,9 @@
                 break;
             }
 
-            // At the bottom of the current rendered tiles:
-            // 1. Try clicking "Show More" if a button exists
+            // At bottom of current DOM: click Show More & wait for AJAX
             tryTriggerShowMoreOnCurrentPage();
 
-            // 2. Nudge scroll up slightly and then back down to trigger IntersectionObserver
             window.scrollBy({ top: -250, behavior: 'smooth' });
             window.dispatchEvent(new Event('scroll', { bubbles: true }));
             await new Promise(r => setTimeout(r, 200));
@@ -676,7 +831,6 @@
             window.dispatchEvent(new Event('scroll', { bubbles: true }));
             window.dispatchEvent(new WheelEvent('wheel', { deltaY: 350, bubbles: true }));
 
-            // 3. Wait for Rozetka's AJAX to return next chunk of goods
             await new Promise(r => setTimeout(r, 1100));
 
             const freshBatch = await scrapeCurrentDomItems(meta, pageIndex);
@@ -688,7 +842,6 @@
 
             const newDocH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2000);
             if (newDocH > docH + 200) {
-                // New chunk was rendered and page expanded, continue scrolling down into it!
                 stableRounds = 0;
             } else {
                 stableRounds++;
@@ -720,7 +873,7 @@
                     if (latestEstimated > 0) currentEstimatedTotal = latestEstimated;
                 }
 
-                // Execute sequential top-to-bottom harvest for this page
+                // Execute sequential harvest for this page
                 await sequentialPageHarvest(meta, currentPage);
 
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
