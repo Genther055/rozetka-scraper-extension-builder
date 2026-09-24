@@ -355,18 +355,12 @@
     }
 
     async function scrapeCurrentDomItems(meta, pageIndex) {
-        // 1. Locate strictly the main catalog grid container
-        const mainGrid = document.querySelector('ul.catalog-grid, rz-grid ul, rz-catalog-grid ul, .catalog-grid > ul, ul[class*="catalog-grid"]');
+        // 1. Locate all catalog tiles flexibly across the page
+        const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, .catalog-grid, rz-catalog-grid, rz-catalog-tiles, .catalog-selection__goods, section.catalog-grid') || document.querySelector('main') || document.body;
         
-        let rawTiles = [];
-        if (mainGrid) {
-            rawTiles = Array.from(mainGrid.children).filter(child => child.tagName === 'LI' || child.classList.contains('catalog-grid__cell') || child.tagName === 'RZ-CATALOG-TILE');
-            if (rawTiles.length === 0) {
-                rawTiles = Array.from(mainGrid.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, .goods-tile'));
-            }
-        } else {
-            const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, .catalog-grid, rz-catalog-grid, rz-catalog-tiles, .catalog-selection__goods, section.catalog-grid') || document.querySelector('main') || document.body;
-            rawTiles = Array.from(catalogContainer.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, [data-goods-id], .goods-tile'));
+        let rawTiles = Array.from(catalogContainer.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, rz-product-tile, [data-goods-id], .goods-tile, app-goods-tile-default'));
+        if (rawTiles.length === 0) {
+            rawTiles = Array.from(document.querySelectorAll('rz-catalog-tile, rz-product-tile, [data-goods-id], .goods-tile, li.catalog-grid__cell, app-goods-tile-default'));
         }
 
         // Calculate max items for this page (standard Rozetka catalog page has up to 60 items)
@@ -900,10 +894,14 @@
         if (message.action === 'PING_TAB_STATUS') {
             const meta = getPageMetadata();
             const est = getEstimatedTotalFromPage();
+            const isRunning = isTabScrapingActive && window.__tradeScoutIsScrapingActive;
+            const isFinished = !isRunning && currentPercent === 100 && sentLinks.size > 0;
+            const finalEst = isFinished ? sentLinks.size : (currentEstimatedTotal > 0 ? currentEstimatedTotal : est);
+
             sendResponse({
-                isRunning: isTabScrapingActive && window.__tradeScoutIsScrapingActive,
+                isRunning: isRunning,
                 totalScraped: sentLinks.size,
-                estimatedTotal: currentEstimatedTotal > 0 ? currentEstimatedTotal : est,
+                estimatedTotal: finalEst,
                 percent: currentPercent,
                 statusMsg: currentStatusMsg,
                 page: currentPage,
