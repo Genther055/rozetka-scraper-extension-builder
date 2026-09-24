@@ -606,10 +606,15 @@
                 }
             }
 
+            // Always reset viewport to TOP at the beginning of every page
+            window.scrollTo({ top: 0, behavior: 'auto' });
+            window.dispatchEvent(new Event('scroll'));
+            await new Promise(r => setTimeout(r, 450));
+
             // 1. Thoroughly scroll & harvest up to 60 items on the CURRENT page
             let pageHarvestedCount = 0;
             let attemptsWithoutNew = 0;
-            const maxAttemptsWithoutNew = 5;
+            const maxAttemptsWithoutNew = 7;
             let expectedPageLimit = 60;
             if (currentEstimatedTotal > 0 && currentPage >= Math.ceil(currentEstimatedTotal / 60)) {
                 const rem = currentEstimatedTotal - sentLinks.size;
@@ -618,24 +623,56 @@
                 }
             }
 
+            // Harvest initially visible items first
+            const initialProducts = await scrapeCurrentDomItems(meta, currentPage);
+            if (initialProducts.length > 0) {
+                pageHarvestedCount += initialProducts.length;
+
+                currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100));
+                currentStatusMsg = `Зібрано ${sentLinks.size} з ${currentEstimatedTotal} товарів (стор. ${currentPage})...`;
+
+                sendTabMessage({
+                    action: 'tabProgress',
+                    total: sentLinks.size,
+                    page: currentPage,
+                    percent: currentPercent,
+                    statusMsg: currentStatusMsg,
+                    syncedCount: sentLinks.size,
+                    estimatedTotal: currentEstimatedTotal,
+                    sessionTitle: meta.title,
+                    category: meta.category,
+                    sessionId: currentSessionId,
+                    startTime: sessionStartTime
+                });
+
+                await sendWebhookPayload({
+                    products: initialProducts,
+                    page: currentPage,
+                    sessionId: currentSessionId,
+                    sessionTitle: meta.title,
+                    category: meta.category,
+                    tabId: currentTabId
+                });
+            }
+
             while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < expectedPageLimit && attemptsWithoutNew < maxAttemptsWithoutNew) {
                 // Progressive scroll down to trigger Rozetka's IntersectionObserver & lazy loading
                 const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
                 const viewH = window.innerHeight || 800;
                 
-                const scrollPcts = [0.3, 0.6, 0.85, 1.0];
+                const scrollPcts = [0.25, 0.5, 0.75, 1.0];
                 for (const pct of scrollPcts) {
                     if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
                     const targetY = Math.max(0, Math.round((totalHeight - viewH) * pct));
                     window.scrollTo({ top: targetY, behavior: 'smooth' });
                     window.dispatchEvent(new Event('scroll'));
-                    await new Promise(r => setTimeout(r, 120));
+                    await new Promise(r => setTimeout(r, 180));
                 }
 
                 // Scroll to absolute bottom and wait for Rozetka lazy-load network request & DOM render
                 window.scrollTo({ top: totalHeight, behavior: 'smooth' });
                 window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 550));
+                await new Promise(r => setTimeout(r, 650));
 
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
@@ -674,7 +711,7 @@
                     // Try nudging the scroll slightly up and down to re-trigger IntersectionObserver
                     window.scrollBy({ top: -350, behavior: 'smooth' });
                     window.dispatchEvent(new Event('scroll'));
-                    await new Promise(r => setTimeout(r, 200));
+                    await new Promise(r => setTimeout(r, 220));
                     window.scrollBy({ top: 400, behavior: 'smooth' });
                     window.dispatchEvent(new Event('scroll'));
                     await new Promise(r => setTimeout(r, 350));
@@ -779,6 +816,10 @@
                     if (pageTransitionSuccess) {
                         currentPage++;
                         consecutiveNoNew = 0;
+                        // Reset scroll to top for the newly loaded page
+                        window.scrollTo({ top: 0, behavior: 'auto' });
+                        window.dispatchEvent(new Event('scroll'));
+                        await new Promise(r => setTimeout(r, 400));
                         break;
                     }
                 }
