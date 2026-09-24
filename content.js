@@ -1,4 +1,4 @@
-// TradeScout Content Script v3.8 Pro (Progressive Row-by-Row Human Scroll & In-Place Catalog Harvester)
+// TradeScout Content Script v3.8 Pro (Chunk-Aware Progressive Scroll Engine & Multi-Page Harvester)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
@@ -570,10 +570,12 @@
         });
     }
 
-    // Progressive Row-by-Row Human Scroll Engine (Starts strictly at 0,0 and smoothly scrolls down to trigger lazy-rendering)
+    // Chunk-Aware Progressive Scroll Engine (Accurately triggers Angular lazy-rendering chunk by chunk)
     async function progressivePageHarvest(meta, pageIndex) {
         let harvestedThisPage = 0;
-        const targetCount = 60; // Rozetka default catalog capacity per page
+        const targetPageCapacity = 60; // Rozetka default catalog capacity per page
+        let idleAtBottomRetries = 0;
+        const maxBottomRetries = 4;
 
         // 1. Always start strictly at top (0, 0)
         if ('scrollRestoration' in history) {
@@ -593,30 +595,75 @@
             await processAndReportHarvest(topBatch, meta, pageIndex);
         }
 
-        // 3. Progressive row-by-row scroll down (step = 350px, delay = 150ms)
+        // 3. Progressive chunk-aware scrolling
         let currentY = 0;
         const stepPx = 350;
-        const getDocH = () => Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2000);
 
-        while (currentY < getDocH() && isTabScrapingActive && window.__tradeScoutIsScrapingActive && harvestedThisPage < targetCount) {
-            currentY += stepPx;
-            window.scrollTo({ top: currentY, behavior: 'smooth' });
-            document.documentElement.scrollTop = currentY;
-            document.body.scrollTop = currentY;
-            window.dispatchEvent(new Event('scroll', { bubbles: true }));
-            window.dispatchEvent(new WheelEvent('wheel', { deltaY: stepPx, bubbles: true }));
+        while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && harvestedThisPage < targetPageCapacity) {
+            const prevScrollH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1000);
+            const maxScrollY = Math.max(0, prevScrollH - window.innerHeight);
 
-            const batch = await scrapeCurrentDomItems(meta, pageIndex);
-            if (batch.length > 0) {
-                harvestedThisPage += batch.length;
-                await processAndReportHarvest(batch, meta, pageIndex);
+            if (currentY < maxScrollY) {
+                currentY = Math.min(currentY + stepPx, maxScrollY);
+                window.scrollTo({ top: currentY, behavior: 'smooth' });
+                document.documentElement.scrollTop = currentY;
+                document.body.scrollTop = currentY;
+                window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                window.dispatchEvent(new WheelEvent('wheel', { deltaY: stepPx, bubbles: true }));
+
+                // Check for new items
+                const batch = await scrapeCurrentDomItems(meta, pageIndex);
+                if (batch.length > 0) {
+                    harvestedThisPage += batch.length;
+                    idleAtBottomRetries = 0;
+                    await processAndReportHarvest(batch, meta, pageIndex);
+                }
+
+                await new Promise(r => setTimeout(r, 180));
+            } else {
+                // We reached the current bottom of the DOM!
+                // Trigger Angular lazy observers by scrolling bottom tile/observer into view
+                const lastTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, rz-catalog-tiles-observer, app-goods-tile-default');
+                if (lastTiles.length > 0) {
+                    try {
+                        lastTiles[lastTiles.length - 1].scrollIntoView({ behavior: 'auto', block: 'end' });
+                    } catch (_) {}
+                }
+
+                // Jiggle scroll to force trigger IntersectionObservers
+                window.scrollBy(0, -150);
+                window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 200));
+                window.scrollBy(0, 150);
+                window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                window.dispatchEvent(new Event('resize', { bubbles: true }));
+
+                await new Promise(r => setTimeout(r, 350));
+
+                // Check if new items loaded or DOM expanded
+                const newScrollH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1000);
+                const batch = await scrapeCurrentDomItems(meta, pageIndex);
+                if (batch.length > 0) {
+                    harvestedThisPage += batch.length;
+                    idleAtBottomRetries = 0;
+                    await processAndReportHarvest(batch, meta, pageIndex);
+                }
+
+                if (newScrollH > prevScrollH + 100) {
+                    // DOM expanded with new product rows! Continue scrolling down!
+                    idleAtBottomRetries = 0;
+                } else if (batch.length === 0) {
+                    // No new items and DOM did not expand
+                    idleAtBottomRetries++;
+                    if (idleAtBottomRetries >= maxBottomRetries) {
+                        // Truly reached the end of this page
+                        break;
+                    }
+                }
             }
-
-            await new Promise(r => setTimeout(r, 150));
         }
 
-        // 4. Final bottom settlement check
-        await new Promise(r => setTimeout(r, 400));
+        // 4. Final bottom sweep
         const finalBatch = await scrapeCurrentDomItems(meta, pageIndex);
         if (finalBatch.length > 0) {
             harvestedThisPage += finalBatch.length;
