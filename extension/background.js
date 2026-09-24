@@ -117,7 +117,8 @@ async function getAllRozetkaTabs() {
                         category: res.category || 'Товари'
                     };
                 } else {
-                    if (sessions[t.id]) {
+                    // Do not reset isRunning if tab is temporarily navigating between pages
+                    if (stoppedTabs.has(t.id) && sessions[t.id]) {
                         sessions[t.id].isRunning = false;
                     }
                 }

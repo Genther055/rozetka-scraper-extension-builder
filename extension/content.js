@@ -1,10 +1,13 @@
-// TradeScout Content Script v3.9 Pro (Ultra-Smooth Linear Downward Catalog Harvester & Accurate Data Extractor)
+// TradeScout Content Script v4.0 Pro (Unbreakable Multi-Page Catalog Harvester & Data Extractor)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
     window.__tradeScoutInjected = true;
 
-    console.log('TradeScout Content Script v3.9 Pro loaded on:', window.location.href);
+    console.log('TradeScout Content Script v4.0 Pro loaded on:', window.location.href);
+
+    const SESSION_STORAGE_KEY = '__tradeScout_active_session';
+    const STOPPED_FLAG_KEY = '__tradeScout_stopped';
 
     let isTabScrapingActive = false;
     window.__tradeScoutIsScrapingActive = false;
@@ -23,12 +26,40 @@
     // Helper to send messages safely to background service worker
     function sendTabMessage(msg) {
         if (msg.action === 'tabProgress' && (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive)) {
-            return; // Block progress messages if scraping has stopped
+            return;
         }
         try {
             chrome.runtime.sendMessage({ ...msg, tabId: currentTabId }, () => {
                 if (chrome.runtime.lastError) {}
             });
+        } catch (_) {}
+    }
+
+    // Save session to tab's sessionStorage for instant persistence across page navigations
+    function persistSessionState(pageNum) {
+        try {
+            const state = {
+                isRunning: isTabScrapingActive && window.__tradeScoutIsScrapingActive,
+                tabId: currentTabId,
+                sessionId: currentSessionId,
+                sentLinks: Array.from(sentLinks),
+                currentPage: pageNum || currentPage,
+                estimatedTotal: currentEstimatedTotal,
+                sessionTitle: getPageMetadata().title,
+                category: getPageMetadata().category,
+                startTime: sessionStartTime,
+                webhookUrl: webhookEndpoint,
+                savedAt: Date.now()
+            };
+            sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state));
+            sessionStorage.removeItem(STOPPED_FLAG_KEY);
+        } catch (_) {}
+    }
+
+    function clearPersistedSession() {
+        try {
+            sessionStorage.removeItem(SESSION_STORAGE_KEY);
+            sessionStorage.setItem(STOPPED_FLAG_KEY, 'true');
         } catch (_) {}
     }
 
@@ -95,7 +126,7 @@
                     maxPage = num;
                 }
                 const href = link.getAttribute('href') || '';
-                const m = href.match(/page=(\d+)/i) || href.match(/\/(\d+)\/?$/) || href.match(/page-(\d+)/i);
+                const m = href.match(/[?&]page=(\d+)/i) || href.match(/page[=-](\d+)/i) || href.match(/\/(\d+)\/?$/);
                 if (m && m[1]) {
                     const hNum = parseInt(m[1], 10);
                     if (!isNaN(hNum) && hNum > maxPage && hNum < 500) {
@@ -136,18 +167,15 @@
     function isUnwantedTile(item) {
         if (!item || !(item instanceof Element)) return true;
         
-        // 1. Exclude all recommendation blocks, carousels, sidebar, recently viewed, and banners
         if (item.closest('aside, .sidebar, header, footer, rz-viewed-goods, .recently-viewed, rz-similar-goods, rz-recommended-goods, rz-accessories, .catalog-banner, .advertising-slot, .main-goods__cell--advertising, rz-goods-sections, app-slider-goods, app-goods-carousel, rz-carousel')) {
             return true;
         }
         
-        // 2. Check if tile itself is an ad banner or placeholder
         const tileClasses = (item.className || '').toLowerCase();
         if (tileClasses.includes('catalog-banner') || tileClasses.includes('banner-tile') || tileClasses.includes('advertising-slot')) {
             return true;
         }
 
-        // 3. Must have a valid product link
         const linkTag = item.tagName === 'A' ? item : (item.querySelector('a.goods-tile__heading, a.tile-title, [class*="heading"] a, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]') || item.querySelector('a[href]'));
         if (!linkTag) return true;
 
@@ -161,21 +189,18 @@
         if (!text || typeof text !== 'string') return 0;
         const clean = text.replace(/&nbsp;/g, ' ').replace(/\u00A0/g, ' ').replace(/\u202F/g, ' ').trim();
         
-        // Pattern 1: "12 відгуків", "5 отзывов", "124 відг."
         const m1 = clean.match(/(\d+)\s*(?:відгук\w*|отзыв\w*|reviews?|відг\w*)/i);
         if (m1 && m1[1]) {
             const n = parseInt(m1[1], 10);
             if (!isNaN(n) && n > 0 && n < 100000) return n;
         }
 
-        // Pattern 2: "(12)" or "[12]"
         const m2 = clean.match(/[\(\[]\s*(\d+)\s*[\)\]]/);
         if (m2 && m2[1]) {
             const n = parseInt(m2[1], 10);
             if (!isNaN(n) && n > 0 && n < 100000) return n;
         }
 
-        // Pattern 3: Pure number e.g. "12"
         const digitsOnly = clean.replace(/\D/g, '');
         if (digitsOnly && digitsOnly.length > 0 && digitsOnly.length <= 6) {
             const n = parseInt(digitsOnly, 10);
@@ -233,7 +258,6 @@
     function extractRating(item) {
         if (!item || !(item instanceof Element)) return 5.0;
 
-        // 1. Star style width
         const starsEl = item.querySelector('.stars_rating, [data-testid="stars-rating"], .goods-tile__stars svg, [class*="stars"] svg, [class*="star"] [style*="width"], [class*="rating-stars"]');
         if (starsEl) {
             const style = starsEl.getAttribute('style') || '';
@@ -246,7 +270,6 @@
             }
         }
 
-        // 2. Aria label / title on rating wrapper
         const ratingContainer = item.querySelector('rz-rating, .goods-tile__rating, [class*="goods-tile__rating"], [class*="rating-block"]');
         if (ratingContainer) {
             const label = (ratingContainer.getAttribute('aria-label') || ratingContainer.getAttribute('title') || '').trim();
@@ -257,7 +280,6 @@
             }
         }
 
-        // 3. Text score
         const scoreEl = item.querySelector('.goods-tile__rating-score, .rating-score, [class*="rating-score"], [class*="rating-value"]');
         if (scoreEl && scoreEl.innerText) {
             const m = scoreEl.innerText.trim().match(/([\d][.,]\d)/);
@@ -386,13 +408,11 @@
         if (!currentUrl) return '';
         let url = currentUrl.split('#')[0];
         
-        if (url.includes('?') && (url.includes('page=') || url.includes('&text=') || url.includes('?text='))) {
-            if (/([?&])page=\d+/i.test(url)) {
-                return url.replace(/([?&])page=\d+/i, `$1page=${targetPageNum}`);
-            } else {
-                const separator = url.includes('?') ? '&' : '?';
-                return `${url}${separator}page=${targetPageNum}`;
-            }
+        if (url.includes('?')) {
+            const [base, query] = url.split('?');
+            const params = new URLSearchParams(query);
+            params.set('page', String(targetPageNum));
+            return `${base}?${params.toString()}`;
         }
 
         if (/\/page=\d+\/?/i.test(url)) {
@@ -560,7 +580,7 @@
                 const name = titleEl && titleEl.innerText ? titleEl.innerText.trim() : (linkTag.innerText ? linkTag.innerText.trim() : '');
                 if (!name || name.length < 3) continue;
 
-                // --- 1. CURRENT PRICE EXTRACTION ---
+                // 1. Price
                 let price = 0;
                 const priceEl = item.querySelector(
                     '.goods-tile__price-value, .goods-tile__price--current, .goods-tile__price_color_red, ' +
@@ -572,7 +592,7 @@
                     price = parseInt(priceText.replace(/\D/g, ''), 10) || 0;
                 }
 
-                // --- 2. OLD (PRE-DISCOUNT) PRICE & DISCOUNT EXTRACTION ---
+                // 2. Old Price & Discount
                 let oldPrice = 0;
                 let discount = 0;
 
@@ -609,7 +629,6 @@
                     }
                 }
 
-                // Harmonize oldPrice & discount
                 if (oldPrice > price && !discount && price > 0) {
                     discount = Math.round(((oldPrice - price) / oldPrice) * 100);
                 } else if (discount > 0 && (!oldPrice || oldPrice <= price) && price > 0) {
@@ -620,18 +639,18 @@
                     oldPrice = price;
                 }
 
-                // --- 3. REVIEWS & RATING EXTRACTION ---
+                // 3. Reviews & Rating
                 const reviews = extractReviews(item);
                 const rating = extractRating(item);
 
-                // --- 4. IN-STOCK STATUS ---
+                // 4. In-Stock
                 const itemText = item.innerText || '';
                 const inStock = !(item.classList.contains('tile-disabled') || itemText.includes('Немає в наявності'));
 
-                // --- 5. SMART SPECIFICATIONS ---
+                // 5. Smart Specifications
                 const specs = extractSmartSpecs(name, item);
 
-                // --- 6. SELLER EXTRACTION ---
+                // 6. Seller
                 const seller = extractSeller(item) || 'Rozetka';
 
                 newItems.push({
@@ -666,6 +685,8 @@
         const estimated = currentEstimatedTotal > 0 ? currentEstimatedTotal : Math.max(sentLinks.size, 60);
         currentPercent = Math.min(100, Math.round((sentLinks.size / estimated) * 100));
         currentStatusMsg = `Зібрано ${sentLinks.size} з ${estimated} товарів (стор. ${pageIndex})...`;
+
+        persistSessionState(pageIndex);
 
         sendTabMessage({
             action: 'tabProgress',
@@ -804,13 +825,13 @@
                 const hasNextPage = !!actionObj;
 
                 if (!hasNextPage) {
-                    // Check if there is still a higher page number estimated
                     const maxPossiblePages = Math.ceil(currentEstimatedTotal / 60);
                     if (currentPage < maxPossiblePages && consecutiveNoGrowth < 2) {
                         const fallbackNextPage = currentPage + 1;
                         const fallbackUrl = buildNextPageUrl(window.location.href, fallbackNextPage);
                         if (fallbackUrl && fallbackUrl !== window.location.href) {
                             console.log(`TradeScout Tab ${currentTabId}: Navigating to fallback next page ${fallbackNextPage} -> ${fallbackUrl}`);
+                            persistSessionState(fallbackNextPage);
                             sendTabMessage({
                                 action: 'tabProgress',
                                 total: sentLinks.size,
@@ -837,7 +858,6 @@
 
                 // 3. Perform Page Transition
                 if (actionObj.type === 'showMore') {
-                    // "Показати ще" expands in-place
                     currentStatusMsg = `Завантаження наступних товарів (стор. ${currentPage + 1})...`;
                     dispatchSafeClick(actionObj.element);
                     
@@ -854,6 +874,7 @@
                     if (expanded) {
                         currentPage++;
                         consecutiveNoGrowth = 0;
+                        persistSessionState(currentPage);
                         continue;
                     }
                 }
@@ -864,6 +885,8 @@
                 const prevItemsSignature = Array.from(document.querySelectorAll(tileSelectors)).slice(0, 3).map(el => el.innerText.slice(0, 20)).join('|');
                 
                 currentStatusMsg = `Перехід на стор. ${nextPageNum}...`;
+                persistSessionState(nextPageNum);
+
                 sendTabMessage({
                     action: 'tabProgress',
                     total: sentLinks.size,
@@ -902,16 +925,17 @@
                 if (pageSwitched) {
                     currentPage = nextPageNum;
                     consecutiveNoGrowth = 0;
-                    // Reset scroll to top for new page harvest
+                    persistSessionState(currentPage);
                     window.scrollTo({ top: 0, behavior: 'instant' });
                     await new Promise(r => setTimeout(r, 600));
                     continue;
                 }
 
-                // Fallback direct URL navigation if click didn't navigate
-                const directUrl = actionObj.href ? (actionObj.href.startsWith('http') ? actionObj.href : `https://rozetka.com.ua${actionObj.href}`) : buildNextPageUrl(window.location.href, nextPageNum);
+                // Direct URL navigation fallback
+                const directUrl = (actionObj.href && actionObj.href.includes('page=')) ? (actionObj.href.startsWith('http') ? actionObj.href : `https://rozetka.com.ua${actionObj.href}`) : buildNextPageUrl(window.location.href, nextPageNum);
                 if (directUrl && directUrl !== window.location.href) {
                     console.log(`TradeScout Tab ${currentTabId}: Direct navigation to page ${nextPageNum} -> ${directUrl}`);
+                    persistSessionState(nextPageNum);
                     window.location.href = directUrl;
                     return;
                 }
@@ -925,6 +949,7 @@
             // Scraping finished
             isTabScrapingActive = false;
             window.__tradeScoutIsScrapingActive = false;
+            clearPersistedSession();
             currentPercent = 100;
             currentStatusMsg = `Збір завершено! (${sentLinks.size} товарів)`;
             console.log(`TradeScout Tab ${currentTabId}: Scrape finished! Total: ${sentLinks.size} items.`);
@@ -962,13 +987,14 @@
         sessionStartTime = Date.now();
         currentPage = 1;
 
-        // Reset scroll position to top
         window.scrollTo({ top: 0, behavior: 'instant' });
 
         const meta = getPageMetadata();
         currentEstimatedTotal = getEstimatedTotalFromPage();
         currentPercent = 1;
         currentStatusMsg = `Запуск скрейпінгу: ${meta.title}...`;
+
+        persistSessionState(1);
 
         sendTabMessage({
             action: 'tabProgress',
@@ -1003,7 +1029,7 @@
         }
 
         let urlPage = 1;
-        const pageMatch = window.location.href.match(/page=(\d+)/i) || window.location.href.match(/\/page-(\d+)/i);
+        const pageMatch = window.location.href.match(/[?&]page=(\d+)/i) || window.location.href.match(/page[=-](\d+)/i);
         if (pageMatch && pageMatch[1]) {
             urlPage = parseInt(pageMatch[1], 10) || 1;
         }
@@ -1014,7 +1040,7 @@
         currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
         currentStatusMsg = `Збір (стор. ${currentPage}): ${sentLinks.size}/${currentEstimatedTotal}...`;
 
-        // Ensure we are at the top of the page when resuming on a newly loaded page
+        persistSessionState(currentPage);
         window.scrollTo({ top: 0, behavior: 'instant' });
 
         sendTabMessage({
@@ -1040,6 +1066,7 @@
         window.__tradeScoutIsScrapingActive = false;
         currentSessionEpoch++;
         isScraperLoopRunning = false;
+        clearPersistedSession();
         const meta = getPageMetadata();
         currentPercent = 0;
         currentStatusMsg = 'Скрейпінг зупинено.';
@@ -1061,6 +1088,7 @@
         window.__tradeScoutIsScrapingActive = false;
         currentSessionEpoch++;
         isScraperLoopRunning = false;
+        clearPersistedSession();
         sentLinks.clear();
         currentPercent = 0;
         currentEstimatedTotal = 0;
@@ -1073,6 +1101,24 @@
     // Check on page load if this tab was in an active scraping session
     function checkAndResumeSessionOnLoad() {
         try {
+            // First check immediate tab-level sessionStorage
+            const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+            const isStopped = sessionStorage.getItem(STOPPED_FLAG_KEY) === 'true';
+
+            if (raw && !isStopped) {
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && parsed.isRunning && Date.now() - (parsed.savedAt || 0) < 120000) {
+                        console.log('TradeScout Content Script: Resuming session from tab sessionStorage on page load...', parsed);
+                        setTimeout(() => {
+                            resumeScrapingSession(parsed);
+                        }, 300);
+                        return;
+                    }
+                } catch (_) {}
+            }
+
+            // Fallback: Query background service worker
             chrome.runtime.sendMessage({ action: 'GET_TAB_SESSION_ON_LOAD' }, (res) => {
                 if (chrome.runtime.lastError) {
                     const meta = getPageMetadata();
@@ -1080,7 +1126,7 @@
                     return;
                 }
                 if (res && res.isRunning && res.session) {
-                    console.log('TradeScout Content Script: Resuming existing scrape session on page load...', res.session);
+                    console.log('TradeScout Content Script: Resuming session from background on page load...', res.session);
                     setTimeout(() => {
                         resumeScrapingSession(res.session);
                     }, 400);
