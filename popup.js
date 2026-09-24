@@ -1,4 +1,4 @@
-// TradeScout Popup Script v3.6 Pro (Live Telemetry & Multi-Tab Control)
+// TradeScout Popup Script v3.5 Pro (Live Telemetry & Multi-Tab Control)
 const btnMasterStart = document.getElementById('btn-master-start');
 const btnMasterStop = document.getElementById('btn-master-stop');
 const allTabsCountEl = document.getElementById('all-tabs-count');
@@ -113,7 +113,7 @@ function pollActiveTabStatus() {
                 tabBadgeEl.innerText = 'Готова до запуску';
                 tabBadgeEl.style.color = '#10b981';
                 stopTimer(true);
-                updateProgress(0, 0, 'Готова до запуску', 0, 1);
+                updateProgress(0, 0, res.statusMsg || 'Готова до запуску', 0, 1);
             }
         }
     });
@@ -252,33 +252,24 @@ btnMasterStop.addEventListener('click', async () => {
     tabBadgeEl.innerText = 'Готова до запуску';
     tabBadgeEl.style.color = '#10b981';
     stopTimer(true);
-    updateProgress(0, 0, 'Всі вкладки зупинено.', 0, 1);
+    updateProgress(0, 0, 'Усі збори зупинено.', 0, 1);
 
-    chrome.runtime.sendMessage({ action: 'STOP_ALL_TABS' }, () => {
+    btnMasterStop.disabled = true;
+    btnMasterStop.innerText = '⏹ Зупинка...';
+
+    chrome.runtime.sendMessage({
+        action: 'STOP_ALL_TABS'
+    }, () => {
         setTimeout(() => {
+            btnMasterStop.disabled = false;
+            btnMasterStop.innerHTML = '<span>⏹ Зупинити все</span>';
             pollActiveTabStatus();
             refreshTabsCount();
-        }, 300);
+        }, 500);
     });
 });
 
-// Reset all sessions & states button
-if (btnResetAll) {
-    btnResetAll.addEventListener('click', () => {
-        chrome.runtime.sendMessage({ action: 'RESET_ALL_SESSIONS' }, () => {
-            stopTimer(true);
-            btnStart.disabled = false;
-            btnStop.disabled = true;
-            tabBadgeEl.innerText = 'Готова до запуску';
-            tabBadgeEl.style.color = '#10b981';
-            updateProgress(0, 0, 'Готова до запуску', 0, 1);
-            refreshTabsCount();
-            pollActiveTabStatus();
-        });
-    });
-}
-
-// Refresh tabs count button
+// Refresh Tabs list button
 if (btnRefreshTabs) {
     btnRefreshTabs.addEventListener('click', () => {
         refreshTabsCount();
@@ -286,14 +277,36 @@ if (btnRefreshTabs) {
     });
 }
 
-// Save Webhook input on change
-inputWebhook.addEventListener('change', () => {
-    const webhookUrl = inputWebhook.value.trim();
-    if (webhookUrl) chrome.storage.local.set({ webhookUrl });
+// Reset all cached sessions
+if (btnResetAll) {
+    btnResetAll.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ action: 'RESET_ALL_SESSIONS' }, () => {
+            btnStart.disabled = false;
+            btnStop.disabled = true;
+            tabBadgeEl.innerText = 'Готова до запуску';
+            tabBadgeEl.style.color = '#10b981';
+            stopTimer(true);
+            updateProgress(0, 0, 'Готова до запуску', 0, 1);
+            pollActiveTabStatus();
+            refreshTabsCount();
+        });
+    });
+}
+
+// Global live message listener to refresh popup automatically on tab progress
+chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action === 'tabProgress' || msg.action === 'tabFinished' || msg.action === 'tabStopped') {
+        if (activeTabId && (msg.tabId === activeTabId || !msg.tabId)) {
+            pollActiveTabStatus();
+        }
+    }
 });
 
-// Real-time polling while popup is open
-setInterval(pollActiveTabStatus, 500);
-setInterval(refreshTabsCount, 2000);
+// Auto poll every 1s when popup is open
+setInterval(() => {
+    pollActiveTabStatus();
+    refreshTabsCount();
+}, 1000);
 
-initPopup();
+// Initialize on DOM ready
+document.addEventListener('DOMContentLoaded', initPopup);

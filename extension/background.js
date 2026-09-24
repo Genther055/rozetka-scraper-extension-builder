@@ -1,5 +1,5 @@
-// Background Service Worker for TradeScout Multi-Tab Extension v3.6 Pro
-console.log('TradeScout Background Service Worker v3.6 Pro initialized.');
+// Background Service Worker for TradeScout Multi-Tab Extension v3.5 Pro
+console.log('TradeScout Background Service Worker v3.5 Pro initialized.');
 
 const LOCAL_DASHBOARD_API = 'http://localhost:4000/api/products';
 const LOCAL_IP_API = 'http://127.0.0.1:4000/api/products';
@@ -54,35 +54,17 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
     await removeTabSession(tabId);
 });
 
-// Manage sessions when a tab navigates or refreshes
+// Clean up sessions when a tab navigates (unless it was actively running an automated multi-page scrape)
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete' && tab.url && tab.url.includes('rozetka.com.ua')) {
+    if (changeInfo.status === 'loading' && tab.url && tab.url.includes('rozetka.com.ua')) {
         const sessions = await getTabSessions();
-        const session = sessions[tabId];
-        if (session && session.isRunning && !stoppedTabs.has(tabId)) {
-            console.log(`TradeScout Background: Tab ${tabId} loaded page, auto-resuming session...`);
-            setTimeout(() => {
-                chrome.tabs.sendMessage(tabId, {
-                    action: 'RESUME_TAB_SCRAPE',
-                    tabId: tabId,
-                    session: session
-                }, () => {
-                    if (chrome.runtime.lastError) {
-                        chrome.scripting.executeScript({
-                            target: { tabId: tabId },
-                            files: ['content.js']
-                        }, () => {
-                            setTimeout(() => {
-                                chrome.tabs.sendMessage(tabId, {
-                                    action: 'RESUME_TAB_SCRAPE',
-                                    tabId: tabId,
-                                    session: session
-                                }).catch(() => {});
-                            }, 250);
-                        }).catch(() => {});
-                    }
-                });
-            }, 500);
+        if (sessions[tabId] && !sessions[tabId].isRunning) {
+            sessions[tabId].isRunning = false;
+            sessions[tabId].percentProgress = 0;
+            sessions[tabId].statusMsg = 'Готова до запуску';
+            await new Promise(resolve => {
+                chrome.storage.local.set({ tabSessions: sessions }, resolve);
+            });
         }
     }
 });
@@ -116,11 +98,6 @@ async function getAllRozetkaTabs() {
                         sessionTitle: res.sessionTitle || t.title || 'Каталог Rozetka',
                         category: res.category || 'Товари'
                     };
-                } else {
-                    // Do not reset isRunning if tab is temporarily navigating between pages
-                    if (stoppedTabs.has(t.id) && sessions[t.id]) {
-                        sessions[t.id].isRunning = false;
-                    }
                 }
                 resolve();
             });
@@ -151,18 +128,6 @@ async function startScrapingTab(tabId, webhookUrl) {
     stoppedTabs.delete(tabId);
     const now = Date.now();
     const sessionId = `session_${tabId}_${now}`;
-
-    await updateTabSession(tabId, {
-        isRunning: true,
-        sessionId: sessionId,
-        webhookUrl: webhookUrl,
-        sentLinks: [],
-        currentPage: 1,
-        totalScraped: 0,
-        percentProgress: 1,
-        statusMsg: 'Запуск скрейпінгу...',
-        startTime: now
-    });
 
     return new Promise(resolve => {
         chrome.tabs.sendMessage(tabId, {
@@ -285,33 +250,17 @@ async function notifyServerScrapingStatus(taskData) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = message.tabId || (sender && sender.tab ? sender.tab.id : null);
 
-    // 0. Tab checks if it has an active session on initial load
-    if (message.action === 'GET_TAB_SESSION_ON_LOAD') {
-        getTabSessions().then(sessions => {
-            const sess = tabId ? sessions[tabId] : null;
-            if (sess && sess.isRunning && !stoppedTabs.has(tabId)) {
-                sendResponse({ isRunning: true, session: sess });
-            } else {
-                sendResponse({ isRunning: false, session: sess });
-            }
-        });
-        return true;
-    }
-
-    // Tab reports it is idle on load (only if not already running)
+    // 0. Tab reports it is idle on load
     if (message.action === 'tabIdle' && tabId) {
-        getTabSessions().then(sessions => {
-            const sess = sessions[tabId];
-            if (!sess || (!sess.isRunning && !stoppedTabs.has(tabId))) {
-                updateTabSession(tabId, {
-                    isRunning: false,
-                    percentProgress: 0,
-                    statusMsg: 'Готова до запуску',
-                    sessionTitle: message.sessionTitle || 'Каталог Rozetka',
-                    category: message.category || 'Товари'
-                });
-            }
-        });
+        if (!stoppedTabs.has(tabId)) {
+            updateTabSession(tabId, {
+                isRunning: false,
+                percentProgress: 0,
+                statusMsg: 'Готова до запуску',
+                sessionTitle: message.sessionTitle || 'Каталог Rozetka',
+                category: message.category || 'Товари'
+            });
+        }
         sendResponse({ success: true });
         return true;
     }
@@ -334,8 +283,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sessionTitle: message.sessionTitle || 'Каталог Rozetka',
             category: message.category || 'Товари',
             sessionId: message.sessionId || `session_${tabId}`,
-            webhookUrl: message.webhookUrl,
-            sentLinks: Array.isArray(message.sentLinks) ? message.sentLinks : undefined,
             startTime: message.startTime || Date.now()
         });
 
@@ -422,7 +369,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'tabError' && tabId) {
         updateTabSession(tabId, {
             isRunning: false,
-            statusMsg: `Помилка: ${message.message || 'Збій скрапінгу'}`
+            statusMsg: `Помилка: ${message.message || 'Збій скрейпінгу'}`
         });
 
         notifyServerScrapingStatus({
@@ -430,7 +377,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sessionId: `session_${tabId}`,
             status: 'error',
             percent: 0,
-            statusMsg: `Помилка: ${message.message || 'Збій скрапінгу'}`
+            statusMsg: `Помилка: ${message.message || 'Збій скрейпінгу'}`
         });
 
         sendResponse({ success: true });
@@ -439,8 +386,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // 5. Send Webhook payload to server
     if (message.action === 'sendWebhook') {
-        sendResponse({ success: true });
-
         const { webhookUrl, payload } = message;
         const itemCount = payload?.products?.length || 0;
         console.log(`TradeScout Background: Tab ${tabId} sending ${itemCount} products for "${payload.sessionTitle || 'Каталог'}"...`);
@@ -461,6 +406,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             func: (prods) => {
                                 try {
                                     if (prods && prods.length > 0) {
+                                        localStorage.setItem('tradescout_cached_products', JSON.stringify(prods));
                                         window.dispatchEvent(new CustomEvent('tradescout_products_updated', { detail: prods }));
                                     }
                                 } catch (_) {}
@@ -494,10 +440,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const sendPromises = targets.map(url => postWithRetry(url, payload));
 
-        // Trigger background asynchronous enrichment for full 30+ specifications & description (non-blocking)
-        if (payload?.products && payload.products.length > 0 && !payload.skipBackgroundEnrichment && !payload.isEnriched) {
-            queueProductsForEnrichment(payload.products, webhookUrl);
-        }
+        Promise.all(sendPromises).then((results) => {
+            const serverInfo = results.find(r => r && r.success) || null;
+            sendResponse({ success: true, serverInfo });
+        });
 
         return true;
     }
@@ -553,253 +499,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // 10. Reset all cached sessions & reset all open tabs
-    if (message.action === 'RESET_ALL_SESSIONS' || message.action === 'CLEAR_ALL_DATA') {
+    // 10. Reset all cached sessions
+    if (message.action === 'RESET_ALL_SESSIONS') {
         stoppedTabs.clear();
-        enrichmentQueue.length = 0;
         chrome.storage.local.set({ tabSessions: {} }, () => {
-            chrome.tabs.query({ url: "*://*.rozetka.com.ua/*" }, (tabs) => {
-                if (tabs && tabs.length > 0) {
-                    tabs.forEach(t => {
-                        chrome.tabs.sendMessage(t.id, { action: 'RESET_TAB_STATE' }, () => {
-                            if (chrome.runtime.lastError) {}
-                        });
-                    });
-                }
-            });
             sendResponse({ success: true });
         });
         return true;
     }
-
-    // 11. Fetch Rozetka official catalog API data with full background host permissions (bypassing CSP/CORS)
-    if (message.action === 'FETCH_ROZETKA_CATALOG_API') {
-        const { url, page } = message;
-        fetchRozetkaCatalogData(url, page).then(result => {
-            sendResponse(result);
-        }).catch(() => {
-            sendResponse({ success: false, goods: [] });
-        });
-        return true;
-    }
 });
-
-async function fetchRozetkaCatalogData(urlStr, pageIndex) {
-    if (!urlStr) return { success: false, goods: [] };
-    try {
-        let categoryId = '';
-        const catMatch = urlStr.match(/\/c(\d+)/i) || urlStr.match(/category_id=(\d+)/i) || urlStr.match(/c_id=(\d+)/i);
-        if (catMatch && catMatch[1]) {
-            categoryId = catMatch[1];
-        }
-
-        const isUa = urlStr.includes('/ua/') || !urlStr.includes('/ru/');
-        const lang = isUa ? 'ua' : 'ru';
-
-        let params = [];
-        params.push('front-type=xl');
-        params.push('country=UA');
-        params.push(`lang=${lang}`);
-        params.push(`page=${pageIndex || 1}`);
-
-        if (categoryId) {
-            params.push(`category_id=${categoryId}`);
-        }
-
-        // Search text if present
-        const searchMatch = urlStr.match(/[?&]text=([^&#]+)/i);
-        if (searchMatch && searchMatch[1]) {
-            params.push(`text=${searchMatch[1]}`);
-        }
-
-        // Filters in path: /c80153/producer=xiaomi;.../
-        const filterPathMatch = urlStr.match(/\/c\d+\/([^/?#]+)/i);
-        if (filterPathMatch && filterPathMatch[1]) {
-            const rawParts = filterPathMatch[1].split(';');
-            for (const part of rawParts) {
-                if (part && !part.startsWith('page=')) {
-                    params.push(part);
-                }
-            }
-        }
-
-        const queryStr = params.join('&');
-        const candidateUrls = [
-            `https://xl-catalog-api.rozetka.com.ua/v4/goods/get?${queryStr}`,
-            `https://common-api.rozetka.com.ua/v2/api/v2/goods/get?${queryStr}`,
-            `https://catalog-api.rozetka.com.ua/v4/goods/get?${queryStr}`
-        ];
-
-        for (const endpoint of candidateUrls) {
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 4000);
-                const res = await fetch(endpoint, {
-                    signal: controller.signal,
-                    headers: {
-                        'Accept': 'application/json, text/plain, */*',
-                        'Accept-Language': 'uk,ru;q=0.9,en-US;q=0.8,en;q=0.7'
-                    }
-                });
-                clearTimeout(timeoutId);
-                if (res && res.ok) {
-                    const json = await res.json();
-                    if (json && json.data) {
-                        const rawGoods = json.data.goods || json.data.items || (Array.isArray(json.data) ? json.data : []);
-                        if (Array.isArray(rawGoods) && rawGoods.length > 0) {
-                            return {
-                                success: true,
-                                goods: rawGoods,
-                                totalGoods: Number(json.data.total_goods || json.data.total || json.data.count || 0),
-                                totalPages: Number(json.data.total_pages || json.data.totalPages || 0)
-                            };
-                        }
-                    }
-                }
-            } catch (_) {}
-        }
-    } catch (_) {}
-    return { success: false, goods: [] };
-}
-
-// =========================================================================
-// ASYNCHRONOUS BACKGROUND ENRICHMENT WORKER (Specs, Characteristics & Description)
-// =========================================================================
-const enrichmentQueue = [];
-let isEnrichmentWorkerRunning = false;
-const processedLinksSet = new Set();
-
-async function fetchProductDetails(product) {
-    if (!product || !product.link) return;
-    try {
-        const cleanLink = product.link.split('?')[0].split('#')[0];
-        const charUrl = cleanLink.endsWith('/') ? `${cleanLink}characteristics/` : `${cleanLink}/characteristics/`;
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
-        const res = await fetch(charUrl, { signal: controller.signal }).catch(() => null);
-        clearTimeout(timeoutId);
-        
-        if (!res || !res.ok) return;
-        const htmlText = await res.text().catch(() => '');
-        if (!htmlText) return;
-
-        // 1. Full Description
-        const descMatch = htmlText.match(/class="[^"]*(?:product-about__description|rz-product-description|product-page__description|about-product)[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
-        if (descMatch) {
-            const cleanDesc = descMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-            if (cleanDesc && cleanDesc.length > 5) {
-                product.description = cleanDesc;
-            }
-        }
-
-        // 2. Structured Characteristics / Specs Map
-        const detailedSpecsMap = {};
-        const specsList = [];
-
-        // Method A: parse characteristics__label and characteristics__value
-        const specMatches = htmlText.matchAll(/class="[^"]*characteristics__label[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>[\s\S]*?class="[^"]*characteristics__value[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>/gi);
-        for (const m of specMatches) {
-            const k = m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-            const v = m[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-            if (k && v) {
-                detailedSpecsMap[k] = v;
-                specsList.push(`${k}: ${v}`);
-            }
-        }
-
-        // Method B: parse dt / dd characteristic rows if Method A found few
-        if (specsList.length === 0) {
-            const dtMatches = htmlText.matchAll(/<dt[^>]*>([\s\S]*?)<\/dt>[\s\S]*?<dd[^>]*>([\s\S]*?)<\/dd>/gi);
-            for (const m of dtMatches) {
-                const k = m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-                const v = m[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-                if (k && v) {
-                    detailedSpecsMap[k] = v;
-                    specsList.push(`${k}: ${v}`);
-                }
-            }
-        }
-
-        if (specsList.length > 0) {
-            product.specs = specsList.join('; ');
-            product.detailedSpecsMap = detailedSpecsMap;
-        }
-    } catch (e) {
-        console.warn('TradeScout Background: Detail fetch error for', product.name, e);
-    }
-}
-
-async function processEnrichmentQueue(webhookUrl) {
-    if (isEnrichmentWorkerRunning) return;
-    isEnrichmentWorkerRunning = true;
-
-    const BATCH_SIZE = 5;
-    const RENDER_CLOUD_API = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
-    const targets = [];
-    if (webhookUrl && !targets.includes(webhookUrl)) targets.push(webhookUrl);
-    if (!targets.includes(RENDER_CLOUD_API)) targets.push(RENDER_CLOUD_API);
-    if (!targets.includes(LOCAL_DASHBOARD_API)) targets.push(LOCAL_DASHBOARD_API);
-    if (!targets.includes(LOCAL_IP_API)) targets.push(LOCAL_IP_API);
-
-    while (enrichmentQueue.length > 0) {
-        const batch = enrichmentQueue.splice(0, BATCH_SIZE);
-        await Promise.all(batch.map(p => fetchProductDetails(p)));
-
-        const enrichedProducts = batch.filter(p => (p.specs && p.specs.length > 0 && p.specs !== 'Стандартні') || (p.description && p.description.length > 0));
-        if (enrichedProducts.length > 0) {
-            const enrichedPayload = { 
-                products: enrichedProducts, 
-                isEnriched: true,
-                skipBackgroundEnrichment: true 
-            };
-
-            // Broadcast to open dashboard tabs to update memory/localStorage
-            try {
-                chrome.tabs.query({ url: ["*://*.vercel.app/*", "*://localhost/*", "*://127.0.0.1/*", "*://*.onrender.com/*"] }, (dashboardTabs) => {
-                    if (dashboardTabs && dashboardTabs.length > 0) {
-                        dashboardTabs.forEach(dTab => {
-                            chrome.scripting.executeScript({
-                                target: { tabId: dTab.id },
-                                func: (prods) => {
-                                    try {
-                                        window.dispatchEvent(new CustomEvent('tradescout_products_updated', { detail: prods }));
-                                    } catch (_) {}
-                                },
-                                args: [enrichedProducts]
-                            }).catch(() => {});
-                        });
-                    }
-                });
-            } catch (_) {}
-
-            // Send enriched updates to backend server
-            for (const targetUrl of targets) {
-                fetch(targetUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(enrichedPayload)
-                }).catch(() => {});
-            }
-        }
-
-        // Polite delay between background batches
-        await new Promise(r => setTimeout(r, 200));
-    }
-
-    isEnrichmentWorkerRunning = false;
-}
-
-function queueProductsForEnrichment(products, webhookUrl) {
-    if (!products || products.length === 0) return;
-    for (const p of products) {
-        if (!p.link) continue;
-        const key = p.link.split('?')[0].split('#')[0];
-        if (!processedLinksSet.has(key)) {
-            processedLinksSet.add(key);
-            enrichmentQueue.push(p);
-        }
-    }
-    processEnrichmentQueue(webhookUrl);
-}
-

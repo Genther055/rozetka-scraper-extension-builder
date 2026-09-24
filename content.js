@@ -1,18 +1,15 @@
-// TradeScout Content Script v4.2 Pro (Smooth Multi-Page Harvester & Accurate Rozetka Data Extractor)
+// TradeScout Content Script v3.5 Pro (Multi-Tab Background Worker & Live Telemetry)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
     window.__tradeScoutInjected = true;
 
-    console.log('TradeScout Content Script v4.2 Pro loaded on:', window.location.href);
+    console.log('TradeScout Content Script v3.5 Pro loaded on:', window.location.href);
 
     const SESSION_STORAGE_KEY = '__tradeScout_active_session';
-    const STOPPED_FLAG_KEY = '__tradeScout_stopped';
 
     let isTabScrapingActive = false;
     window.__tradeScoutIsScrapingActive = false;
-    let isScraperLoopRunning = false;
-    let currentSessionEpoch = 0;
     let currentSessionId = null;
     let currentTabId = null;
     let webhookEndpoint = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
@@ -26,7 +23,7 @@
     // Helper to send messages safely to background service worker
     function sendTabMessage(msg) {
         if (msg.action === 'tabProgress' && (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive)) {
-            return;
+            return; // Block progress messages if scraping has stopped
         }
         try {
             chrome.runtime.sendMessage({ ...msg, tabId: currentTabId }, () => {
@@ -52,14 +49,12 @@
                 savedAt: Date.now()
             };
             sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state));
-            sessionStorage.removeItem(STOPPED_FLAG_KEY);
         } catch (_) {}
     }
 
     function clearPersistedSession() {
         try {
             sessionStorage.removeItem(SESSION_STORAGE_KEY);
-            sessionStorage.setItem(STOPPED_FLAG_KEY, 'true');
         } catch (_) {}
     }
 
@@ -90,408 +85,218 @@
         if (!text || typeof text !== 'string') return 0;
         const cleaned = text.replace(/&nbsp;/g, ' ').replace(/\u00A0/g, ' ').replace(/\u202F/g, ' ').trim();
         
-        // Match: "Знайдено 531 товар" or "Знайдено 508 товарів" or "Найдено 355 товаров"
-        const m1 = cleaned.match(/(?:знайдено|найдено|показано)\s*([\d\s\u00A0\u202F.,]+)\s*(?:товар\w*|тов\w*)?/i);
+        const m1 = cleaned.match(/(?:знайдено|найдено|показано)?\s*([\d\s\u00A0\u202F.,]+)\s*(?:товар\w*|тов\w*)/i);
         if (m1 && m1[1]) {
             const num = parseInt(m1[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
-            if (!isNaN(num) && num > 0 && num < 1000000) return num;
+            if (!isNaN(num) && num > 0 && num < 10000000) return num;
         }
 
-        // Match: "531 товар", "508 товарів", "73 товари", "24 товари", "100 товаров", "350 товаров"
-        const m2 = cleaned.match(/\b([\d\s\u00A0\u202F.,]+)\s*(?:товарів|товари|товаров|товара|товар)\b/i);
+        const m2 = cleaned.match(/([\d\s\u00A0\u202F.,]+)\s*(?:товарів|товари|товаров|товара|товар)/i);
         if (m2 && m2[1]) {
             const num = parseInt(m2[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
-            if (!isNaN(num) && num > 0 && num < 1000000) return num;
+            if (!isNaN(num) && num > 0 && num < 10000000) return num;
         }
 
-        // Match: "Знайдено 508"
-        const m3 = cleaned.match(/(?:знайдено|найдено)\s*([\d\s\u00A0\u202F.,]+)/i);
-        if (m3 && m3[1]) {
-            const num = parseInt(m3[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
-            if (!isNaN(num) && num > 0 && num < 1000000) return num;
+        const digitsOnly = cleaned.replace(/[^\d]/g, '');
+        if (digitsOnly.length > 0) {
+            const num = parseInt(digitsOnly, 10);
+            if (!isNaN(num) && num > 0 && num < 10000000) return num;
         }
 
         return 0;
     }
 
     function getEstimatedTotalFromPage() {
-        let maxPage = 1;
-        try {
-            const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a, rz-paginator a');
-            for (const link of pageLinks) {
-                if (link.closest('aside, .sidebar, header, footer, rz-recommended-goods')) continue;
-                const txt = (link.textContent || '').trim();
-                const num = parseInt(txt, 10);
-                if (!isNaN(num) && num > maxPage && num < 500) {
-                    maxPage = num;
-                }
-                const href = link.getAttribute('href') || '';
-                const m = href.match(/[?&]page=(\d+)/i) || href.match(/page[=-](\d+)/i) || href.match(/\/(\d+)\/?$/);
-                if (m && m[1]) {
-                    const hNum = parseInt(m[1], 10);
-                    if (!isNaN(hNum) && hNum > maxPage && hNum < 500) {
-                        maxPage = hNum;
-                    }
-                }
-            }
-        } catch (_) {}
-
-        // Check top catalog counter text (strictly exclude sidebars, chips, and filters)
-        let parsedTopCount = 0;
-        const topElements = document.querySelectorAll('rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection__label, [class*="heading__goods"], [class*="found-goods"], [class*="goods-count"], h1');
-        for (const el of topElements) {
-            if (el.closest('aside, .sidebar, rz-filter-stack, .sidebar-block, [class*="filter"], rz-catalog-selection, .catalog-selection, [class*="chip"]')) continue;
-            const txt = (el.textContent || el.innerText || '').trim();
-            if (txt.toLowerCase().includes('знайдено') || txt.toLowerCase().includes('найдено') || txt.toLowerCase().includes('товар')) {
-                const count = parseCountFromText(txt);
-                if (count > 0 && count < 1000000) {
-                    parsedTopCount = count;
-                    break;
-                }
-            }
-        }
-
-        if (parsedTopCount > 0) {
-            return parsedTopCount;
-        }
-
-        if (maxPage > 1) {
-            return maxPage * 60;
-        }
-
-        const currentDomTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default').length;
-        return currentDomTiles > 0 ? currentDomTiles : 60;
-    }
-
-    // Filter: strictly eliminate non-catalog containers (sidebar, recommendations, recently viewed, carousels, banners)
-    function isUnwantedTile(item) {
-        if (!item || !(item instanceof Element)) return true;
-        
-        if (item.closest('aside, .sidebar, header, footer, rz-viewed-goods, .recently-viewed, rz-similar-goods, rz-recommended-goods, rz-accessories, .catalog-banner, .advertising-slot, .main-goods__cell--advertising')) {
-            return true;
-        }
-        
-        const tileClasses = (item.className || '').toLowerCase();
-        if (tileClasses.includes('catalog-banner') || tileClasses.includes('banner-tile') || tileClasses.includes('advertising-slot')) {
-            return true;
-        }
-
-        const linkTag = item.tagName === 'A' ? item : (item.querySelector('a.goods-tile__heading, a.tile-title, [class*="heading"] a, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]') || item.querySelector('a[href]'));
-        if (!linkTag) return true;
-
-        const href = linkTag.getAttribute('href') || '';
-        if (!href || href === '#' || href.startsWith('javascript:')) return true;
-
-        return false;
-    }
-
-    // Gentle, smooth linear downward scroll (100% human-like, zero jumping)
-    async function smoothPageScroll() {
-        try {
-            window.scrollTo({ top: 0, behavior: 'instant' });
-            await new Promise(r => setTimeout(r, 150));
-
-            const docHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1200);
-            const stepPx = 350;
-            let currentY = 0;
-
-            while (currentY < docHeight - window.innerHeight) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                currentY = Math.min(currentY + stepPx, docHeight - window.innerHeight);
-                window.scrollTo({ top: currentY, behavior: 'smooth' });
-                await new Promise(r => setTimeout(r, 100));
-            }
-
-            // Brief settle at bottom for Angular lazy loading
-            await new Promise(r => setTimeout(r, 200));
-        } catch (_) {}
-    }
-
-    function parseReviewNumber(text) {
-        if (!text || typeof text !== 'string') return 0;
-        const clean = text.replace(/&nbsp;/g, ' ').replace(/\u00A0/g, ' ').replace(/\u202F/g, ' ').trim();
-        
-        const m1 = clean.match(/(\d+)\s*(?:відгук\w*|отзыв\w*|reviews?|відг\w*)/i);
-        if (m1 && m1[1]) {
-            const n = parseInt(m1[1], 10);
-            if (!isNaN(n) && n > 0 && n < 100000) return n;
-        }
-
-        const m2 = clean.match(/[\(\[]\s*(\d+)\s*[\)\]]/);
-        if (m2 && m2[1]) {
-            const n = parseInt(m2[1], 10);
-            if (!isNaN(n) && n > 0 && n < 100000) return n;
-        }
-
-        const digitsOnly = clean.replace(/\D/g, '');
-        if (digitsOnly && digitsOnly.length > 0 && digitsOnly.length <= 6) {
-            const n = parseInt(digitsOnly, 10);
-            if (!isNaN(n) && n > 0 && n < 100000) return n;
-        }
-
-        return 0;
-    }
-
-    function extractReviews(item) {
-        if (!item || !(item instanceof Element)) return 0;
-
-        const reviewSelectors = [
-            'a.goods-tile__reviews-link',
-            'a[class*="reviews-link"]',
-            'a[class*="comments-link"]',
-            'a[href*="#comments"]',
-            'a[href*="comments"]',
-            'a[href*="reviews"]',
-            '.goods-tile__reviews-link',
-            'rz-rating a',
-            'rz-rating-block a',
-            '[class*="reviews-link"]',
-            '[class*="comments-link"]',
-            '[class*="reviews-count"]',
-            '[class*="comments-count"]',
-            '[class*="goods-tile__comments"]',
-            '[class*="goods-tile__reviews"]',
-            'a.rating-block-rating'
+        const selectors = [
+            '[data-testid="filters-found-goods"]',
+            'p[data-testid="filters-found-goods"]',
+            '[data-testid*="found-goods"]',
+            '[data-testid*="filters-found"]',
+            '[data-testid="goods-counter"]',
+            '[data-testid*="counter"]',
+            '.catalog-heading__goods', 
+            '.catalog-selection__label',
+            '.goods-count',
+            '[class*="heading__goods"]',
+            '[class*="selection__label"]',
+            '[class*="found-goods"]',
+            '[class*="filters-found"]',
+            '[class*="goods-count"]',
+            'rz-catalog-settings [class*="found"]',
+            'rz-catalog-settings p',
+            'rz-catalog-counter',
+            'rz-goods-counter',
+            '.catalog-settings__goods-count'
         ];
-
-        for (const sel of reviewSelectors) {
+        
+        for (const sel of selectors) {
             try {
-                const el = item.querySelector(sel);
-                if (el) {
-                    const text = (el.innerText || el.textContent || el.getAttribute('aria-label') || el.getAttribute('title') || '').trim();
-                    const count = parseReviewNumber(text);
+                const elements = document.querySelectorAll(sel);
+                for (const el of elements) {
+                    if (el.closest('aside, .sidebar, rz-filter-stack, .sidebar-block')) continue;
+                    const txt = el.textContent || el.innerText || '';
+                    const count = parseCountFromText(txt);
                     if (count > 0) return count;
                 }
             } catch (_) {}
         }
 
         try {
-            const fullText = item.innerText || '';
-            const match = fullText.match(/(\d+)\s*(?:відгук\w*|отзыв\w*|reviews?|відг\w*)/i);
-            if (match && match[1]) {
-                const n = parseInt(match[1], 10);
-                if (!isNaN(n) && n > 0 && n < 100000) return n;
+            const pTags = document.querySelectorAll('p, span, div, h1, h2');
+            for (const el of pTags) {
+                if (el.children.length > 3) continue;
+                if (el.closest('aside, .sidebar, rz-filter-stack, .sidebar-block')) continue;
+                const txt = el.textContent || el.innerText || '';
+                if (txt.includes('товар') || txt.includes('Знайдено') || txt.includes('знайдено') || txt.includes('найдено')) {
+                    const count = parseCountFromText(txt);
+                    if (count > 0 && count < 10000000) return count;
+                }
             }
         } catch (_) {}
 
+        try {
+            const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, rz-paginator a');
+            let maxPage = 1;
+            pageLinks.forEach(link => {
+                const txt = (link.textContent || '').trim();
+                const num = parseInt(txt, 10);
+                if (!isNaN(num) && num > maxPage && num < 1000) {
+                    maxPage = num;
+                }
+            });
+            if (maxPage > 1) {
+                return maxPage * 60;
+            }
+        } catch (_) {}
+
+        const currentDomTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, [data-goods-id], app-goods-tile-default').length;
+        return currentDomTiles > 0 ? currentDomTiles : 60;
+    }
+
+    function isSponsoredTile(item) {
+        if (!item || !(item instanceof Element)) return true;
+        if (item.closest('aside, .sidebar, header, footer, rz-viewed-goods, .recently-viewed, rz-similar-goods, rz-recommended-goods, rz-accessories, .catalog-banner, .advertising-slot, .main-goods__cell--advertising')) {
+            return true;
+        }
+        const tileClasses = (item.className || '').toLowerCase();
+        if (tileClasses.includes('catalog-banner') || tileClasses.includes('banner-tile') || tileClasses.includes('advertising-slot')) {
+            return true;
+        }
+        const hasProductLink = !!item.querySelector('a[href*="/p"], a.goods-tile__heading, a.tile-title, [class*="heading"] a');
+        const hasPrice = !!item.querySelector('.goods-tile__price, .price, [class*="price"]');
+        if (!hasProductLink && !hasPrice) return true;
+        return false;
+    }
+
+    // Fast, gentle 2-step silent background scroll (takes 500ms total, triggers all lazy loads smoothly)
+    async function silentBackgroundScroll() {
+        try {
+            const midY = Math.round(document.body.scrollHeight / 2);
+            window.scrollTo({ top: midY, behavior: 'auto' });
+            await new Promise(r => setTimeout(r, 200));
+            const targetY = Math.max(0, document.body.scrollHeight - window.innerHeight);
+            window.scrollTo({ top: targetY, behavior: 'auto' });
+            await new Promise(r => setTimeout(r, 300));
+        } catch (_) {}
+    }
+
+    function extractReviews(item) {
+        try {
+            const revEl = item.querySelector('.goods-tile__reviews-link, [class*="reviews-link"], [class*="comments"], [class*="rating-count"], [data-testid*="reviews"]');
+            if (revEl) {
+                const text = revEl.innerText || revEl.textContent || '';
+                const m = text.match(/(\d+)/);
+                if (m && m[1]) return parseInt(m[1], 10);
+            }
+            const allText = item.innerText || '';
+            const m2 = allText.match(/(\d+)\s*(?:відгук|отзыв)/i);
+            if (m2 && m2[1]) return parseInt(m2[1], 10);
+        } catch (_) {}
         return 0;
     }
 
     function extractRating(item) {
-        if (!item || !(item instanceof Element)) return 5.0;
-
-        const starsEl = item.querySelector('.stars_rating, [data-testid="stars-rating"], .goods-tile__stars svg, [class*="stars"] svg, [class*="star"] [style*="width"], [class*="rating-stars"]');
-        if (starsEl) {
-            const style = starsEl.getAttribute('style') || '';
-            const match = style.match(/width:\s*(?:calc\()?([\d.]+)%?/i);
-            if (match && match[1]) {
-                const pct = parseFloat(match[1]);
-                if (!isNaN(pct) && pct > 0 && pct <= 100) {
-                    return parseFloat((pct / 20).toFixed(1));
+        try {
+            const starsEl = item.querySelector('.stars_rating, [data-testid="stars-rating"], .goods-tile__stars svg, [class*="stars"] svg, [class*="rating-stars"]');
+            if (starsEl) {
+                const style = starsEl.getAttribute('style') || '';
+                const matchCalc = style.match(/calc\(([\d.]+)%/i);
+                if (matchCalc) return parseFloat(((parseFloat(matchCalc[1]) || 100) / 20).toFixed(1));
+                const matchWidth = style.match(/width:\s*([\d.]+)%/i);
+                if (matchWidth) return parseFloat(((parseFloat(matchWidth[1]) || 100) / 20).toFixed(1));
+            }
+            const ratingEl = item.querySelector('[data-rating], [aria-label*="рейтинг"], [aria-label*="rating"]');
+            if (ratingEl) {
+                const attr = ratingEl.getAttribute('data-rating') || ratingEl.getAttribute('aria-label') || '';
+                const m = attr.match(/([\d.]+)/);
+                if (m && m[1]) {
+                    const val = parseFloat(m[1]);
+                    if (val > 0 && val <= 5) return val;
                 }
             }
-        }
-
-        const ratingContainer = item.querySelector('rz-rating, .goods-tile__rating, [class*="goods-tile__rating"], [class*="rating-block"]');
-        if (ratingContainer) {
-            const label = (ratingContainer.getAttribute('aria-label') || ratingContainer.getAttribute('title') || '').trim();
-            const m = label.match(/([\d][.,]\d)/);
-            if (m && m[1]) {
-                const score = parseFloat(m[1].replace(',', '.'));
-                if (!isNaN(score) && score >= 1 && score <= 5) return score;
-            }
-        }
-
-        const scoreEl = item.querySelector('.goods-tile__rating-score, .rating-score, [class*="rating-score"], [class*="rating-value"]');
-        if (scoreEl && scoreEl.innerText) {
-            const m = scoreEl.innerText.trim().match(/([\d][.,]\d)/);
-            if (m && m[1]) {
-                const score = parseFloat(m[1].replace(',', '.'));
-                if (!isNaN(score) && score >= 1 && score <= 5) return score;
-            }
-        }
-
-        return 5.0;
+        } catch (_) {}
+        return 4.8;
     }
 
     function extractSeller(item) {
-        if (!item || !(item instanceof Element)) return 'Rozetka';
-
-        const sellerSelectors = [
-            '.goods-tile__seller b',
-            '.goods-tile__seller a',
-            '.goods-tile__seller-name',
-            '.goods-tile__seller',
-            'rz-goods-seller b',
-            'rz-goods-seller a',
-            'rz-goods-seller',
-            'rz-seller b',
-            'rz-seller a',
-            'rz-seller',
-            '[class*="goods-tile__seller"] b',
-            '[class*="goods-tile__seller"] a',
-            '[class*="goods-tile__seller"]',
-            '[class*="seller-name"]',
-            '[class*="seller-title"]',
-            '.seller-title',
-            '.seller-name',
-            '.shop-name',
-            '.goods-tile__shop',
-            '[data-testid*="seller"]',
-            '[data-testid*="merchant"]',
-            '.goods-tile__merchant',
-            '[class*="merchant"]'
-        ];
-
-        for (const sel of sellerSelectors) {
-            try {
-                const el = item.querySelector(sel);
-                if (el) {
-                    let s = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-                    s = s.replace(/^продавець:?\s*/i, '')
-                         .replace(/^продавец:?\s*/i, '')
-                         .replace(/^seller:?\s*/i, '')
-                         .replace(/^магазин:?\s*/i, '')
-                         .trim();
-                    if (s && s.length > 1 && s.length < 60) {
-                        if (/^rozetka$/i.test(s) || s === 'Rozetka' || s === 'Розетка') {
-                            return 'Rozetka';
-                        }
-                        return s;
-                    }
-                }
-            } catch (_) {}
-        }
-
         try {
-            const attrSeller = item.getAttribute('data-seller') || item.getAttribute('data-merchant');
-            if (attrSeller && attrSeller.trim().length > 1) {
-                let s = attrSeller.trim();
-                if (/^rozetka$/i.test(s) || s === 'Rozetka' || s === 'Розетка') return 'Rozetka';
-                return s;
+            const merchantEl = item.querySelector('.goods-tile__merchant, [class*="merchant"], .seller-title, [class*="seller"], .goods-tile__seller');
+            if (merchantEl) {
+                const txt = merchantEl.innerText || merchantEl.textContent || '';
+                const clean = txt.replace(/Продавець:|Продавец:|Seller:/gi, '').trim();
+                if (clean.length > 1) return clean;
             }
         } catch (_) {}
-
-        try {
-            const itemText = (item.innerText || '').replace(/\s+/g, ' ');
-            const match = itemText.match(/(?:продавець|продавец|seller)\s*:\s*([A-Za-zА-Яа-яІіЇїЄє0-9\s_\-\.]{2,40})/i);
-            if (match && match[1]) {
-                let s = match[1].trim();
-                if (s && s.length > 1 && s.length < 60) {
-                    if (/^rozetka$/i.test(s) || s === 'Rozetka' || s === 'Розетка') return 'Rozetka';
-                    return s;
-                }
-            }
-        } catch (_) {}
-
         return 'Rozetka';
     }
 
-    function extractSmartSpecs(name, item) {
+    function extractSpecs(name) {
         if (!name) return 'Стандартні';
-        const specsList = [];
-
-        const capMatch = name.match(/(\d[\d\s]*\d|\d+)\s*(?:mah|мАг|маг|мА\*г)/i);
-        if (capMatch) specsList.push(`${capMatch[1].replace(/\s/g, '')} mAh`);
-
-        const powerMatch = name.match(/(\d+(?:\.\d+)?)\s*(?:W|Вт|вт|w)\b/);
-        if (powerMatch) specsList.push(`${powerMatch[1]}W`);
-
-        const storageMatch = name.match(/\b(\d+)\s*(?:GB|ГБ|TB|ТБ)\b/i);
-        if (storageMatch) specsList.push(`${storageMatch[1].toUpperCase()}`);
-
-        const screenMatch = name.match(/(\d{1,2}(?:[.,]\d)?)\s*(?:["”″]|дюйм|\bd\b)/i);
-        if (screenMatch) specsList.push(`${screenMatch[1].replace(',', '.')}"`);
-
-        if (/QC\s*3\.0|Quick\s*Charge|PD\s*\d*W?|Power\s*Delivery|MagSafe|GaN/i.test(name)) {
-            const protoMatch = name.match(/(?:QC\s*3\.0|Quick\s*Charge|PD\s*\d*W?|Power\s*Delivery|MagSafe|GaN)/i);
-            if (protoMatch) specsList.push(protoMatch[0]);
-        }
-
-        if (/Type-C|USB-C|Lightning|Micro-USB/i.test(name)) {
-            const connMatch = name.match(/(?:Type-C|USB-C|Lightning|Micro-USB)/i);
-            if (connMatch) specsList.push(connMatch[0]);
-        }
-
-        if (item && item instanceof Element) {
-            const charElements = item.querySelectorAll('.goods-tile__short-desc, .goods-tile__characteristic, [class*="characteristic"], [class*="param"]');
-            for (const cel of charElements) {
-                const txt = (cel.innerText || '').replace(/\s+/g, ' ').trim();
-                if (txt && txt.length > 2 && txt.length < 80 && !specsList.includes(txt)) {
-                    specsList.push(txt);
-                }
-            }
-        }
-
-        return specsList.length > 0 ? specsList.slice(0, 5).join(', ') : 'Стандартні';
-    }
-
-    // Accurate Rozetka pagination URL builder (supporting query params, standard path, and filter semicolon syntax)
-    function buildNextPageUrl(currentUrl, targetPageNum) {
-        if (!currentUrl) return '';
-        let url = currentUrl.split('#')[0];
-        
-        // 1. Search / query parameters
-        if (url.includes('?')) {
-            const [base, query] = url.split('?');
-            const params = new URLSearchParams(query);
-            params.set('page', String(targetPageNum));
-            return `${base}?${params.toString()}`;
-        }
-
-        // 2. Existing ;page=X
-        if (/;page=\d+\/?/i.test(url)) {
-            return url.replace(/;page=\d+\/?/i, `;page=${targetPageNum}/`);
-        }
-
-        // 3. Existing /page=X/
-        if (/\/page=\d+\/?/i.test(url)) {
-            return url.replace(/\/page=\d+\/?/i, `/page=${targetPageNum}/`);
-        }
-
-        // 4. Existing /page-X/
-        if (/\/page-\d+\/?/i.test(url)) {
-            return url.replace(/\/page-\d+\/?/i, `/page-${targetPageNum}/`);
-        }
-
-        // 5. Filter path with slug (e.g. /c80153/producer=xiaomi/) -> must use semicolon!
-        const clean = url.replace(/\/+$/, '');
-        const filterSlugMatch = clean.match(/(\/c\d+\/[^/?#]+)$/i);
-        if (filterSlugMatch) {
-            return `${clean};page=${targetPageNum}/`;
-        }
-
-        // 6. Plain category e.g. /c80153/ -> /c80153/page=2/
-        return `${clean}/page=${targetPageNum}/`;
+        const capacityMatch = name.match(/(\d+)\s*(?:mah|мАг|мАч)/i);
+        const powerMatch = name.match(/(\d+(?:\.\d+)?)\s*W/i);
+        const parts = [];
+        if (capacityMatch) parts.push(`${capacityMatch[1]} mAh`);
+        if (powerMatch) parts.push(`${powerMatch[1]}W`);
+        return parts.join(', ') || 'Стандартні';
     }
 
     function findPaginationActionElements(pageIndex) {
-        const nextPageNum = pageIndex + 1;
-
-        // Priority 1: Numbered next page link (e.g. 2, 3...)
-        const pageNumSelectors = [
-            `a.pagination__link[href*="page=${nextPageNum}"]`,
-            `a.pagination__link[href*=";page=${nextPageNum}"]`,
-            `a.pagination__link[href*="page-${nextPageNum}"]`,
-            `a.pagination__link`,
-            `[class*="pagination__item"] a`,
-            `rz-paginator a`
+        const retrySelectors = [
+            'button.retry',
+            'button[class*="retry"]',
+            'a[class*="retry"]',
+            'rz-empty-state button',
+            '.error-state button',
+            '[class*="error"] button'
         ];
-        for (const sel of pageNumSelectors) {
+        for (const sel of retrySelectors) {
             try {
-                const links = document.querySelectorAll(sel);
-                for (const link of links) {
-                    if (link.closest('aside, .sidebar, header, footer, rz-recommended-goods')) continue;
-                    const txt = (link.innerText || link.textContent || '').trim();
-                    const href = link.getAttribute('href') || '';
-                    if (txt === String(nextPageNum) || href.includes(`page=${nextPageNum}`) || href.includes(`;page=${nextPageNum}`) || href.includes(`page-${nextPageNum}`)) {
-                        return { type: 'pageNum', element: link, pageNum: nextPageNum, href };
-                    }
+                const btn = document.querySelector(sel);
+                if (btn) return { type: 'retry', element: btn };
+            } catch (_) {}
+        }
+
+        const moreSelectors = [
+            'rz-catalog-more button', 
+            '.catalog-more button', 
+            '.catalog-more__btn', 
+            'button.show-more', 
+            '.show-more', 
+            'a.show-more', 
+            '[class*="catalog-more"] button',
+            '[class*="catalog-more"] a',
+            '[class*="show-more"]',
+            'button[data-testid="show-more"]'
+        ];
+        for (const sel of moreSelectors) {
+            try {
+                const btn = document.querySelector(sel);
+                if (btn && !btn.disabled && !btn.classList.contains('button--loading') && !btn.classList.contains('disabled')) {
+                    return { type: 'showMore', element: btn };
                 }
             } catch (_) {}
         }
 
-        // Priority 2: Forward arrow / next button
         const nextSelectors = [
             'a.pagination__direction--forward',
             'a.pagination__direction_type_forward',
@@ -507,254 +312,139 @@
             try {
                 const btn = document.querySelector(sel);
                 if (btn && !btn.disabled && !btn.classList.contains('disabled') && !btn.classList.contains('pagination__direction--disabled')) {
-                    if (btn.closest('aside, .sidebar, header, footer, rz-recommended-goods')) continue;
                     const href = btn.getAttribute('href') || '';
                     return { type: 'nextPage', element: btn, href };
                 }
             } catch (_) {}
         }
 
-        // Priority 3: "Show More" / "Показати ще" button
-        const moreSelectors = [
-            'rz-catalog-more button', 
-            '.catalog-more button', 
-            '.catalog-more__btn', 
-            'button.show-more', 
-            '.show-more', 
-            'a.show-more', 
-            '[class*="catalog-more"] button',
-            '[class*="catalog-more"] a',
-            '[class*="show-more"]',
-            'button[data-testid*="show-more"]',
-            'button[data-testid*="more"]'
+        const nextPageNum = pageIndex + 1;
+        const pageNumSelectors = [
+            `a.pagination__link[href*="page=${nextPageNum}"]`,
+            `a.pagination__link[href*="page=${nextPageNum}/"]`,
+            `a.pagination__link[href*=";page=${nextPageNum}"]`,
+            `a.pagination__link`,
+            `[class*="pagination__item"] a`
         ];
-        for (const sel of moreSelectors) {
+        for (const sel of pageNumSelectors) {
             try {
-                const btn = document.querySelector(sel);
-                if (btn && !btn.disabled && !btn.classList.contains('button--loading') && !btn.classList.contains('disabled')) {
-                    if (btn.closest('aside, .sidebar, .filter, .recently-viewed, header, rz-recommended-goods')) continue;
-                    return { type: 'showMore', element: btn };
+                const links = document.querySelectorAll(sel);
+                for (const link of links) {
+                    const txt = (link.innerText || link.textContent || '').trim();
+                    const href = link.getAttribute('href') || '';
+                    if (txt === String(nextPageNum) || href.includes(`page=${nextPageNum}`)) {
+                        return { type: 'pageNum', element: link, pageNum: nextPageNum, href };
+                    }
                 }
             } catch (_) {}
         }
 
-        const allButtons = document.querySelectorAll('button, a, div[role="button"]');
-        for (const el of allButtons) {
+        const allElements = document.querySelectorAll('button, a, div[role="button"], span');
+        for (const el of allElements) {
             const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
             if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more') {
-                if (el.closest('aside, .sidebar, .filter, .recently-viewed, header, rz-recommended-goods')) continue;
+                if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed')) continue;
                 if (el.disabled || el.classList.contains('button--loading') || el.classList.contains('disabled')) continue;
                 return { type: 'showMore', element: el };
+            }
+            if (txt === 'спробувати ще' || txt === 'повторити' || txt.includes('спробувати знову') || txt.includes('повторити спробу')) {
+                return { type: 'retry', element: el };
             }
         }
 
         return null;
     }
 
+    function buildNextPageUrl(currentUrl, nextPg) {
+        try {
+            const u = new URL(currentUrl);
+            const path = u.pathname;
+            if (path.includes(';page=')) {
+                u.pathname = path.replace(/;page=\d+/, `;page=${nextPg}`);
+            } else if (path.match(/page=\d+/)) {
+                u.pathname = path.replace(/page=\d+/, `page=${nextPg}`);
+            } else {
+                if (path.includes('=')) {
+                    u.pathname = path.endsWith('/') ? `${path.slice(0, -1)};page=${nextPg}/` : `${path};page=${nextPg}/`;
+                } else {
+                    u.pathname = path.endsWith('/') ? `${path}page=${nextPg}/` : `${path}/page=${nextPg}/`;
+                }
+            }
+            return u.toString();
+        } catch (_) {
+            return currentUrl;
+        }
+    }
+
     function dispatchSafeClick(element) {
         if (!element) return;
         try {
-            element.focus();
-            element.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true, view: window }));
-            element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-            element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
             element.click();
             element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
         } catch (_) {}
     }
 
-    function sendWebhookPayload(payload) {
-        try {
+    async function sendWebhookPayload(payload) {
+        return new Promise(resolve => {
             chrome.runtime.sendMessage({
                 action: 'sendWebhook',
                 webhookUrl: webhookEndpoint,
                 tabId: currentTabId,
                 payload: payload
-            }, () => {
-                if (chrome.runtime.lastError) {}
+            }, (res) => {
+                resolve(res?.serverInfo || null);
             });
-        } catch (_) {}
+        });
     }
 
     async function scrapeCurrentDomItems(meta, pageIndex) {
-        const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, .catalog-grid, rz-catalog-grid, rz-catalog-tiles, .catalog-selection__goods, section.catalog-grid') || document.querySelector('main') || document.body;
+        const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"], [data-testid="goods-tile"], app-goods-tile-default, .catalog-grid__cell, .goods-tile__inner';
+        let items = Array.from(document.querySelectorAll(tileSelectors)).filter(item => !item.closest('.recently-viewed'));
         
-        let rawTiles = Array.from(catalogContainer.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, rz-product-tile, [data-goods-id], .goods-tile, app-goods-tile-default'));
-        if (rawTiles.length === 0) {
-            rawTiles = Array.from(document.querySelectorAll('rz-catalog-tile, rz-product-tile, [data-goods-id], .goods-tile, li.catalog-grid__cell, app-goods-tile-default'));
+        if (items.length === 0) {
+            const links = document.querySelectorAll('a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
+            items = Array.from(links).map(l => l.closest('li, div, rz-catalog-tile, article, section, app-goods-tile-default') || l).filter(Boolean);
         }
 
-        const distinctTiles = [];
-        const seenElements = new Set();
-
-        for (const item of rawTiles) {
-            if (isUnwantedTile(item)) continue;
-            
-            const linkTag = item.tagName === 'A' ? item : (item.querySelector('a.goods-tile__heading, a.tile-title, [class*="heading"] a, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]') || item.querySelector('a[href]'));
-            if (!linkTag) continue;
-
-            const rawHref = linkTag.getAttribute('href');
-            if (!rawHref) continue;
-
-            let link = rawHref.split('?')[0].split('#')[0].replace(/\/+$/, '');
-            if (!link.startsWith('http')) {
-                link = link.startsWith('/') ? `https://rozetka.com.ua${link}` : `https://rozetka.com.ua/${link}`;
-            }
-
-            if (sentLinks.has(link) || seenElements.has(link)) continue;
-            seenElements.add(link);
-            distinctTiles.push({ item, linkTag, link });
-        }
-
-        if (distinctTiles.length === 0) return [];
-
-        // Batch query Rozetka's official details API to enrich sellers, ratings, reviews, and precise pricing
-        const apiProductMap = new Map();
-        try {
-            const productIds = [];
-            for (const { link } of distinctTiles) {
-                const m = link.match(/\/p(\d+)/i) || link.match(/p-(\d+)/i) || link.match(/\/(\d{5,})\//);
-                if (m && m[1]) productIds.push(m[1]);
-            }
-            if (productIds.length > 0) {
-                const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productIds.join(',')}`;
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3000);
-                const res = await fetch(apiUrl, { signal: controller.signal }).catch(() => null);
-                clearTimeout(timeoutId);
-                if (res && res.ok) {
-                    const json = await res.json().catch(() => null);
-                    if (json && Array.isArray(json.data)) {
-                        for (const apiProd of json.data) {
-                            if (apiProd && apiProd.id) {
-                                apiProductMap.set(String(apiProd.id), apiProd);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (_) {}
+        if (items.length === 0) return [];
 
         const newItems = [];
 
-        for (const { item, linkTag, link } of distinctTiles) {
+        items.forEach((item) => {
             try {
+                if (isSponsoredTile(item)) return;
+
+                const linkTag = item.tagName === 'A' ? item : (item.querySelector('a.goods-tile__heading, a.tile-title, [class*="heading"] a, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]') || item.querySelector('a[href]'));
+                if (!linkTag) return;
+                
+                const linkEl = linkTag.getAttribute('href');
+                if (!linkEl) return;
+
                 const titleEl = item.querySelector('a.tile-title, a.goods-tile__heading, .goods-tile__heading, .tile-title, [class*="heading"], [class*="title"]') || linkTag;
                 const name = titleEl && titleEl.innerText ? titleEl.innerText.trim() : (linkTag.innerText ? linkTag.innerText.trim() : '');
-                if (!name || name.length < 3) continue;
+                if (!name || name.length < 3) return;
 
-                const idMatch = link.match(/\/p(\d+)/i) || link.match(/p-(\d+)/i) || link.match(/\/(\d{5,})\//);
-                const prodId = idMatch ? String(idMatch[1]) : '';
-                const apiProd = prodId ? apiProductMap.get(prodId) : null;
+                let link = linkEl.startsWith('http') ? linkEl : (linkEl.startsWith('/') ? `https://rozetka.com.ua${linkEl}` : `https://rozetka.com.ua/${linkEl}`);
+                link = link.split('?')[0].split('#')[0];
 
-                // 1. Current Price
-                let price = 0;
-                const priceEl = item.querySelector(
-                    '.goods-tile__price-value, .goods-tile__price--current, .goods-tile__price_color_red, ' +
-                    '.price--red, .price, [class*="price-value"], [class*="price__current"], [class*="price_color_red"], ' +
-                    '.product-price__big, [class*="price__main"], [class*="price-current"], .goods-tile__price'
-                );
+                if (sentLinks.has(link)) return;
+
+                const priceEl = item.querySelector('.goods-tile__price-value, .price, [class*="price-value"], [class*="price__current"], [class*="current-price"]');
                 const priceText = priceEl && priceEl.innerText ? priceEl.innerText : '';
-                if (priceText) {
-                    price = parseInt(priceText.replace(/\D/g, ''), 10) || 0;
-                }
-                if (!price && apiProd && apiProd.price) {
-                    price = parseInt(String(apiProd.price).replace(/\D/g, ''), 10) || 0;
-                }
+                const price = priceText ? parseInt(priceText.replace(/\D/g, ''), 10) || 0 : 0;
 
-                // 2. Old Price & Discount
-                let oldPrice = 0;
-                let discount = 0;
+                const oldPriceEl = item.querySelector('.goods-tile__price.type_old, .goods-tile__price--old, .price--old, [class*="price--old"], [class*="old-price"]');
+                const oldPriceText = oldPriceEl && oldPriceEl.innerText ? oldPriceEl.innerText : '';
+                const oldPrice = oldPriceText ? parseInt(oldPriceText.replace(/\D/g, ''), 10) || 0 : 0;
+                const discount = (oldPrice && oldPrice > price) ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0;
 
-                if (apiProd) {
-                    if (apiProd.old_price && Number(apiProd.old_price) > 0) {
-                        const parsedOld = parseInt(String(apiProd.old_price).replace(/\D/g, ''), 10) || 0;
-                        if (parsedOld > price) oldPrice = parsedOld;
-                    } else if (apiProd.oldPrice && Number(apiProd.oldPrice) > 0) {
-                        const parsedOld = parseInt(String(apiProd.oldPrice).replace(/\D/g, ''), 10) || 0;
-                        if (parsedOld > price) oldPrice = parsedOld;
-                    }
+                const reviews = extractReviews(item);
+                const rating = extractRating(item);
+                const seller = extractSeller(item);
+                const specs = extractSpecs(name);
 
-                    if (apiProd.discount) {
-                        if (typeof apiProd.discount === 'number' && apiProd.discount > 0) {
-                            discount = apiProd.discount;
-                        } else if (typeof apiProd.discount === 'object' && apiProd.discount.value) {
-                            discount = parseInt(apiProd.discount.value, 10) || 0;
-                        }
-                    }
-                }
-
-                if (!oldPrice) {
-                    const oldPriceEl = item.querySelector(
-                        '.goods-tile__price--old, .goods-tile__price_type_old, .goods-tile__price.type_old, ' +
-                        '.goods-tile__price_color_gray, .goods-tile__price-old, [class*="price_color_gray"], ' +
-                        '[class*="price--old"], [class*="price_type_old"], [class*="price-old"], [class*="old-price"], ' +
-                        '[class*="price__old"], [class*="old_price"], [class*="price-discount"], [class*="product-price__small"], ' +
-                        'del, s, strike, [style*="line-through"]'
-                    );
-                    if (oldPriceEl && oldPriceEl.innerText) {
-                        const parsed = parseInt(oldPriceEl.innerText.replace(/\D/g, ''), 10) || 0;
-                        if (parsed > price) oldPrice = parsed;
-                    }
-                }
-
-                if (!discount) {
-                    const badgeEl = item.querySelector(
-                        'rz-badge, .goods-tile__badge, [class*="goods-tile__badge"], [class*="goods-tile__label"], ' +
-                        '[class*="badge"], [class*="promo"], [class*="discount"], [class*="sticker"], [class*="tag"]'
-                    );
-                    const badgeText = badgeEl && badgeEl.innerText ? badgeEl.innerText : '';
-                    const badgeMatch = badgeText.match(/(?:-|−|знижка\s*|скидка\s*)(\d{1,2})\s*%/i) || badgeText.match(/-(\d{1,2})%/);
-                    if (badgeMatch && badgeMatch[1]) {
-                        discount = parseInt(badgeMatch[1], 10) || 0;
-                    }
-                }
-
-                if (oldPrice > price && !discount && price > 0) {
-                    discount = Math.round(((oldPrice - price) / oldPrice) * 100);
-                } else if (discount > 0 && (!oldPrice || oldPrice <= price) && price > 0) {
-                    oldPrice = Math.round(price / (1 - (discount / 100)));
-                }
-
-                if (!oldPrice || oldPrice < price) {
-                    oldPrice = price;
-                }
-
-                // 3. Reviews & Rating
-                let reviews = 0;
-                let rating = 5.0;
-
-                if (apiProd) {
-                    if (typeof apiProd.comments_amount === 'number') reviews = apiProd.comments_amount;
-                    else if (typeof apiProd.reviews_amount === 'number') reviews = apiProd.reviews_amount;
-                    else if (typeof apiProd.comments_count === 'number') reviews = apiProd.comments_count;
-
-                    if (typeof apiProd.comments_mark === 'number' && apiProd.comments_mark > 0) rating = apiProd.comments_mark;
-                    else if (typeof apiProd.rating === 'number' && apiProd.rating > 0) rating = apiProd.rating;
-                }
-
-                if (!reviews) reviews = extractReviews(item);
-                if (!rating || rating === 5.0) rating = extractRating(item);
-
-                // 4. In-Stock
-                let inStock = true;
-                if (apiProd && typeof apiProd.sell_status === 'string') {
-                    inStock = apiProd.sell_status !== 'unavailable' && apiProd.sell_status !== 'out_of_stock';
-                } else {
-                    const itemText = item.innerText || '';
-                    inStock = !(item.classList.contains('tile-disabled') || itemText.includes('Немає в наявності'));
-                }
-
-                // 5. Smart Specifications
-                const specs = extractSmartSpecs(name, item);
-
-                // 6. Seller
-                let seller = 'Rozetka';
-                if (apiProd && apiProd.seller && apiProd.seller.title) {
-                    seller = apiProd.seller.title.trim() || 'Rozetka';
-                } else {
-                    seller = extractSeller(item) || 'Rozetka';
-                }
+                const itemText = item.innerText || '';
+                const inStock = !(item.classList.contains('tile-disabled') || itemText.includes('Немає в наявності') || itemText.includes('Нет в наличии'));
 
                 newItems.push({
                     name,
@@ -778,128 +468,57 @@
 
                 sentLinks.add(link);
             } catch (_) {}
-        }
+        });
 
         return newItems;
     }
 
-    function processAndReportHarvest(items, meta, pageIndex) {
-        if (!items || items.length === 0) return;
-        const estimated = currentEstimatedTotal > 0 ? currentEstimatedTotal : Math.max(sentLinks.size, 60);
-        currentPercent = Math.min(100, Math.round((sentLinks.size / estimated) * 100));
-        currentStatusMsg = `Зібрано ${sentLinks.size} з ${estimated} товарів (стор. ${pageIndex})...`;
-
-        persistSessionState(pageIndex);
-
-        sendTabMessage({
-            action: 'tabProgress',
-            total: sentLinks.size,
-            page: pageIndex,
-            percent: currentPercent,
-            statusMsg: currentStatusMsg,
-            syncedCount: sentLinks.size,
-            estimatedTotal: estimated,
-            sessionTitle: meta.title,
-            category: meta.category,
-            sessionId: currentSessionId,
-            startTime: sessionStartTime,
-            sentLinks: Array.from(sentLinks),
-            webhookUrl: webhookEndpoint
-        });
-
-        // Fast non-blocking background dispatch
-        sendWebhookPayload({
-            products: items,
-            page: pageIndex,
-            sessionId: currentSessionId,
-            sessionTitle: meta.title,
-            category: meta.category,
-            tabId: currentTabId
-        });
-    }
-
-    // Main multi-page traversal controller
+    // Main scraping runner
     async function runTabScraper(initialPage) {
-        currentSessionEpoch++;
-        const myEpoch = currentSessionEpoch;
-        isScraperLoopRunning = true;
+        const meta = getPageMetadata();
+        currentEstimatedTotal = getEstimatedTotalFromPage();
+        currentPage = initialPage || 1;
+        console.log(`TradeScout Tab ${currentTabId}: Started scraping "${meta.title}"...`);
 
-        try {
-            const meta = getPageMetadata();
-            if (currentEstimatedTotal <= 0) {
-                currentEstimatedTotal = getEstimatedTotalFromPage();
+        currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
+        currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
+
+        let consecutiveNoNew = 0;
+        let lastCount = sentLinks.size;
+        const tileSelectors = 'rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], div[class*="goods-tile"], article[class*="tile"], [data-testid="goods-tile"]';
+
+        while (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
+            const latestEstimated = getEstimatedTotalFromPage();
+            if (latestEstimated > currentEstimatedTotal) {
+                currentEstimatedTotal = latestEstimated;
             }
-            currentPage = initialPage || 1;
-            console.log(`TradeScout Tab ${currentTabId}: Started scraping "${meta.title}" (Page ${currentPage})... Estimated total: ${currentEstimatedTotal}`);
 
-            currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
-            currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
+            // 1. Silent scroll to trigger lazy mounting (500ms fast)
+            await silentBackgroundScroll();
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
-            const tileSelectors = 'ul.catalog-grid, rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default';
-
-            while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && myEpoch === currentSessionEpoch) {
-                if (currentEstimatedTotal <= 0) {
-                    const latestEstimated = getEstimatedTotalFromPage();
-                    if (latestEstimated > 0) {
-                        currentEstimatedTotal = latestEstimated;
-                    }
+            // 2. Scrape all items on current page
+            let newProducts = await scrapeCurrentDomItems(meta, currentPage);
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+            
+            if (newProducts.length === 0) {
+                await new Promise(r => setTimeout(r, 350));
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+                const extraSweep = await scrapeCurrentDomItems(meta, currentPage);
+                if (extraSweep.length > 0) {
+                    newProducts = newProducts.concat(extraSweep);
                 }
-
-                // 1. Gentle, linear downward scroll to load all tiles on this page
-                await smoothPageScroll();
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
-
-                // 2. Scrape all new items in current DOM
-                let batch = await scrapeCurrentDomItems(meta, currentPage);
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
-
-                if (batch.length === 0) {
-                    await new Promise(r => setTimeout(r, 300));
-                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
-                    const extra = await scrapeCurrentDomItems(meta, currentPage);
-                    if (extra.length > 0) {
-                        batch = batch.concat(extra);
-                    }
-                }
-
-                if (batch.length > 0 && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
-                    processAndReportHarvest(batch, meta, currentPage);
-                }
-
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
-
-                const latestEstimated = getEstimatedTotalFromPage();
-                if (latestEstimated > currentEstimatedTotal) {
-                    currentEstimatedTotal = latestEstimated;
-                }
-
-                // 3. Find next page action (numbered link, forward arrow, or show more)
-                const actionObj = findPaginationActionElements(currentPage);
-                const nextPageNum = currentPage + 1;
-                const maxPossiblePages = Math.ceil(currentEstimatedTotal / 60);
-
-                if (!actionObj && currentPage >= maxPossiblePages) {
-                    console.log(`TradeScout Tab ${currentTabId}: Reached estimated total page count (${currentPage}/${maxPossiblePages}). Catalog complete.`);
-                    break;
-                }
-
-                // Compute destination URL
-                let targetUrl = '';
-                if (actionObj && actionObj.href) {
-                    targetUrl = actionObj.href.startsWith('http') ? actionObj.href : `https://rozetka.com.ua${actionObj.href}`;
-                } else {
-                    targetUrl = buildNextPageUrl(window.location.href, nextPageNum);
-                }
-
-                // Perform navigation to next page
-                console.log(`TradeScout Tab ${currentTabId}: Navigating from Page ${currentPage} to Page ${nextPageNum} -> ${targetUrl}`);
-                currentStatusMsg = `Завантаження стор. ${nextPageNum}...`;
-                persistSessionState(nextPageNum);
+            }
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+            
+            if (newProducts.length > 0 && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
+                currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100));
+                currentStatusMsg = `Зібрано ${sentLinks.size} з ${currentEstimatedTotal} товарів (стор. ${currentPage})...`;
 
                 sendTabMessage({
                     action: 'tabProgress',
                     total: sentLinks.size,
-                    page: nextPageNum,
+                    page: currentPage,
                     percent: currentPercent,
                     statusMsg: currentStatusMsg,
                     syncedCount: sentLinks.size,
@@ -907,35 +526,142 @@
                     sessionTitle: meta.title,
                     category: meta.category,
                     sessionId: currentSessionId,
-                    startTime: sessionStartTime,
-                    sentLinks: Array.from(sentLinks),
-                    webhookUrl: webhookEndpoint
+                    startTime: sessionStartTime
                 });
 
-                if (targetUrl && targetUrl !== window.location.href) {
-                    window.location.href = targetUrl;
-                    return;
+                await sendWebhookPayload({
+                    products: newProducts,
+                    page: currentPage,
+                    sessionId: currentSessionId,
+                    sessionTitle: meta.title,
+                    category: meta.category,
+                    tabId: currentTabId
+                });
+
+                persistSessionState(currentPage);
+            }
+
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+
+            if (sentLinks.size > lastCount) {
+                consecutiveNoNew = 0;
+                lastCount = sentLinks.size;
+            } else {
+                consecutiveNoNew++;
+            }
+
+            // 3. Check if all items in catalog are collected
+            if (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) {
+                console.log(`TradeScout Tab ${currentTabId}: All ${sentLinks.size}/${currentEstimatedTotal} items collected!`);
+                break;
+            }
+
+            if (consecutiveNoNew >= 3) {
+                console.log(`TradeScout Tab ${currentTabId}: Catalog ended (no new products). Total: ${sentLinks.size}`);
+                break;
+            }
+
+            // 4. Trigger next page via DOM click or Show More
+            let pageTransitionSuccess = false;
+            const maxTransitionAttempts = 3;
+
+            for (let attempt = 1; attempt <= maxTransitionAttempts; attempt++) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+
+                const prevDomCount = document.querySelectorAll(tileSelectors).length;
+                const actionObj = findPaginationActionElements(currentPage);
+
+                if (actionObj) {
+                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+
+                    currentStatusMsg = `Завантаження стор. ${currentPage + 1}...`;
+                    sendTabMessage({
+                        action: 'tabProgress',
+                        total: sentLinks.size,
+                        page: currentPage,
+                        percent: currentPercent,
+                        statusMsg: currentStatusMsg,
+                        syncedCount: sentLinks.size,
+                        estimatedTotal: currentEstimatedTotal,
+                        sessionTitle: meta.title,
+                        category: meta.category,
+                        sessionId: currentSessionId,
+                        startTime: sessionStartTime
+                    });
+
+                    // If it's a page navigation link and action has href
+                    if (actionObj.type === 'nextPage' || actionObj.type === 'pageNum') {
+                        persistSessionState(currentPage + 1);
+                    }
+
+                    dispatchSafeClick(actionObj.element);
+
+                    for (let w = 0; w < 12; w++) {
+                        if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+                        await new Promise(r => setTimeout(r, 250));
+                        
+                        const currentDomCount = document.querySelectorAll(tileSelectors).length;
+                        // Check if DOM expanded (Show More)
+                        if (currentDomCount > prevDomCount) {
+                            pageTransitionSuccess = true;
+                            break;
+                        }
+                        // Check if new tiles loaded in DOM with unscraped links (Numbered Pagination)
+                        const freshItems = Array.from(document.querySelectorAll(tileSelectors));
+                        const hasUnscrapedLink = freshItems.some(tile => {
+                            const linkTag = tile.querySelector('a.goods-tile__heading, a.tile-title, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
+                            if (!linkTag) return false;
+                            let href = linkTag.getAttribute('href') || '';
+                            href = href.split('?')[0].split('#')[0];
+                            return href && !sentLinks.has(href) && !sentLinks.has(`https://rozetka.com.ua${href}`);
+                        });
+                        if (hasUnscrapedLink) {
+                            pageTransitionSuccess = true;
+                            break;
+                        }
+                    }
+
+                    if (pageTransitionSuccess) {
+                        currentPage++;
+                        consecutiveNoNew = 0;
+                        persistSessionState(currentPage);
+                        break;
+                    }
+
+                    // If click did not expand in DOM and we have a target href or pageNum, navigate directly
+                    if (!pageTransitionSuccess && (actionObj.type === 'nextPage' || actionObj.type === 'pageNum')) {
+                        const targetUrl = actionObj.href && actionObj.href.startsWith('http') ? actionObj.href : buildNextPageUrl(window.location.href, currentPage + 1);
+                        if (targetUrl && targetUrl !== window.location.href) {
+                            persistSessionState(currentPage + 1);
+                            window.location.href = targetUrl;
+                            return; // Navigation will reload content script and resume seamlessly
+                        }
+                    }
                 }
 
-                if (actionObj && actionObj.element) {
-                    dispatchSafeClick(actionObj.element);
-                    await new Promise(r => setTimeout(r, 1000));
-                    if (window.location.href !== targetUrl) {
-                        window.location.href = targetUrl;
-                        return;
-                    }
-                } else {
-                    break;
+                if (attempt < maxTransitionAttempts) {
+                    await silentBackgroundScroll();
+                    await new Promise(r => setTimeout(r, 400));
                 }
             }
 
-            // Scraping finished
+            if (!pageTransitionSuccess) {
+                consecutiveNoNew++;
+                if (consecutiveNoNew >= 2) {
+                    console.log(`TradeScout Tab ${currentTabId}: Catalog finished with ${sentLinks.size} items.`);
+                    break;
+                }
+                await new Promise(r => setTimeout(r, 500));
+            }
+        }
+
+        if (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
             isTabScrapingActive = false;
             window.__tradeScoutIsScrapingActive = false;
-            clearPersistedSession();
             currentPercent = 100;
-            currentStatusMsg = `Збір завершено! (${sentLinks.size} товарів)`;
-            console.log(`TradeScout Tab ${currentTabId}: Scrape finished! Total: ${sentLinks.size} items.`);
+            currentStatusMsg = `Збір завершено! Всього ${sentLinks.size} товарів.`;
+            clearPersistedSession();
+            console.log(`TradeScout Tab ${currentTabId}: Scrape completed with ${sentLinks.size} items.`);
 
             sendTabMessage({
                 action: 'tabFinished',
@@ -947,22 +673,14 @@
                 estimatedTotal: sentLinks.size,
                 sessionTitle: meta.title,
                 category: meta.category,
-                sessionId: currentSessionId,
-                startTime: sessionStartTime,
-                sentLinks: Array.from(sentLinks),
-                webhookUrl: webhookEndpoint
+                sessionId: currentSessionId
             });
-        } finally {
-            if (myEpoch === currentSessionEpoch) {
-                isScraperLoopRunning = false;
-            }
         }
     }
 
     function startScrapingOnThisTab(tabId, customUrl) {
         isTabScrapingActive = true;
         window.__tradeScoutIsScrapingActive = true;
-        currentSessionEpoch++;
         currentTabId = tabId || currentTabId || Date.now();
         currentSessionId = `session_${currentTabId}_${Date.now()}`;
         if (customUrl) webhookEndpoint = customUrl;
@@ -987,65 +705,15 @@
             category: meta.category,
             sessionId: currentSessionId,
             estimatedTotal: currentEstimatedTotal,
-            startTime: sessionStartTime,
-            sentLinks: [],
-            webhookUrl: webhookEndpoint
+            startTime: sessionStartTime
         });
 
         runTabScraper(1);
     }
 
-    function resumeScrapingSession(session) {
-        if (!session) return;
-        isTabScrapingActive = true;
-        window.__tradeScoutIsScrapingActive = true;
-        currentSessionEpoch++;
-        currentTabId = session.tabId || currentTabId || Date.now();
-        currentSessionId = session.sessionId || `session_${currentTabId}_${Date.now()}`;
-        if (session.webhookUrl) webhookEndpoint = session.webhookUrl;
-
-        sentLinks.clear();
-        if (Array.isArray(session.sentLinks)) {
-            session.sentLinks.forEach(link => sentLinks.add(link));
-        }
-
-        let urlPage = 1;
-        const pageMatch = window.location.href.match(/[?&]page=(\d+)/i) || window.location.href.match(/page[=-](\d+)/i);
-        if (pageMatch && pageMatch[1]) {
-            urlPage = parseInt(pageMatch[1], 10) || 1;
-        }
-        currentPage = urlPage > 1 ? urlPage : (session.currentPage || 1);
-
-        sessionStartTime = session.startTime || Date.now();
-        currentEstimatedTotal = session.estimatedTotal || getEstimatedTotalFromPage();
-        currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
-        currentStatusMsg = `Збір (стор. ${currentPage}): ${sentLinks.size}/${currentEstimatedTotal}...`;
-
-        persistSessionState(currentPage);
-
-        sendTabMessage({
-            action: 'tabProgress',
-            total: sentLinks.size,
-            page: currentPage,
-            percent: currentPercent,
-            statusMsg: currentStatusMsg,
-            sessionTitle: session.sessionTitle || getPageMetadata().title,
-            category: session.category || getPageMetadata().category,
-            sessionId: currentSessionId,
-            estimatedTotal: currentEstimatedTotal,
-            startTime: sessionStartTime,
-            sentLinks: Array.from(sentLinks),
-            webhookUrl: webhookEndpoint
-        });
-
-        runTabScraper(currentPage);
-    }
-
     function stopScrapingOnThisTab() {
         isTabScrapingActive = false;
         window.__tradeScoutIsScrapingActive = false;
-        currentSessionEpoch++;
-        isScraperLoopRunning = false;
         clearPersistedSession();
         const meta = getPageMetadata();
         currentPercent = 0;
@@ -1063,79 +731,58 @@
         });
     }
 
-    function resetTabState() {
-        isTabScrapingActive = false;
-        window.__tradeScoutIsScrapingActive = false;
-        currentSessionEpoch++;
-        isScraperLoopRunning = false;
-        clearPersistedSession();
-        sentLinks.clear();
-        currentPercent = 0;
-        currentEstimatedTotal = 0;
-        currentStatusMsg = 'Готова до запуску';
-        currentPage = 1;
-        const meta = getPageMetadata();
-        sendTabMessage({ action: 'tabIdle', sessionTitle: meta.title, category: meta.category });
-    }
+    // Check if resuming from an active session after page navigation
+    try {
+        const rawState = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        if (rawState) {
+            const state = JSON.parse(rawState);
+            if (state && state.isRunning && (Date.now() - (state.savedAt || 0) < 600000)) {
+                console.log('TradeScout Content Script: Resuming session across page navigation on page', state.currentPage);
+                isTabScrapingActive = true;
+                window.__tradeScoutIsScrapingActive = true;
+                currentTabId = state.tabId;
+                currentSessionId = state.sessionId;
+                webhookEndpoint = state.webhookUrl || webhookEndpoint;
+                sessionStartTime = state.startTime || Date.now();
+                currentPage = state.currentPage || 1;
+                currentEstimatedTotal = state.estimatedTotal || getEstimatedTotalFromPage();
+                
+                if (Array.isArray(state.sentLinks)) {
+                    state.sentLinks.forEach(l => sentLinks.add(l));
+                }
 
-    // Check on page load if this tab was in an active scraping session
-    function checkAndResumeSessionOnLoad() {
-        try {
-            // First check immediate tab-level sessionStorage
-            const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
-            const isStopped = sessionStorage.getItem(STOPPED_FLAG_KEY) === 'true';
+                const meta = getPageMetadata();
+                currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
+                
+                sendTabMessage({
+                    action: 'tabProgress',
+                    total: sentLinks.size,
+                    page: currentPage,
+                    percent: Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)),
+                    statusMsg: currentStatusMsg,
+                    sessionTitle: meta.title,
+                    category: meta.category,
+                    sessionId: currentSessionId,
+                    estimatedTotal: currentEstimatedTotal,
+                    startTime: sessionStartTime
+                });
 
-            if (raw && !isStopped) {
-                try {
-                    const parsed = JSON.parse(raw);
-                    if (parsed && parsed.isRunning && Date.now() - (parsed.savedAt || 0) < 120000) {
-                        console.log('TradeScout Content Script: Resuming session from tab sessionStorage on page load...', parsed);
-                        setTimeout(() => {
-                            resumeScrapingSession(parsed);
-                        }, 250);
-                        return;
-                    }
-                } catch (_) {}
+                setTimeout(() => {
+                    runTabScraper(currentPage);
+                }, 400);
             }
-
-            // Fallback: Query background service worker
-            chrome.runtime.sendMessage({ action: 'GET_TAB_SESSION_ON_LOAD' }, (res) => {
-                if (chrome.runtime.lastError) {
-                    const meta = getPageMetadata();
-                    sendTabMessage({ action: 'tabIdle', sessionTitle: meta.title, category: meta.category });
-                    return;
-                }
-                if (res && res.isRunning && res.session) {
-                    console.log('TradeScout Content Script: Resuming session from background on page load...', res.session);
-                    setTimeout(() => {
-                        resumeScrapingSession(res.session);
-                    }, 350);
-                } else {
-                    const meta = getPageMetadata();
-                    sendTabMessage({ action: 'tabIdle', sessionTitle: meta.title, category: meta.category });
-                }
-            });
-        } catch (_) {
-            const meta = getPageMetadata();
-            sendTabMessage({ action: 'tabIdle', sessionTitle: meta.title, category: meta.category });
         }
-    }
+    } catch (_) {}
 
-    checkAndResumeSessionOnLoad();
+    // Default 100% idle on page load if not resuming
+    if (!isTabScrapingActive) {
+        const initialMeta = getPageMetadata();
+        sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
+    }
 
     // Expose direct window handlers for fail-safe invocation
     window.__tradeScoutStartScrape = startScrapingOnThisTab;
-    window.__tradeScoutResumeScrape = resumeScrapingSession;
     window.__tradeScoutStopScrape = stopScrapingOnThisTab;
-    window.__tradeScoutResetState = resetTabState;
-
-    // Listen for clear events from dashboard window
-    window.addEventListener('tradescout_reset_extension_sessions', resetTabState);
-    window.addEventListener('message', (event) => {
-        if (event.data && (event.data.type === 'TRADESCOUT_CLEAR_ALL' || event.data.action === 'RESET_ALL_SESSIONS')) {
-            resetTabState();
-        }
-    });
 
     // Message listener for popup / background commands
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -1146,20 +793,8 @@
             return true;
         }
 
-        if (message.action === 'RESUME_TAB_SCRAPE') {
-            resumeScrapingSession(message.session);
-            sendResponse({ success: true });
-            return true;
-        }
-
         if (message.action === 'STOP_TAB_SCRAPE') {
             stopScrapingOnThisTab();
-            sendResponse({ success: true });
-            return true;
-        }
-
-        if (message.action === 'RESET_TAB_STATE') {
-            resetTabState();
             sendResponse({ success: true });
             return true;
         }
@@ -1167,14 +802,10 @@
         if (message.action === 'PING_TAB_STATUS') {
             const meta = getPageMetadata();
             const est = getEstimatedTotalFromPage();
-            const isRunning = isTabScrapingActive && window.__tradeScoutIsScrapingActive;
-            const isFinished = !isRunning && currentPercent === 100 && sentLinks.size > 0;
-            const finalEst = isFinished ? sentLinks.size : (currentEstimatedTotal > 0 ? currentEstimatedTotal : est);
-
             sendResponse({
-                isRunning: isRunning,
+                isRunning: isTabScrapingActive && window.__tradeScoutIsScrapingActive,
                 totalScraped: sentLinks.size,
-                estimatedTotal: finalEst,
+                estimatedTotal: currentEstimatedTotal > 0 ? currentEstimatedTotal : est,
                 percent: currentPercent,
                 statusMsg: currentStatusMsg,
                 page: currentPage,
