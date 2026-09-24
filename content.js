@@ -740,7 +740,7 @@
         document.body.scrollTop = 0;
         window.dispatchEvent(new Event('scroll', { bubbles: true }));
         window.dispatchEvent(new Event('resize', { bubbles: true }));
-        await new Promise(r => setTimeout(r, 450));
+        await new Promise(r => setTimeout(r, 350));
 
         // Initial DOM check at top
         const initialBatch = await scrapeCurrentDomItems(meta, pageIndex);
@@ -750,7 +750,7 @@
         }
 
         let stableRounds = 0;
-        const maxStableRounds = 4;
+        const maxStableRounds = 5;
         const stepPx = 250;
 
         while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < targetPageCount && stableRounds < maxStableRounds) {
@@ -758,13 +758,18 @@
             let currentY = 0;
             const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2000);
 
-            // Step-by-step top-to-bottom scroll pass
+            // Synchronous top-to-bottom step scrolling
             while (currentY < docH && isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < targetPageCount) {
                 currentY = Math.min(docH, currentY + stepPx);
-                window.scrollTo({ top: currentY, behavior: 'smooth' });
+                window.scrollTo(0, currentY);
+                document.documentElement.scrollTop = currentY;
+                document.body.scrollTop = currentY;
                 window.dispatchEvent(new Event('scroll', { bubbles: true }));
                 document.dispatchEvent(new Event('scroll', { bubbles: true }));
                 window.dispatchEvent(new WheelEvent('wheel', { deltaY: stepPx, bubbles: true }));
+
+                const grid = document.querySelector('rz-grid, ul.catalog-grid, .catalog-grid, rz-catalog-tiles, main');
+                if (grid) grid.dispatchEvent(new Event('scroll', { bubbles: true }));
 
                 const batch = await scrapeCurrentDomItems(meta, pageIndex);
                 if (batch.length > 0) {
@@ -773,7 +778,7 @@
                     await processAndReportHarvest(batch, meta, pageIndex);
                 }
 
-                await new Promise(r => setTimeout(r, 80));
+                await new Promise(r => setTimeout(r, 60));
             }
 
             if (pageHarvestedCount >= targetPageCount || (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal)) {
@@ -782,10 +787,10 @@
 
             // Scroll last tile into view to trigger Angular IntersectionObserver
             try {
-                const allTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, app-goods-tile-default');
+                const allTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, app-goods-tile-default, rz-catalog-tiles-observer');
                 if (allTiles.length > 0) {
                     const lastTile = allTiles[allTiles.length - 1];
-                    lastTile.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    lastTile.scrollIntoView({ behavior: 'auto', block: 'center' });
                     window.dispatchEvent(new Event('scroll', { bubbles: true }));
                     window.dispatchEvent(new Event('resize', { bubbles: true }));
                 }
@@ -795,29 +800,37 @@
             tryTriggerShowMoreOnCurrentPage();
 
             // Nudge scroll up and down to wake up lazy loaders
-            window.scrollBy({ top: -300, behavior: 'smooth' });
+            window.scrollBy(0, -350);
             window.dispatchEvent(new Event('scroll', { bubbles: true }));
-            await new Promise(r => setTimeout(r, 250));
+            await new Promise(r => setTimeout(r, 200));
 
-            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            window.scrollTo(0, document.body.scrollHeight);
             window.dispatchEvent(new Event('scroll', { bubbles: true }));
             window.dispatchEvent(new WheelEvent('wheel', { deltaY: 350, bubbles: true }));
             window.dispatchEvent(new Event('resize', { bubbles: true }));
 
-            // Wait for network / DOM injection
-            await new Promise(r => setTimeout(r, 1200));
-
-            const freshBatch = await scrapeCurrentDomItems(meta, pageIndex);
-            if (freshBatch.length > 0) {
-                pageHarvestedCount += freshBatch.length;
-                passFoundAnyNew = true;
-                await processAndReportHarvest(freshBatch, meta, pageIndex);
+            // Active poll for up to 1500ms for network/DOM insertion
+            for (let poll = 0; poll < 6; poll++) {
+                if (pageHarvestedCount >= targetPageCount) break;
+                await new Promise(r => setTimeout(r, 250));
+                const pollBatch = await scrapeCurrentDomItems(meta, pageIndex);
+                if (pollBatch.length > 0) {
+                    pageHarvestedCount += pollBatch.length;
+                    passFoundAnyNew = true;
+                    await processAndReportHarvest(pollBatch, meta, pageIndex);
+                    break;
+                }
             }
 
             if (passFoundAnyNew) {
                 stableRounds = 0;
             } else {
                 stableRounds++;
+                // If nothing new was found, jump back to top before next pass
+                window.scrollTo(0, 0);
+                document.documentElement.scrollTop = 0;
+                document.body.scrollTop = 0;
+                await new Promise(r => setTimeout(r, 200));
             }
         }
 
