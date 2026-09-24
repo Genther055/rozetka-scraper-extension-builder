@@ -4,6 +4,11 @@
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
     window.__tradeScoutInjected = true;
 
+    // Immediately enforce manual scroll restoration so new page loads always start at top (0, 0)
+    if ('scrollRestoration' in history) {
+        try { history.scrollRestoration = 'manual'; } catch (_) {}
+    }
+
     console.log('TradeScout Content Script v3.6 Pro loaded on:', window.location.href);
 
     let isTabScrapingActive = false;
@@ -158,20 +163,6 @@
         if (!href || href === '#' || href.startsWith('javascript:')) return true;
 
         return false;
-    }
-
-    async function silentBackgroundScroll() {
-        try {
-            const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-            const viewH = window.innerHeight || 800;
-            const steps = [0.25, 0.50, 0.75, 1.0];
-            for (const step of steps) {
-                const targetY = Math.max(0, Math.round((totalHeight - viewH) * step));
-                window.scrollTo({ top: targetY, behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 120));
-            }
-        } catch (_) {}
     }
 
     function tryTriggerShowMoreOnCurrentPage() {
@@ -618,6 +609,95 @@
         });
     }
 
+    // Sequential top-to-bottom smooth scrolling function that genuinely triggers Rozetka's lazy loading chunk by chunk
+    async function sequentialPageHarvest(meta, pageIndex) {
+        // 1. Force manual scroll restoration so Chrome/Angular doesn't remember bottom
+        if ('scrollRestoration' in history) {
+            try { history.scrollRestoration = 'manual'; } catch (_) {}
+        }
+
+        // 2. Start strictly at the top of the page (0, 0)
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+        window.dispatchEvent(new Event('scroll', { bubbles: true }));
+        await new Promise(r => setTimeout(r, 450));
+
+        let pageHarvestedCount = 0;
+        const targetPageCount = 60;
+        let currentY = 0;
+        const stepPx = 300;
+        let stableRounds = 0;
+        const maxStableRounds = 3;
+
+        // A. Initial harvest at the very top (SSR batch 1)
+        const initialBatch = await scrapeCurrentDomItems(meta, pageIndex);
+        if (initialBatch.length > 0) {
+            pageHarvestedCount += initialBatch.length;
+            await processAndReportHarvest(initialBatch, meta, pageIndex);
+        }
+
+        // B. Sequential scroll-down loop
+        while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < targetPageCount && stableRounds < maxStableRounds) {
+            const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2000);
+
+            // Step down from current position to bottom of currently rendered content
+            while (currentY < docH && isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < targetPageCount) {
+                currentY = Math.min(docH, currentY + stepPx);
+                window.scrollTo({ top: currentY, behavior: 'smooth' });
+                window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                window.dispatchEvent(new WheelEvent('wheel', { deltaY: stepPx, bubbles: true }));
+
+                // Check DOM periodically as we scroll down
+                const batch = await scrapeCurrentDomItems(meta, pageIndex);
+                if (batch.length > 0) {
+                    pageHarvestedCount += batch.length;
+                    stableRounds = 0;
+                    await processAndReportHarvest(batch, meta, pageIndex);
+                }
+
+                await new Promise(r => setTimeout(r, 90));
+            }
+
+            if (pageHarvestedCount >= targetPageCount || (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal)) {
+                break;
+            }
+
+            // At the bottom of the current rendered tiles:
+            // 1. Try clicking "Show More" if a button exists
+            tryTriggerShowMoreOnCurrentPage();
+
+            // 2. Nudge scroll up slightly and then back down to trigger IntersectionObserver
+            window.scrollBy({ top: -250, behavior: 'smooth' });
+            window.dispatchEvent(new Event('scroll', { bubbles: true }));
+            await new Promise(r => setTimeout(r, 200));
+
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            window.dispatchEvent(new Event('scroll', { bubbles: true }));
+            window.dispatchEvent(new WheelEvent('wheel', { deltaY: 350, bubbles: true }));
+
+            // 3. Wait for Rozetka's AJAX to return next chunk of goods
+            await new Promise(r => setTimeout(r, 1100));
+
+            const freshBatch = await scrapeCurrentDomItems(meta, pageIndex);
+            if (freshBatch.length > 0) {
+                pageHarvestedCount += freshBatch.length;
+                stableRounds = 0;
+                await processAndReportHarvest(freshBatch, meta, pageIndex);
+            }
+
+            const newDocH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2000);
+            if (newDocH > docH + 200) {
+                // New chunk was rendered and page expanded, continue scrolling down into it!
+                stableRounds = 0;
+            } else {
+                stableRounds++;
+            }
+        }
+
+        return pageHarvestedCount;
+    }
+
     // Main scraping runner
     async function runTabScraper(initialPage) {
         if (isScraperLoopRunning) {
@@ -640,85 +720,12 @@
                     if (latestEstimated > 0) currentEstimatedTotal = latestEstimated;
                 }
 
-                // 1. Initial stabilization delay on page load / navigation
-                await new Promise(r => setTimeout(r, 600));
-
-                // Always reset viewport to top first
-                window.scrollTo({ top: 0, behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                await new Promise(r => setTimeout(r, 300));
-
-                // Harvest all items on the current page (up to 60 items)
-                let pageHarvestedCount = 0;
-                const targetPageCount = 60;
-                let idleAttempts = 0;
-                const maxIdleAttempts = 6;
-                let pass = 0;
-
-                while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < targetPageCount && idleAttempts < maxIdleAttempts && pass < 15) {
-                    pass++;
-
-                    // A. Harvest whatever is rendered in DOM right now
-                    const currentBatch = await scrapeCurrentDomItems(meta, currentPage);
-                    if (currentBatch.length > 0) {
-                        pageHarvestedCount += currentBatch.length;
-                        idleAttempts = 0;
-                        await processAndReportHarvest(currentBatch, meta, currentPage);
-                    } else {
-                        idleAttempts++;
-                    }
-
-                    // Check if we hit full 60 items for this page or overall catalog total
-                    if (pageHarvestedCount >= targetPageCount || (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal)) {
-                        break;
-                    }
-
-                    // B. Scroll smoothly to the last product tile in DOM to trigger lazy chunk loading
-                    const allTiles = document.querySelectorAll('rz-catalog-tile, rz-product-tile, li.catalog-grid__cell, .goods-tile, [data-goods-id]');
-                    if (allTiles.length > 0) {
-                        const lastTile = allTiles[allTiles.length - 1];
-                        try {
-                            lastTile.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        } catch (_) {}
-                    }
-
-                    // C. Progressive multi-step scroll down to trigger Rozetka lazy loading
-                    const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
-                    const stepPx = 350;
-                    const steps = Math.min(20, Math.ceil(docH / stepPx));
-
-                    for (let i = 1; i <= steps; i++) {
-                        if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                        const y = Math.min(docH, i * stepPx);
-                        window.scrollTo({ top: y, behavior: 'auto' });
-                        window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                        await new Promise(r => setTimeout(r, 70));
-                    }
-
-                    // D. Try clicking "Show More" if Rozetka has a button
-                    tryTriggerShowMoreOnCurrentPage();
-
-                    // E. Scroll to bottom & dispatch synthetic triggers (IntersectionObserver / Wheel)
-                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
-                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    window.dispatchEvent(new Event('resize', { bubbles: true }));
-                    window.dispatchEvent(new WheelEvent('wheel', { deltaY: 400, bubbles: true }));
-                    
-                    // Wait for Rozetka AJAX chunk response (1.2s)
-                    await new Promise(r => setTimeout(r, 1200));
-
-                    // Nudge scroll slightly to trigger viewport entry
-                    window.scrollBy({ top: -300, behavior: 'auto' });
-                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    await new Promise(r => setTimeout(r, 200));
-                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
-                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    await new Promise(r => setTimeout(r, 400));
-                }
+                // Execute sequential top-to-bottom harvest for this page
+                await sequentialPageHarvest(meta, currentPage);
 
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
-                // Check if catalog complete (either total items reached or no next page)
+                // Check if catalog complete (either total items reached or reached max calculated page)
                 if (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) {
                     console.log(`TradeScout Tab ${currentTabId}: Reached estimated total (${sentLinks.size}/${currentEstimatedTotal}). Catalog complete.`);
                     break;
@@ -779,6 +786,14 @@
                     dispatchSafeClick(actionObj.element);
                 }
 
+                // Immediately force scroll restoration to manual and scroll to top
+                if ('scrollRestoration' in history) {
+                    try { history.scrollRestoration = 'manual'; } catch (_) {}
+                }
+                window.scrollTo(0, 0);
+                document.documentElement.scrollTop = 0;
+                document.body.scrollTop = 0;
+
                 // Wait up to 2.5 seconds to check if Rozetka did an in-page SPA transition or page reload
                 let spaTransitionDetected = false;
                 for (let w = 0; w < 10; w++) {
@@ -805,8 +820,10 @@
 
                 if (spaTransitionDetected) {
                     currentPage = nextPageNum;
-                    window.scrollTo({ top: 0, behavior: 'auto' });
-                    await new Promise(r => setTimeout(r, 500));
+                    window.scrollTo(0, 0);
+                    document.documentElement.scrollTop = 0;
+                    document.body.scrollTop = 0;
+                    await new Promise(r => setTimeout(r, 450));
                     continue;
                 }
 
@@ -848,6 +865,13 @@
     }
 
     function startScrapingOnThisTab(tabId, customUrl) {
+        if ('scrollRestoration' in history) {
+            try { history.scrollRestoration = 'manual'; } catch (_) {}
+        }
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+
         isTabScrapingActive = true;
         window.__tradeScoutIsScrapingActive = true;
         currentTabId = tabId || currentTabId || Date.now();
@@ -882,6 +906,13 @@
 
     function resumeScrapingSession(session) {
         if (!session) return;
+        if ('scrollRestoration' in history) {
+            try { history.scrollRestoration = 'manual'; } catch (_) {}
+        }
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+
         isTabScrapingActive = true;
         window.__tradeScoutIsScrapingActive = true;
         currentTabId = session.tabId || currentTabId || Date.now();
@@ -959,6 +990,13 @@
 
     // Check on page load if this tab was in an active scraping session
     function checkAndResumeSessionOnLoad() {
+        if ('scrollRestoration' in history) {
+            try { history.scrollRestoration = 'manual'; } catch (_) {}
+        }
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+
         try {
             chrome.runtime.sendMessage({ action: 'GET_TAB_SESSION_ON_LOAD' }, (res) => {
                 if (chrome.runtime.lastError) {
@@ -969,8 +1007,11 @@
                 if (res && res.isRunning && res.session) {
                     console.log('TradeScout Content Script: Resuming existing scrape session on page load...', res.session);
                     setTimeout(() => {
+                        window.scrollTo(0, 0);
+                        document.documentElement.scrollTop = 0;
+                        document.body.scrollTop = 0;
                         resumeScrapingSession(res.session);
-                    }, 500);
+                    }, 400);
                 } else {
                     const meta = getPageMetadata();
                     sendTabMessage({ action: 'tabIdle', sessionTitle: meta.title, category: meta.category });
