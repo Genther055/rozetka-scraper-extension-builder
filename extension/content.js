@@ -1,10 +1,10 @@
-// TradeScout Content Script v4.0 Pro (Unbreakable Multi-Page Catalog Harvester & Data Extractor)
+// TradeScout Content Script v4.1 Pro (Proven Fast In-Place Harvester & Accurate Data Extractor)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
     window.__tradeScoutInjected = true;
 
-    console.log('TradeScout Content Script v4.0 Pro loaded on:', window.location.href);
+    console.log('TradeScout Content Script v4.1 Pro loaded on:', window.location.href);
 
     const SESSION_STORAGE_KEY = '__tradeScout_active_session';
     const STOPPED_FLAG_KEY = '__tradeScout_stopped';
@@ -35,7 +35,7 @@
         } catch (_) {}
     }
 
-    // Save session to tab's sessionStorage for instant persistence across page navigations
+    // Persist session to tab's sessionStorage across page transitions
     function persistSessionState(pageNum) {
         try {
             const state = {
@@ -183,6 +183,33 @@
         if (!href || href === '#' || href.startsWith('javascript:')) return true;
 
         return false;
+    }
+
+    // Fast, gentle background scroll to mount all lazy-loaded rows
+    async function silentBackgroundScroll() {
+        try {
+            const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1500);
+            
+            // 1. Scroll to middle
+            const midY = Math.round(docH / 2);
+            window.scrollTo(0, midY);
+            window.dispatchEvent(new Event('scroll', { bubbles: true }));
+            await new Promise(r => setTimeout(r, 150));
+
+            // 2. Scroll to bottom of catalog
+            const targetY = Math.max(0, docH - window.innerHeight);
+            window.scrollTo(0, targetY);
+            window.dispatchEvent(new Event('scroll', { bubbles: true }));
+
+            // 3. Trigger last tile view to ensure Angular loads bottom items
+            const allTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, app-goods-tile-default, rz-catalog-tiles-observer');
+            if (allTiles.length > 0) {
+                const lastTile = allTiles[allTiles.length - 1];
+                lastTile.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+            }
+
+            await new Promise(r => setTimeout(r, 200));
+        } catch (_) {}
     }
 
     function parseReviewNumber(text) {
@@ -540,7 +567,7 @@
         } catch (_) {}
     }
 
-    function scrapeCurrentDomItems(meta, pageIndex) {
+    async function scrapeCurrentDomItems(meta, pageIndex) {
         const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, .catalog-grid, rz-catalog-grid, rz-catalog-tiles, .catalog-selection__goods, section.catalog-grid') || document.querySelector('main') || document.body;
         
         let rawTiles = Array.from(catalogContainer.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, rz-product-tile, [data-goods-id], .goods-tile, app-goods-tile-default'));
@@ -572,6 +599,33 @@
 
         if (distinctTiles.length === 0) return [];
 
+        // Batch query Rozetka's official details API to enrich sellers, ratings, reviews, and precise pricing
+        const apiProductMap = new Map();
+        try {
+            const productIds = [];
+            for (const { link } of distinctTiles) {
+                const m = link.match(/\/p(\d+)/i) || link.match(/p-(\d+)/i) || link.match(/\/(\d{5,})\//);
+                if (m && m[1]) productIds.push(m[1]);
+            }
+            if (productIds.length > 0) {
+                const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productIds.join(',')}`;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                const res = await fetch(apiUrl, { signal: controller.signal }).catch(() => null);
+                clearTimeout(timeoutId);
+                if (res && res.ok) {
+                    const json = await res.json().catch(() => null);
+                    if (json && Array.isArray(json.data)) {
+                        for (const apiProd of json.data) {
+                            if (apiProd && apiProd.id) {
+                                apiProductMap.set(String(apiProd.id), apiProd);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_) {}
+
         const newItems = [];
 
         for (const { item, linkTag, link } of distinctTiles) {
@@ -580,7 +634,11 @@
                 const name = titleEl && titleEl.innerText ? titleEl.innerText.trim() : (linkTag.innerText ? linkTag.innerText.trim() : '');
                 if (!name || name.length < 3) continue;
 
-                // 1. Price
+                const idMatch = link.match(/\/p(\d+)/i) || link.match(/p-(\d+)/i) || link.match(/\/(\d{5,})\//);
+                const prodId = idMatch ? String(idMatch[1]) : '';
+                const apiProd = prodId ? apiProductMap.get(prodId) : null;
+
+                // 1. Current Price
                 let price = 0;
                 const priceEl = item.querySelector(
                     '.goods-tile__price-value, .goods-tile__price--current, .goods-tile__price_color_red, ' +
@@ -591,41 +649,55 @@
                 if (priceText) {
                     price = parseInt(priceText.replace(/\D/g, ''), 10) || 0;
                 }
+                if (!price && apiProd && apiProd.price) {
+                    price = parseInt(String(apiProd.price).replace(/\D/g, ''), 10) || 0;
+                }
 
                 // 2. Old Price & Discount
                 let oldPrice = 0;
                 let discount = 0;
 
-                const oldPriceEl = item.querySelector(
-                    '.goods-tile__price--old, .goods-tile__price_type_old, .goods-tile__price.type_old, ' +
-                    '.goods-tile__price_color_gray, .goods-tile__price-old, [class*="price_color_gray"], ' +
-                    '[class*="price--old"], [class*="price_type_old"], [class*="price-old"], [class*="old-price"], ' +
-                    '[class*="price__old"], [class*="old_price"], [class*="price-discount"], [class*="product-price__small"], ' +
-                    'del, s, strike, [style*="line-through"]'
-                );
-                if (oldPriceEl && oldPriceEl.innerText) {
-                    const parsed = parseInt(oldPriceEl.innerText.replace(/\D/g, ''), 10) || 0;
-                    if (parsed > price) {
-                        oldPrice = parsed;
+                if (apiProd) {
+                    if (apiProd.old_price && Number(apiProd.old_price) > 0) {
+                        const parsedOld = parseInt(String(apiProd.old_price).replace(/\D/g, ''), 10) || 0;
+                        if (parsedOld > price) oldPrice = parsedOld;
+                    } else if (apiProd.oldPrice && Number(apiProd.oldPrice) > 0) {
+                        const parsedOld = parseInt(String(apiProd.oldPrice).replace(/\D/g, ''), 10) || 0;
+                        if (parsedOld > price) oldPrice = parsedOld;
+                    }
+
+                    if (apiProd.discount) {
+                        if (typeof apiProd.discount === 'number' && apiProd.discount > 0) {
+                            discount = apiProd.discount;
+                        } else if (typeof apiProd.discount === 'object' && apiProd.discount.value) {
+                            discount = parseInt(apiProd.discount.value, 10) || 0;
+                        }
                     }
                 }
 
-                const badgeEl = item.querySelector(
-                    'rz-badge, .goods-tile__badge, [class*="goods-tile__badge"], [class*="goods-tile__label"], ' +
-                    '[class*="badge"], [class*="promo"], [class*="discount"], [class*="sticker"], [class*="tag"]'
-                );
-                const badgeText = badgeEl && badgeEl.innerText ? badgeEl.innerText : '';
-                const badgeMatch = badgeText.match(/(?:-|−|знижка\s*|скидка\s*)(\d{1,2})\s*%/i) || badgeText.match(/-(\d{1,2})%/);
-                if (badgeMatch && badgeMatch[1]) {
-                    discount = parseInt(badgeMatch[1], 10) || 0;
-                } else {
-                    const fullTileText = item.innerText || '';
-                    const tileMatch = fullTileText.match(/(?:-|−)(\d{1,2})%/);
-                    if (tileMatch && tileMatch[1]) {
-                        const pct = parseInt(tileMatch[1], 10) || 0;
-                        if (pct > 0 && pct < 90) {
-                            discount = pct;
-                        }
+                if (!oldPrice) {
+                    const oldPriceEl = item.querySelector(
+                        '.goods-tile__price--old, .goods-tile__price_type_old, .goods-tile__price.type_old, ' +
+                        '.goods-tile__price_color_gray, .goods-tile__price-old, [class*="price_color_gray"], ' +
+                        '[class*="price--old"], [class*="price_type_old"], [class*="price-old"], [class*="old-price"], ' +
+                        '[class*="price__old"], [class*="old_price"], [class*="price-discount"], [class*="product-price__small"], ' +
+                        'del, s, strike, [style*="line-through"]'
+                    );
+                    if (oldPriceEl && oldPriceEl.innerText) {
+                        const parsed = parseInt(oldPriceEl.innerText.replace(/\D/g, ''), 10) || 0;
+                        if (parsed > price) oldPrice = parsed;
+                    }
+                }
+
+                if (!discount) {
+                    const badgeEl = item.querySelector(
+                        'rz-badge, .goods-tile__badge, [class*="goods-tile__badge"], [class*="goods-tile__label"], ' +
+                        '[class*="badge"], [class*="promo"], [class*="discount"], [class*="sticker"], [class*="tag"]'
+                    );
+                    const badgeText = badgeEl && badgeEl.innerText ? badgeEl.innerText : '';
+                    const badgeMatch = badgeText.match(/(?:-|−|знижка\s*|скидка\s*)(\d{1,2})\s*%/i) || badgeText.match(/-(\d{1,2})%/);
+                    if (badgeMatch && badgeMatch[1]) {
+                        discount = parseInt(badgeMatch[1], 10) || 0;
                     }
                 }
 
@@ -639,19 +711,41 @@
                     oldPrice = price;
                 }
 
-                // 3. Reviews & Rating
-                const reviews = extractReviews(item);
-                const rating = extractRating(item);
+                // 3. Reviews & Rating (API preferred, DOM fallback)
+                let reviews = 0;
+                let rating = 5.0;
+
+                if (apiProd) {
+                    if (typeof apiProd.comments_amount === 'number') reviews = apiProd.comments_amount;
+                    else if (typeof apiProd.reviews_amount === 'number') reviews = apiProd.reviews_amount;
+                    else if (typeof apiProd.comments_count === 'number') reviews = apiProd.comments_count;
+
+                    if (typeof apiProd.comments_mark === 'number' && apiProd.comments_mark > 0) rating = apiProd.comments_mark;
+                    else if (typeof apiProd.rating === 'number' && apiProd.rating > 0) rating = apiProd.rating;
+                }
+
+                if (!reviews) reviews = extractReviews(item);
+                if (!rating || rating === 5.0) rating = extractRating(item);
 
                 // 4. In-Stock
-                const itemText = item.innerText || '';
-                const inStock = !(item.classList.contains('tile-disabled') || itemText.includes('Немає в наявності'));
+                let inStock = true;
+                if (apiProd && typeof apiProd.sell_status === 'string') {
+                    inStock = apiProd.sell_status !== 'unavailable' && apiProd.sell_status !== 'out_of_stock';
+                } else {
+                    const itemText = item.innerText || '';
+                    inStock = !(item.classList.contains('tile-disabled') || itemText.includes('Немає в наявності'));
+                }
 
                 // 5. Smart Specifications
                 const specs = extractSmartSpecs(name, item);
 
                 // 6. Seller
-                const seller = extractSeller(item) || 'Rozetka';
+                let seller = 'Rozetka';
+                if (apiProd && apiProd.seller && apiProd.seller.title) {
+                    seller = apiProd.seller.title.trim() || 'Rozetka';
+                } else {
+                    seller = extractSeller(item) || 'Rozetka';
+                }
 
                 newItems.push({
                     name,
@@ -715,73 +809,6 @@
         });
     }
 
-    // Ultra-Smooth Linear Downward Scroll Engine
-    async function progressivePageHarvest(meta, pageIndex, epoch) {
-        let harvestedThisPage = 0;
-        let consecutiveBottomChecks = 0;
-
-        // 1. Initial harvest at top of page
-        const initialBatch = scrapeCurrentDomItems(meta, pageIndex);
-        if (initialBatch.length > 0) {
-            harvestedThisPage += initialBatch.length;
-            processAndReportHarvest(initialBatch, meta, pageIndex);
-        }
-
-        const stepPx = 250;
-        const stepDelay = 100; // 100ms per step = smooth, fast and 100% stable
-
-        while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && epoch === currentSessionEpoch) {
-            const currentScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
-            const docHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1000);
-            const maxScrollY = Math.max(0, docHeight - window.innerHeight);
-
-            if (currentScrollY < maxScrollY - 20) {
-                const targetY = Math.min(currentScrollY + stepPx, maxScrollY);
-                window.scrollTo({ top: targetY, behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll', { bubbles: true }));
-
-                const batch = scrapeCurrentDomItems(meta, pageIndex);
-                if (batch.length > 0) {
-                    harvestedThisPage += batch.length;
-                    consecutiveBottomChecks = 0;
-                    processAndReportHarvest(batch, meta, pageIndex);
-                }
-
-                await new Promise(r => setTimeout(r, stepDelay));
-            } else {
-                // Reached current bottom! Check for dynamic lazy loading
-                await new Promise(r => setTimeout(r, 400));
-                window.dispatchEvent(new Event('scroll', { bubbles: true }));
-
-                const batch = scrapeCurrentDomItems(meta, pageIndex);
-                if (batch.length > 0) {
-                    harvestedThisPage += batch.length;
-                    consecutiveBottomChecks = 0;
-                    processAndReportHarvest(batch, meta, pageIndex);
-                }
-
-                const newDocHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1000);
-                if (newDocHeight > docHeight + 40) {
-                    consecutiveBottomChecks = 0;
-                } else {
-                    consecutiveBottomChecks++;
-                    if (consecutiveBottomChecks >= 2) {
-                        break; // Confirmed bottom of this page
-                    }
-                }
-            }
-        }
-
-        // Final sweep
-        const finalBatch = scrapeCurrentDomItems(meta, pageIndex);
-        if (finalBatch.length > 0) {
-            harvestedThisPage += finalBatch.length;
-            processAndReportHarvest(finalBatch, meta, pageIndex);
-        }
-
-        return harvestedThisPage;
-    }
-
     // Main multi-page traversal controller
     async function runTabScraper(initialPage) {
         currentSessionEpoch++;
@@ -804,13 +831,34 @@
             const tileSelectors = 'ul.catalog-grid, rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default';
 
             while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && myEpoch === currentSessionEpoch) {
-                const latestEstimated = getEstimatedTotalFromPage();
-                if (latestEstimated > currentEstimatedTotal) {
-                    currentEstimatedTotal = latestEstimated;
+                if (currentEstimatedTotal <= 0) {
+                    const latestEstimated = getEstimatedTotalFromPage();
+                    if (latestEstimated > 0) {
+                        currentEstimatedTotal = latestEstimated;
+                    }
                 }
 
-                // 1. Harvest current page from top to bottom
-                await progressivePageHarvest(meta, currentPage, myEpoch);
+                // 1. Background fast scroll to mount all lazy rows
+                await silentBackgroundScroll();
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
+
+                // 2. Scrape all new items in current DOM
+                let batch = await scrapeCurrentDomItems(meta, currentPage);
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
+
+                if (batch.length === 0) {
+                    await new Promise(r => setTimeout(r, 350));
+                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
+                    const extra = await scrapeCurrentDomItems(meta, currentPage);
+                    if (extra.length > 0) {
+                        batch = batch.concat(extra);
+                    }
+                }
+
+                if (batch.length > 0 && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
+                    processAndReportHarvest(batch, meta, currentPage);
+                }
+
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
 
                 if (sentLinks.size > lastHarvestCount) {
@@ -820,7 +868,12 @@
                     consecutiveNoGrowth++;
                 }
 
-                // 2. Check for pagination action (Show More vs Next Page)
+                const latestEstimated = getEstimatedTotalFromPage();
+                if (latestEstimated > currentEstimatedTotal) {
+                    currentEstimatedTotal = latestEstimated;
+                }
+
+                // 3. Find next page action (Show More vs Next Page Link)
                 const actionObj = findPaginationActionElements(currentPage);
                 const hasNextPage = !!actionObj;
 
@@ -830,7 +883,7 @@
                         const fallbackNextPage = currentPage + 1;
                         const fallbackUrl = buildNextPageUrl(window.location.href, fallbackNextPage);
                         if (fallbackUrl && fallbackUrl !== window.location.href) {
-                            console.log(`TradeScout Tab ${currentTabId}: Navigating to fallback next page ${fallbackNextPage} -> ${fallbackUrl}`);
+                            console.log(`TradeScout Tab ${currentTabId}: Direct navigation to page ${fallbackNextPage} -> ${fallbackUrl}`);
                             persistSessionState(fallbackNextPage);
                             sendTabMessage({
                                 action: 'tabProgress',
@@ -852,26 +905,71 @@
                         }
                     }
 
-                    console.log(`TradeScout Tab ${currentTabId}: No further pages found. Catalog complete.`);
-                    break;
+                    if (consecutiveNoGrowth >= 2) {
+                        console.log(`TradeScout Tab ${currentTabId}: Catalog finished with ${sentLinks.size} items.`);
+                        break;
+                    }
                 }
 
-                // 3. Perform Page Transition
-                if (actionObj.type === 'showMore') {
-                    currentStatusMsg = `Завантаження наступних товарів (стор. ${currentPage + 1})...`;
+                // 4. Trigger Page Transition via Click or Fallback
+                let pageTransitionSuccess = false;
+                const prevDomCount = document.querySelectorAll(tileSelectors).length;
+                const prevHref = window.location.href;
+
+                if (actionObj) {
+                    currentStatusMsg = `Завантаження стор. ${currentPage + 1}...`;
+                    persistSessionState(currentPage + 1);
+
+                    sendTabMessage({
+                        action: 'tabProgress',
+                        total: sentLinks.size,
+                        page: currentPage + 1,
+                        percent: currentPercent,
+                        statusMsg: currentStatusMsg,
+                        syncedCount: sentLinks.size,
+                        estimatedTotal: currentEstimatedTotal,
+                        sessionTitle: meta.title,
+                        category: meta.category,
+                        sessionId: currentSessionId,
+                        startTime: sessionStartTime,
+                        sentLinks: Array.from(sentLinks),
+                        webhookUrl: webhookEndpoint
+                    });
+
                     dispatchSafeClick(actionObj.element);
-                    
-                    let expanded = false;
-                    const prevCount = document.querySelectorAll(tileSelectors).length;
+
                     for (let w = 0; w < 12; w++) {
                         if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
                         await new Promise(r => setTimeout(r, 250));
-                        if (document.querySelectorAll(tileSelectors).length > prevCount) {
-                            expanded = true;
+
+                        // A. URL changed
+                        if (window.location.href !== prevHref) {
+                            pageTransitionSuccess = true;
+                            break;
+                        }
+
+                        // B. DOM expanded (Show More in-place)
+                        if (document.querySelectorAll(tileSelectors).length > prevDomCount) {
+                            pageTransitionSuccess = true;
+                            break;
+                        }
+
+                        // C. New unscraped tiles present in DOM
+                        const freshItems = Array.from(document.querySelectorAll(tileSelectors));
+                        const hasUnscrapedLink = freshItems.some(tile => {
+                            if (isUnwantedTile(tile)) return false;
+                            const linkTag = tile.querySelector('a.goods-tile__heading, a.tile-title, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
+                            if (!linkTag) return false;
+                            let href = (linkTag.getAttribute('href') || '').split('?')[0].split('#')[0].replace(/\/+$/, '');
+                            return href && !sentLinks.has(href) && !sentLinks.has(`https://rozetka.com.ua${href}`);
+                        });
+                        if (hasUnscrapedLink) {
+                            pageTransitionSuccess = true;
                             break;
                         }
                     }
-                    if (expanded) {
+
+                    if (pageTransitionSuccess) {
                         currentPage++;
                         consecutiveNoGrowth = 0;
                         persistSessionState(currentPage);
@@ -879,63 +977,12 @@
                     }
                 }
 
-                // Standard Next Page (pageNum or nextPage)
-                const nextPageNum = currentPage + 1;
-                const prevHref = window.location.href;
-                const prevItemsSignature = Array.from(document.querySelectorAll(tileSelectors)).slice(0, 3).map(el => el.innerText.slice(0, 20)).join('|');
-                
-                currentStatusMsg = `Перехід на стор. ${nextPageNum}...`;
-                persistSessionState(nextPageNum);
-
-                sendTabMessage({
-                    action: 'tabProgress',
-                    total: sentLinks.size,
-                    page: nextPageNum,
-                    percent: currentPercent,
-                    statusMsg: currentStatusMsg,
-                    syncedCount: sentLinks.size,
-                    estimatedTotal: currentEstimatedTotal,
-                    sessionTitle: meta.title,
-                    category: meta.category,
-                    sessionId: currentSessionId,
-                    startTime: sessionStartTime,
-                    sentLinks: Array.from(sentLinks),
-                    webhookUrl: webhookEndpoint
-                });
-
-                dispatchSafeClick(actionObj.element);
-
-                let pageSwitched = false;
-                for (let w = 0; w < 12; w++) {
-                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
-                    await new Promise(r => setTimeout(r, 250));
-
-                    if (window.location.href !== prevHref) {
-                        pageSwitched = true;
-                        break;
-                    }
-
-                    const newItemsSignature = Array.from(document.querySelectorAll(tileSelectors)).slice(0, 3).map(el => el.innerText.slice(0, 20)).join('|');
-                    if (newItemsSignature && newItemsSignature !== prevItemsSignature) {
-                        pageSwitched = true;
-                        break;
-                    }
-                }
-
-                if (pageSwitched) {
-                    currentPage = nextPageNum;
-                    consecutiveNoGrowth = 0;
-                    persistSessionState(currentPage);
-                    window.scrollTo({ top: 0, behavior: 'instant' });
-                    await new Promise(r => setTimeout(r, 600));
-                    continue;
-                }
-
-                // Direct URL navigation fallback
-                const directUrl = (actionObj.href && actionObj.href.includes('page=')) ? (actionObj.href.startsWith('http') ? actionObj.href : `https://rozetka.com.ua${actionObj.href}`) : buildNextPageUrl(window.location.href, nextPageNum);
+                // Direct URL fallback navigation if click did not navigate
+                const targetPageNum = currentPage + 1;
+                const directUrl = (actionObj && actionObj.href && actionObj.href.includes('page=')) ? (actionObj.href.startsWith('http') ? actionObj.href : `https://rozetka.com.ua${actionObj.href}`) : buildNextPageUrl(window.location.href, targetPageNum);
                 if (directUrl && directUrl !== window.location.href) {
-                    console.log(`TradeScout Tab ${currentTabId}: Direct navigation to page ${nextPageNum} -> ${directUrl}`);
-                    persistSessionState(nextPageNum);
+                    console.log(`TradeScout Tab ${currentTabId}: Direct navigation fallback to page ${targetPageNum} -> ${directUrl}`);
+                    persistSessionState(targetPageNum);
                     window.location.href = directUrl;
                     return;
                 }
@@ -986,8 +1033,6 @@
         sentLinks.clear();
         sessionStartTime = Date.now();
         currentPage = 1;
-
-        window.scrollTo({ top: 0, behavior: 'instant' });
 
         const meta = getPageMetadata();
         currentEstimatedTotal = getEstimatedTotalFromPage();
@@ -1041,7 +1086,6 @@
         currentStatusMsg = `Збір (стор. ${currentPage}): ${sentLinks.size}/${currentEstimatedTotal}...`;
 
         persistSessionState(currentPage);
-        window.scrollTo({ top: 0, behavior: 'instant' });
 
         sendTabMessage({
             action: 'tabProgress',
@@ -1112,7 +1156,7 @@
                         console.log('TradeScout Content Script: Resuming session from tab sessionStorage on page load...', parsed);
                         setTimeout(() => {
                             resumeScrapingSession(parsed);
-                        }, 300);
+                        }, 250);
                         return;
                     }
                 } catch (_) {}
@@ -1129,7 +1173,7 @@
                     console.log('TradeScout Content Script: Resuming session from background on page load...', res.session);
                     setTimeout(() => {
                         resumeScrapingSession(res.session);
-                    }, 400);
+                    }, 350);
                 } else {
                     const meta = getPageMetadata();
                     sendTabMessage({ action: 'tabIdle', sessionTitle: meta.title, category: meta.category });
