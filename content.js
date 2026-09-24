@@ -82,21 +82,10 @@
     }
 
     function getEstimatedTotalFromPage() {
-        // Priority 1: Top catalog counter text (e.g. "Знайдено 508 товарів")
-        const topElements = document.querySelectorAll('rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection, [data-testid*="found"], [data-testid*="counter"], [class*="found-goods"], [class*="goods-count"], [class*="heading__goods"], .catalog-selection__label, h1, h2, p, span, div');
-        for (const el of topElements) {
-            if (el.children.length > 5) continue;
-            const txt = (el.textContent || el.innerText || '').trim();
-            if (txt.toLowerCase().includes('знайдено') || txt.toLowerCase().includes('найдено') || txt.toLowerCase().includes('товар')) {
-                const count = parseCountFromText(txt);
-                if (count > 0 && count < 1000000) return count;
-            }
-        }
-
-        // Priority 2: Check pagination links - find the real last page
+        // Priority 1: Check pagination links - find the real last page number
+        let maxPage = 1;
         try {
             const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a');
-            let maxPage = 1;
             pageLinks.forEach(link => {
                 const txt = (link.textContent || '').trim();
                 const num = parseInt(txt, 10);
@@ -112,13 +101,27 @@
                     }
                 }
             });
-            if (maxPage > 1) {
-                return maxPage * 60;
-            }
         } catch (e) {}
 
-        const currentDomTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, [data-goods-id]').length;
-        return currentDomTiles > 0 ? currentDomTiles : 60;
+        const currentDomTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default').length;
+        const itemsPerPage = currentDomTiles > 0 ? currentDomTiles : 24;
+
+        if (maxPage > 1) {
+            return maxPage * itemsPerPage;
+        }
+
+        // Priority 2: Top catalog counter text (e.g. "Знайдено 508 товарів")
+        const topElements = document.querySelectorAll('rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection, [data-testid*="found"], [data-testid*="counter"], [class*="found-goods"], [class*="goods-count"], [class*="heading__goods"], .catalog-selection__label, h1, h2, p, span, div');
+        for (const el of topElements) {
+            if (el.children.length > 5) continue;
+            const txt = (el.textContent || el.innerText || '').trim();
+            if (txt.toLowerCase().includes('знайдено') || txt.toLowerCase().includes('найдено') || txt.toLowerCase().includes('товар')) {
+                const count = parseCountFromText(txt);
+                if (count > 0 && count < 1000000) return count;
+            }
+        }
+
+        return currentDomTiles > 0 ? currentDomTiles : 24;
     }
 
     // Strict filter: eliminate carousels, sliders, accessories, sidebars, banners, recommendation widgets, and ads
