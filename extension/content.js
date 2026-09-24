@@ -82,29 +82,18 @@
     }
 
     function getEstimatedTotalFromPage() {
-        // Priority 1: Top catalog counter text (e.g. "Знайдено 531 товар", "531 товар")
-        const topElements = document.querySelectorAll('rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection, [data-testid*="found"], [data-testid*="counter"], [class*="found-goods"], [class*="goods-count"], [class*="heading__goods"], .catalog-selection__label, [class*="catalog-selection"], h1, h2, p, span, div');
-        for (const el of topElements) {
-            if (el.children.length > 6) continue;
-            const txt = (el.textContent || el.innerText || '').trim();
-            if (txt.toLowerCase().includes('знайдено') || txt.toLowerCase().includes('найдено') || txt.toLowerCase().includes('товар')) {
-                const count = parseCountFromText(txt);
-                if (count > 0 && count < 1000000) return count;
-            }
-        }
-
-        // Priority 2: Check pagination links - find max page number * 60 items per page
         let maxPage = 1;
         try {
-            const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a');
+            const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a, rz-paginator a');
             pageLinks.forEach(link => {
+                if (link.closest('aside, .sidebar, header, footer')) continue;
                 const txt = (link.textContent || '').trim();
                 const num = parseInt(txt, 10);
                 if (!isNaN(num) && num > maxPage && num < 500) {
                     maxPage = num;
                 }
                 const href = link.getAttribute('href') || '';
-                const m = href.match(/page=(\d+)/i) || href.match(/\/(\d+)\/?$/);
+                const m = href.match(/page=(\d+)/i) || href.match(/\/(\d+)\/?$/) || href.match(/page-(\d+)/i);
                 if (m && m[1]) {
                     const hNum = parseInt(m[1], 10);
                     if (!isNaN(hNum) && hNum > maxPage && hNum < 500) {
@@ -114,6 +103,29 @@
             });
         } catch (e) {}
 
+        // Check top catalog counter text (strictly exclude sidebars and filters)
+        let parsedTopCount = 0;
+        const topElements = document.querySelectorAll('rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection, rz-catalog-selection, .catalog-selection__label, [class*="heading__goods"], [class*="found-goods"], [class*="goods-count"], h1');
+        for (const el of topElements) {
+            if (el.closest('aside, .sidebar, rz-filter-stack, [class*="filter"]')) continue;
+            const txt = (el.textContent || el.innerText || '').trim();
+            if (txt.toLowerCase().includes('знайдено') || txt.toLowerCase().includes('найдено') || txt.toLowerCase().includes('товар')) {
+                const count = parseCountFromText(txt);
+                if (count > 0 && count < 1000000) {
+                    parsedTopCount = count;
+                    break;
+                }
+            }
+        }
+
+        // If top counter text was found and is consistent with the number of pages
+        if (parsedTopCount > 0) {
+            if (maxPage <= 1 || parsedTopCount >= (maxPage - 1) * 30) {
+                return parsedTopCount;
+            }
+        }
+
+        // Fallback: maxPage * 60
         if (maxPage > 1) {
             return maxPage * 60;
         }
@@ -200,22 +212,25 @@
     }
 
     function findNextPageElement(pageIndex) {
-        // Priority 1: Numbered next page link (e.g. page=2, page=3...)
         const nextPageNum = pageIndex + 1;
+
+        // Priority 1: Numbered next page link (e.g. page=2, page=3...)
         const pageNumSelectors = [
             `a.pagination__link[href*="page=${nextPageNum}"]`,
-            `a.pagination__link[href*="page=${nextPageNum}/"]`,
             `a.pagination__link[href*=";page=${nextPageNum}"]`,
+            `a.pagination__link[href*="page-${nextPageNum}"]`,
             `a.pagination__link`,
-            `[class*="pagination__item"] a`
+            `[class*="pagination__item"] a`,
+            `rz-paginator a`
         ];
         for (const sel of pageNumSelectors) {
             try {
                 const links = document.querySelectorAll(sel);
                 for (const link of links) {
+                    if (link.closest('aside, .sidebar, header, footer')) continue;
                     const txt = (link.innerText || link.textContent || '').trim();
                     const href = link.getAttribute('href') || '';
-                    if (txt === String(nextPageNum) || href.includes(`page=${nextPageNum}`) || href.includes(`page=${nextPageNum}/`)) {
+                    if (txt === String(nextPageNum) || href.includes(`page=${nextPageNum}`) || href.includes(`;page=${nextPageNum}`) || href.includes(`page-${nextPageNum}`)) {
                         return { type: 'pageNum', element: link, pageNum: nextPageNum, href };
                     }
                 }
@@ -238,6 +253,7 @@
             try {
                 const btn = document.querySelector(sel);
                 if (btn && !btn.disabled && !btn.classList.contains('disabled') && !btn.classList.contains('pagination__direction--disabled')) {
+                    if (btn.closest('aside, .sidebar, header, footer')) continue;
                     const href = btn.getAttribute('href') || '';
                     return { type: 'nextPage', element: btn, href };
                 }
@@ -329,14 +345,8 @@
             rawTiles = Array.from(document.querySelectorAll('rz-catalog-tile, rz-product-tile, [data-goods-id], .goods-tile, li.catalog-grid__cell, app-goods-tile-default'));
         }
 
-        // Calculate max items for this page (standard Rozetka catalog page has up to 60 items)
-        let maxItemsThisPage = 60;
-        if (currentEstimatedTotal > 0 && pageIndex >= Math.ceil(currentEstimatedTotal / 60)) {
-            const remainder = currentEstimatedTotal - sentLinks.size;
-            if (remainder > 0 && remainder <= 60) {
-                maxItemsThisPage = remainder;
-            }
-        }
+        // Standard Rozetka catalog page has up to 60 items
+        const maxItemsThisPage = 60;
 
         // Filter out unwanted slider/carousel/banner elements and avoid nested child duplicates
         const distinctTiles = [];
