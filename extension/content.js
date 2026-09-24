@@ -1,4 +1,4 @@
-// TradeScout Content Script v3.5 Pro (Multi-Tab Background Worker & Strict 60-Items/Page Scraper)
+// TradeScout Content Script v3.5 Pro (Multi-Tab Background Worker & Universal Full-Catalog Harvester)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
@@ -7,6 +7,7 @@
     console.log('TradeScout Content Script v3.5 Pro loaded on:', window.location.href);
 
     const SESSION_STORAGE_KEY = '__tradeScout_active_session';
+    const TILE_SELECTORS = 'rz-catalog-tile, .goods-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default, article.goods-tile, div.goods-tile';
 
     let isTabScrapingActive = false;
     window.__tradeScoutIsScrapingActive = false;
@@ -152,7 +153,7 @@
             }
         } catch (_) {}
 
-        const currentDomTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, [data-goods-id], app-goods-tile-default').length;
+        const currentDomTiles = document.querySelectorAll(TILE_SELECTORS).length;
         return currentDomTiles > 0 ? currentDomTiles : 60;
     }
 
@@ -209,12 +210,12 @@
 
     async function silentBackgroundScroll() {
         try {
-            const midY = Math.round(document.body.scrollHeight / 2);
+            const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1200);
+            const midY = Math.round(totalHeight / 2);
             window.scrollTo({ top: midY, behavior: 'auto' });
-            await new Promise(r => setTimeout(r, 200));
-            const targetY = Math.max(0, document.body.scrollHeight - window.innerHeight);
-            window.scrollTo({ top: targetY, behavior: 'auto' });
-            await new Promise(r => setTimeout(r, 300));
+            await new Promise(r => setTimeout(r, 150));
+            window.scrollTo({ top: totalHeight - window.innerHeight, behavior: 'auto' });
+            await new Promise(r => setTimeout(r, 250));
         } catch (_) {}
     }
 
@@ -408,30 +409,17 @@
     }
 
     async function scrapeCurrentDomItems(meta, pageIndex) {
-        // 1. Locate strictly the main catalog grid container
-        const mainGrid = document.querySelector('ul.catalog-grid, rz-grid ul, rz-catalog-grid ul, .catalog-grid > ul, ul[class*="catalog-grid"]');
+        // Query all catalog tiles across all rendered grids/pages on the page
+        let rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
         
-        let rawTiles = [];
-        if (mainGrid) {
-            rawTiles = Array.from(mainGrid.children).filter(child => child.tagName === 'LI' || child.classList.contains('catalog-grid__cell') || child.tagName === 'RZ-CATALOG-TILE');
-            if (rawTiles.length === 0) {
-                rawTiles = Array.from(mainGrid.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, .goods-tile'));
-            }
-        } else {
-            const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, .catalog-grid, rz-catalog-grid, rz-catalog-tiles, .catalog-selection__goods, section.catalog-grid') || document.querySelector('main') || document.body;
-            rawTiles = Array.from(catalogContainer.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, [data-goods-id], .goods-tile, app-goods-tile-default'));
+        if (rawTiles.length === 0) {
+            const grids = document.querySelectorAll('ul.catalog-grid, rz-grid ul, rz-catalog-grid ul, .catalog-grid');
+            grids.forEach(g => {
+                rawTiles.push(...Array.from(g.children));
+            });
         }
 
-        // Calculate max items for this page (standard Rozetka catalog page has up to 60 items)
-        let maxItemsThisPage = 60;
-        if (currentEstimatedTotal > 0 && pageIndex >= Math.ceil(currentEstimatedTotal / 60)) {
-            const remainder = currentEstimatedTotal - sentLinks.size;
-            if (remainder > 0 && remainder <= 60) {
-                maxItemsThisPage = remainder;
-            }
-        }
-
-        // Filter out unwanted slider/carousel/banner elements and avoid nested child duplicates
+        // Filter out unwanted slider/carousel/banner elements and avoid duplicates
         const distinctTiles = [];
         const seenElements = new Set();
 
@@ -452,14 +440,11 @@
             if (sentLinks.has(link) || seenElements.has(link)) continue;
             seenElements.add(link);
             distinctTiles.push({ item, linkTag, link });
-
-            // Strictly cap at exactly max items needed for this page
-            if (distinctTiles.length >= maxItemsThisPage) break;
         }
 
         if (distinctTiles.length === 0) return [];
 
-        // Batch fetch official Rozetka product details (seller title, exact pricing, stock) for all items on this page
+        // Batch fetch official Rozetka product details (seller title, exact pricing, stock) for all new items
         const apiSellerMap = new Map();
         try {
             const productIds = [];
@@ -468,19 +453,24 @@
                 if (m && m[1]) productIds.push(m[1]);
             }
             if (productIds.length > 0) {
-                const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productIds.join(',')}`;
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2500);
-                const res = await fetch(apiUrl, { signal: controller.signal }).catch(() => null);
-                clearTimeout(timeoutId);
-                if (res && res.ok) {
-                    const json = await res.json().catch(() => null);
-                    if (json && Array.isArray(json.data)) {
-                        for (const apiProd of json.data) {
-                            if (apiProd && apiProd.id && apiProd.seller) {
-                                const sTitle = (apiProd.seller.title || apiProd.seller.name || '').trim();
-                                if (sTitle) {
-                                    apiSellerMap.set(String(apiProd.id), sTitle);
+                // Batch in chunks of up to 60 IDs to avoid query string limits
+                const chunkSize = 60;
+                for (let i = 0; i < productIds.length; i += chunkSize) {
+                    const chunk = productIds.slice(i, i + chunkSize);
+                    const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${chunk.join(',')}`;
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 2500);
+                    const res = await fetch(apiUrl, { signal: controller.signal }).catch(() => null);
+                    clearTimeout(timeoutId);
+                    if (res && res.ok) {
+                        const json = await res.json().catch(() => null);
+                        if (json && Array.isArray(json.data)) {
+                            for (const apiProd of json.data) {
+                                if (apiProd && apiProd.id && apiProd.seller) {
+                                    const sTitle = (apiProd.seller.title || apiProd.seller.name || '').trim();
+                                    if (sTitle) {
+                                        apiSellerMap.set(String(apiProd.id), sTitle);
+                                    }
                                 }
                             }
                         }
@@ -573,7 +563,6 @@
 
         let consecutiveNoNew = 0;
         let lastCount = sentLinks.size;
-        const tileSelectors = 'ul.catalog-grid, rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id]';
 
         while (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
             if (currentEstimatedTotal <= 0) {
@@ -583,17 +572,18 @@
                 }
             }
 
-            // 1. Silent scroll to trigger lazy mounting (fast 500ms)
+            // 1. Silent scroll to trigger lazy mounting (fast 400ms)
             await silentBackgroundScroll();
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
-            // 2. Scrape all items on current page (strictly up to maxItemsThisPage)
+            // 2. Scrape all new items currently in DOM
             let newProducts = await scrapeCurrentDomItems(meta, currentPage);
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
             
             if (newProducts.length === 0 && (currentEstimatedTotal <= 0 || sentLinks.size < currentEstimatedTotal)) {
                 await new Promise(r => setTimeout(r, 350));
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+                await silentBackgroundScroll();
                 const extraSweep = await scrapeCurrentDomItems(meta, currentPage);
                 if (extraSweep.length > 0) {
                     newProducts = newProducts.concat(extraSweep);
@@ -667,10 +657,10 @@
             for (let attempt = 1; attempt <= maxTransitionAttempts; attempt++) {
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
-                const prevDomCount = document.querySelectorAll(tileSelectors).length;
-                const actionObj = findPaginationActionElements(currentPage);
+                const prevDomCount = document.querySelectorAll(TILE_SELECTORS).length;
+                const curActionObj = findPaginationActionElements(currentPage);
 
-                if (actionObj) {
+                if (curActionObj) {
                     if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
                     currentStatusMsg = `Завантаження стор. ${currentPage + 1}...`;
@@ -688,24 +678,24 @@
                         startTime: sessionStartTime
                     });
 
-                    if (actionObj.type === 'nextPage' || actionObj.type === 'pageNum') {
+                    if (curActionObj.type === 'nextPage' || curActionObj.type === 'pageNum') {
                         persistSessionState(currentPage + 1);
                     }
 
-                    dispatchSafeClick(actionObj.element);
+                    dispatchSafeClick(curActionObj.element);
 
-                    for (let w = 0; w < 12; w++) {
+                    for (let w = 0; w < 16; w++) {
                         if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
                         await new Promise(r => setTimeout(r, 250));
                         
-                        const currentDomCount = document.querySelectorAll(tileSelectors).length;
+                        const currentDomCount = document.querySelectorAll(TILE_SELECTORS).length;
                         // Check if DOM expanded (Show More)
                         if (currentDomCount > prevDomCount) {
                             pageTransitionSuccess = true;
                             break;
                         }
                         // Check if new tiles loaded in DOM with unscraped links (Numbered Pagination)
-                        const freshItems = Array.from(document.querySelectorAll(tileSelectors));
+                        const freshItems = Array.from(document.querySelectorAll(TILE_SELECTORS));
                         const hasUnscrapedLink = freshItems.some(tile => {
                             if (isUnwantedTile(tile)) return false;
                             const linkTag = tile.querySelector('a.goods-tile__heading, a.tile-title, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
@@ -728,8 +718,8 @@
                     }
 
                     // If click did not expand in DOM and we have a target href or pageNum, navigate directly
-                    if (!pageTransitionSuccess && (actionObj.type === 'nextPage' || actionObj.type === 'pageNum')) {
-                        const targetUrl = actionObj.href && actionObj.href.startsWith('http') ? actionObj.href : buildNextPageUrl(window.location.href, currentPage + 1);
+                    if (!pageTransitionSuccess && (curActionObj.type === 'nextPage' || curActionObj.type === 'pageNum')) {
+                        const targetUrl = curActionObj.href && curActionObj.href.startsWith('http') ? curActionObj.href : buildNextPageUrl(window.location.href, currentPage + 1);
                         if (targetUrl && targetUrl !== window.location.href) {
                             persistSessionState(currentPage + 1);
                             window.location.href = targetUrl;
