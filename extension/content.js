@@ -86,7 +86,7 @@
         let maxPage = 1;
         try {
             const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a, rz-paginator a');
-            pageLinks.forEach(link => {
+            for (const link of pageLinks) {
                 if (link.closest('aside, .sidebar, header, footer')) continue;
                 const txt = (link.textContent || '').trim();
                 const num = parseInt(txt, 10);
@@ -101,7 +101,7 @@
                         maxPage = hNum;
                     }
                 }
-            });
+            }
         } catch (e) {}
 
         // Check top catalog counter text (strictly exclude sidebars, chips, and filters)
