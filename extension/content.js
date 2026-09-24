@@ -1,10 +1,10 @@
-// TradeScout Content Script v4.1 Pro (Proven Fast In-Place Harvester & Accurate Data Extractor)
+// TradeScout Content Script v4.2 Pro (Smooth Multi-Page Harvester & Accurate Rozetka Data Extractor)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
     window.__tradeScoutInjected = true;
 
-    console.log('TradeScout Content Script v4.1 Pro loaded on:', window.location.href);
+    console.log('TradeScout Content Script v4.2 Pro loaded on:', window.location.href);
 
     const SESSION_STORAGE_KEY = '__tradeScout_active_session';
     const STOPPED_FLAG_KEY = '__tradeScout_stopped';
@@ -119,7 +119,7 @@
         try {
             const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a, rz-paginator a');
             for (const link of pageLinks) {
-                if (link.closest('aside, .sidebar, header, footer, rz-recommended-goods, .recently-viewed')) continue;
+                if (link.closest('aside, .sidebar, header, footer, rz-recommended-goods')) continue;
                 const txt = (link.textContent || '').trim();
                 const num = parseInt(txt, 10);
                 if (!isNaN(num) && num > maxPage && num < 500) {
@@ -185,29 +185,24 @@
         return false;
     }
 
-    // Fast, gentle background scroll to mount all lazy-loaded rows
-    async function silentBackgroundScroll() {
+    // Gentle, smooth linear downward scroll (100% human-like, zero jumping)
+    async function smoothPageScroll() {
         try {
-            const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1500);
-            
-            // 1. Scroll to middle
-            const midY = Math.round(docH / 2);
-            window.scrollTo(0, midY);
-            window.dispatchEvent(new Event('scroll', { bubbles: true }));
+            window.scrollTo({ top: 0, behavior: 'instant' });
             await new Promise(r => setTimeout(r, 150));
 
-            // 2. Scroll to bottom of catalog
-            const targetY = Math.max(0, docH - window.innerHeight);
-            window.scrollTo(0, targetY);
-            window.dispatchEvent(new Event('scroll', { bubbles: true }));
+            const docHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1200);
+            const stepPx = 350;
+            let currentY = 0;
 
-            // 3. Trigger last tile view to ensure Angular loads bottom items
-            const allTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, app-goods-tile-default, rz-catalog-tiles-observer');
-            if (allTiles.length > 0) {
-                const lastTile = allTiles[allTiles.length - 1];
-                lastTile.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+            while (currentY < docHeight - window.innerHeight) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+                currentY = Math.min(currentY + stepPx, docHeight - window.innerHeight);
+                window.scrollTo({ top: currentY, behavior: 'smooth' });
+                await new Promise(r => setTimeout(r, 100));
             }
 
+            // Brief settle at bottom for Angular lazy loading
             await new Promise(r => setTimeout(r, 200));
         } catch (_) {}
     }
@@ -431,10 +426,12 @@
         return specsList.length > 0 ? specsList.slice(0, 5).join(', ') : 'Стандартні';
     }
 
+    // Accurate Rozetka pagination URL builder (supporting query params, standard path, and filter semicolon syntax)
     function buildNextPageUrl(currentUrl, targetPageNum) {
         if (!currentUrl) return '';
         let url = currentUrl.split('#')[0];
         
+        // 1. Search / query parameters
         if (url.includes('?')) {
             const [base, query] = url.split('?');
             const params = new URLSearchParams(query);
@@ -442,24 +439,82 @@
             return `${base}?${params.toString()}`;
         }
 
-        if (/\/page=\d+\/?/i.test(url)) {
-            return url.replace(/\/page=\d+\/?/i, `/page=${targetPageNum}/`);
-        }
+        // 2. Existing ;page=X
         if (/;page=\d+\/?/i.test(url)) {
             return url.replace(/;page=\d+\/?/i, `;page=${targetPageNum}/`);
         }
+
+        // 3. Existing /page=X/
+        if (/\/page=\d+\/?/i.test(url)) {
+            return url.replace(/\/page=\d+\/?/i, `/page=${targetPageNum}/`);
+        }
+
+        // 4. Existing /page-X/
         if (/\/page-\d+\/?/i.test(url)) {
             return url.replace(/\/page-\d+\/?/i, `/page-${targetPageNum}/`);
         }
 
+        // 5. Filter path with slug (e.g. /c80153/producer=xiaomi/) -> must use semicolon!
         const clean = url.replace(/\/+$/, '');
+        const filterSlugMatch = clean.match(/(\/c\d+\/[^/?#]+)$/i);
+        if (filterSlugMatch) {
+            return `${clean};page=${targetPageNum}/`;
+        }
+
+        // 6. Plain category e.g. /c80153/ -> /c80153/page=2/
         return `${clean}/page=${targetPageNum}/`;
     }
 
     function findPaginationActionElements(pageIndex) {
         const nextPageNum = pageIndex + 1;
 
-        // Priority 1: "Show More" / "Показати ще" button
+        // Priority 1: Numbered next page link (e.g. 2, 3...)
+        const pageNumSelectors = [
+            `a.pagination__link[href*="page=${nextPageNum}"]`,
+            `a.pagination__link[href*=";page=${nextPageNum}"]`,
+            `a.pagination__link[href*="page-${nextPageNum}"]`,
+            `a.pagination__link`,
+            `[class*="pagination__item"] a`,
+            `rz-paginator a`
+        ];
+        for (const sel of pageNumSelectors) {
+            try {
+                const links = document.querySelectorAll(sel);
+                for (const link of links) {
+                    if (link.closest('aside, .sidebar, header, footer, rz-recommended-goods')) continue;
+                    const txt = (link.innerText || link.textContent || '').trim();
+                    const href = link.getAttribute('href') || '';
+                    if (txt === String(nextPageNum) || href.includes(`page=${nextPageNum}`) || href.includes(`;page=${nextPageNum}`) || href.includes(`page-${nextPageNum}`)) {
+                        return { type: 'pageNum', element: link, pageNum: nextPageNum, href };
+                    }
+                }
+            } catch (_) {}
+        }
+
+        // Priority 2: Forward arrow / next button
+        const nextSelectors = [
+            'a.pagination__direction--forward',
+            'a.pagination__direction_type_forward',
+            '[class*="pagination__direction--forward"]',
+            '[class*="pagination__direction_type_forward"]',
+            'a[title*="Наступна"]',
+            'a[title*="Следующая"]',
+            'a[aria-label*="Next"]',
+            'rz-paginator a.pagination__direction:last-child',
+            'a.pagination__direction:last-child'
+        ];
+        for (const sel of nextSelectors) {
+            try {
+                const btn = document.querySelector(sel);
+                if (btn && !btn.disabled && !btn.classList.contains('disabled') && !btn.classList.contains('pagination__direction--disabled')) {
+                    if (btn.closest('aside, .sidebar, header, footer, rz-recommended-goods')) continue;
+                    const href = btn.getAttribute('href') || '';
+                    return { type: 'nextPage', element: btn, href };
+                }
+            } catch (_) {}
+        }
+
+        // Priority 3: "Show More" / "Показати ще" button
         const moreSelectors = [
             'rz-catalog-more button', 
             '.catalog-more button', 
@@ -491,52 +546,6 @@
                 if (el.disabled || el.classList.contains('button--loading') || el.classList.contains('disabled')) continue;
                 return { type: 'showMore', element: el };
             }
-        }
-
-        // Priority 2: Numbered next page link (e.g. page=2, page=3...)
-        const pageNumSelectors = [
-            `a.pagination__link[href*="page=${nextPageNum}"]`,
-            `a.pagination__link[href*=";page=${nextPageNum}"]`,
-            `a.pagination__link[href*="page-${nextPageNum}"]`,
-            `a.pagination__link`,
-            `[class*="pagination__item"] a`,
-            `rz-paginator a`
-        ];
-        for (const sel of pageNumSelectors) {
-            try {
-                const links = document.querySelectorAll(sel);
-                for (const link of links) {
-                    if (link.closest('aside, .sidebar, header, footer, rz-recommended-goods')) continue;
-                    const txt = (link.innerText || link.textContent || '').trim();
-                    const href = link.getAttribute('href') || '';
-                    if (txt === String(nextPageNum) || href.includes(`page=${nextPageNum}`) || href.includes(`;page=${nextPageNum}`) || href.includes(`page-${nextPageNum}`)) {
-                        return { type: 'pageNum', element: link, pageNum: nextPageNum, href };
-                    }
-                }
-            } catch (_) {}
-        }
-
-        // Priority 3: Forward arrow / next button
-        const nextSelectors = [
-            'a.pagination__direction--forward',
-            'a.pagination__direction_type_forward',
-            '[class*="pagination__direction--forward"]',
-            '[class*="pagination__direction_type_forward"]',
-            'a[title*="Наступна"]',
-            'a[title*="Следующая"]',
-            'a[aria-label*="Next"]',
-            'rz-paginator a.pagination__direction:last-child',
-            'a.pagination__direction:last-child'
-        ];
-        for (const sel of nextSelectors) {
-            try {
-                const btn = document.querySelector(sel);
-                if (btn && !btn.disabled && !btn.classList.contains('disabled') && !btn.classList.contains('pagination__direction--disabled')) {
-                    if (btn.closest('aside, .sidebar, header, footer, rz-recommended-goods')) continue;
-                    const href = btn.getAttribute('href') || '';
-                    return { type: 'nextPage', element: btn, href };
-                }
-            } catch (_) {}
         }
 
         return null;
@@ -711,7 +720,7 @@
                     oldPrice = price;
                 }
 
-                // 3. Reviews & Rating (API preferred, DOM fallback)
+                // 3. Reviews & Rating
                 let reviews = 0;
                 let rating = 5.0;
 
@@ -826,8 +835,6 @@
             currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
             currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
 
-            let consecutiveNoGrowth = 0;
-            let lastHarvestCount = sentLinks.size;
             const tileSelectors = 'ul.catalog-grid, rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default';
 
             while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && myEpoch === currentSessionEpoch) {
@@ -838,8 +845,8 @@
                     }
                 }
 
-                // 1. Background fast scroll to mount all lazy rows
-                await silentBackgroundScroll();
+                // 1. Gentle, linear downward scroll to load all tiles on this page
+                await smoothPageScroll();
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
 
                 // 2. Scrape all new items in current DOM
@@ -847,7 +854,7 @@
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
 
                 if (batch.length === 0) {
-                    await new Promise(r => setTimeout(r, 350));
+                    await new Promise(r => setTimeout(r, 300));
                     if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
                     const extra = await scrapeCurrentDomItems(meta, currentPage);
                     if (extra.length > 0) {
@@ -861,134 +868,63 @@
 
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
 
-                if (sentLinks.size > lastHarvestCount) {
-                    consecutiveNoGrowth = 0;
-                    lastHarvestCount = sentLinks.size;
-                } else {
-                    consecutiveNoGrowth++;
-                }
-
                 const latestEstimated = getEstimatedTotalFromPage();
                 if (latestEstimated > currentEstimatedTotal) {
                     currentEstimatedTotal = latestEstimated;
                 }
 
-                // 3. Find next page action (Show More vs Next Page Link)
+                // 3. Find next page action (numbered link, forward arrow, or show more)
                 const actionObj = findPaginationActionElements(currentPage);
-                const hasNextPage = !!actionObj;
+                const nextPageNum = currentPage + 1;
+                const maxPossiblePages = Math.ceil(currentEstimatedTotal / 60);
 
-                if (!hasNextPage) {
-                    const maxPossiblePages = Math.ceil(currentEstimatedTotal / 60);
-                    if (currentPage < maxPossiblePages && consecutiveNoGrowth < 2) {
-                        const fallbackNextPage = currentPage + 1;
-                        const fallbackUrl = buildNextPageUrl(window.location.href, fallbackNextPage);
-                        if (fallbackUrl && fallbackUrl !== window.location.href) {
-                            console.log(`TradeScout Tab ${currentTabId}: Direct navigation to page ${fallbackNextPage} -> ${fallbackUrl}`);
-                            persistSessionState(fallbackNextPage);
-                            sendTabMessage({
-                                action: 'tabProgress',
-                                total: sentLinks.size,
-                                page: fallbackNextPage,
-                                percent: currentPercent,
-                                statusMsg: `Завантаження стор. ${fallbackNextPage}...`,
-                                syncedCount: sentLinks.size,
-                                estimatedTotal: currentEstimatedTotal,
-                                sessionTitle: meta.title,
-                                category: meta.category,
-                                sessionId: currentSessionId,
-                                startTime: sessionStartTime,
-                                sentLinks: Array.from(sentLinks),
-                                webhookUrl: webhookEndpoint
-                            });
-                            window.location.href = fallbackUrl;
-                            return;
-                        }
-                    }
-
-                    if (consecutiveNoGrowth >= 2) {
-                        console.log(`TradeScout Tab ${currentTabId}: Catalog finished with ${sentLinks.size} items.`);
-                        break;
-                    }
+                if (!actionObj && currentPage >= maxPossiblePages) {
+                    console.log(`TradeScout Tab ${currentTabId}: Reached estimated total page count (${currentPage}/${maxPossiblePages}). Catalog complete.`);
+                    break;
                 }
 
-                // 4. Trigger Page Transition via Click or Fallback
-                let pageTransitionSuccess = false;
-                const prevDomCount = document.querySelectorAll(tileSelectors).length;
-                const prevHref = window.location.href;
-
-                if (actionObj) {
-                    currentStatusMsg = `Завантаження стор. ${currentPage + 1}...`;
-                    persistSessionState(currentPage + 1);
-
-                    sendTabMessage({
-                        action: 'tabProgress',
-                        total: sentLinks.size,
-                        page: currentPage + 1,
-                        percent: currentPercent,
-                        statusMsg: currentStatusMsg,
-                        syncedCount: sentLinks.size,
-                        estimatedTotal: currentEstimatedTotal,
-                        sessionTitle: meta.title,
-                        category: meta.category,
-                        sessionId: currentSessionId,
-                        startTime: sessionStartTime,
-                        sentLinks: Array.from(sentLinks),
-                        webhookUrl: webhookEndpoint
-                    });
-
-                    dispatchSafeClick(actionObj.element);
-
-                    for (let w = 0; w < 12; w++) {
-                        if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive || myEpoch !== currentSessionEpoch) break;
-                        await new Promise(r => setTimeout(r, 250));
-
-                        // A. URL changed
-                        if (window.location.href !== prevHref) {
-                            pageTransitionSuccess = true;
-                            break;
-                        }
-
-                        // B. DOM expanded (Show More in-place)
-                        if (document.querySelectorAll(tileSelectors).length > prevDomCount) {
-                            pageTransitionSuccess = true;
-                            break;
-                        }
-
-                        // C. New unscraped tiles present in DOM
-                        const freshItems = Array.from(document.querySelectorAll(tileSelectors));
-                        const hasUnscrapedLink = freshItems.some(tile => {
-                            if (isUnwantedTile(tile)) return false;
-                            const linkTag = tile.querySelector('a.goods-tile__heading, a.tile-title, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
-                            if (!linkTag) return false;
-                            let href = (linkTag.getAttribute('href') || '').split('?')[0].split('#')[0].replace(/\/+$/, '');
-                            return href && !sentLinks.has(href) && !sentLinks.has(`https://rozetka.com.ua${href}`);
-                        });
-                        if (hasUnscrapedLink) {
-                            pageTransitionSuccess = true;
-                            break;
-                        }
-                    }
-
-                    if (pageTransitionSuccess) {
-                        currentPage++;
-                        consecutiveNoGrowth = 0;
-                        persistSessionState(currentPage);
-                        continue;
-                    }
+                // Compute destination URL
+                let targetUrl = '';
+                if (actionObj && actionObj.href) {
+                    targetUrl = actionObj.href.startsWith('http') ? actionObj.href : `https://rozetka.com.ua${actionObj.href}`;
+                } else {
+                    targetUrl = buildNextPageUrl(window.location.href, nextPageNum);
                 }
 
-                // Direct URL fallback navigation if click did not navigate
-                const targetPageNum = currentPage + 1;
-                const directUrl = (actionObj && actionObj.href && actionObj.href.includes('page=')) ? (actionObj.href.startsWith('http') ? actionObj.href : `https://rozetka.com.ua${actionObj.href}`) : buildNextPageUrl(window.location.href, targetPageNum);
-                if (directUrl && directUrl !== window.location.href) {
-                    console.log(`TradeScout Tab ${currentTabId}: Direct navigation fallback to page ${targetPageNum} -> ${directUrl}`);
-                    persistSessionState(targetPageNum);
-                    window.location.href = directUrl;
+                // Perform navigation to next page
+                console.log(`TradeScout Tab ${currentTabId}: Navigating from Page ${currentPage} to Page ${nextPageNum} -> ${targetUrl}`);
+                currentStatusMsg = `Завантаження стор. ${nextPageNum}...`;
+                persistSessionState(nextPageNum);
+
+                sendTabMessage({
+                    action: 'tabProgress',
+                    total: sentLinks.size,
+                    page: nextPageNum,
+                    percent: currentPercent,
+                    statusMsg: currentStatusMsg,
+                    syncedCount: sentLinks.size,
+                    estimatedTotal: currentEstimatedTotal,
+                    sessionTitle: meta.title,
+                    category: meta.category,
+                    sessionId: currentSessionId,
+                    startTime: sessionStartTime,
+                    sentLinks: Array.from(sentLinks),
+                    webhookUrl: webhookEndpoint
+                });
+
+                if (targetUrl && targetUrl !== window.location.href) {
+                    window.location.href = targetUrl;
                     return;
                 }
 
-                consecutiveNoGrowth++;
-                if (consecutiveNoGrowth >= 2) {
+                if (actionObj && actionObj.element) {
+                    dispatchSafeClick(actionObj.element);
+                    await new Promise(r => setTimeout(r, 1000));
+                    if (window.location.href !== targetUrl) {
+                        window.location.href = targetUrl;
+                        return;
+                    }
+                } else {
                     break;
                 }
             }
