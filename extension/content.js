@@ -103,11 +103,11 @@
             });
         } catch (e) {}
 
-        // Check top catalog counter text (strictly exclude sidebars and filters)
+        // Check top catalog counter text (strictly exclude sidebars, chips, and filters)
         let parsedTopCount = 0;
-        const topElements = document.querySelectorAll('rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection, rz-catalog-selection, .catalog-selection__label, [class*="heading__goods"], [class*="found-goods"], [class*="goods-count"], h1');
+        const topElements = document.querySelectorAll('rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection__label, [class*="heading__goods"], [class*="found-goods"], [class*="goods-count"], h1');
         for (const el of topElements) {
-            if (el.closest('aside, .sidebar, rz-filter-stack, [class*="filter"]')) continue;
+            if (el.closest('aside, .sidebar, rz-filter-stack, .sidebar-block, [class*="filter"], rz-catalog-selection, .catalog-selection, [class*="chip"]')) continue;
             const txt = (el.textContent || el.innerText || '').trim();
             if (txt.toLowerCase().includes('знайдено') || txt.toLowerCase().includes('найдено') || txt.toLowerCase().includes('товар')) {
                 const count = parseCountFromText(txt);
@@ -120,7 +120,7 @@
 
         // If top counter text was found and is consistent with the number of pages
         if (parsedTopCount > 0) {
-            if (maxPage <= 1 || parsedTopCount >= (maxPage - 1) * 30) {
+            if (maxPage <= 1 || parsedTopCount >= (maxPage - 1) * 35) {
                 return parsedTopCount;
             }
         }
@@ -664,13 +664,8 @@
             const actionObj = findNextPageElement(currentPage);
             const hasNextPage = !!actionObj;
 
-            if ((currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || (!hasNextPage && pageHarvestedCount === 0)) {
-                console.log(`TradeScout Tab ${currentTabId}: Target reached or no next page (${sentLinks.size}/${currentEstimatedTotal}). Finishing!`);
-                break;
-            }
-
             if (!hasNextPage) {
-                console.log(`TradeScout Tab ${currentTabId}: No next page button found. Catalog complete.`);
+                console.log(`TradeScout Tab ${currentTabId}: No next page button found. Catalog complete with ${sentLinks.size} items.`);
                 break;
             }
 
