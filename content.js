@@ -606,26 +606,42 @@
                 }
             }
 
-            // 1. Progressive multi-step scroll & harvest on the CURRENT page
-            // Standard Rozetka catalog pages mount up to 60 items as the user scrolls.
+            // 1. Thoroughly scroll & harvest up to 60 items on the CURRENT page
             let pageHarvestedCount = 0;
-            const scrollSteps = [0.2, 0.45, 0.7, 0.95, 1.0, 0.5, 1.0];
+            let attemptsWithoutNew = 0;
+            const maxAttemptsWithoutNew = 5;
+            let expectedPageLimit = 60;
+            if (currentEstimatedTotal > 0 && currentPage >= Math.ceil(currentEstimatedTotal / 60)) {
+                const rem = currentEstimatedTotal - sentLinks.size;
+                if (rem > 0 && rem <= 60) {
+                    expectedPageLimit = rem;
+                }
+            }
 
-            for (const stepPct of scrollSteps) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-
+            while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < expectedPageLimit && attemptsWithoutNew < maxAttemptsWithoutNew) {
+                // Progressive scroll down to trigger Rozetka's IntersectionObserver & lazy loading
                 const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
                 const viewH = window.innerHeight || 800;
-                const targetY = Math.max(0, Math.round((totalHeight - viewH) * stepPct));
                 
-                window.scrollTo({ top: targetY, behavior: 'auto' });
+                const scrollPcts = [0.3, 0.6, 0.85, 1.0];
+                for (const pct of scrollPcts) {
+                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+                    const targetY = Math.max(0, Math.round((totalHeight - viewH) * pct));
+                    window.scrollTo({ top: targetY, behavior: 'smooth' });
+                    window.dispatchEvent(new Event('scroll'));
+                    await new Promise(r => setTimeout(r, 120));
+                }
+
+                // Scroll to absolute bottom and wait for Rozetka lazy-load network request & DOM render
+                window.scrollTo({ top: totalHeight, behavior: 'smooth' });
                 window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 220));
+                await new Promise(r => setTimeout(r, 550));
 
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
                 const stepProducts = await scrapeCurrentDomItems(meta, currentPage);
                 if (stepProducts.length > 0) {
+                    attemptsWithoutNew = 0;
                     pageHarvestedCount += stepProducts.length;
 
                     currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100));
@@ -653,10 +669,18 @@
                         category: meta.category,
                         tabId: currentTabId
                     });
+                } else {
+                    attemptsWithoutNew++;
+                    // Try nudging the scroll slightly up and down to re-trigger IntersectionObserver
+                    window.scrollBy({ top: -350, behavior: 'smooth' });
+                    window.dispatchEvent(new Event('scroll'));
+                    await new Promise(r => setTimeout(r, 200));
+                    window.scrollBy({ top: 400, behavior: 'smooth' });
+                    window.dispatchEvent(new Event('scroll'));
+                    await new Promise(r => setTimeout(r, 350));
                 }
 
-                // If we collected 60 items on this page or reached the total catalog estimate, we are ready for next page
-                if (pageHarvestedCount >= 60 || (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal)) {
+                if (pageHarvestedCount >= expectedPageLimit || (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal)) {
                     break;
                 }
             }
@@ -718,9 +742,15 @@
                         startTime: sessionStartTime
                     });
 
+                    // Scroll element into view before clicking
+                    try {
+                        actionObj.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        await new Promise(r => setTimeout(r, 200));
+                    } catch (_) {}
+
                     dispatchSafeClick(actionObj.element);
 
-                    for (let w = 0; w < 12; w++) {
+                    for (let w = 0; w < 16; w++) {
                         if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
                         await new Promise(r => setTimeout(r, 250));
                         
@@ -755,7 +785,7 @@
 
                 if (attempt < maxTransitionAttempts) {
                     await silentBackgroundScroll();
-                    await new Promise(r => setTimeout(r, 400));
+                    await new Promise(r => setTimeout(r, 500));
                 }
             }
 
