@@ -113,7 +113,7 @@ function pollActiveTabStatus() {
                 tabBadgeEl.innerText = 'Готова до запуску';
                 tabBadgeEl.style.color = '#10b981';
                 stopTimer(true);
-                updateProgress(0, 0, res.statusMsg || 'Готова до запуску', 0, 1);
+                updateProgress(0, 0, 'Готова до запуску', 0, 1);
             }
         }
     });

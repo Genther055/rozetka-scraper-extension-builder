@@ -167,7 +167,7 @@
     function isUnwantedTile(item) {
         if (!item || !(item instanceof Element)) return true;
         
-        if (item.closest('aside, .sidebar, header, footer, rz-viewed-goods, .recently-viewed, rz-similar-goods, rz-recommended-goods, rz-accessories, .catalog-banner, .advertising-slot, .main-goods__cell--advertising, rz-goods-sections, app-slider-goods, app-goods-carousel, rz-carousel')) {
+        if (item.closest('aside, .sidebar, header, footer, rz-viewed-goods, .recently-viewed, rz-similar-goods, rz-recommended-goods, rz-accessories, .catalog-banner, .advertising-slot, .main-goods__cell--advertising')) {
             return true;
         }
         
