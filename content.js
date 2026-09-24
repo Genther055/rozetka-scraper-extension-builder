@@ -189,22 +189,7 @@
         } catch (_) {}
     }
 
-    function findPaginationActionElements(pageIndex) {
-        const retrySelectors = [
-            'button.retry',
-            'button[class*="retry"]',
-            'a[class*="retry"]',
-            'rz-empty-state button',
-            '.error-state button',
-            '[class*="error"] button'
-        ];
-        for (const sel of retrySelectors) {
-            try {
-                const btn = document.querySelector(sel);
-                if (btn) return { type: 'retry', element: btn };
-            } catch (e) {}
-        }
-
+    function tryTriggerShowMoreOnCurrentPage() {
         const moreSelectors = [
             'rz-catalog-more button', 
             '.catalog-more button', 
@@ -215,17 +200,57 @@
             '[class*="catalog-more"] button',
             '[class*="catalog-more"] a',
             '[class*="show-more"]',
-            'button[data-testid="show-more"]'
+            'button[data-testid*="show-more"]',
+            'button[data-testid*="more"]'
         ];
         for (const sel of moreSelectors) {
             try {
                 const btn = document.querySelector(sel);
                 if (btn && !btn.disabled && !btn.classList.contains('button--loading') && !btn.classList.contains('disabled')) {
-                    return { type: 'showMore', element: btn };
+                    if (btn.closest('.sidebar') || btn.closest('.filter') || btn.closest('.recently-viewed') || btn.closest('header')) continue;
+                    dispatchSafeClick(btn);
+                    return true;
                 }
             } catch (e) {}
         }
 
+        const allButtons = document.querySelectorAll('button, a, div[role="button"]');
+        for (const el of allButtons) {
+            const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+            if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more') {
+                if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed') || el.closest('header')) continue;
+                if (el.disabled || el.classList.contains('button--loading') || el.classList.contains('disabled')) continue;
+                dispatchSafeClick(el);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function findNextPageElement(pageIndex) {
+        // Priority 1: Numbered next page link (e.g. page=2, page=3...)
+        const nextPageNum = pageIndex + 1;
+        const pageNumSelectors = [
+            `a.pagination__link[href*="page=${nextPageNum}"]`,
+            `a.pagination__link[href*="page=${nextPageNum}/"]`,
+            `a.pagination__link[href*=";page=${nextPageNum}"]`,
+            `a.pagination__link`,
+            `[class*="pagination__item"] a`
+        ];
+        for (const sel of pageNumSelectors) {
+            try {
+                const links = document.querySelectorAll(sel);
+                for (const link of links) {
+                    const txt = (link.innerText || link.textContent || '').trim();
+                    const href = link.getAttribute('href') || '';
+                    if (txt === String(nextPageNum) || href.includes(`page=${nextPageNum}`) || href.includes(`page=${nextPageNum}/`)) {
+                        return { type: 'pageNum', element: link, pageNum: nextPageNum, href };
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // Priority 2: Forward arrow / next button
         const nextSelectors = [
             'a.pagination__direction--forward',
             'a.pagination__direction_type_forward',
@@ -245,40 +270,6 @@
                     return { type: 'nextPage', element: btn, href };
                 }
             } catch (e) {}
-        }
-
-        const nextPageNum = pageIndex + 1;
-        const pageNumSelectors = [
-            `a.pagination__link[href*="page=${nextPageNum}"]`,
-            `a.pagination__link[href*="page=${nextPageNum}/"]`,
-            `a.pagination__link[href*=";page=${nextPageNum}"]`,
-            `a.pagination__link`,
-            `[class*="pagination__item"] a`
-        ];
-        for (const sel of pageNumSelectors) {
-            try {
-                const links = document.querySelectorAll(sel);
-                for (const link of links) {
-                    const txt = (link.innerText || link.textContent || '').trim();
-                    const href = link.getAttribute('href') || '';
-                    if (txt === String(nextPageNum) || href.includes(`page=${nextPageNum}`)) {
-                        return { type: 'pageNum', element: link, pageNum: nextPageNum, href };
-                    }
-                }
-            } catch (e) {}
-        }
-
-        const allElements = document.querySelectorAll('button, a, div[role="button"], span');
-        for (const el of allElements) {
-            const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
-            if (txt === 'показати ще' || txt === 'показать еще' || txt.includes('показати ще') || txt.includes('показать еще') || txt === 'show more') {
-                if (el.closest('.sidebar') || el.closest('.filter') || el.closest('.recently-viewed')) continue;
-                if (el.disabled || el.classList.contains('button--loading') || el.classList.contains('disabled')) continue;
-                return { type: 'showMore', element: el };
-            }
-            if (txt === 'спробувати ще' || txt === 'повторити' || txt.includes('спробувати знову') || txt.includes('повторити спробу')) {
-                return { type: 'retry', element: el };
-            }
         }
 
         return null;
@@ -668,14 +659,16 @@
                     if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
                     const targetY = Math.max(0, Math.round((totalHeight - viewH) * pct));
                     window.scrollTo({ top: targetY, behavior: 'smooth' });
-                    window.dispatchEvent(new Event('scroll'));
-                    await new Promise(r => setTimeout(r, 180));
+                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                    document.dispatchEvent(new Event('scroll', { bubbles: true }));
+                    await new Promise(r => setTimeout(r, 150));
                 }
 
-                // Scroll to absolute bottom and wait for Rozetka lazy-load network request & DOM render
-                window.scrollTo({ top: totalHeight, behavior: 'smooth' });
-                window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 650));
+                // Try clicking in-page "Показати ще" if Rozetka has it
+                tryTriggerShowMoreOnCurrentPage();
+
+                // Wait at bottom for Rozetka lazy-load network request & DOM render
+                await new Promise(r => setTimeout(r, 700));
 
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
@@ -711,12 +704,13 @@
                     });
                 } else {
                     attemptsWithoutNew++;
-                    // Try nudging the scroll slightly up and down to re-trigger IntersectionObserver
+                    // Try nudging the scroll slightly up and down and trigger show more again
                     window.scrollBy({ top: -350, behavior: 'smooth' });
-                    window.dispatchEvent(new Event('scroll'));
+                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
                     await new Promise(r => setTimeout(r, 220));
                     window.scrollBy({ top: 400, behavior: 'smooth' });
-                    window.dispatchEvent(new Event('scroll'));
+                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                    tryTriggerShowMoreOnCurrentPage();
                     await new Promise(r => setTimeout(r, 350));
                 }
 
@@ -740,7 +734,7 @@
                 currentEstimatedTotal = latestEstimated;
             }
 
-            const actionObj = findPaginationActionElements(currentPage);
+            const actionObj = findNextPageElement(currentPage);
             const hasNextPage = !!actionObj;
 
             // 2. Strict Check: finish only when target reached AND no further pages exist, or no next action
@@ -754,7 +748,7 @@
                 break;
             }
 
-            // 3. Trigger next page via DOM click or Show More
+            // 3. Trigger next page via DOM click
             let pageTransitionSuccess = false;
             const maxTransitionAttempts = 3;
 
@@ -762,9 +756,9 @@
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
                 const prevDomCount = document.querySelectorAll(tileSelectors).length;
-                const actionObj = findPaginationActionElements(currentPage);
+                const nextPageAction = findNextPageElement(currentPage);
 
-                if (actionObj) {
+                if (nextPageAction) {
                     if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
 
                     currentStatusMsg = `Завантаження стор. ${currentPage + 1}...`;
@@ -784,23 +778,21 @@
 
                     // Scroll element into view before clicking
                     try {
-                        actionObj.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        nextPageAction.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         await new Promise(r => setTimeout(r, 200));
                     } catch (_) {}
 
-                    dispatchSafeClick(actionObj.element);
+                    dispatchSafeClick(nextPageAction.element);
 
                     for (let w = 0; w < 16; w++) {
                         if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
                         await new Promise(r => setTimeout(r, 250));
                         
                         const currentDomCount = document.querySelectorAll(tileSelectors).length;
-                        // Check if DOM expanded (Show More)
                         if (currentDomCount > prevDomCount) {
                             pageTransitionSuccess = true;
                             break;
                         }
-                        // Check if new tiles loaded in DOM with unscraped links (Numbered Pagination)
                         const freshItems = Array.from(document.querySelectorAll(tileSelectors));
                         const hasUnscrapedLink = freshItems.some(tile => {
                             if (isUnwantedTile(tile)) return false;
@@ -819,10 +811,9 @@
                     if (pageTransitionSuccess) {
                         currentPage++;
                         consecutiveNoNew = 0;
-                        // Reset scroll to top for the newly loaded page
                         window.scrollTo({ top: 0, behavior: 'auto' });
-                        window.dispatchEvent(new Event('scroll'));
-                        await new Promise(r => setTimeout(r, 400));
+                        window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                        await new Promise(r => setTimeout(r, 450));
                         break;
                     }
                 }
