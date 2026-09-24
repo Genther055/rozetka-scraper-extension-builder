@@ -57,15 +57,15 @@
         if (!text || typeof text !== 'string') return 0;
         const cleaned = text.replace(/&nbsp;/g, ' ').replace(/\u00A0/g, ' ').replace(/\u202F/g, ' ').trim();
         
-        // Match: "Знайдено 508 товарів" or "Знайдено 355 товарів"
-        const m1 = cleaned.match(/(?:знайдено|найдено)\s*([\d\s\u00A0\u202F.,]+)\s*(?:товар|тов)/i);
+        // Match: "Знайдено 531 товар" or "Знайдено 508 товарів" or "Найдено 355 товаров"
+        const m1 = cleaned.match(/(?:знайдено|найдено|показано)\s*([\d\s\u00A0\u202F.,]+)\s*(?:товар\w*|тов\w*)?/i);
         if (m1 && m1[1]) {
             const num = parseInt(m1[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
             if (!isNaN(num) && num > 0 && num < 1000000) return num;
         }
 
-        // Match: "508 товарів"
-        const m2 = cleaned.match(/\b([\d\s\u00A0\u202F.,]+)\s*(?:товарів|товари|товаров|товара)\b/i);
+        // Match: "531 товар", "508 товарів", "24 товари", "100 товаров", "350 товаров"
+        const m2 = cleaned.match(/\b([\d\s\u00A0\u202F.,]+)\s*(?:товарів|товари|товаров|товара|товар)\b/i);
         if (m2 && m2[1]) {
             const num = parseInt(m2[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
             if (!isNaN(num) && num > 0 && num < 1000000) return num;
@@ -82,7 +82,18 @@
     }
 
     function getEstimatedTotalFromPage() {
-        // Priority 1: Check pagination links - find the real last page number
+        // Priority 1: Top catalog counter text (e.g. "Знайдено 531 товар", "531 товар")
+        const topElements = document.querySelectorAll('rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection, [data-testid*="found"], [data-testid*="counter"], [class*="found-goods"], [class*="goods-count"], [class*="heading__goods"], .catalog-selection__label, [class*="catalog-selection"], h1, h2, p, span, div');
+        for (const el of topElements) {
+            if (el.children.length > 6) continue;
+            const txt = (el.textContent || el.innerText || '').trim();
+            if (txt.toLowerCase().includes('знайдено') || txt.toLowerCase().includes('найдено') || txt.toLowerCase().includes('товар')) {
+                const count = parseCountFromText(txt);
+                if (count > 0 && count < 1000000) return count;
+            }
+        }
+
+        // Priority 2: Check pagination links - find max page number * 60 items per page
         let maxPage = 1;
         try {
             const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a');
@@ -103,74 +114,35 @@
             });
         } catch (e) {}
 
-        const currentDomTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default').length;
-        const itemsPerPage = currentDomTiles > 0 ? currentDomTiles : 24;
-
         if (maxPage > 1) {
-            return maxPage * itemsPerPage;
+            return maxPage * 60;
         }
 
-        // Priority 2: Top catalog counter text (e.g. "Знайдено 508 товарів")
-        const topElements = document.querySelectorAll('rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection, [data-testid*="found"], [data-testid*="counter"], [class*="found-goods"], [class*="goods-count"], [class*="heading__goods"], .catalog-selection__label, h1, h2, p, span, div');
-        for (const el of topElements) {
-            if (el.children.length > 5) continue;
-            const txt = (el.textContent || el.innerText || '').trim();
-            if (txt.toLowerCase().includes('знайдено') || txt.toLowerCase().includes('найдено') || txt.toLowerCase().includes('товар')) {
-                const count = parseCountFromText(txt);
-                if (count > 0 && count < 1000000) return count;
-            }
-        }
-
-        return currentDomTiles > 0 ? currentDomTiles : 24;
+        const currentDomTiles = document.querySelectorAll('rz-product-tile, .goods-tile, rz-catalog-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default').length;
+        return currentDomTiles > 0 ? currentDomTiles : 60;
     }
 
-    // Strict filter: eliminate carousels, sliders, accessories, sidebars, banners, recommendation widgets, and ads
+    // Filter: eliminate sidebars, recommendation widgets, recently viewed, and banners (NEVER filter promo items or items with image sliders)
     function isUnwantedTile(item) {
         if (!item || !(item instanceof Element)) return true;
         
-        // 1. Check all possible slider / carousel / recommendation / sidebar / accessories containers
-        if (item.closest('rz-goods-carousel, rz-carousel, rz-goods-slider, rz-slider, app-goods-carousel, app-slider, .goods-carousel, .recently-viewed, rz-goods-section-slider, .slider, .carousel, rz-similar-goods, rz-recommended-goods, rz-viewed-goods, .catalog-banner, .advertising-slot, aside, .sidebar, rz-accessories, .goods-slider, .recommendations, [data-testid*="carousel"], [data-testid*="slider"], [class*="carousel"], [class*="slider"], [class*="section-slider"], rz-product-slider, .main-goods__cell--advertising')) {
+        // 1. Check all non-catalog containers (sidebar, header, footer, recently viewed, recommendations, banners)
+        if (item.closest('aside, .sidebar, header, footer, rz-viewed-goods, .recently-viewed, rz-similar-goods, rz-recommended-goods, rz-accessories, .catalog-banner, .advertising-slot, .main-goods__cell--advertising')) {
             return true;
         }
         
-        // 2. Check if tile itself is a banner, advertising slot, or marked as advert/sponsored
+        // 2. Check if tile itself is an ad banner or placeholder
         const tileClasses = (item.className || '').toLowerCase();
-        if (
-            tileClasses.includes('catalog-banner') || 
-            tileClasses.includes('rz-banner') || 
-            tileClasses.includes('banner-tile') || 
-            tileClasses.includes('advertising') || 
-            tileClasses.includes('advert') || 
-            tileClasses.includes('promoted') || 
-            tileClasses.includes('sponsored') ||
-            item.hasAttribute('data-ad') ||
-            item.hasAttribute('data-advertisement') ||
-            item.hasAttribute('data-sponsored') ||
-            item.hasAttribute('data-advert') ||
-            item.hasAttribute('data-promo-id') ||
-            item.hasAttribute('data-adv')
-        ) {
+        if (tileClasses.includes('catalog-banner') || tileClasses.includes('banner-tile') || tileClasses.includes('advertising-slot')) {
             return true;
         }
 
-        // 3. Check for promo/ad labels, badges, or text anywhere inside tile
-        const promoElements = item.querySelectorAll('.goods-tile__label, .promo-label, [data-testid*="promo-label"], [data-testid*="advert"], [class*="promo-label"], [class*="advert"], [class*="sponsored"], [class*="promoted"], .goods-tile__badge, [class*="badge"]');
-        for (const el of promoElements) {
-            const txt = (el.textContent || '').trim().toLowerCase();
-            if (/(?:^|\s|\b)(?:реклама|спонсор|спонсорський|спонсоровано|ad|ads|sponsored|promoted)(?:\s|$|\b|[.,!?:])/i.test(txt)) {
-                return true;
-            }
-        }
+        // 3. Must have a product link
+        const linkTag = item.tagName === 'A' ? item : (item.querySelector('a.goods-tile__heading, a.tile-title, [class*="heading"] a, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]') || item.querySelector('a[href]'));
+        if (!linkTag) return true;
 
-        // 4. Fallback check: if any text inside tile explicitly states "реклама" or "спонсорський"
-        const innerText = (item.innerText || '').toLowerCase();
-        if (/(?:^|\s|\b)(?:реклама|спонсорський|спонсорский|спонсоровано)(?:\s|$|\b|[.,!?:])/i.test(innerText)) {
-            return true;
-        }
-
-        const hasProductLink = !!item.querySelector('a[href*="/p/"], a[href*="/p-"], a[href*="/p"], a.goods-tile__heading, a.tile-title, [class*="heading"] a');
-        const hasPrice = !!item.querySelector('.goods-tile__price, .price, [class*="price"]');
-        if (!hasProductLink && !hasPrice) return true;
+        const href = linkTag.getAttribute('href') || '';
+        if (!href || href === '#' || href.startsWith('javascript:')) return true;
 
         return false;
     }
