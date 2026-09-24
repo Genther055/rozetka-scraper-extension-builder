@@ -1,13 +1,14 @@
-// TradeScout Content Script v3.5 Pro (Multi-Tab Background Worker & Strict 60-Items/Page Scraper)
+// TradeScout Content Script v3.6 Pro (Multi-Tab Background Worker & Strict 60-Items/Page Scraper)
 (function() {
     if (window.self !== window.top) return; // Skip iframes
     if (window.__tradeScoutInjected) return; // Prevent duplicate injection
     window.__tradeScoutInjected = true;
 
-    console.log('TradeScout Content Script v3.5 Pro loaded on:', window.location.href);
+    console.log('TradeScout Content Script v3.6 Pro loaded on:', window.location.href);
 
     let isTabScrapingActive = false;
     window.__tradeScoutIsScrapingActive = false;
+    let isScraperLoopRunning = false;
     let currentSessionId = null;
     let currentTabId = null;
     let webhookEndpoint = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
@@ -211,6 +212,34 @@
         return false;
     }
 
+    function constructNextPageUrl(currentUrl, nextPageNum) {
+        if (!currentUrl) return '';
+        try {
+            // Query param format: ?text=xiaomi&page=2 or &page=2
+            if (currentUrl.includes('?')) {
+                const urlObj = new URL(currentUrl);
+                urlObj.searchParams.set('page', String(nextPageNum));
+                return urlObj.toString();
+            }
+            // Semicolon format: /producer=xiaomi;page=2/ or /c80153;page=2/
+            if (currentUrl.match(/;page=\d+/i)) {
+                return currentUrl.replace(/;page=\d+/i, `;page=${nextPageNum}`);
+            }
+            // Path format: /page=2/ or /page-2/
+            if (currentUrl.match(/\/page=\d+\/?/i)) {
+                return currentUrl.replace(/\/page=\d+\/?/i, `/page=${nextPageNum}/`);
+            }
+            if (currentUrl.match(/\/page-\d+\/?/i)) {
+                return currentUrl.replace(/\/page-\d+\/?/i, `/page-${nextPageNum}/`);
+            }
+            // Base category URL without page param: append ;page=N/
+            const cleanBase = currentUrl.replace(/\/+$/, '');
+            return `${cleanBase};page=${nextPageNum}/`;
+        } catch (_) {
+            return '';
+        }
+    }
+
     function findNextPageElement(pageIndex) {
         const nextPageNum = pageIndex + 1;
 
@@ -348,7 +377,7 @@
         // Standard Rozetka catalog page has up to 60 items
         const maxItemsThisPage = 60;
 
-        // Filter out unwanted slider/carousel/banner elements and avoid nested child duplicates
+        // Filter out unwanted slider/carousel/banner elements and avoid duplicates
         const distinctTiles = [];
         const seenElements = new Set();
 
@@ -591,168 +620,212 @@
 
     // Main scraping runner
     async function runTabScraper(initialPage) {
-        const meta = getPageMetadata();
-        if (currentEstimatedTotal <= 0) {
-            currentEstimatedTotal = getEstimatedTotalFromPage();
+        if (isScraperLoopRunning) {
+            console.log(`TradeScout Tab ${currentTabId}: Scraper loop is already running, skipping duplicate start.`);
+            return;
         }
-        currentPage = initialPage || currentPage || 1;
-        console.log(`TradeScout Tab ${currentTabId}: Running page ${currentPage}... Total scraped so far: ${sentLinks.size}/${currentEstimatedTotal}`);
+        isScraperLoopRunning = true;
 
-        while (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
+        try {
+            const meta = getPageMetadata();
             if (currentEstimatedTotal <= 0) {
-                const latestEstimated = getEstimatedTotalFromPage();
-                if (latestEstimated > 0) currentEstimatedTotal = latestEstimated;
+                currentEstimatedTotal = getEstimatedTotalFromPage();
             }
+            currentPage = initialPage || currentPage || 1;
+            console.log(`TradeScout Tab ${currentTabId}: Starting scraping on page ${currentPage}... Total scraped so far: ${sentLinks.size}/${currentEstimatedTotal}`);
 
-            // Always reset viewport to top first
-            window.scrollTo({ top: 0, behavior: 'auto' });
-            window.dispatchEvent(new Event('scroll', { bubbles: true }));
-            await new Promise(r => setTimeout(r, 350));
-
-            // Harvest initially visible items
-            let pageHarvestedCount = 0;
-            const expectedPageLimit = 60;
-
-            const initialProducts = await scrapeCurrentDomItems(meta, currentPage);
-            if (initialProducts.length > 0) {
-                pageHarvestedCount += initialProducts.length;
-                await processAndReportHarvest(initialProducts, meta, currentPage);
-            }
-
-            // Thorough progressive step-scroll down the page to trigger Rozetka's lazy-load
-            const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 3500);
-            const stepSize = 400;
-            const totalSteps = Math.ceil(totalHeight / stepSize);
-
-            for (let step = 1; step <= totalSteps; step++) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                if (pageHarvestedCount >= expectedPageLimit) break;
-
-                const targetY = Math.min(totalHeight, step * stepSize);
-                window.scrollTo({ top: targetY, behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                document.dispatchEvent(new Event('scroll', { bubbles: true }));
-                
-                await new Promise(r => setTimeout(r, 160));
-
-                const stepProducts = await scrapeCurrentDomItems(meta, currentPage);
-                if (stepProducts.length > 0) {
-                    pageHarvestedCount += stepProducts.length;
-                    await processAndReportHarvest(stepProducts, meta, currentPage);
+            while (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
+                if (currentEstimatedTotal <= 0) {
+                    const latestEstimated = getEstimatedTotalFromPage();
+                    if (latestEstimated > 0) currentEstimatedTotal = latestEstimated;
                 }
-            }
 
-            // Quick second pass at bottom
-            if (pageHarvestedCount < expectedPageLimit && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
-                window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                await new Promise(r => setTimeout(r, 400));
-                window.scrollBy({ top: -500, behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll', { bubbles: true }));
-                await new Promise(r => setTimeout(r, 200));
+                // 1. Initial stabilization delay on page load / navigation
+                await new Promise(r => setTimeout(r, 600));
 
-                const endProducts = await scrapeCurrentDomItems(meta, currentPage);
-                if (endProducts.length > 0) {
-                    pageHarvestedCount += endProducts.length;
-                    await processAndReportHarvest(endProducts, meta, currentPage);
-                }
-            }
-
-            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-
-            // Check if catalog complete
-            const actionObj = findNextPageElement(currentPage);
-            const hasNextPage = !!actionObj;
-
-            if (!hasNextPage) {
-                console.log(`TradeScout Tab ${currentTabId}: No next page button found. Catalog complete with ${sentLinks.size} items.`);
-                break;
-            }
-
-            // Proceed to Next Page
-            const nextPageNum = currentPage + 1;
-            currentStatusMsg = `Завантаження стор. ${nextPageNum}...`;
-            sendTabMessage({
-                action: 'tabProgress',
-                total: sentLinks.size,
-                page: nextPageNum,
-                percent: currentPercent,
-                statusMsg: currentStatusMsg,
-                syncedCount: sentLinks.size,
-                estimatedTotal: currentEstimatedTotal,
-                sessionTitle: meta.title,
-                category: meta.category,
-                sessionId: currentSessionId,
-                startTime: sessionStartTime,
-                sentLinks: Array.from(sentLinks),
-                webhookUrl: webhookEndpoint
-            });
-
-            // If actionObj has an href, construct full URL
-            let nextUrl = actionObj.href || '';
-            if (nextUrl && !nextUrl.startsWith('http')) {
-                nextUrl = nextUrl.startsWith('/') ? `https://rozetka.com.ua${nextUrl}` : `https://rozetka.com.ua/${nextUrl}`;
-            }
-
-            // Scroll next button into view and click
-            try {
-                actionObj.element.scrollIntoView({ behavior: 'auto', block: 'center' });
-                await new Promise(r => setTimeout(r, 200));
-            } catch (_) {}
-
-            const prevHref = window.location.href;
-            dispatchSafeClick(actionObj.element);
-
-            // Wait up to 2 seconds to check if Rozetka did an in-page SPA transition or page reload
-            let spaTransitionDetected = false;
-            for (let w = 0; w < 8; w++) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                await new Promise(r => setTimeout(r, 250));
-
-                if (window.location.href !== prevHref) {
-                    spaTransitionDetected = true;
-                    break;
-                }
-                const freshItems = Array.from(document.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, .goods-tile'));
-                const hasUnscraped = freshItems.some(tile => {
-                    if (isUnwantedTile(tile)) return false;
-                    const linkTag = tile.querySelector('a.goods-tile__heading, a.tile-title, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
-                    if (!linkTag) return false;
-                    let href = (linkTag.getAttribute('href') || '').split('?')[0].split('#')[0].replace(/\/+$/, '');
-                    return href && !sentLinks.has(href) && !sentLinks.has(`https://rozetka.com.ua${href}`);
-                });
-                if (hasUnscraped) {
-                    spaTransitionDetected = true;
-                    break;
-                }
-            }
-
-            if (spaTransitionDetected) {
-                currentPage = nextPageNum;
+                // Always reset viewport to top first
                 window.scrollTo({ top: 0, behavior: 'auto' });
-                await new Promise(r => setTimeout(r, 450));
-                continue;
+                window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 300));
+
+                // Harvest all items on the current page (up to 60 items)
+                let pageHarvestedCount = 0;
+                const targetPageCount = 60;
+                let idleAttempts = 0;
+                const maxIdleAttempts = 6;
+                let pass = 0;
+
+                while (isTabScrapingActive && window.__tradeScoutIsScrapingActive && pageHarvestedCount < targetPageCount && idleAttempts < maxIdleAttempts && pass < 15) {
+                    pass++;
+
+                    // A. Harvest whatever is rendered in DOM right now
+                    const currentBatch = await scrapeCurrentDomItems(meta, currentPage);
+                    if (currentBatch.length > 0) {
+                        pageHarvestedCount += currentBatch.length;
+                        idleAttempts = 0;
+                        await processAndReportHarvest(currentBatch, meta, currentPage);
+                    } else {
+                        idleAttempts++;
+                    }
+
+                    // Check if we hit full 60 items for this page or overall catalog total
+                    if (pageHarvestedCount >= targetPageCount || (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal)) {
+                        break;
+                    }
+
+                    // B. Scroll smoothly to the last product tile in DOM to trigger lazy chunk loading
+                    const allTiles = document.querySelectorAll('rz-catalog-tile, rz-product-tile, li.catalog-grid__cell, .goods-tile, [data-goods-id]');
+                    if (allTiles.length > 0) {
+                        const lastTile = allTiles[allTiles.length - 1];
+                        try {
+                            lastTile.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        } catch (_) {}
+                    }
+
+                    // C. Progressive multi-step scroll down to trigger Rozetka lazy loading
+                    const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
+                    const stepPx = 350;
+                    const steps = Math.min(20, Math.ceil(docH / stepPx));
+
+                    for (let i = 1; i <= steps; i++) {
+                        if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+                        const y = Math.min(docH, i * stepPx);
+                        window.scrollTo({ top: y, behavior: 'auto' });
+                        window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                        await new Promise(r => setTimeout(r, 70));
+                    }
+
+                    // D. Try clicking "Show More" if Rozetka has a button
+                    tryTriggerShowMoreOnCurrentPage();
+
+                    // E. Scroll to bottom & dispatch synthetic triggers (IntersectionObserver / Wheel)
+                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
+                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                    window.dispatchEvent(new Event('resize', { bubbles: true }));
+                    window.dispatchEvent(new WheelEvent('wheel', { deltaY: 400, bubbles: true }));
+                    
+                    // Wait for Rozetka AJAX chunk response (1.2s)
+                    await new Promise(r => setTimeout(r, 1200));
+
+                    // Nudge scroll slightly to trigger viewport entry
+                    window.scrollBy({ top: -300, behavior: 'auto' });
+                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                    await new Promise(r => setTimeout(r, 200));
+                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
+                    window.dispatchEvent(new Event('scroll', { bubbles: true }));
+                    await new Promise(r => setTimeout(r, 400));
+                }
+
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+
+                // Check if catalog complete (either total items reached or no next page)
+                if (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) {
+                    console.log(`TradeScout Tab ${currentTabId}: Reached estimated total (${sentLinks.size}/${currentEstimatedTotal}). Catalog complete.`);
+                    break;
+                }
+
+                const maxCalculatedPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
+                if (currentPage >= maxCalculatedPages) {
+                    console.log(`TradeScout Tab ${currentTabId}: Reached max calculated page (${currentPage}/${maxCalculatedPages}). Catalog complete.`);
+                    break;
+                }
+
+                const actionObj = findNextPageElement(currentPage);
+                const fallbackNextUrl = constructNextPageUrl(window.location.href, currentPage + 1);
+
+                if (!actionObj && !fallbackNextUrl) {
+                    console.log(`TradeScout Tab ${currentTabId}: No next page link found. Catalog complete with ${sentLinks.size} items.`);
+                    break;
+                }
+
+                // Proceed to Next Page
+                const nextPageNum = currentPage + 1;
+                currentStatusMsg = `Завантаження стор. ${nextPageNum}...`;
+                sendTabMessage({
+                    action: 'tabProgress',
+                    total: sentLinks.size,
+                    page: nextPageNum,
+                    percent: currentPercent,
+                    statusMsg: currentStatusMsg,
+                    syncedCount: sentLinks.size,
+                    estimatedTotal: currentEstimatedTotal,
+                    sessionTitle: meta.title,
+                    category: meta.category,
+                    sessionId: currentSessionId,
+                    startTime: sessionStartTime,
+                    sentLinks: Array.from(sentLinks),
+                    webhookUrl: webhookEndpoint
+                });
+
+                // If actionObj has an href, construct full URL
+                let nextUrl = actionObj ? (actionObj.href || '') : '';
+                if (nextUrl && !nextUrl.startsWith('http')) {
+                    nextUrl = nextUrl.startsWith('/') ? `https://rozetka.com.ua${nextUrl}` : `https://rozetka.com.ua/${nextUrl}`;
+                }
+                if (!nextUrl) {
+                    nextUrl = fallbackNextUrl;
+                }
+
+                // Scroll next button into view and click
+                if (actionObj && actionObj.element) {
+                    try {
+                        actionObj.element.scrollIntoView({ behavior: 'auto', block: 'center' });
+                        await new Promise(r => setTimeout(r, 200));
+                    } catch (_) {}
+                }
+
+                const prevHref = window.location.href;
+                if (actionObj && actionObj.element) {
+                    dispatchSafeClick(actionObj.element);
+                }
+
+                // Wait up to 2.5 seconds to check if Rozetka did an in-page SPA transition or page reload
+                let spaTransitionDetected = false;
+                for (let w = 0; w < 10; w++) {
+                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+                    await new Promise(r => setTimeout(r, 250));
+
+                    if (window.location.href !== prevHref) {
+                        spaTransitionDetected = true;
+                        break;
+                    }
+                    const freshItems = Array.from(document.querySelectorAll('li.catalog-grid__cell, rz-catalog-tile, .goods-tile'));
+                    const hasUnscraped = freshItems.some(tile => {
+                        if (isUnwantedTile(tile)) return false;
+                        const linkTag = tile.querySelector('a.goods-tile__heading, a.tile-title, a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
+                        if (!linkTag) return false;
+                        let href = (linkTag.getAttribute('href') || '').split('?')[0].split('#')[0].replace(/\/+$/, '');
+                        return href && !sentLinks.has(href) && !sentLinks.has(`https://rozetka.com.ua${href}`);
+                    });
+                    if (hasUnscraped) {
+                        spaTransitionDetected = true;
+                        break;
+                    }
+                }
+
+                if (spaTransitionDetected) {
+                    currentPage = nextPageNum;
+                    window.scrollTo({ top: 0, behavior: 'auto' });
+                    await new Promise(r => setTimeout(r, 500));
+                    continue;
+                }
+
+                // If click didn't trigger navigation within 2.5s, force direct URL navigation
+                if (nextUrl && nextUrl !== prevHref) {
+                    console.log(`TradeScout Tab ${currentTabId}: Navigating directly to next page: ${nextUrl}`);
+                    window.location.href = nextUrl;
+                    return;
+                } else {
+                    break;
+                }
             }
 
-            // If click didn't trigger navigation within 2s, force direct URL navigation
-            if (nextUrl && nextUrl !== prevHref) {
-                console.log(`TradeScout Tab ${currentTabId}: Navigating directly to next page: ${nextUrl}`);
-                window.location.href = nextUrl;
-                // Execution pauses here and auto-resumes on new page load via checkAndResumeSessionOnLoad
-                return;
-            } else {
-                // If no next URL found and click didn't change page, finish
-                break;
-            }
-        }
-
-        // Scraping completed
-        if (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
+            // Scraping completed
             isTabScrapingActive = false;
             window.__tradeScoutIsScrapingActive = false;
             currentPercent = 100;
-            currentStatusMsg = `Збір завершено! Всього ${sentLinks.size} товарів.`;
-            console.log(`TradeScout Tab ${currentTabId}: Scrape completed with ${sentLinks.size} items.`);
+            currentStatusMsg = `Збір завершено! (${sentLinks.size} товарів)`;
+            console.log(`TradeScout Tab ${currentTabId}: Scrape finished! Total: ${sentLinks.size} items.`);
 
             sendTabMessage({
                 action: 'tabFinished',
@@ -765,9 +838,12 @@
                 sessionTitle: meta.title,
                 category: meta.category,
                 sessionId: currentSessionId,
+                startTime: sessionStartTime,
                 sentLinks: Array.from(sentLinks),
                 webhookUrl: webhookEndpoint
             });
+        } finally {
+            isScraperLoopRunning = false;
         }
     }
 
@@ -851,6 +927,7 @@
     function stopScrapingOnThisTab() {
         isTabScrapingActive = false;
         window.__tradeScoutIsScrapingActive = false;
+        isScraperLoopRunning = false;
         const meta = getPageMetadata();
         currentPercent = 0;
         currentStatusMsg = 'Скрейпінг зупинено.';
@@ -870,6 +947,7 @@
     function resetTabState() {
         isTabScrapingActive = false;
         window.__tradeScoutIsScrapingActive = false;
+        isScraperLoopRunning = false;
         sentLinks.clear();
         currentPercent = 0;
         currentEstimatedTotal = 0;
@@ -890,7 +968,9 @@
                 }
                 if (res && res.isRunning && res.session) {
                     console.log('TradeScout Content Script: Resuming existing scrape session on page load...', res.session);
-                    resumeScrapingSession(res.session);
+                    setTimeout(() => {
+                        resumeScrapingSession(res.session);
+                    }, 500);
                 } else {
                     const meta = getPageMetadata();
                     sendTabMessage({ action: 'tabIdle', sessionTitle: meta.title, category: meta.category });

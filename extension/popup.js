@@ -1,4 +1,4 @@
-// TradeScout Popup Script v3.5 Pro (Live Telemetry & Multi-Tab Control)
+// TradeScout Popup Script v3.6 Pro (Live Telemetry & Multi-Tab Control)
 const btnMasterStart = document.getElementById('btn-master-start');
 const btnMasterStop = document.getElementById('btn-master-stop');
 const allTabsCountEl = document.getElementById('all-tabs-count');

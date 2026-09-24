@@ -1,5 +1,5 @@
-// Background Service Worker for TradeScout Multi-Tab Extension v3.5 Pro
-console.log('TradeScout Background Service Worker v3.5 Pro initialized.');
+// Background Service Worker for TradeScout Multi-Tab Extension v3.6 Pro
+console.log('TradeScout Background Service Worker v3.6 Pro initialized.');
 
 const LOCAL_DASHBOARD_API = 'http://localhost:4000/api/products';
 const LOCAL_IP_API = 'http://127.0.0.1:4000/api/products';
