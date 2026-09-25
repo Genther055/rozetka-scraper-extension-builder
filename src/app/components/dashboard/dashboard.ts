@@ -335,6 +335,8 @@ export class DashboardComponent implements OnInit {
   quantExpectedDiscount: number = 0;
   quantStrategyMode: 'balanced' | 'volume' | 'profit' = 'balanced';
   quantActiveModule: 'all' | 'revenue' | 'elasticity' | 'gini' | 'correlation' | 'montecarlo' = 'all';
+  selectedPriceCategoryFilter: string = 'all';
+  selectedBrandFilter: string = 'all';
   settingsActiveSubTab: 'users' | 'profile' | 'storage' = 'users';
   isSidebarCollapsed: boolean = false;
 
@@ -1402,8 +1404,169 @@ export class DashboardComponent implements OnInit {
     return s === 'rozetka' || s.includes('rozetka');
   }
 
+  getPriceChartFilteredProducts(): Product[] {
+    let list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+
+    // 1. Filter by category / session if selected
+    if (this.selectedPriceCategoryFilter && this.selectedPriceCategoryFilter !== 'all') {
+      const targetCat = this.selectedPriceCategoryFilter.trim().toLowerCase();
+      list = list.filter(p => {
+        const cat = (p.category || p.sessionTitle || '').trim().toLowerCase();
+        return cat === targetCat || this.normalizeSessionTitle(cat) === targetCat;
+      });
+    }
+
+    // 2. Filter by brand if selected
+    if (this.selectedBrandFilter && this.selectedBrandFilter !== 'all') {
+      const targetB = this.selectedBrandFilter.trim().toLowerCase();
+      list = list.filter(p => {
+        const nameLower = (p.name || '').toLowerCase();
+        let specB = '';
+        const rawMap = (p as any).detailedSpecsMap;
+        if (rawMap && (rawMap['Бренд'] || rawMap['Виробник'])) {
+          specB = String(rawMap['Бренд'] || rawMap['Виробник']).toLowerCase();
+        }
+        return specB.includes(targetB) || nameLower.includes(targetB);
+      });
+    }
+
+    // 3. Filter by store / firm (scatterStoreFilter)
+    if (this.scatterStoreFilter && this.scatterStoreFilter !== 'all') {
+      const top10Names = this.getTop10SellersList().map(s => s.name.toLowerCase());
+      const top3Names = top10Names.slice(0, 3);
+      const target = this.scatterStoreFilter.toLowerCase();
+
+      list = list.filter(p => {
+        const s = (p.seller || '').trim().toLowerCase();
+        if (this.scatterStoreFilter === 'top10') {
+          return top10Names.some(t => s === t || (t.includes('rozetka') && s.includes('rozetka')));
+        }
+        if (this.scatterStoreFilter === 'top3') {
+          return top3Names.some(t => s === t || (t.includes('rozetka') && s.includes('rozetka')));
+        }
+        if (target === 'rozetka' || target.includes('rozetka')) {
+          return s === 'rozetka' || s.includes('rozetka');
+        }
+        return s === target;
+      });
+    }
+
+    return list;
+  }
+
+  getAvailablePriceCategoriesList(): Array<{ name: string; count: number; share: number }> {
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    if (!list || list.length === 0) return [];
+
+    const map = new Map<string, number>();
+    for (const p of list) {
+      const raw = (p.category || p.sessionTitle || 'Загальна').trim();
+      if (raw) {
+        map.set(raw, (map.get(raw) || 0) + 1);
+      }
+    }
+
+    if (map.size <= 1) return [];
+
+    const total = list.length || 1;
+    return Array.from(map.entries()).map(([name, count]) => ({
+      name,
+      count,
+      share: Math.round((count / total) * 1000) / 10
+    })).sort((a, b) => b.count - a.count);
+  }
+
+  setPriceCategoryFilter(cat: string): void {
+    this.selectedPriceCategoryFilter = cat;
+    this.hoveredCumulativePoint = null;
+    this.pinnedCumulativePoint = null;
+    this.cdr.markForCheck();
+  }
+
+  getTopBrandsList(): Array<{ name: string; count: number; share: number }> {
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    if (!list || list.length === 0) return [];
+
+    const brandCounts = new Map<string, number>();
+    for (const p of list) {
+      let b = '';
+      const rawMap = (p as any).detailedSpecsMap;
+      if (rawMap && (rawMap['Бренд'] || rawMap['Виробник'])) {
+        b = String(rawMap['Бренд'] || rawMap['Виробник']).trim();
+      } else if (p.specs && p.specs.includes('Бренд:')) {
+        const m = p.specs.match(/Бренд:\s*([^,;]+)/i);
+        if (m) b = m[1].trim();
+      }
+      if (!b && p.name) {
+        const tokens = p.name.split(/[\s,]+/);
+        if (tokens.length > 1) {
+          if (['повербанк', 'бездротовий', 'зарядний', 'акумулятор', 'кабель', 'чохол', 'навушники', 'портативний'].some(w => tokens[0].toLowerCase().startsWith(w))) {
+            b = tokens[1];
+          } else {
+            b = tokens[0];
+          }
+        }
+      }
+      if (b && b.length >= 2 && !/^\d+$/.test(b)) {
+        const cleanB = b.charAt(0).toUpperCase() + b.slice(1);
+        brandCounts.set(cleanB, (brandCounts.get(cleanB) || 0) + 1);
+      }
+    }
+
+    const total = list.length || 1;
+    const sorted = Array.from(brandCounts.entries())
+      .filter(([_, count]) => count >= 2)
+      .map(([name, count]) => ({
+        name,
+        count,
+        share: Math.round((count / total) * 1000) / 10
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    return sorted.length >= 2 ? sorted : [];
+  }
+
+  setBrandFilter(brand: string): void {
+    this.selectedBrandFilter = brand;
+    this.hoveredCumulativePoint = null;
+    this.pinnedCumulativePoint = null;
+    this.cdr.markForCheck();
+  }
+
+  isPriceChartFiltered(): boolean {
+    return (this.scatterStoreFilter !== 'all') || 
+           (this.selectedPriceCategoryFilter !== 'all') || 
+           (this.selectedBrandFilter !== 'all');
+  }
+
+  resetPriceChartFilters(): void {
+    this.scatterStoreFilter = 'all';
+    this.selectedPriceCategoryFilter = 'all';
+    this.selectedBrandFilter = 'all';
+    this.hoveredCumulativePoint = null;
+    this.pinnedCumulativePoint = null;
+    this.cdr.markForCheck();
+  }
+
+  getPriceChartFilterLabel(): string {
+    const parts: string[] = [];
+    if (this.selectedPriceCategoryFilter !== 'all') {
+      parts.push(`Категорія: ${this.selectedPriceCategoryFilter}`);
+    }
+    if (this.scatterStoreFilter !== 'all') {
+      if (this.scatterStoreFilter === 'top10') parts.push('Топ-10 магазинів');
+      else if (this.scatterStoreFilter === 'top3') parts.push('Топ-3 магазини');
+      else parts.push(`Магазин: ${this.scatterStoreFilter}`);
+    }
+    if (this.selectedBrandFilter !== 'all') {
+      parts.push(`Бренд: ${this.selectedBrandFilter}`);
+    }
+    return parts.length > 0 ? parts.join(' • ') : 'Вся ніша (всі товари та продавці)';
+  }
+
   getCumulativeDemandChartData() {
-    const allProducts = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const allProducts = this.getPriceChartFilteredProducts();
     const inStockValidProducts = allProducts.filter(p => p && Number(p.price) > 0 && p.inStock !== false);
     const validProducts = inStockValidProducts.length > 0 ? inStockValidProducts : allProducts.filter(p => p && Number(p.price) > 0);
     const totalCount = validProducts.length;
@@ -1432,7 +1595,10 @@ export class DashboardComponent implements OnInit {
         medianPrice: 0,
         avgPrice: 0,
         weightedAvgPrice: 0,
-        weightedMedianPrice: 0
+        weightedMedianPrice: 0,
+        filteredCount: 0,
+        hasFilter: this.isPriceChartFiltered(),
+        filterLabel: this.getPriceChartFilterLabel()
       };
     }
 
@@ -1541,12 +1707,21 @@ export class DashboardComponent implements OnInit {
       demandAreaPath += ` L ${renderPoints[renderPoints.length - 1].x} ${PAD_T + PLOT_H} Z`;
     }
 
-    // 4. Coordinates for 4 Key Price Anchors
-    const kpi = this.analyticsSummary?.kpi;
-    const medianPrice = kpi?.medianPrice || minPrice;
-    const avgPrice = kpi?.avgPrice || minPrice;
-    const weightedAvgPrice = kpi?.weightedAvgPrice || avgPrice;
-    const weightedMedianPrice = kpi?.weightedMedianPrice || medianPrice;
+    // 4. Dynamically calculate Price Anchors directly from active selection
+    const sortedPrices = sorted.map(p => p.price);
+    const medianPrice = sortedPrices[Math.floor(sortedPrices.length / 2)] || minPrice;
+    const avgPrice = Math.round(sortedPrices.reduce((a, b) => a + b, 0) / (sortedPrices.length || 1));
+    const weightedAvgPrice = Math.round(sorted.reduce((acc, p) => acc + p.price * p.weight, 0) / (totalWeight || 1));
+
+    let cumW = 0;
+    let weightedMedianPrice = sorted[0]?.price || minPrice;
+    for (const item of sorted) {
+      cumW += item.weight;
+      if (cumW >= totalWeight * 0.5) {
+        weightedMedianPrice = item.price;
+        break;
+      }
+    }
 
     const calcX = (val: number) => {
       const norm = Math.max(0, Math.min(1, (val - minPrice) / (maxScalePrice - minPrice)));
