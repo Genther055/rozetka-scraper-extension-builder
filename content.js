@@ -706,8 +706,15 @@
         }
 
         // 3. Check if all items in catalog are collected
+        const nextPg = currentPage + 1;
+        const targetUrl = getRozetkaNextPageUrl(window.location.href, nextPg);
+        const hasNextPageInDom = !!document.querySelector(`a.pagination__direction--forward, a[rel="next"], [class*="pagination__direction_type_forward"], a.pagination__link[href*="page=${nextPg}"], a.pagination__link[href*="page=${nextPg};"], [class*="paginator"] a[href*="page=${nextPg}"]`);
+
         const maxPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
-        const isFinished = (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || (newProducts.length === 0 && currentPage > 1) || (currentPage >= maxPages);
+        const isFinished = (!hasNextPageInDom && currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || 
+                           (newProducts.length === 0 && currentPage > 1 && !hasNextPageInDom) || 
+                           (!hasNextPageInDom && (!targetUrl || targetUrl === window.location.href)) || 
+                           (currentPage >= maxPages && !hasNextPageInDom);
 
         if (isFinished) {
             isTabScrapingActive = false;
@@ -733,8 +740,6 @@
         }
 
         // 4. Navigate directly to Next Page URL
-        const nextPg = currentPage + 1;
-        const targetUrl = getRozetkaNextPageUrl(window.location.href, nextPg);
 
         if (targetUrl && targetUrl !== window.location.href) {
             currentStatusMsg = `Перехід на стор. ${nextPg}...`;
