@@ -1695,15 +1695,36 @@
 
                 </div>
 
-                <!-- SVG PLOT AREA (With Horizontal Scroll on Zoom) -->
-                <div class="w-full overflow-x-auto custom-scrollbar pb-1 flex items-center justify-center">
-                  <div [style.width]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" [style.minWidth]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" class="transition-all flex items-center justify-center">
-                    <svg 
-                      [attr.viewBox]="'0 0 ' + chart.svgWidth + ' 330'" 
-                      class="w-full h-72 sm:h-80 cursor-pointer overflow-visible"
-                      (mousemove)="onCumulativeMouseMove($event)"
-                      (click)="onCumulativeChartClick($event)"
-                    >
+                <!-- SVG PLOT AREA (With Horizontal Scroll on Zoom & Sticky Left Y-Axis Rail) -->
+                <div class="relative w-full overflow-hidden">
+                  <!-- Pinned Sticky Y-Axis Overlay Rail (Fixed on left during horizontal scroll) -->
+                  <div class="absolute left-0 top-0 bottom-1 w-[65px] z-20 pointer-events-none bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent flex items-center">
+                    <svg viewBox="0 0 65 330" class="w-full h-72 sm:h-80 overflow-visible">
+                      <g *ngFor="let tick of chart.yTicks">
+                        <line x1="56" [attr.y1]="tick.y" x2="65" [attr.y2]="tick.y" [attr.stroke]="tick.y === 155 ? '#f59e0b' : '#334155'" stroke-width="1.5"/>
+                        <text 
+                          x="52" 
+                          [attr.y]="tick.y + 4" 
+                          text-anchor="end" 
+                          [attr.fill]="tick.y === 155 ? '#fbbf24' : '#94a3b8'" 
+                          [attr.font-weight]="tick.y === 155 ? 'bold' : '500'"
+                          font-size="10" 
+                          font-family="monospace"
+                        >
+                          {{ tick.label }}
+                        </text>
+                      </g>
+                    </svg>
+                  </div>
+
+                  <div class="w-full overflow-x-auto custom-scrollbar pb-1 flex items-center justify-center">
+                    <div [style.width]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" [style.minWidth]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" class="transition-all flex items-center justify-center">
+                      <svg 
+                        [attr.viewBox]="'0 0 ' + chart.svgWidth + ' 330'" 
+                        class="w-full h-72 sm:h-80 cursor-pointer overflow-visible"
+                        (mousemove)="onCumulativeMouseMove($event)"
+                        (click)="onCumulativeChartClick($event)"
+                      >
                   <defs>
                     <!-- Gradients -->
                     <linearGradient id="cumDemandAreaGrad" x1="0" y1="0" x2="0" y2="1">
@@ -1931,6 +1952,7 @@
                 </svg>
               </div>
             </div>
+          </div>
 
               </div>
             </div>
@@ -2938,8 +2960,28 @@
             <span>У поточній вибірці ({{ (filteredProducts.length || products.length) }} шт) активні акційні знижки відсутні — усі товари реалізуються за стандартною регулярною ціною (дисконт 0%). При зборі лістингів із промо-акціями тут відображатиметься векторна крива коливань знижок.</span>
           </div>
 
-          <!-- Interactive SVG Plot Canvas Container (With Horizontal Scroll on Zoom) -->
+          <!-- Interactive SVG Plot Canvas Container (With Horizontal Scroll on Zoom & Sticky Left Y-Axis Rail) -->
           <div class="relative bg-slate-950/80 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none">
+            <!-- Pinned Sticky Y-Axis Overlay Rail (Fixed on left during horizontal scroll) -->
+            <div class="absolute left-4 top-4 bottom-4 w-[60px] z-20 pointer-events-none bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent flex items-center">
+              <svg viewBox="0 0 60 220" class="w-full h-56 sm:h-64 overflow-visible">
+                <g *ngFor="let tick of getOverviewChartYTicks()">
+                  <line x1="52" [attr.y1]="tick.y" x2="60" [attr.y2]="tick.y" stroke="#334155" stroke-width="1.5"/>
+                  <text 
+                    x="48" 
+                    [attr.y]="tick.y + 4" 
+                    text-anchor="end" 
+                    fill="#94a3b8" 
+                    font-weight="500"
+                    font-size="10" 
+                    font-family="monospace"
+                  >
+                    {{ tick.label }}
+                  </text>
+                </g>
+              </svg>
+            </div>
+
             <div class="w-full overflow-x-auto custom-scrollbar pb-1 flex items-center justify-center">
               <div [style.width]="overviewChartZoom === 1 ? '100%' : (overviewChartZoom * 100) + '%'" [style.minWidth]="overviewChartZoom === 1 ? '100%' : (overviewChartZoom * 100) + '%'" class="transition-all relative flex items-center justify-center">
                 <svg 
@@ -7400,6 +7442,26 @@
 
         <!-- EXPANDED SVG CANVAS (CUMULATIVE MODAL) -->
         <div *ngIf="activeExpandedChartModal === 'cumulative'" class="flex-1 bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden flex flex-col justify-center relative select-none">
+          <!-- Pinned Sticky Y-Axis Overlay Rail (Fixed on left during horizontal scroll) -->
+          <div *ngIf="getCumulativeDemandChartData() as chart" class="absolute left-4 top-4 bottom-4 w-[65px] z-20 pointer-events-none bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent flex items-center">
+            <svg viewBox="0 0 65 330" class="w-full h-full max-h-[520px] overflow-visible">
+              <g *ngFor="let tick of chart.yTicks">
+                <line x1="56" [attr.y1]="tick.y" x2="65" [attr.y2]="tick.y" [attr.stroke]="tick.y === 155 ? '#f59e0b' : '#334155'" stroke-width="1.5"/>
+                <text 
+                  x="52" 
+                  [attr.y]="tick.y + 4" 
+                  text-anchor="end" 
+                  [attr.fill]="tick.y === 155 ? '#fbbf24' : '#94a3b8'" 
+                  [attr.font-weight]="tick.y === 155 ? 'bold' : '500'"
+                  font-size="10" 
+                  font-family="monospace"
+                >
+                  {{ tick.label }}
+                </text>
+              </g>
+            </svg>
+          </div>
+
           <div *ngIf="getCumulativeDemandChartData() as chart" class="w-full h-full overflow-x-auto custom-scrollbar flex items-center justify-center">
             <div [style.width]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" [style.minWidth]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" class="h-full flex items-center justify-center transition-all">
               <svg 
@@ -7554,6 +7616,26 @@
 
         <!-- EXPANDED SVG CANVAS (OVERVIEW FLUCTUATIONS MODAL) -->
         <div *ngIf="activeExpandedChartModal === 'overview'" class="flex-1 bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden flex flex-col justify-center relative select-none">
+          <!-- Pinned Sticky Y-Axis Overlay Rail (Fixed on left during horizontal scroll) -->
+          <div class="absolute left-4 top-4 bottom-4 w-[60px] z-20 pointer-events-none bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent flex items-center">
+            <svg viewBox="0 0 60 220" class="w-full h-full max-h-[520px] overflow-visible">
+              <g *ngFor="let tick of getOverviewChartYTicks()">
+                <line x1="52" [attr.y1]="tick.y" x2="60" [attr.y2]="tick.y" stroke="#334155" stroke-width="1.5"/>
+                <text 
+                  x="48" 
+                  [attr.y]="tick.y + 4" 
+                  text-anchor="end" 
+                  fill="#94a3b8" 
+                  font-weight="500"
+                  font-size="10" 
+                  font-family="monospace"
+                >
+                  {{ tick.label }}
+                </text>
+              </g>
+            </svg>
+          </div>
+
           <div class="w-full h-full overflow-x-auto custom-scrollbar flex items-center justify-center">
             <div [style.width]="overviewChartZoom === 1 ? '100%' : (overviewChartZoom * 100) + '%'" [style.minWidth]="overviewChartZoom === 1 ? '100%' : (overviewChartZoom * 100) + '%'" class="h-full flex items-center justify-center transition-all relative">
               <svg 
