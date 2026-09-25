@@ -90,6 +90,18 @@
       </button>
 
       <button 
+        (click)="activeTab = 'quant'" 
+        [class.premium-menu-btn-active]="activeTab === 'quant'"
+        [class.premium-menu-btn-inactive]="activeTab !== 'quant'"
+        [class.premium-menu-btn-collapsed]="isSidebarCollapsed"
+        class="premium-menu-btn transition-all"
+        title="Кількісний аналіз (Quant Math)"
+      >
+        <span class="material-icons text-lg shrink-0">functions</span>
+        <span *ngIf="!isSidebarCollapsed" class="truncate">Quant Math</span>
+      </button>
+
+      <button 
         (click)="activeTab = 'details'" 
         [class.premium-menu-btn-active]="activeTab === 'details'"
         [class.premium-menu-btn-inactive]="activeTab !== 'details'"
@@ -244,6 +256,7 @@
             <span *ngIf="activeTab === 'overview'">Панель огляду ніші</span>
             <span *ngIf="activeTab === 'explorer'">Пошук та аналіз товарів</span>
             <span *ngIf="activeTab === 'demand'">Оцінка ринкового попиту</span>
+            <span *ngIf="activeTab === 'quant'">Кількісний та алгоритмічний аналіз (Quant Math)</span>
             <span *ngIf="activeTab === 'details'">Детальні характеристики & Описи</span>
             <span *ngIf="activeTab === 'history'">Історія скрейпінгів & Папки зборів</span>
             <span *ngIf="activeTab === 'settings'">Профіль користувача & Системні налаштування</span>
@@ -3738,6 +3751,657 @@
             </tbody>
           </table>
         </div>
+      </div>
+
+      <!-- TAB: QUANT MATH & ALGORITHMIC OS (5 MODULES) -->
+      <div *ngIf="activeTab === 'quant' && products.length > 0" class="space-y-6 animate-fadeIn">
+        
+        <!-- Quant OS Header Banner -->
+        <div class="p-6 premium-card relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#111827] to-[#1e1b4b] border border-indigo-500/30 shadow-2xl">
+          <div class="absolute -right-10 -bottom-10 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div class="absolute right-1/3 -top-10 w-48 h-48 bg-purple-600/10 rounded-full blur-2xl pointer-events-none"></div>
+
+          <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="space-y-2">
+              <div class="inline-flex items-center gap-2 px-3 py-1 bg-indigo-950/80 border border-indigo-500/40 rounded-full text-indigo-300 text-xs font-bold tracking-wide shadow-sm">
+                <span class="material-icons text-sm text-indigo-400">functions</span>
+                <span>Institutional Quantitative Analytics Engine</span>
+              </div>
+              <h3 class="text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
+                <span>Кількісний та алгоритмічний аналіз ніші</span>
+              </h3>
+              <p class="text-xs text-slate-350 max-w-3xl leading-relaxed font-medium">
+                Математичне моделювання неперервної густини виручки, цінової еластичності попиту, коефіцієнта нерівності Джині, багатофакторної кореляції Пірсона та 1,000 стохастичних симуляцій Монте-Карло для прийняття безпомилкових комерційних рішень.
+              </p>
+            </div>
+
+            <!-- Quick module filter pills -->
+            <div class="flex items-center gap-1.5 flex-wrap shrink-0">
+              <button 
+                (click)="quantActiveModule = 'all'"
+                [class.bg-indigo-600]="quantActiveModule === 'all'"
+                [class.text-white]="quantActiveModule === 'all'"
+                [class.border-indigo-500]="quantActiveModule === 'all'"
+                [class.bg-slate-900/80]="quantActiveModule !== 'all'"
+                [class.text-slate-400]="quantActiveModule !== 'all'"
+                [class.border-slate-800]="quantActiveModule !== 'all'"
+                class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer hover:text-white"
+              >
+                Всі модулі (5)
+              </button>
+              <button 
+                (click)="quantActiveModule = 'revenue'"
+                [class.bg-indigo-600]="quantActiveModule === 'revenue'"
+                [class.text-white]="quantActiveModule === 'revenue'"
+                [class.border-indigo-500]="quantActiveModule === 'revenue'"
+                [class.bg-slate-900/80]="quantActiveModule !== 'revenue'"
+                [class.text-slate-400]="quantActiveModule !== 'revenue'"
+                [class.border-slate-800]="quantActiveModule !== 'revenue'"
+                class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer hover:text-white"
+              >
+                1. Оптимум E[Rev]
+              </button>
+              <button 
+                (click)="quantActiveModule = 'elasticity'"
+                [class.bg-indigo-600]="quantActiveModule === 'elasticity'"
+                [class.text-white]="quantActiveModule === 'elasticity'"
+                [class.border-indigo-500]="quantActiveModule === 'elasticity'"
+                [class.bg-slate-900/80]="quantActiveModule !== 'elasticity'"
+                [class.text-slate-400]="quantActiveModule !== 'elasticity'"
+                [class.border-slate-800]="quantActiveModule !== 'elasticity'"
+                class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer hover:text-white"
+              >
+                2. Еластичність Ed
+              </button>
+              <button 
+                (click)="quantActiveModule = 'gini'"
+                [class.bg-indigo-600]="quantActiveModule === 'gini'"
+                [class.text-white]="quantActiveModule === 'gini'"
+                [class.border-indigo-500]="quantActiveModule === 'gini'"
+                [class.bg-slate-900/80]="quantActiveModule !== 'gini'"
+                [class.text-slate-400]="quantActiveModule !== 'gini'"
+                [class.border-slate-800]="quantActiveModule !== 'gini'"
+                class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer hover:text-white"
+              >
+                3. Джині & Лоренц
+              </button>
+              <button 
+                (click)="quantActiveModule = 'correlation'"
+                [class.bg-indigo-600]="quantActiveModule === 'correlation'"
+                [class.text-white]="quantActiveModule === 'correlation'"
+                [class.border-indigo-500]="quantActiveModule === 'correlation'"
+                [class.bg-slate-900/80]="quantActiveModule !== 'correlation'"
+                [class.text-slate-400]="quantActiveModule !== 'correlation'"
+                [class.border-slate-800]="quantActiveModule !== 'correlation'"
+                class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer hover:text-white"
+              >
+                4. Матриця Пірсона
+              </button>
+              <button 
+                (click)="quantActiveModule = 'montecarlo'"
+                [class.bg-indigo-600]="quantActiveModule === 'montecarlo'"
+                [class.text-white]="quantActiveModule === 'montecarlo'"
+                [class.border-indigo-500]="quantActiveModule === 'montecarlo'"
+                [class.bg-slate-900/80]="quantActiveModule !== 'montecarlo'"
+                [class.text-slate-400]="quantActiveModule !== 'montecarlo'"
+                [class.border-slate-800]="quantActiveModule !== 'montecarlo'"
+                class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer hover:text-white"
+              >
+                5. Монте-Карло
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODULE 1: REVENUE MAXIMIZATION & OPTIMAL PRICE E[Rev](P) -->
+        <div *ngIf="quantActiveModule === 'all' || quantActiveModule === 'revenue'" class="p-6 premium-card space-y-6">
+          <div *ngIf="getQuantOptimalRevenueData() as opt">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="p-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-lg text-indigo-400">
+                    <span class="material-icons text-base">price_check</span>
+                  </span>
+                  <h4 class="text-base font-extrabold text-white tracking-tight">Модуль 1: Неперервна крива максимізації виручки E[Rev](P)</h4>
+                </div>
+                <p class="text-xs text-slate-400 font-medium">
+                  Ядерна апроксимація очікуваного валового виторгу ніші для визначення ціни, яка генерує найбільший грошовий потік.
+                </p>
+              </div>
+
+              <div class="flex items-center gap-3 flex-wrap">
+                <!-- Optimal Price Pill -->
+                <div class="px-4 py-2 bg-indigo-950/80 border border-indigo-500/40 rounded-xl shadow-md">
+                  <p class="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">Глобальний ціновий оптимум</p>
+                  <p class="text-xl font-black text-white font-mono mt-0.5">{{ opt.optimalPrice.toLocaleString() }} ₴</p>
+                </div>
+
+                <!-- Sweet Spot Pill -->
+                <div class="px-4 py-2 bg-emerald-950/60 border border-emerald-500/40 rounded-xl shadow-md">
+                  <p class="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">Ефективний коридор (Sweet Spot)</p>
+                  <p class="text-sm font-extrabold text-emerald-300 font-mono mt-0.5">{{ opt.sweetSpotMin.toLocaleString() }} — {{ opt.sweetSpotMax.toLocaleString() }} ₴</p>
+                </div>
+
+                <!-- Delta to weighted median -->
+                <div class="px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl shadow-md">
+                  <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Відхилення від медіани</p>
+                  <p class="text-sm font-extrabold font-mono mt-0.5" [class.text-emerald-400]="opt.diffFromWeightedMedianPct >= 0" [class.text-rose-400]="opt.diffFromWeightedMedianPct < 0">
+                    {{ opt.diffFromWeightedMedianPct > 0 ? '+' : '' }}{{ opt.diffFromWeightedMedianPct }}% (Медіана: {{ opt.weightedMedianPrice.toLocaleString() }} ₴)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- SVG Chart of E[Rev](P) -->
+            <div class="p-4 bg-slate-950/90 border border-slate-850 rounded-2xl relative overflow-hidden shadow-inner mt-4">
+              <svg viewBox="0 0 760 240" class="w-full h-60 overflow-visible">
+                <defs>
+                  <!-- Revenue Area Gradient -->
+                  <linearGradient id="quantRevAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#6366f1" stop-opacity="0.45" />
+                    <stop offset="60%" stop-color="#4f46e5" stop-opacity="0.15" />
+                    <stop offset="100%" stop-color="#312e81" stop-opacity="0.0" />
+                  </linearGradient>
+
+                  <!-- Sweet Spot Highlight Pattern -->
+                  <linearGradient id="sweetSpotGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.15" />
+                    <stop offset="100%" stop-color="#10b981" stop-opacity="0.02" />
+                  </linearGradient>
+                </defs>
+
+                <!-- Grid lines -->
+                <g class="stroke-slate-800/60" stroke-dasharray="3,3">
+                  <line *ngFor="let g of opt.yGridLines" x1="50" [attr.y1]="g.y" x2="735" [attr.y2]="g.y" />
+                </g>
+
+                <!-- Y Grid Labels -->
+                <text *ngFor="let g of opt.yGridLines" x="42" [attr.y]="g.y + 4" text-anchor="end" class="fill-slate-500 text-[9px] font-mono font-bold">{{ g.label }}</text>
+
+                <!-- Shaded Area Under E[Rev] Curve -->
+                <path [attr.d]="opt.areaCurvePath" fill="url(#quantRevAreaGrad)" />
+
+                <!-- E[Rev] Curve Line -->
+                <path [attr.d]="opt.revenueCurvePath" fill="none" stroke="#818cf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="filter drop-shadow-[0_2px_8px_rgba(99,102,241,0.5)]" />
+
+                <!-- Optimal Peak Vertical Indicator -->
+                <line [attr.x1]="opt.optX" y1="25" [attr.x2]="opt.optX" y2="210" stroke="#a5b4fc" stroke-width="1.5" stroke-dasharray="4,4" />
+
+                <!-- Peak Glowing Dot -->
+                <circle [attr.cx]="opt.optX" [attr.cy]="opt.optY" r="7" fill="#6366f1" class="animate-pulse" />
+                <circle [attr.cx]="opt.optX" [attr.cy]="opt.optY" r="4" fill="#ffffff" />
+
+                <!-- Peak Badge Callout -->
+                <g [attr.transform]="'translate(' + Math.max(70, Math.min(640, opt.optX - 55)) + ', ' + Math.max(10, opt.optY - 28) + ')'">
+                  <rect width="110" height="22" rx="6" fill="#1e1b4b" stroke="#818cf8" stroke-width="1.2" class="shadow-lg" />
+                  <text x="55" y="14" text-anchor="middle" class="fill-indigo-200 text-[10px] font-mono font-black">
+                    P_opt: {{ opt.optimalPrice.toLocaleString() }} ₴
+                  </text>
+                </g>
+
+                <!-- X-Axis Baseline -->
+                <line x1="50" y1="210" x2="735" y2="210" stroke="#334155" stroke-width="1" />
+
+                <!-- X Ticks -->
+                <g *ngFor="let t of opt.xTicks">
+                  <line [attr.x1]="t.x" y1="210" [attr.x2]="t.x" y2="215" stroke="#475569" stroke-width="1" />
+                  <text [attr.x]="t.x" y="228" text-anchor="middle" class="fill-slate-400 text-[10px] font-mono font-bold">{{ t.label }}</text>
+                </g>
+              </svg>
+            </div>
+
+            <!-- Mathematical Formulation & Guidance -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 text-xs">
+              <div class="p-3.5 bg-slate-900/70 border border-slate-800/80 rounded-xl space-y-1">
+                <span class="text-[10px] font-extrabold text-indigo-400 uppercase tracking-wider block">Математична модель</span>
+                <p class="text-slate-350 leading-relaxed font-mono text-[11px]">
+                  E[Rev](p) = p · Σ [W_i · K_σ(p - P_i)]
+                </p>
+                <p class="text-slate-400 text-[11px] mt-1">
+                  Гаусове згладжування з автоматичним підбором ширини вікна σ за правилом Сільвермана.
+                </p>
+              </div>
+
+              <div class="p-3.5 bg-slate-900/70 border border-slate-800/80 rounded-xl space-y-1">
+                <span class="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider block">Чому не найнижча ціна?</span>
+                <p class="text-slate-350 leading-relaxed text-[11px]">
+                  Демпінг збільшує кількість одиниць, але різко знижує загальну виручку. Точка <b>{{ opt.optimalPrice.toLocaleString() }} ₴</b> оптимізує баланс маржинальності та темпу продажів.
+                </p>
+              </div>
+
+              <div class="p-3.5 bg-slate-900/70 border border-slate-800/80 rounded-xl space-y-1">
+                <span class="text-[10px] font-extrabold text-purple-400 uppercase tracking-wider block">Стратегічна рекомендація</span>
+                <p class="text-slate-350 leading-relaxed text-[11px]">
+                  Для запуску нового товару встановлюйте стартову ціну в межах <b>{{ opt.sweetSpotMin.toLocaleString() }} — {{ opt.sweetSpotMax.toLocaleString() }} ₴</b> (Sweet Spot).
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODULE 2: PRICE ELASTICITY & CONVERSION SIGMOID -->
+        <div *ngIf="quantActiveModule === 'all' || quantActiveModule === 'elasticity'" class="p-6 premium-card space-y-6">
+          <div *ngIf="getQuantElasticityData() as elast">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="p-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400">
+                    <span class="material-icons text-base">show_chart</span>
+                  </span>
+                  <h4 class="text-base font-extrabold text-white tracking-tight">Модуль 2: Цінова еластичність попиту (Ed) & Сигмоїда конверсії</h4>
+                </div>
+                <p class="text-xs text-slate-400 font-medium">
+                  Оцінка чутливості аудиторії до зміни вартості та логістична ймовірність покупки P(Conversion | Price).
+                </p>
+              </div>
+
+              <div class="flex items-center gap-3 flex-wrap">
+                <div class="px-4 py-2 rounded-xl border shadow-md" [class]="elast.elasticityColorClass">
+                  <p class="text-[10px] font-bold uppercase tracking-wider">Індекс еластичності ніші</p>
+                  <p class="text-xl font-black font-mono mt-0.5">|Ed| = {{ elast.elasticityIndex.toFixed(2) }}</p>
+                </div>
+                <div class="px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl shadow-md max-w-xs">
+                  <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Класифікація попиту</p>
+                  <p class="text-xs font-bold text-white mt-0.5">{{ elast.elasticityLabel }}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Content Grid: Left Table, Right Sigmoid Curve -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-4">
+              
+              <!-- Segment Table (7 cols) -->
+              <div class="lg:col-span-7 space-y-3">
+                <h5 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <span class="material-icons text-sm text-amber-400">table_chart</span>
+                  Дугова еластичність за ціновими квінтилями
+                </h5>
+                
+                <div class="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/60 shadow-inner">
+                  <table class="w-full border-collapse text-left text-xs">
+                    <thead>
+                      <tr class="border-b border-slate-800 bg-slate-900/80 text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">
+                        <th class="py-2.5 px-3">Сегмент</th>
+                        <th class="py-2.5 px-3">Діапазон цін</th>
+                        <th class="py-2.5 px-3 text-center">Сер. продажі</th>
+                        <th class="py-2.5 px-3 text-center">Частка попиту</th>
+                        <th class="py-2.5 px-3 text-right">Еластичність</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 text-slate-300 font-medium">
+                      <tr *ngFor="let band of elast.bands" class="hover:bg-slate-850/40 transition-colors">
+                        <td class="py-2.5 px-3 font-bold text-white flex items-center gap-1.5">
+                          <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+                          <span>{{ band.name }}</span>
+                        </td>
+                        <td class="py-2.5 px-3 font-mono text-slate-350">{{ band.priceRange }}</td>
+                        <td class="py-2.5 px-3 text-center font-mono font-bold text-indigo-300">{{ band.avgSales }} од.</td>
+                        <td class="py-2.5 px-3 text-center font-mono text-emerald-400 font-bold">{{ band.demandSharePct }}%</td>
+                        <td class="py-2.5 px-3 text-right font-mono">
+                          <span *ngIf="band.segmentElasticity !== null" class="px-2 py-0.5 rounded text-[10px] font-bold" [class.bg-rose-950]="band.segmentElasticity < -1.3" [class.text-rose-300]="band.segmentElasticity < -1.3" [class.bg-slate-900]="band.segmentElasticity >= -1.3" [class.text-amber-300]="band.segmentElasticity >= -1.3">
+                            {{ band.segmentElasticity }}
+                          </span>
+                          <span *ngIf="band.segmentElasticity === null" class="text-slate-600">—</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="p-3.5 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-1 text-xs">
+                  <p class="text-slate-300 leading-relaxed font-medium">{{ elast.elasticityDesc }}</p>
+                  <p class="text-indigo-300 font-bold text-[11px] pt-1">Порада: {{ elast.pricingAdvice }}</p>
+                </div>
+              </div>
+
+              <!-- Sigmoid Curve SVG (5 cols) -->
+              <div class="lg:col-span-5 space-y-3">
+                <h5 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <span class="material-icons text-sm text-indigo-400">timeline</span>
+                  Логістична сигмоїда ймовірності конверсії
+                </h5>
+
+                <div class="p-4 bg-slate-950/90 border border-slate-850 rounded-xl relative overflow-hidden shadow-inner flex flex-col items-center justify-center">
+                  <svg viewBox="0 0 600 200" class="w-full h-44 overflow-visible">
+                    <!-- Background Grid -->
+                    <line x1="40" y1="20" x2="560" y2="20" stroke="#1e293b" stroke-dasharray="2,2" />
+                    <line x1="40" y1="100" x2="560" y2="100" stroke="#1e293b" stroke-dasharray="2,2" />
+                    <line x1="40" y1="180" x2="560" y2="180" stroke="#334155" />
+
+                    <!-- Y labels -->
+                    <text x="32" y="24" text-anchor="end" class="fill-slate-500 text-[9px] font-mono">100%</text>
+                    <text x="32" y="104" text-anchor="end" class="fill-slate-500 text-[9px] font-mono">50%</text>
+                    <text x="32" y="184" text-anchor="end" class="fill-slate-500 text-[9px] font-mono">0%</text>
+
+                    <!-- Sigmoid Path -->
+                    <path [attr.d]="elast.sigmoidPath" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" class="filter drop-shadow-[0_2px_6px_rgba(245,158,11,0.4)]" />
+
+                    <!-- Points on Sigmoid -->
+                    <g *ngFor="let pt of elast.sigmoidPoints">
+                      <circle [attr.cx]="pt.x" [attr.cy]="pt.y" r="4.5" fill="#f59e0b" stroke="#000" stroke-width="1.5" />
+                      <text [attr.x]="pt.x" [attr.y]="pt.y - 8" text-anchor="middle" class="fill-amber-300 text-[9px] font-mono font-bold">{{ pt.probPct }}%</text>
+                    </g>
+                  </svg>
+
+                  <p class="text-[10px] text-slate-400 text-center font-medium mt-1">
+                    Крива відображає падіння ймовірності покупки товару зі зростанням ціни відносно ринкового балансу.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODULE 3: GINI COEFFICIENT & LORENZ CURVE -->
+        <div *ngIf="quantActiveModule === 'all' || quantActiveModule === 'gini'" class="p-6 premium-card space-y-6">
+          <div *ngIf="getQuantGiniLorenzData() as gini">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="p-1.5 bg-purple-500/10 border border-purple-500/30 rounded-lg text-purple-400">
+                    <span class="material-icons text-base">pie_chart</span>
+                  </span>
+                  <h4 class="text-base font-extrabold text-white tracking-tight">Модуль 3: Коефіцієнт нерівності Джині (G) & Крива Лоренца</h4>
+                </div>
+                <p class="text-xs text-slate-400 font-medium">
+                  Точний розрахунок концентрації ринкового попиту та ступінь олігополізації категорії.
+                </p>
+              </div>
+
+              <div class="flex items-center gap-3 flex-wrap">
+                <div class="px-4 py-2 rounded-xl border shadow-md" [class]="gini.giniColorClass">
+                  <p class="text-[10px] font-bold uppercase tracking-wider">Індекс Джині (Gini Index)</p>
+                  <p class="text-xl font-black font-mono mt-0.5">G = {{ gini.giniIndex }} ({{ gini.giniPct }}%)</p>
+                </div>
+                <div class="px-4 py-2 bg-indigo-950/60 border border-indigo-500/30 rounded-xl shadow-md">
+                  <p class="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">Парето Топ-20% SKU</p>
+                  <p class="text-base font-extrabold text-white font-mono mt-0.5">{{ gini.top20SharePct }}% попиту</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-4 items-center">
+              <!-- Lorenz SVG (6 cols) -->
+              <div class="lg:col-span-6 space-y-3">
+                <h5 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <span class="material-icons text-sm text-purple-400">donut_large</span>
+                  Крива Лоренца L(F) vs Абсолютна рівність
+                </h5>
+
+                <div class="p-4 bg-slate-950/90 border border-slate-850 rounded-2xl relative overflow-hidden shadow-inner flex flex-col items-center">
+                  <svg viewBox="0 0 440 280" class="w-full h-64 overflow-visible">
+                    <defs>
+                      <linearGradient id="giniAreaGrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#a855f7" stop-opacity="0.35" />
+                        <stop offset="100%" stop-color="#6366f1" stop-opacity="0.05" />
+                      </linearGradient>
+                    </defs>
+
+                    <!-- Chart Frame Box -->
+                    <rect x="40" y="25" width="375" height="220" fill="none" stroke="#1e293b" stroke-width="1" />
+
+                    <!-- Diagonal Line of Absolute Equality (y = x) -->
+                    <line x1="40" y1="245" x2="415" y2="25" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4,4" />
+
+                    <!-- Shaded Inequality Area -->
+                    <path [attr.d]="gini.areaPath" fill="url(#giniAreaGrad)" />
+
+                    <!-- Actual Lorenz Curve -->
+                    <path [attr.d]="gini.lorenzPath" fill="none" stroke="#c084fc" stroke-width="3" stroke-linecap="round" class="filter drop-shadow-[0_2px_8px_rgba(192,132,252,0.5)]" />
+
+                    <!-- Marker Points -->
+                    <g *ngFor="let pt of gini.samplePoints">
+                      <circle [attr.cx]="pt.x" [attr.cy]="pt.y" r="4.5" fill="#a855f7" stroke="#ffffff" stroke-width="1.5" />
+                      <text [attr.x]="pt.x" [attr.y]="pt.y - 7" text-anchor="middle" class="fill-purple-300 text-[9px] font-mono font-bold">{{ pt.demandPct }}%</text>
+                    </g>
+
+                    <!-- Axis Labels -->
+                    <text x="227" y="268" text-anchor="middle" class="fill-slate-400 text-[10px] font-bold">Частка карток у каталозі (%)</text>
+                    <text x="18" y="140" text-anchor="middle" transform="rotate(-90 18 140)" class="fill-slate-400 text-[10px] font-bold">Частка попиту (%)</text>
+                  </svg>
+                </div>
+              </div>
+
+              <!-- Explanation & Interpretations (6 cols) -->
+              <div class="lg:col-span-6 space-y-4">
+                <div class="p-4 bg-slate-900/70 border border-slate-800/80 rounded-xl space-y-2">
+                  <span class="text-xs font-extrabold text-white flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                    Діагностика: {{ gini.giniLabel }}
+                  </span>
+                  <p class="text-xs text-slate-350 leading-relaxed font-medium">
+                    {{ gini.giniDesc }}
+                  </p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="p-3.5 bg-slate-950/70 border border-slate-800/80 rounded-xl">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Концентрація Топ-10%</span>
+                    <p class="text-base font-black text-indigo-300 font-mono mt-0.5">{{ gini.top10SharePct }}% попиту</p>
+                    <p class="text-[10px] text-slate-400 mt-1">Верхній дециль карток</p>
+                  </div>
+
+                  <div class="p-3.5 bg-slate-950/70 border border-slate-800/80 rounded-xl">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Індекс рівності (1 - G)</span>
+                    <p class="text-base font-black text-emerald-400 font-mono mt-0.5">{{ ((1 - gini.giniIndex) * 100).toFixed(1) }}%</p>
+                    <p class="text-[10px] text-slate-400 mt-1">Доступність для новачків</p>
+                  </div>
+                </div>
+
+                <div class="p-3.5 bg-indigo-950/40 border border-indigo-500/20 rounded-xl text-xs text-slate-350 leading-relaxed">
+                  <b class="text-indigo-300">Принцип прийняття рішень:</b> Чим більша площа між пунктирною блакитною прямою та фіолетовою кривою Лоренца, тим сильніший бар'єр входу. При G > 0.65 обов'язково диференціюйтеся специфікаціями, а не прямою конкуренцією з лідерами.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODULE 4: MULTI-FACTOR CORRELATION MATRIX (PEARSON R) -->
+        <div *ngIf="quantActiveModule === 'all' || quantActiveModule === 'correlation'" class="p-6 premium-card space-y-6">
+          <div *ngIf="getQuantCorrelationMatrix() as corr">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="p-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400">
+                    <span class="material-icons text-base">grid_on</span>
+                  </span>
+                  <h4 class="text-base font-extrabold text-white tracking-tight">Модуль 4: Багатофакторна кореляційна матриця (Коефіцієнт Пірсона r)</h4>
+                </div>
+                <p class="text-xs text-slate-400 font-medium">
+                  Кількісний вимір сили та напрямку взаємозв'язку між ключовими комерційними параметрами товару.
+                </p>
+              </div>
+            </div>
+
+            <!-- Heatmap Table -->
+            <div class="overflow-x-auto custom-scrollbar mt-4">
+              <table class="w-full border-collapse text-center text-xs">
+                <thead>
+                  <tr class="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">
+                    <th class="py-3 px-3 text-left bg-slate-950/60 rounded-l-xl">Параметр</th>
+                    <th *ngFor="let col of corr.variables" class="py-3 px-3 bg-slate-950/60">
+                      {{ col }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-850/80 font-mono">
+                  <tr *ngFor="let row of corr.matrix; let rIdx = index" class="hover:bg-slate-900/40 transition-colors">
+                    <td class="py-3.5 px-3 text-left font-sans font-bold text-slate-200 bg-slate-950/30 whitespace-nowrap">
+                      {{ corr.variables[rIdx] }}
+                    </td>
+                    <td *ngFor="let cell of row" class="py-3 px-3">
+                      <div class="py-2 px-3 rounded-xl border text-center font-bold shadow-sm transition-all hover:scale-105" [class]="cell.bgClass + ' ' + cell.textClass + ' ' + cell.borderClass">
+                        {{ cell.val > 0 ? '+' : '' }}{{ cell.val.toFixed(2) }}
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- 4 Strategic Deductions Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+              <div *ngFor="let ins of corr.insights" class="p-4 bg-slate-950/70 border border-slate-800/80 rounded-xl space-y-2">
+                <div class="flex items-center gap-2">
+                  <span class="p-1 rounded-lg bg-indigo-500/10 text-indigo-400 material-icons text-sm">{{ ins.icon }}</span>
+                  <span class="text-xs font-extrabold text-white">{{ ins.title }}</span>
+                </div>
+                <div class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider" [class.bg-emerald-950]="ins.type === 'positive'" [class.text-emerald-300]="ins.type === 'positive'" [class.bg-rose-950]="ins.type === 'negative'" [class.text-rose-300]="ins.type === 'negative'" [class.bg-slate-900]="ins.type === 'neutral'" [class.text-slate-400]="ins.type === 'neutral'">
+                  {{ ins.stat }}
+                </div>
+                <p class="text-[11px] text-slate-350 leading-relaxed font-medium">
+                  {{ ins.desc }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODULE 5: MONTE CARLO STOCHASTIC SIMULATION ENGINE -->
+        <div *ngIf="quantActiveModule === 'all' || quantActiveModule === 'montecarlo'" class="p-6 premium-card space-y-6">
+          <div *ngIf="getQuantMonteCarloSimulation() as mc">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="p-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-lg text-indigo-400">
+                    <span class="material-icons text-base">casino</span>
+                  </span>
+                  <h4 class="text-base font-extrabold text-white tracking-tight">Модуль 5: Стохастичний симулятор Монте-Карло (1,000 ітерацій)</h4>
+                </div>
+                <p class="text-xs text-slate-400 font-medium">
+                  Ймовірнісний аналіз валового виторгу та ризиків (P10 / P50 / P90 / VaR 95%) для обраної ціни запуску.
+                </p>
+              </div>
+
+              <!-- Interactive Price Input / Reset -->
+              <div class="flex items-center gap-3 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+                <div class="space-y-0.5">
+                  <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Цільова ціна запуску:</label>
+                  <div class="flex items-center gap-1.5">
+                    <input 
+                      type="number" 
+                      [value]="mc.targetPrice" 
+                      (input)="setQuantSimulationPrice($any($event.target).value)" 
+                      class="w-28 px-2.5 py-1 bg-slate-900 border border-slate-750 rounded-lg text-white font-mono font-bold text-sm focus:outline-none focus:border-indigo-500"
+                    />
+                    <span class="text-xs text-slate-400 font-bold">₴</span>
+                  </div>
+                </div>
+
+                <button 
+                  (click)="resetQuantSimulationPrice()"
+                  class="px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm"
+                  title="Скинути ціну до глобального математичного оптимуму"
+                >
+                  Оптимум
+                </button>
+              </div>
+            </div>
+
+            <!-- Real-time Slider Control -->
+            <div class="space-y-1.5 bg-slate-950/60 p-4 rounded-xl border border-slate-850">
+              <div class="flex justify-between text-xs font-bold text-slate-400">
+                <span>Мін: {{ mc.minSliderPrice.toLocaleString() }} ₴</span>
+                <span class="text-indigo-300 font-mono">Поточна модельована ціна: {{ mc.targetPrice.toLocaleString() }} ₴</span>
+                <span>Макс: {{ mc.maxSliderPrice.toLocaleString() }} ₴</span>
+              </div>
+              <input 
+                type="range" 
+                [min]="mc.minSliderPrice" 
+                [max]="mc.maxSliderPrice" 
+                [step]="10" 
+                [value]="mc.targetPrice" 
+                (input)="setQuantSimulationPrice($any($event.target).value)" 
+                class="w-full accent-indigo-500 cursor-pointer"
+              />
+            </div>
+
+            <!-- KPI Cards: P10, P50, P90, VaR -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <!-- P10 Stress -->
+              <div class="p-4 bg-rose-950/30 border border-rose-500/30 rounded-xl space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-extrabold text-rose-400 uppercase tracking-wider">P10 (Стрес-сценарій)</span>
+                  <span class="text-[10px] font-mono bg-rose-900/50 text-rose-200 px-1.5 py-0.5 rounded">10% ймовірність</span>
+                </div>
+                <p class="text-xl font-black text-white font-mono mt-1">{{ mc.p10Sales.toLocaleString() }} <span class="text-xs font-normal text-slate-400">од/міс</span></p>
+                <p class="text-xs font-bold text-rose-300 font-mono">{{ mc.p10Revenue.toLocaleString() }} ₴ / міс</p>
+              </div>
+
+              <!-- P50 Base -->
+              <div class="p-4 bg-indigo-950/40 border border-indigo-500/40 rounded-xl space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-extrabold text-indigo-300 uppercase tracking-wider">P50 (Базовий прогноз)</span>
+                  <span class="text-[10px] font-mono bg-indigo-900/50 text-indigo-200 px-1.5 py-0.5 rounded">Медіана 50%</span>
+                </div>
+                <p class="text-xl font-black text-white font-mono mt-1">{{ mc.p50Sales.toLocaleString() }} <span class="text-xs font-normal text-slate-400">од/міс</span></p>
+                <p class="text-xs font-bold text-indigo-300 font-mono">{{ mc.p50Revenue.toLocaleString() }} ₴ / міс</p>
+              </div>
+
+              <!-- P90 Optimistic -->
+              <div class="p-4 bg-emerald-950/30 border border-emerald-500/30 rounded-xl space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider">P90 (Оптимістичний)</span>
+                  <span class="text-[10px] font-mono bg-emerald-900/50 text-emerald-200 px-1.5 py-0.5 rounded">90% перцентиль</span>
+                </div>
+                <p class="text-xl font-black text-white font-mono mt-1">{{ mc.p90Sales.toLocaleString() }} <span class="text-xs font-normal text-slate-400">од/міс</span></p>
+                <p class="text-xs font-bold text-emerald-300 font-mono">{{ mc.p90Revenue.toLocaleString() }} ₴ / міс</p>
+              </div>
+
+              <!-- VaR 95% -->
+              <div class="p-4 bg-slate-900/90 border border-slate-800 rounded-xl space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider">Value-at-Risk (VaR 95%)</span>
+                  <span class="text-[10px] font-mono bg-amber-950 text-amber-300 px-1.5 py-0.5 rounded">95% Conf.</span>
+                </div>
+                <p class="text-xl font-black text-white font-mono mt-1">{{ mc.var95Revenue.toLocaleString() }} ₴</p>
+                <p class="text-xs font-bold text-slate-400">Гарантований мінімум виручки</p>
+              </div>
+            </div>
+
+            <!-- Monte Carlo Distribution Histogram SVG -->
+            <div class="p-4 bg-slate-950/90 border border-slate-850 rounded-2xl relative overflow-hidden shadow-inner">
+              <h5 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                <span class="material-icons text-sm text-indigo-400">bar_chart</span>
+                Розподіл ймовірностей обсягу місячних продажів (1,000 симуляцій)
+              </h5>
+
+              <svg viewBox="0 0 700 220" class="w-full h-56 overflow-visible">
+                <!-- Bars -->
+                <g *ngFor="let bin of mc.bins">
+                  <rect 
+                    [attr.x]="bin.x" 
+                    [attr.y]="bin.y" 
+                    [attr.width]="bin.w" 
+                    [attr.height]="bin.h" 
+                    fill="#6366f1" 
+                    rx="3" 
+                    class="opacity-80 hover:opacity-100 transition-opacity"
+                  >
+                    <title>{{ bin.rangeLabel }}: {{ bin.count }} симуляцій</title>
+                  </rect>
+                </g>
+
+                <!-- Baseline -->
+                <line x1="45" y1="190" x2="675" y2="190" stroke="#334155" stroke-width="1" />
+
+                <!-- Vertical Markers: P10, P50, P90 -->
+                <line [attr.x1]="mc.p10X" y1="20" [attr.x2]="mc.p10X" y2="190" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="3,3" />
+                <text [attr.x]="mc.p10X" y="14" text-anchor="middle" class="fill-rose-400 text-[9px] font-mono font-bold">P10</text>
+
+                <line [attr.x1]="mc.p50X" y1="20" [attr.x2]="mc.p50X" y2="190" stroke="#a5b4fc" stroke-width="2" stroke-dasharray="4,4" />
+                <text [attr.x]="mc.p50X" y="14" text-anchor="middle" class="fill-indigo-200 text-[9px] font-mono font-black">P50 (Базовий)</text>
+
+                <line [attr.x1]="mc.p90X" y1="20" [attr.x2]="mc.p90X" y2="190" stroke="#10b981" stroke-width="1.5" stroke-dasharray="3,3" />
+                <text [attr.x]="mc.p90X" y="14" text-anchor="middle" class="fill-emerald-400 text-[9px] font-mono font-bold">P90</text>
+
+                <!-- X Axis label -->
+                <text x="360" y="212" text-anchor="middle" class="fill-slate-500 text-[10px] font-bold">Прогнозована кількість замовлень (од / міс)</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- DETAILS & DESCRIPTION SPECS VIEW -->

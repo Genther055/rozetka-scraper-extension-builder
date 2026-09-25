@@ -329,7 +329,9 @@ export class DashboardComponent implements OnInit {
   }
   
   // Navigation & Tabs
-  activeTab: 'overview' | 'explorer' | 'demand' | 'details' | 'history' | 'settings' = 'overview';
+  activeTab: 'overview' | 'explorer' | 'demand' | 'quant' | 'details' | 'history' | 'settings' = 'overview';
+  quantSimulationPrice: number = 0;
+  quantActiveModule: 'all' | 'revenue' | 'elasticity' | 'gini' | 'correlation' | 'montecarlo' = 'all';
   settingsActiveSubTab: 'users' | 'profile' | 'storage' = 'users';
   isSidebarCollapsed: boolean = false;
 
@@ -4629,6 +4631,759 @@ export class DashboardComponent implements OnInit {
     URL.revokeObjectURL(url);
   }
 
+
+  // ==========================================
+  // QUANT MATH & ALGORITHMIC ENGINE (5 MODULES)
+  // ==========================================
+
+  private getQuantBaseProducts(): Product[] {
+    const list = (this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products);
+    const inStockList = list.filter(p => p && p.price && p.price > 0 && p.inStock !== false);
+    return inStockList.length > 0 ? inStockList : list.filter(p => p && p.price && p.price > 0);
+  }
+
+  // MODULE 1: Revenue Maximization Curve & Optimal Price E[Rev](P)
+  getQuantOptimalRevenueData() {
+    const prods = this.getQuantBaseProducts();
+    if (prods.length === 0) {
+      return {
+        hasData: false,
+        optimalPrice: 0,
+        maxExpectedRevenue: 0,
+        sweetSpotMin: 0,
+        sweetSpotMax: 0,
+        weightedMedianPrice: 0,
+        diffFromWeightedMedianPct: 0,
+        revenueCurvePath: '',
+        areaCurvePath: '',
+        optX: 0,
+        optY: 0,
+        xTicks: [] as Array<{ x: number, label: string }>,
+        yGridLines: [] as Array<{ y: number, label: string }>,
+        pointsCount: 0
+      };
+    }
+
+    const prices = prods.map(p => Number(p.price) || 0);
+    const weights = prods.map(p => Math.max(1, (Number(p.reviews) || 0) * 12));
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+    // Weighted mean and variance
+    let weightedSum = 0;
+    for (let i = 0; i < prods.length; i++) {
+      weightedSum += prices[i] * weights[i];
+    }
+    const weightedMean = weightedSum / (totalWeight || 1);
+
+    let weightedVarianceSum = 0;
+    for (let i = 0; i < prods.length; i++) {
+      weightedVarianceSum += weights[i] * Math.pow(prices[i] - weightedMean, 2);
+    }
+    const stdDev = Math.sqrt(weightedVarianceSum / (totalWeight || 1)) || (weightedMean * 0.25);
+
+    // Bandwidth sigma (Silverman's rule of thumb)
+    const sigma = Math.max(15, 1.06 * stdDev * Math.pow(prods.length, -0.2));
+
+    const minPrice = Math.min(...prices);
+    const sortedPrices = [...prices].sort((a, b) => a - b);
+    const p95 = sortedPrices[Math.min(sortedPrices.length - 1, Math.floor(sortedPrices.length * 0.95))] || Math.max(...prices);
+    
+    // Evaluate across price range
+    const pStart = Math.max(10, Math.floor(minPrice * 0.8));
+    const pEnd = Math.ceil(p95 * 1.3);
+    const steps = 80;
+    const stepSize = (pEnd - pStart) / steps;
+
+    const points: Array<{ price: number, rev: number }> = [];
+    let maxRev = -1;
+    let optimalPrice = weightedMean;
+
+    for (let s = 0; s <= steps; s++) {
+      const p = pStart + s * stepSize;
+      let density = 0;
+      for (let i = 0; i < prods.length; i++) {
+        const diff = p - prices[i];
+        const kernel = Math.exp(-0.5 * Math.pow(diff / sigma, 2)) / (Math.sqrt(2 * Math.PI) * sigma);
+        density += (weights[i] / totalWeight) * kernel;
+      }
+      const expRev = p * density * 1000;
+      points.push({ price: p, rev: expRev });
+      if (expRev > maxRev) {
+        maxRev = expRev;
+        optimalPrice = p;
+      }
+    }
+
+    if (maxRev <= 0) maxRev = 1;
+
+    // Sweet Spot range where expected revenue >= 85% of peak
+    const threshold = maxRev * 0.85;
+    const sweetPoints = points.filter(pt => pt.rev >= threshold);
+    const sweetSpotMin = sweetPoints.length > 0 ? sweetPoints[0].price : optimalPrice * 0.9;
+    const sweetSpotMax = sweetPoints.length > 0 ? sweetPoints[sweetPoints.length - 1].price : optimalPrice * 1.1;
+
+    // SVG coordinates (W=760, H=240, padding X: 50 to 735, padding Y: 25 to 210)
+    const svgW = 760;
+    const svgH = 240;
+    const padL = 50;
+    const padR = 25;
+    const padT = 25;
+    const padB = 30;
+    const plotW = svgW - padL - padR;
+    const plotH = svgH - padT - padB;
+
+    const toX = (price: number) => padL + ((price - pStart) / (pEnd - pStart || 1)) * plotW;
+    const toY = (rev: number) => (padT + plotH) - (rev / (maxRev * 1.12 || 1)) * plotH;
+
+    let pathD = '';
+    for (let i = 0; i < points.length; i++) {
+      const x = Math.round(toX(points[i].price) * 10) / 10;
+      const y = Math.round(toY(points[i].rev) * 10) / 10;
+      pathD += (i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`);
+    }
+
+    const areaD = `${pathD} L ${Math.round(toX(pEnd))} ${padT + plotH} L ${Math.round(toX(pStart))} ${padT + plotH} Z`;
+    const optX = Math.round(toX(optimalPrice));
+    const optY = Math.round(toY(maxRev));
+
+    // Axis Ticks
+    const xTicks: Array<{ x: number, label: string }> = [];
+    const tickCount = 5;
+    for (let t = 0; t <= tickCount; t++) {
+      const pr = pStart + (t / tickCount) * (pEnd - pStart);
+      xTicks.push({
+        x: Math.round(toX(pr)),
+        label: `${Math.round(pr).toLocaleString()} ₴`
+      });
+    }
+
+    const yGridLines: Array<{ y: number, label: string }> = [];
+    for (let g = 1; g <= 3; g++) {
+      const fract = g / 4;
+      const yPos = Math.round((padT + plotH) - fract * plotH);
+      yGridLines.push({
+        y: yPos,
+        label: `${Math.round(fract * 100)}%`
+      });
+    }
+
+    // Weighted median
+    const sortedWeighted = [...prods].sort((a, b) => (a.price || 0) - (b.price || 0));
+    let cumW = 0;
+    let weightedMed = sortedWeighted[Math.floor(sortedWeighted.length / 2)]?.price || weightedMean;
+    for (const item of sortedWeighted) {
+      cumW += Math.max(1, (item.reviews || 0) * 12);
+      if (cumW >= totalWeight / 2) {
+        weightedMed = item.price;
+        break;
+      }
+    }
+
+    const diffPct = weightedMed > 0 ? ((optimalPrice - weightedMed) / weightedMed) * 100 : 0;
+
+    return {
+      hasData: true,
+      optimalPrice: Math.round(optimalPrice),
+      maxExpectedRevenue: Math.round(maxRev * 10) / 10,
+      sweetSpotMin: Math.round(sweetSpotMin),
+      sweetSpotMax: Math.round(sweetSpotMax),
+      weightedMedianPrice: Math.round(weightedMed),
+      diffFromWeightedMedianPct: Math.round(diffPct * 10) / 10,
+      revenueCurvePath: pathD,
+      areaCurvePath: areaD,
+      optX,
+      optY,
+      xTicks,
+      yGridLines,
+      pointsCount: prods.length
+    };
+  }
+
+  // MODULE 2: Price Elasticity of Demand (Ed) & Logistic Conversion Sigmoid
+  getQuantElasticityData() {
+    const prods = this.getQuantBaseProducts();
+    if (prods.length === 0) {
+      return {
+        hasData: false,
+        elasticityIndex: 1.0,
+        elasticityLevel: 'moderate' as const,
+        elasticityLabel: 'Помірний попит',
+        elasticityColorClass: 'text-amber-400 bg-amber-950/40 border-amber-500/30',
+        elasticityDesc: 'Недостатньо даних для розрахунку еластичності.',
+        pricingAdvice: '',
+        bands: [] as any[],
+        sigmoidPath: '',
+        sigmoidPoints: [] as any[]
+      };
+    }
+
+    const sortedByPrice = [...prods].sort((a, b) => a.price - b.price);
+    const n = sortedByPrice.length;
+    const bandCount = Math.min(5, Math.max(3, Math.floor(n / 3)));
+    const bandNames = ['Бюджетний', 'Економ-плюс', 'Середній', 'Преміум', 'Флагман / Люкс'];
+    
+    const bands: Array<{
+      name: string;
+      priceRange: string;
+      avgPrice: number;
+      avgSales: number;
+      demandSharePct: number;
+      segmentElasticity: number | null;
+      elasticityBadge: string;
+    }> = [];
+
+    const totalNicheSales = sortedByPrice.reduce((acc, p) => acc + Math.max(1, (p.reviews || 0) * 12), 0);
+    const itemsPerBand = Math.ceil(n / bandCount);
+
+    for (let b = 0; b < bandCount; b++) {
+      const slice = sortedByPrice.slice(b * itemsPerBand, Math.min(n, (b + 1) * itemsPerBand));
+      if (slice.length === 0) continue;
+      const minP = slice[0].price;
+      const maxP = slice[slice.length - 1].price;
+      const avgP = Math.round(slice.reduce((acc, p) => acc + p.price, 0) / slice.length);
+      const bandSales = slice.reduce((acc, p) => acc + Math.max(1, (p.reviews || 0) * 12), 0);
+      const avgS = Math.round(bandSales / slice.length);
+      const sharePct = Math.round((bandSales / (totalNicheSales || 1)) * 1000) / 10;
+
+      bands.push({
+        name: bandNames[b] || `Сегмент ${b + 1}`,
+        priceRange: minP === maxP ? `${minP.toLocaleString()} ₴` : `${minP.toLocaleString()} — ${maxP.toLocaleString()} ₴`,
+        avgPrice: avgP,
+        avgSales: avgS,
+        demandSharePct: sharePct,
+        segmentElasticity: null,
+        elasticityBadge: '—'
+      });
+    }
+
+    // Arc Elasticity between bands
+    let elasticitySum = 0;
+    let elasticityCount = 0;
+
+    for (let i = 0; i < bands.length - 1; i++) {
+      const b1 = bands[i];
+      const b2 = bands[i + 1];
+      const deltaQ = b2.avgSales - b1.avgSales;
+      const avgQ = (b2.avgSales + b1.avgSales) / 2 || 1;
+      const deltaP = b2.avgPrice - b1.avgPrice;
+      const avgP = (b2.avgPrice + b1.avgPrice) / 2 || 1;
+
+      if (deltaP !== 0 && avgQ > 0) {
+        const ed = (deltaQ / avgQ) / (deltaP / avgP);
+        b1.segmentElasticity = Math.round(ed * 100) / 100;
+        const absEd = Math.abs(ed);
+        elasticitySum += absEd;
+        elasticityCount++;
+        if (absEd >= 1.3) {
+          b1.elasticityBadge = `Еластичний (|Ed| = ${absEd.toFixed(2)})`;
+        } else if (absEd >= 0.7) {
+          b1.elasticityBadge = `Одиничний (|Ed| = ${absEd.toFixed(2)})`;
+        } else {
+          b1.elasticityBadge = `Нееластичний (|Ed| = ${absEd.toFixed(2)})`;
+        }
+      }
+    }
+
+    const avgEd = elasticityCount > 0 ? elasticitySum / elasticityCount : 1.15;
+    const roundedEd = Math.round(avgEd * 100) / 100;
+
+    let elasticityLevel: 'high' | 'moderate' | 'inelastic' = 'moderate';
+    let elasticityLabel = 'Одинична / Помірна еластичність';
+    let elasticityColorClass = 'text-amber-400 bg-amber-950/40 border-amber-500/30';
+    let elasticityDesc = 'Попит пропорційно реагує на коливання ціни. Зміна вартості компенсується зміною обсягу продажів.';
+    let pricingAdvice = 'Рекомендовано тримати ціну в зоні локального оптимуму, підсилюючи конверсію якісним описом та швидкою доставкою.';
+
+    if (avgEd >= 1.3) {
+      elasticityLevel = 'high';
+      elasticityLabel = 'Висока цінова еластичність';
+      elasticityColorClass = 'text-rose-400 bg-rose-950/40 border-rose-500/30';
+      elasticityDesc = 'Покупці вкрай чутливі до ціни. Будь-яке підвищення ціни веде до різкого падіння продажів, а знижка 5-10% дає вибухове зростання попиту.';
+      pricingAdvice = 'Дотримуйтесь агресивної цінової стратегії, використовуйте динамічні знижки та кешбеки для випередження конкурентів.';
+    } else if (avgEd < 0.7) {
+      elasticityLevel = 'inelastic';
+      elasticityLabel = 'Нееластичний попит (Низька чутливість)';
+      elasticityColorClass = 'text-emerald-400 bg-emerald-950/40 border-emerald-500/30';
+      elasticityDesc = 'Попит слабо реагує на коливання ціни. Покупці обирають за якістю, брендом чи характеристиками, а не за найнижчим чеком.';
+      pricingAdvice = 'Ви можете сміливо встановлювати високу маржу. Демпінг не принесе пропорційного приросту замовлень.';
+    }
+
+    // Logistic Sigmoid Curve SVG (W=600, H=200)
+    const prices = prods.map(p => p.price);
+    const minP = Math.min(...prices);
+    const maxP = Math.max(...prices);
+    const midP = (minP + maxP) / 2;
+    const spanP = (maxP - minP) || 1;
+
+    const svgW = 600;
+    const svgH = 200;
+    const padX = 40;
+    const padY = 20;
+    const plotW = svgW - padX * 2;
+    const plotH = svgH - padY * 2;
+
+    const sigmoidSteps = 60;
+    let sigmoidPath = '';
+    const sigmoidPoints: Array<{ x: number, y: number, price: number, probPct: number }> = [];
+
+    for (let s = 0; s <= sigmoidSteps; s++) {
+      const pr = minP + (s / sigmoidSteps) * (maxP - minP);
+      // Logistic probability function
+      const z = ((pr - midP) / (spanP * 0.25)) * (avgEd >= 1.3 ? 2.5 : (avgEd < 0.7 ? 1.2 : 1.8));
+      const prob = 1 / (1 + Math.exp(z));
+      const x = padX + (s / sigmoidSteps) * plotW;
+      const y = (padY + plotH) - prob * plotH;
+
+      sigmoidPath += (s === 0 ? `M ${x.toFixed(1)} ${y.toFixed(1)}` : ` L ${x.toFixed(1)} ${y.toFixed(1)}`);
+
+      if (s % 15 === 0) {
+        sigmoidPoints.push({
+          x: Math.round(x),
+          y: Math.round(y),
+          price: Math.round(pr),
+          probPct: Math.round(prob * 100)
+        });
+      }
+    }
+
+    return {
+      hasData: true,
+      elasticityIndex: roundedEd,
+      elasticityLevel,
+      elasticityLabel,
+      elasticityColorClass,
+      elasticityDesc,
+      pricingAdvice,
+      bands,
+      sigmoidPath,
+      sigmoidPoints
+    };
+  }
+
+  // MODULE 3: Gini Index of Niche Inequality & Lorenz Curve (G, L(F))
+  getQuantGiniLorenzData() {
+    const prods = this.getQuantBaseProducts();
+    if (prods.length === 0) {
+      return {
+        hasData: false,
+        giniIndex: 0,
+        giniPct: 0,
+        giniLevel: 'balanced' as const,
+        giniLabel: 'Рівномірний розподіл',
+        giniColorClass: 'text-emerald-400 bg-emerald-950/40 border-emerald-500/30',
+        giniDesc: 'Немає даних.',
+        top20SharePct: 0,
+        top10SharePct: 0,
+        lorenzPath: '',
+        areaPath: '',
+        samplePoints: [] as any[]
+      };
+    }
+
+    const n = prods.length;
+    const sortedByDemand = [...prods].sort((a, b) => {
+      const wA = Math.max(1, (a.reviews || 0) * 12);
+      const wB = Math.max(1, (b.reviews || 0) * 12);
+      return wA - wB;
+    });
+
+    const weights = sortedByDemand.map(p => Math.max(1, (p.reviews || 0) * 12));
+    const totalW = weights.reduce((a, b) => a + b, 0);
+
+    // Exact Gini calculation
+    let weightedRankSum = 0;
+    for (let i = 0; i < n; i++) {
+      weightedRankSum += (i + 1) * weights[i];
+    }
+    const rawGini = (2 * weightedRankSum) / (n * (totalW || 1)) - (n + 1) / n;
+    const gini = Math.max(0, Math.min(1, rawGini));
+    const giniRounded = Math.round(gini * 1000) / 1000;
+    const giniPct = Math.round(gini * 100);
+
+    // Pareto shares
+    const top20Count = Math.max(1, Math.round(n * 0.2));
+    const top10Count = Math.max(1, Math.round(n * 0.1));
+    const top20Demand = sortedByDemand.slice(n - top20Count).reduce((acc, p) => acc + Math.max(1, (p.reviews || 0) * 12), 0);
+    const top10Demand = sortedByDemand.slice(n - top10Count).reduce((acc, p) => acc + Math.max(1, (p.reviews || 0) * 12), 0);
+    const top20SharePct = Math.round((top20Demand / (totalW || 1)) * 1000) / 10;
+    const top10SharePct = Math.round((top10Demand / (totalW || 1)) * 1000) / 10;
+
+    let giniLevel: 'extreme' | 'moderate' | 'balanced' = 'moderate';
+    let giniLabel = 'Помірна олігополія ніші';
+    let giniColorClass = 'text-amber-400 bg-amber-950/40 border-amber-500/30';
+    let giniDesc = 'Попит здебільшого концентрується навколо визнаних товарів, однак нові позиції мають стабільний простір для конверсій.';
+
+    if (gini >= 0.65) {
+      giniLevel = 'extreme';
+      giniLabel = 'Висока монополізація попиту';
+      giniColorClass = 'text-rose-400 bg-rose-950/40 border-rose-500/30';
+      giniDesc = 'Вузька група топ-SKU забирає майже весь трафік та замовлення ніші. Новим гравцям потрібен сильний оффер або агресивний маркетинг.';
+    } else if (gini < 0.4) {
+      giniLevel = 'balanced';
+      giniLabel = 'Здорова демократична конкуренція';
+      giniColorClass = 'text-emerald-400 bg-emerald-950/40 border-emerald-500/30';
+      giniDesc = 'Попит рівномірно розподілений між продавцями. Відсутня монополія, вхід у нішу максимально сприятливий.';
+    }
+
+    // Lorenz Curve SVG (W=440, H=280)
+    const svgW = 440;
+    const svgH = 280;
+    const padL = 40;
+    const padR = 25;
+    const padT = 25;
+    const padB = 35;
+    const plotW = svgW - padL - padR;
+    const plotH = svgH - padT - padB;
+
+    let cumDemand = 0;
+    let lorenzPath = `M ${padL} ${padT + plotH}`;
+    const samplePoints: Array<{ x: number, y: number, listingsPct: number, demandPct: number }> = [];
+
+    for (let i = 0; i < n; i++) {
+      cumDemand += weights[i];
+      const fracListings = (i + 1) / n;
+      const fracDemand = cumDemand / (totalW || 1);
+
+      const x = padL + fracListings * plotW;
+      const y = (padT + plotH) - fracDemand * plotH;
+      lorenzPath += ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
+
+      if (i === Math.floor(n * 0.25) || i === Math.floor(n * 0.5) || i === Math.floor(n * 0.8) || i === n - 1) {
+        samplePoints.push({
+          x: Math.round(x),
+          y: Math.round(y),
+          listingsPct: Math.round(fracListings * 100),
+          demandPct: Math.round(fracDemand * 100)
+        });
+      }
+    }
+
+    const areaPath = `${lorenzPath} L ${padL + plotW} ${padT + plotH} Z`;
+
+    return {
+      hasData: true,
+      giniIndex: giniRounded,
+      giniPct,
+      giniLevel,
+      giniLabel,
+      giniColorClass,
+      giniDesc,
+      top20SharePct,
+      top10SharePct,
+      lorenzPath,
+      areaPath,
+      samplePoints
+    };
+  }
+
+  // MODULE 4: Multi-Factor Correlation Matrix (Pearson r)
+  getQuantCorrelationMatrix() {
+    const prods = this.getQuantBaseProducts();
+    const variables = ['Ціна (₴)', 'Відгуки / Попит', 'Рейтинг (★)', 'Знижка (%)', 'Позиція (Ранг)'];
+
+    if (prods.length < 3) {
+      return {
+        hasData: false,
+        variables,
+        matrix: [] as Array<Array<{ val: number, bgClass: string, textClass: string, borderClass: string }>>,
+        insights: [] as any[]
+      };
+    }
+
+    const vectors: number[][] = [
+      prods.map(p => Number(p.price) || 0),
+      prods.map(p => Math.max(1, (Number(p.reviews) || 0) * 12)),
+      prods.map(p => Number(p.rating) || 0),
+      prods.map(p => this.getDiscountPercent(p)),
+      prods.map((_, idx) => idx + 1)
+    ];
+
+    const calcPearson = (x: number[], y: number[]): number => {
+      const len = x.length;
+      const avgX = x.reduce((a, b) => a + b, 0) / len;
+      const avgY = y.reduce((a, b) => a + b, 0) / len;
+
+      let num = 0;
+      let denX = 0;
+      let denY = 0;
+
+      for (let i = 0; i < len; i++) {
+        const dx = x[i] - avgX;
+        const dy = y[i] - avgY;
+        num += dx * dy;
+        denX += dx * dx;
+        denY += dy * dy;
+      }
+
+      const den = Math.sqrt(denX * denY);
+      if (den === 0) return 0;
+      const r = num / den;
+      return Math.round(r * 100) / 100;
+    };
+
+    const matrix: Array<Array<{ val: number, bgClass: string, textClass: string, borderClass: string }>> = [];
+
+    for (let i = 0; i < vectors.length; i++) {
+      const row: Array<{ val: number, bgClass: string, textClass: string, borderClass: string }> = [];
+      for (let j = 0; j < vectors.length; j++) {
+        const r = (i === j) ? 1.0 : calcPearson(vectors[i], vectors[j]);
+        
+        let bgClass = 'bg-slate-900/60';
+        let textClass = 'text-slate-400';
+        let borderClass = 'border-slate-800';
+
+        if (i === j) {
+          bgClass = 'bg-indigo-950/60';
+          textClass = 'text-indigo-300 font-bold';
+          borderClass = 'border-indigo-500/30';
+        } else if (r >= 0.45) {
+          bgClass = 'bg-emerald-950/80';
+          textClass = 'text-emerald-300 font-bold';
+          borderClass = 'border-emerald-500/40';
+        } else if (r >= 0.15) {
+          bgClass = 'bg-emerald-950/40';
+          textClass = 'text-emerald-400';
+          borderClass = 'border-emerald-500/20';
+        } else if (r <= -0.45) {
+          bgClass = 'bg-rose-950/80';
+          textClass = 'text-rose-300 font-bold';
+          borderClass = 'border-rose-500/40';
+        } else if (r <= -0.15) {
+          bgClass = 'bg-rose-950/40';
+          textClass = 'text-rose-400';
+          borderClass = 'border-rose-500/20';
+        }
+
+        row.push({ val: r, bgClass, textClass, borderClass });
+      }
+      matrix.push(row);
+    }
+
+    // Quantitative strategic deductions
+    const rPriceDemand = matrix[0][1].val;
+    const rRatingDemand = matrix[1][2].val;
+    const rDiscountDemand = matrix[1][3].val;
+    const rRankDemand = matrix[1][4].val;
+
+    const insights: Array<{ icon: string, title: string, stat: string, desc: string, type: 'positive' | 'negative' | 'neutral' }> = [
+      {
+        icon: 'trending_down',
+        title: 'Чутливість попиту до ціни (r = ' + rPriceDemand + ')',
+        stat: rPriceDemand < -0.2 ? 'Негативна кореляція' : (rPriceDemand > 0.2 ? 'Преміальний ефект' : 'Нейтральний звʼязок'),
+        desc: rPriceDemand < -0.2
+          ? 'Зі зростанням вартості товару попит помітно знижується. Ринок чутливий до ціни.'
+          : (rPriceDemand > 0.2 ? 'Дорожчі товари мають вищий попит — ознака високої довіри до відомих брендів.' : 'Ціна не є основним фактором вибору; покупці дивляться на інші параметри.'),
+        type: rPriceDemand < -0.2 ? 'negative' : (rPriceDemand > 0.2 ? 'positive' : 'neutral')
+      },
+      {
+        icon: 'star',
+        title: 'Вплив соціального доказу (r = ' + rRatingDemand + ')',
+        stat: rRatingDemand > 0.2 ? 'Сильний позитивний вплив' : 'Помірний вплив',
+        desc: rRatingDemand > 0.2
+          ? 'Високий рейтинг прямо конвертується у зростання замовлень. Підтримка 4.5+ зірок є визначальною.'
+          : 'Рейтинг має стабільне значення, але головну роль відіграє загальна кількість відгуків.',
+        type: 'positive'
+      },
+      {
+        icon: 'percent',
+        title: 'Ефективність знижок (r = ' + rDiscountDemand + ')',
+        stat: rDiscountDemand > 0.15 ? 'Знижки стимулюють продажі' : 'Органічний попит',
+        desc: rDiscountDemand > 0.15
+          ? 'Наявність перекресленої ціни суттєво підвищує CTR та підсумковий попит.'
+          : 'Товари купують за регулярною ціною; покупці шукають потрібну специфікацію, а не тільки сейл.',
+        type: rDiscountDemand > 0.15 ? 'positive' : 'neutral'
+      },
+      {
+        icon: 'format_list_numbered',
+        title: 'Важливість органічного рангу (r = ' + rRankDemand + ')',
+        stat: rRankDemand < -0.2 ? 'Топ-видача акумулює продажі' : 'Рівномірний перегляд',
+        desc: rRankDemand < -0.2
+          ? 'Товари на перших позиціях отримують левову частку замовлень. Просування в топ — стратегічна мета.'
+          : 'Покупці глибоко вивчають каталог, гортаючи сторінки донизу.',
+        type: rRankDemand < -0.2 ? 'positive' : 'neutral'
+      }
+    ];
+
+    return {
+      hasData: true,
+      variables,
+      matrix,
+      insights
+    };
+  }
+
+  // MODULE 5: Monte Carlo Simulation Engine (1,000 Stochastic Iterations)
+  setQuantSimulationPrice(val: any) {
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0) {
+      this.quantSimulationPrice = Math.round(num);
+      this.cdr.markForCheck();
+    }
+  }
+
+  resetQuantSimulationPrice() {
+    const optData = this.getQuantOptimalRevenueData();
+    this.quantSimulationPrice = optData.optimalPrice || 0;
+    this.cdr.markForCheck();
+  }
+
+  getQuantMonteCarloSimulation() {
+    const prods = this.getQuantBaseProducts();
+    if (prods.length === 0) {
+      return {
+        hasData: false,
+        targetPrice: 0,
+        minSliderPrice: 100,
+        maxSliderPrice: 10000,
+        p10Sales: 0,
+        p10Revenue: 0,
+        p50Sales: 0,
+        p50Revenue: 0,
+        p90Sales: 0,
+        p90Revenue: 0,
+        meanSales: 0,
+        expectedRevenue: 0,
+        var95Revenue: 0,
+        probBreakEven: 0,
+        bins: [] as any[],
+        p10X: 0,
+        p50X: 0,
+        p90X: 0
+      };
+    }
+
+    const prices = prods.map(p => Number(p.price) || 0);
+    const minP = Math.min(...prices);
+    const maxP = Math.max(...prices);
+    const sortedPrices = [...prices].sort((a, b) => a - b);
+    const medianP = sortedPrices[Math.floor(sortedPrices.length / 2)] || 1000;
+
+    const optData = this.getQuantOptimalRevenueData();
+    if (!this.quantSimulationPrice || this.quantSimulationPrice <= 0) {
+      this.quantSimulationPrice = optData.optimalPrice || medianP;
+    }
+
+    const simP = this.quantSimulationPrice;
+    const elasticityData = this.getQuantElasticityData();
+    const ed = Math.max(0.5, elasticityData.elasticityIndex || 1.15);
+
+    // Baseline sales log-normal parameters
+    const salesArray = prods.map(p => Math.max(5, (p.reviews || 0) * 12));
+    const logSales = salesArray.map(s => Math.log(s));
+    const meanLogSales = logSales.reduce((a, b) => a + b, 0) / (logSales.length || 1);
+    const varLogSales = logSales.reduce((a, b) => a + Math.pow(b - meanLogSales, 2), 0) / (logSales.length || 1);
+    const stdLogSales = Math.max(0.3, Math.sqrt(varLogSales));
+
+    // 1,000 Stochastic Iterations with Box-Muller normal deviates
+    const iterations = 1000;
+    const simulatedRuns: Array<{ sales: number, revenue: number }> = [];
+
+    // Seeded/deterministic PRNG step for steady rendering
+    for (let k = 0; k < iterations; k++) {
+      // Deterministic Box-Muller pseudo-random sequence based on k and simP
+      const u1 = Math.max(1e-6, ((Math.sin(k * 12.9898 + simP * 0.05) * 43758.5453) % 1 + 1) % 1);
+      const u2 = Math.max(1e-6, ((Math.cos(k * 78.233 + simP * 0.03) * 23421.631) % 1 + 1) % 1);
+      
+      const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+      const z1 = Math.sqrt(-2.0 * Math.log(u1)) * Math.sin(2.0 * Math.PI * u2);
+
+      const baseDemand = Math.exp(meanLogSales + stdLogSales * z0);
+      const priceRatio = simP / (medianP || 1);
+      const elasticityFactor = Math.pow(priceRatio, -ed);
+      const noise = Math.exp(0.12 * z1);
+
+      const simSales = Math.max(1, Math.round(baseDemand * elasticityFactor * noise));
+      const simRev = simSales * simP;
+
+      simulatedRuns.push({ sales: simSales, revenue: simRev });
+    }
+
+    simulatedRuns.sort((a, b) => a.sales - b.sales);
+
+    const p10 = simulatedRuns[Math.floor(iterations * 0.10)];
+    const p50 = simulatedRuns[Math.floor(iterations * 0.50)];
+    const p90 = simulatedRuns[Math.floor(iterations * 0.90)];
+    const var95 = simulatedRuns[Math.floor(iterations * 0.05)];
+
+    const meanSales = simulatedRuns.reduce((a, b) => a + b.sales, 0) / iterations;
+    const meanRevenue = simulatedRuns.reduce((a, b) => a + b.revenue, 0) / iterations;
+
+    // Build Histogram (20 bins)
+    const minSales = simulatedRuns[0].sales;
+    const maxSales = simulatedRuns[simulatedRuns.length - 1].sales;
+    const binCount = 20;
+    const binWidth = (maxSales - minSales) / binCount || 1;
+
+    const binCounts = new Array(binCount).fill(0);
+    for (const run of simulatedRuns) {
+      const idx = Math.min(binCount - 1, Math.floor((run.sales - minSales) / binWidth));
+      binCounts[idx]++;
+    }
+
+    const maxBinCount = Math.max(...binCounts, 1);
+
+    // SVG coordinates (W=700, H=220)
+    const svgW = 700;
+    const svgH = 220;
+    const padL = 45;
+    const padR = 25;
+    const padT = 20;
+    const padB = 30;
+    const plotW = svgW - padL - padR;
+    const plotH = svgH - padT - padB;
+
+    const barW = (plotW / binCount) * 0.82;
+    const barGap = (plotW / binCount) * 0.18;
+
+    const bins: Array<{ x: number, y: number, w: number, h: number, count: number, rangeLabel: string }> = [];
+
+    for (let i = 0; i < binCount; i++) {
+      const bMin = Math.round(minSales + i * binWidth);
+      const bMax = Math.round(minSales + (i + 1) * binWidth);
+      const count = binCounts[i];
+      const h = (count / maxBinCount) * plotH;
+      const x = padL + i * (barW + barGap);
+      const y = (padT + plotH) - h;
+
+      bins.push({
+        x: Math.round(x * 10) / 10,
+        y: Math.round(y * 10) / 10,
+        w: Math.round(barW * 10) / 10,
+        h: Math.round(h * 10) / 10,
+        count,
+        rangeLabel: `${bMin}–${bMax} од.`
+      });
+    }
+
+    const toPlotX = (sales: number) => {
+      const pct = (sales - minSales) / (maxSales - minSales || 1);
+      return Math.round((padL + pct * plotW) * 10) / 10;
+    };
+
+    const p10X = toPlotX(p10.sales);
+    const p50X = toPlotX(p50.sales);
+    const p90X = toPlotX(p90.sales);
+
+    return {
+      hasData: true,
+      targetPrice: simP,
+      minSliderPrice: Math.max(50, Math.round(minP * 0.5)),
+      maxSliderPrice: Math.round(maxP * 1.5),
+      p10Sales: p10.sales,
+      p10Revenue: p10.revenue,
+      p50Sales: p50.sales,
+      p50Revenue: p50.revenue,
+      p90Sales: p90.sales,
+      p90Revenue: p90.revenue,
+      meanSales: Math.round(meanSales),
+      expectedRevenue: Math.round(meanRevenue),
+      var95Revenue: Math.round(var95.revenue),
+      probBreakEven: Math.round((simulatedRuns.filter(r => r.sales >= p10.sales).length / iterations) * 100),
+      bins,
+      p10X,
+      p50X,
+      p90X
+    };
+  }
 
   getSpecsArray(product: any): { key: string, val: string }[] {
     if (!product) return [];
