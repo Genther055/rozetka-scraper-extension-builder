@@ -1281,6 +1281,7 @@ export class DashboardComponent implements OnInit {
 
   // --- Price Equilibrium & Cumulative Demand Engine ---
   activePriceChartTab: 'cumulative' | 'density' | 'bins' = 'cumulative';
+  cumulativeZoomMode: 'full' | 'focus' = 'full';
   hoveredCumulativePoint: any = null;
   hoveredDensityBar: any = null;
   hoveredDensityBarIndex: number = -1;
@@ -1291,6 +1292,18 @@ export class DashboardComponent implements OnInit {
     this.hoveredDensityBar = null;
     this.hoveredDensityBarIndex = -1;
     this.cdr.markForCheck();
+  }
+
+  setCumulativeZoomMode(mode: 'full' | 'focus'): void {
+    this.cumulativeZoomMode = mode;
+    this.hoveredCumulativePoint = null;
+    this.cdr.markForCheck();
+  }
+
+  isRozetkaSeller(seller?: string): boolean {
+    if (!seller) return true;
+    const s = seller.trim().toLowerCase();
+    return s === 'rozetka' || s.includes('rozetka');
   }
 
   getCumulativeDemandChartData() {
@@ -1328,7 +1341,7 @@ export class DashboardComponent implements OnInit {
     }
 
     const SVG_W = 960;
-    const SVG_H = 320;
+    const SVG_H = 330;
     const PAD_L = 65;
     const PAD_R = 35;
     const PAD_T = 30;
@@ -1352,6 +1365,22 @@ export class DashboardComponent implements OnInit {
 
     const totalWeight = sorted.reduce((acc, p) => acc + p.weight, 0);
     const totalReviews = sorted.reduce((acc, p) => acc + p.reviews, 0);
+
+    // Dynamic Zoom Framing: Focus on core 85% demand zone if requested
+    if (this.cumulativeZoomMode === 'focus') {
+      let accW = 0;
+      let focusPrice = maxScalePrice;
+      for (const p of sorted) {
+        accW += p.weight;
+        if (accW / totalWeight >= 0.85) {
+          focusPrice = p.price;
+          break;
+        }
+      }
+      const kpiWeightedMed = this.analyticsSummary?.kpi?.weightedMedianPrice || minPrice;
+      focusPrice = Math.max(focusPrice, kpiWeightedMed * 1.25);
+      maxScalePrice = Math.min(maxScalePrice, focusPrice);
+    }
 
     // 2. Build cumulative distribution curve points
     let runningWeight = 0;

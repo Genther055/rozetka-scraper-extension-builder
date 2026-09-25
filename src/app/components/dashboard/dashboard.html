@@ -1355,8 +1355,39 @@
                   </button>
                 </div>
 
-                <!-- Legend & Shift Indicator -->
-                <div class="flex items-center gap-2">
+                <!-- Legend, Zoom & Shift Indicator -->
+                <div class="flex flex-wrap items-center gap-2.5">
+                  <!-- Cumulative Zoom Mode Toggle -->
+                  <div *ngIf="activePriceChartTab === 'cumulative'" class="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
+                    <button 
+                      (click)="setCumulativeZoomMode('full')"
+                      class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                      [class.bg-indigo-600]="cumulativeZoomMode === 'full'"
+                      [class.text-white]="cumulativeZoomMode === 'full'"
+                      [class.shadow]="cumulativeZoomMode === 'full'"
+                      [class.text-slate-400]="cumulativeZoomMode !== 'full'"
+                      [class.hover:text-white]="cumulativeZoomMode !== 'full'"
+                      title="Огляд усього цінового спектра ніші (100%)"
+                    >
+                      <span class="material-icons text-[12px]">zoom_out_map</span>
+                      <span>100% Ринок</span>
+                    </button>
+                    <button 
+                      (click)="setCumulativeZoomMode('focus')"
+                      class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                      [class.bg-amber-600]="cumulativeZoomMode === 'focus'"
+                      [class.text-white]="cumulativeZoomMode === 'focus'"
+                      [class.shadow]="cumulativeZoomMode === 'focus'"
+                      [class.text-slate-400]="cumulativeZoomMode !== 'focus'"
+                      [class.hover:text-white]="cumulativeZoomMode !== 'focus'"
+                      title="Приблизити графік: фокус на активній зоні попиту (85% замовлень)"
+                    >
+                      <span class="material-icons text-[12px]">zoom_in</span>
+                      <span>Фокус попиту (85%)</span>
+                    </button>
+                  </div>
+
+                  <!-- Shift Indicator -->
                   <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/90 border border-slate-800 text-[11px] font-mono text-slate-300">
                     <span class="text-slate-400">Зсув попиту:</span>
                     <span 
@@ -1379,7 +1410,7 @@
             <div *ngIf="activePriceChartTab === 'cumulative'" class="relative bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none" (mouseleave)="onCumulativeMouseLeave()">
               <div *ngIf="getCumulativeDemandChartData() as chart">
                 <svg 
-                  viewBox="0 0 960 320" 
+                  viewBox="0 0 960 330" 
                   class="w-full h-72 sm:h-80 cursor-crosshair overflow-visible"
                   (mousemove)="onCumulativeMouseMove($event)"
                 >
@@ -1534,34 +1565,89 @@
                   </g>
                 </svg>
 
-                <!-- Interactive Floating Tooltip -->
+                <!-- Interactive Floating Tooltip with Full Product Details -->
                 <div 
                   *ngIf="hoveredCumulativePoint" 
-                  class="absolute z-30 p-3.5 bg-[#0f172a] border border-indigo-500/70 rounded-2xl shadow-2xl text-xs text-white transition-all duration-75 max-w-xs ring-1 ring-slate-700/80 backdrop-blur-md"
-                  [style.left.px]="Math.min(680, Math.max(80, hoveredCumulativePoint.x - 120))"
-                  [style.top.px]="Math.max(15, hoveredCumulativePoint.yDemand - 90)"
+                  class="absolute z-30 p-3.5 bg-[#0f172a]/95 border border-indigo-500/80 rounded-2xl shadow-2xl text-xs text-white transition-all duration-75 w-80 max-w-[90vw] ring-1 ring-slate-700/80 backdrop-blur-md"
+                  [style.left.px]="Math.min(620, Math.max(20, hoveredCumulativePoint.x - 140))"
+                  [style.top.px]="Math.max(10, Math.min(150, hoveredCumulativePoint.yDemand - 120))"
                 >
                   <div class="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2 font-mono">
-                    <span class="text-slate-400">Ціновий поріг:</span>
-                    <b class="text-white text-sm">{{ hoveredCumulativePoint.price | number }} ₴</b>
+                    <div>
+                      <span class="text-[10px] text-slate-400 font-sans block">Ціновий поріг:</span>
+                      <b class="text-white text-base leading-none">{{ hoveredCumulativePoint.price | number }} ₴</b>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-[10px] text-emerald-400 font-sans block">Накопичений попит:</span>
+                      <b class="text-emerald-400 text-sm leading-none">{{ hoveredCumulativePoint.cumDemandPct }}%</b>
+                    </div>
                   </div>
 
-                  <div class="space-y-1.5 font-mono text-[11px]">
-                    <div class="flex justify-between items-center text-emerald-400">
-                      <span>Накопичений попит:</span>
-                      <b>{{ hoveredCumulativePoint.cumDemandPct }}%</b>
-                    </div>
-                    <div class="flex justify-between items-center text-indigo-300">
-                      <span>Асортимент полиці:</span>
-                      <b>{{ hoveredCumulativePoint.cumSupplyPct }}%</b>
-                    </div>
-                    <div class="flex justify-between items-center text-slate-300 pt-1 border-t border-slate-800">
-                      <span class="text-slate-400">Товарів до цієї ціни:</span>
-                      <b>{{ hoveredCumulativePoint.cumProducts }} SKU</b>
+                  <div class="space-y-1 font-mono text-[11px]">
+                    <div class="flex justify-between items-center text-slate-300">
+                      <span class="text-slate-400 font-sans">Асортимент полиці:</span>
+                      <b class="text-indigo-300">{{ hoveredCumulativePoint.cumProducts }} тов. ({{ hoveredCumulativePoint.cumSupplyPct }}%)</b>
                     </div>
                     <div class="flex justify-between items-center text-slate-300">
-                      <span class="text-slate-400">Сума відгуків:</span>
-                      <b class="text-amber-300">{{ hoveredCumulativePoint.cumReviews }} в.</b>
+                      <span class="text-slate-400 font-sans">Сума відгуків:</span>
+                      <b class="text-amber-300">{{ hoveredCumulativePoint.cumReviews | number }} в.</b>
+                    </div>
+                  </div>
+
+                  <!-- Specific SKU Card in this Price Anchor -->
+                  <div *ngIf="hoveredCumulativePoint.product" class="mt-2.5 pt-2 border-t border-slate-800 space-y-2">
+                    <div class="flex items-start gap-2">
+                      <span class="material-icons text-indigo-400 text-sm shrink-0 mt-0.5">inventory_2</span>
+                      <div class="min-w-0 flex-1">
+                        <p class="text-[11px] font-bold text-white leading-tight line-clamp-2" [title]="hoveredCumulativePoint.product.name">
+                          {{ hoveredCumulativePoint.product.name }}
+                        </p>
+                        
+                        <div class="flex flex-wrap items-center gap-1.5 mt-1 text-[10px]">
+                          <!-- Seller Badge -->
+                          <span 
+                            class="px-1.5 py-0.5 rounded text-[9.5px] font-bold border"
+                            [class.bg-emerald-950]="isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                            [class.text-emerald-300]="isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                            [class.border-emerald-500/40]="isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                            [class.bg-indigo-950]="!isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                            [class.text-indigo-300]="!isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                            [class.border-indigo-500/40]="!isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                          >
+                            🏪 {{ hoveredCumulativePoint.product.seller || 'Rozetka' }} ({{ isRozetkaSeller(hoveredCumulativePoint.product.seller) ? '1P' : '3P' }})
+                          </span>
+
+                          <!-- Rating & Reviews -->
+                          <span class="text-amber-300 font-bold font-mono flex items-center gap-0.5">
+                            ★ {{ hoveredCumulativePoint.product.rating || '5.0' }}
+                          </span>
+                          <span class="text-slate-300 font-mono font-semibold">
+                            • {{ hoveredCumulativePoint.product.reviews || 0 }} відгуків
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Quick Action Buttons -->
+                    <div class="pt-1 flex items-center gap-1.5">
+                      <button 
+                        (click)="openSpecsModal(hoveredCumulativePoint.product)"
+                        class="flex-1 py-1 px-2 bg-indigo-600/90 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer shadow"
+                      >
+                        <span class="material-icons text-xs">tune</span>
+                        <span>Характеристики</span>
+                      </button>
+                      
+                      <a 
+                        *ngIf="hoveredCumulativePoint.product.link"
+                        [href]="hoveredCumulativePoint.product.link" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        class="py-1 px-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer border border-slate-700/80"
+                      >
+                        <span class="material-icons text-xs">open_in_new</span>
+                        <span>Rozetka</span>
+                      </a>
                     </div>
                   </div>
                 </div>
