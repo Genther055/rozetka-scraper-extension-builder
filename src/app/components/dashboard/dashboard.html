@@ -1411,62 +1411,73 @@
               <div *ngIf="getCumulativeDemandChartData() as chart">
 
                 <!-- LIVE INTERACTIVE DEMAND & PRODUCT INSPECTOR BAR -->
-                <div class="mb-3 p-3 rounded-2xl bg-gradient-to-r from-slate-900/95 via-[#131d36]/90 to-slate-900/95 border border-indigo-500/40 shadow-lg min-h-[58px] flex flex-col md:flex-row md:items-center justify-between gap-3 transition-all">
+                <div class="mb-3 p-3 rounded-2xl bg-gradient-to-r from-slate-900/95 via-[#131d36]/90 to-slate-900/95 border border-indigo-500/40 shadow-lg min-h-[58px] flex flex-col md:flex-row md:items-center justify-between gap-3 transition-all"
+                     [class.ring-2]="pinnedCumulativePoint"
+                     [class.ring-amber-500/50]="pinnedCumulativePoint"
+                     [class.border-amber-500/60]="pinnedCumulativePoint">
                   
-                  <!-- Active Hovered State -->
-                  <ng-container *ngIf="hoveredCumulativePoint; else defaultEquilibriumNotice">
+                  <!-- Active Hovered or Pinned State -->
+                  <ng-container *ngIf="activeCumulativePoint; else defaultEquilibriumNotice">
                     <div class="flex items-center gap-3 min-w-0 flex-1">
                       <!-- Left Price & Demand Badge -->
-                      <div class="flex items-center gap-2.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-indigo-500/30 shrink-0 font-mono">
+                      <div class="flex items-center gap-2.5 bg-slate-950 px-3 py-1.5 rounded-xl border shrink-0 font-mono"
+                           [class.border-amber-500/50]="pinnedCumulativePoint"
+                           [class.border-indigo-500/30]="!pinnedCumulativePoint">
                         <div class="text-right">
                           <span class="text-[9px] text-slate-400 font-sans block uppercase leading-none">Ціна</span>
-                          <b class="text-white text-sm leading-none">{{ hoveredCumulativePoint.price | number }} ₴</b>
+                          <b class="text-white text-sm leading-none">{{ activeCumulativePoint.price | number }} ₴</b>
                         </div>
                         <div class="h-6 w-px bg-slate-800"></div>
                         <div>
                           <span class="text-[9px] text-emerald-400 font-sans block uppercase leading-none">Попит</span>
-                          <b class="text-emerald-400 text-sm leading-none">{{ hoveredCumulativePoint.cumDemandPct }}%</b>
+                          <b class="text-emerald-400 text-sm leading-none">{{ activeCumulativePoint.cumDemandPct }}%</b>
                         </div>
                       </div>
 
                       <!-- Middle: Product Info -->
-                      <div *ngIf="hoveredCumulativePoint.product" class="min-w-0 flex-1">
-                        <p class="text-xs font-bold text-white truncate" [title]="hoveredCumulativePoint.product.name">
-                          {{ hoveredCumulativePoint.product.name }}
-                        </p>
+                      <div *ngIf="activeCumulativePoint.product" class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2">
+                          <span *ngIf="pinnedCumulativePoint" class="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider flex items-center gap-0.5 shrink-0">
+                            <span class="material-icons text-[10px]">push_pin</span>
+                            Зафіксовано
+                          </span>
+                          <p class="text-xs font-bold text-white truncate" [title]="activeCumulativePoint.product.name">
+                            {{ activeCumulativePoint.product.name }}
+                          </p>
+                        </div>
                         <div class="flex flex-wrap items-center gap-2 mt-0.5 text-[11px]">
                           <!-- Seller Tag -->
                           <span 
                             class="px-1.5 py-0.2 rounded text-[9.5px] font-bold border"
-                            [class.bg-emerald-950]="isRozetkaSeller(hoveredCumulativePoint.product.seller)"
-                            [class.text-emerald-300]="isRozetkaSeller(hoveredCumulativePoint.product.seller)"
-                            [class.border-emerald-500/40]="isRozetkaSeller(hoveredCumulativePoint.product.seller)"
-                            [class.bg-indigo-950]="!isRozetkaSeller(hoveredCumulativePoint.product.seller)"
-                            [class.text-indigo-300]="!isRozetkaSeller(hoveredCumulativePoint.product.seller)"
-                            [class.border-indigo-500/40]="!isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                            [class.bg-emerald-950]="isRozetkaSeller(activeCumulativePoint.product.seller)"
+                            [class.text-emerald-300]="isRozetkaSeller(activeCumulativePoint.product.seller)"
+                            [class.border-emerald-500/40]="isRozetkaSeller(activeCumulativePoint.product.seller)"
+                            [class.bg-indigo-950]="!isRozetkaSeller(activeCumulativePoint.product.seller)"
+                            [class.text-indigo-300]="!isRozetkaSeller(activeCumulativePoint.product.seller)"
+                            [class.border-indigo-500/40]="!isRozetkaSeller(activeCumulativePoint.product.seller)"
                           >
-                            🏪 {{ hoveredCumulativePoint.product.seller || 'Rozetka' }} ({{ isRozetkaSeller(hoveredCumulativePoint.product.seller) ? '1P' : '3P' }})
+                            🏪 {{ activeCumulativePoint.product.seller || 'Rozetka' }} ({{ isRozetkaSeller(activeCumulativePoint.product.seller) ? '1P' : '3P' }})
                           </span>
                           <!-- Rating & Reviews -->
-                          <span class="text-amber-300 font-bold font-mono">★ {{ hoveredCumulativePoint.product.rating || '5.0' }}</span>
-                          <span class="text-slate-300 font-mono font-semibold">({{ hoveredCumulativePoint.product.reviews || 0 }} відгуків)</span>
-                          <span class="text-slate-400 font-mono text-[10px] hidden lg:inline">• До цієї ціни: {{ hoveredCumulativePoint.cumProducts }} SKU ({{ hoveredCumulativePoint.cumSupplyPct }}%) / {{ hoveredCumulativePoint.cumReviews | number }} в.</span>
+                          <span class="text-amber-300 font-bold font-mono">★ {{ activeCumulativePoint.product.rating || '5.0' }}</span>
+                          <span class="text-slate-300 font-mono font-semibold">({{ activeCumulativePoint.product.reviews || 0 }} відгуків)</span>
+                          <span class="text-slate-400 font-mono text-[10px] hidden lg:inline">• До цієї ціни: {{ activeCumulativePoint.cumProducts }} SKU ({{ activeCumulativePoint.cumSupplyPct }}%) / {{ activeCumulativePoint.cumReviews | number }} в.</span>
                         </div>
                       </div>
                     </div>
 
                     <!-- Right: Action Buttons -->
-                    <div *ngIf="hoveredCumulativePoint.product" class="flex items-center gap-2 shrink-0">
+                    <div *ngIf="activeCumulativePoint.product" class="flex items-center gap-2 shrink-0">
                       <button 
-                        (click)="openSpecsModal(hoveredCumulativePoint.product)"
+                        (click)="openSpecsModal(activeCumulativePoint.product)"
                         class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer"
                       >
                         <span class="material-icons text-sm">tune</span>
                         <span>Характеристики</span>
                       </button>
                       <a 
-                        *ngIf="hoveredCumulativePoint.product.link" 
-                        [href]="hoveredCumulativePoint.product.link" 
+                        *ngIf="activeCumulativePoint.product.link" 
+                        [href]="activeCumulativePoint.product.link" 
                         target="_blank" 
                         rel="noopener noreferrer"
                         class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700 cursor-pointer"
@@ -1474,6 +1485,14 @@
                         <span class="material-icons text-sm">open_in_new</span>
                         <span>Rozetka</span>
                       </a>
+                      <button 
+                        *ngIf="pinnedCumulativePoint"
+                        (click)="unpinCumulativePoint($event)"
+                        class="p-1.5 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all cursor-pointer"
+                        title="Зняти фіксацію"
+                      >
+                        <span class="material-icons text-sm">close</span>
+                      </button>
                     </div>
                   </ng-container>
 
@@ -1492,7 +1511,7 @@
                       </div>
                       <div class="text-[11px] text-slate-400 font-medium hidden sm:flex items-center gap-1.5 bg-slate-950/80 px-3 py-1 rounded-xl border border-slate-800">
                         <span class="material-icons text-indigo-400 text-xs">touch_app</span>
-                        <span>Наведіть курсор на будь-яку точку кривої для аналізу товару</span>
+                        <span>Клікніть на будь-яку точку кривої для фіксації та аналізу товару</span>
                       </div>
                     </div>
                   </ng-template>
@@ -1502,8 +1521,9 @@
                 <!-- SVG PLOT AREA -->
                 <svg 
                   viewBox="0 0 960 330" 
-                  class="w-full h-72 sm:h-80 cursor-crosshair overflow-visible"
+                  class="w-full h-72 sm:h-80 cursor-pointer overflow-visible"
                   (mousemove)="onCumulativeMouseMove($event)"
+                  (click)="onCumulativeChartClick($event)"
                 >
                   <defs>
                     <!-- Gradients -->
@@ -1641,29 +1661,91 @@
                   </g>
 
                   <!-- Interactive Cursor Crosshairs & Dynamic Axis Pills -->
-                  <g *ngIf="hoveredCumulativePoint">
+                  <g *ngIf="activeCumulativePoint">
                     <!-- Vertical line -->
-                    <line [attr.x1]="hoveredCumulativePoint.x" y1="20" [attr.x2]="hoveredCumulativePoint.x" y2="280" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="2 2"/>
+                    <line 
+                      [attr.x1]="activeCumulativePoint.x" 
+                      y1="20" 
+                      [attr.x2]="activeCumulativePoint.x" 
+                      y2="280" 
+                      [attr.stroke]="pinnedCumulativePoint ? '#fbbf24' : '#38bdf8'" 
+                      stroke-width="1.5" 
+                      stroke-dasharray="2 2"
+                    />
                     <!-- Horizontal line to Y axis -->
-                    <line x1="65" [attr.y1]="hoveredCumulativePoint.yDemand" [attr.x2]="hoveredCumulativePoint.x" [attr.y2]="hoveredCumulativePoint.yDemand" stroke="#10b981" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>
+                    <line 
+                      x1="65" 
+                      [attr.y1]="activeCumulativePoint.yDemand" 
+                      [attr.x2]="activeCumulativePoint.x" 
+                      [attr.y2]="activeCumulativePoint.yDemand" 
+                      stroke="#10b981" 
+                      stroke-width="1" 
+                      stroke-dasharray="2 2" 
+                      opacity="0.6"
+                    />
 
                     <!-- Intersection circles -->
-                    <circle [attr.cx]="hoveredCumulativePoint.x" [attr.cy]="hoveredCumulativePoint.yDemand" r="6" fill="#10b981" stroke="#ffffff" stroke-width="2"/>
-                    <circle [attr.cx]="hoveredCumulativePoint.x" [attr.cy]="hoveredCumulativePoint.ySupply" r="4" fill="#818cf8" stroke="#ffffff" stroke-width="1.5"/>
+                    <!-- Demand Point -->
+                    <g>
+                      <circle 
+                        *ngIf="pinnedCumulativePoint"
+                        [attr.cx]="activeCumulativePoint.x" 
+                        [attr.cy]="activeCumulativePoint.yDemand" 
+                        r="14" 
+                        fill="#fbbf24" 
+                        fill-opacity="0.25"
+                      />
+                      <circle 
+                        [attr.cx]="activeCumulativePoint.x" 
+                        [attr.cy]="activeCumulativePoint.yDemand" 
+                        [attr.r]="pinnedCumulativePoint ? 7 : 6" 
+                        [attr.fill]="pinnedCumulativePoint ? '#fbbf24' : '#10b981'" 
+                        stroke="#ffffff" 
+                        stroke-width="2"
+                      />
+                    </g>
+                    <!-- Supply Point -->
+                    <circle [attr.cx]="activeCumulativePoint.x" [attr.cy]="activeCumulativePoint.ySupply" r="4" fill="#818cf8" stroke="#ffffff" stroke-width="1.5"/>
+
+                    <!-- Dynamic Floating Smart Pill right on the curve -->
+                    <g>
+                      <rect 
+                        [attr.x]="Math.max(70, Math.min(800, activeCumulativePoint.x - 70))" 
+                        [attr.y]="Math.max(14, activeCumulativePoint.yDemand - 32)" 
+                        width="140" 
+                        height="24" 
+                        rx="6" 
+                        fill="#090d16" 
+                        fill-opacity="0.95"
+                        [attr.stroke]="pinnedCumulativePoint ? '#fbbf24' : '#38bdf8'" 
+                        stroke-width="1.5"
+                      />
+                      <text 
+                        [attr.x]="Math.max(70, Math.min(800, activeCumulativePoint.x - 70)) + 70" 
+                        [attr.y]="Math.max(14, activeCumulativePoint.yDemand - 32) + 16" 
+                        text-anchor="middle" 
+                        fill="#ffffff" 
+                        font-size="10" 
+                        font-weight="bold" 
+                        font-family="monospace"
+                      >
+                        {{ activeCumulativePoint.price | number }} ₴ • {{ activeCumulativePoint.cumDemandPct }}%
+                      </text>
+                    </g>
 
                     <!-- Dynamic X-Axis Price Pill -->
                     <g>
-                      <rect [attr.x]="hoveredCumulativePoint.x - 36" y="284" width="72" height="18" rx="4" fill="#0369a1" stroke="#38bdf8" stroke-width="1"/>
-                      <text [attr.x]="hoveredCumulativePoint.x" y="296" text-anchor="middle" fill="#ffffff" font-size="9" font-weight="bold" font-family="monospace">
-                        {{ hoveredCumulativePoint.price | number }} ₴
+                      <rect [attr.x]="activeCumulativePoint.x - 36" y="284" width="72" height="18" rx="4" [attr.fill]="pinnedCumulativePoint ? '#78350f' : '#0369a1'" [attr.stroke]="pinnedCumulativePoint ? '#fbbf24' : '#38bdf8'" stroke-width="1"/>
+                      <text [attr.x]="activeCumulativePoint.x" y="296" text-anchor="middle" fill="#ffffff" font-size="9" font-weight="bold" font-family="monospace">
+                        {{ activeCumulativePoint.price | number }} ₴
                       </text>
                     </g>
 
                     <!-- Dynamic Y-Axis Demand % Pill -->
                     <g>
-                      <rect x="18" [attr.y]="hoveredCumulativePoint.yDemand - 8" width="42" height="16" rx="3" fill="#065f46" stroke="#10b981" stroke-width="1"/>
-                      <text x="39" [attr.y]="hoveredCumulativePoint.yDemand + 4" text-anchor="middle" fill="#ffffff" font-size="9" font-weight="bold" font-family="monospace">
-                        {{ hoveredCumulativePoint.cumDemandPct }}%
+                      <rect x="18" [attr.y]="activeCumulativePoint.yDemand - 8" width="42" height="16" rx="3" fill="#065f46" stroke="#10b981" stroke-width="1"/>
+                      <text x="39" [attr.y]="activeCumulativePoint.yDemand + 4" text-anchor="middle" fill="#ffffff" font-size="9" font-weight="bold" font-family="monospace">
+                        {{ activeCumulativePoint.cumDemandPct }}%
                       </text>
                     </g>
                   </g>

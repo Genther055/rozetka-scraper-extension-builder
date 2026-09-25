@@ -1283,12 +1283,18 @@ export class DashboardComponent implements OnInit {
   activePriceChartTab: 'cumulative' | 'density' | 'bins' = 'cumulative';
   cumulativeZoomMode: 'full' | 'focus' = 'full';
   hoveredCumulativePoint: any = null;
+  pinnedCumulativePoint: any = null;
   hoveredDensityBar: any = null;
   hoveredDensityBarIndex: number = -1;
+
+  get activeCumulativePoint(): any {
+    return this.pinnedCumulativePoint || this.hoveredCumulativePoint;
+  }
 
   setActivePriceChartTab(tab: 'cumulative' | 'density' | 'bins'): void {
     this.activePriceChartTab = tab;
     this.hoveredCumulativePoint = null;
+    this.pinnedCumulativePoint = null;
     this.hoveredDensityBar = null;
     this.hoveredDensityBarIndex = -1;
     this.cdr.markForCheck();
@@ -1297,6 +1303,7 @@ export class DashboardComponent implements OnInit {
   setCumulativeZoomMode(mode: 'full' | 'focus'): void {
     this.cumulativeZoomMode = mode;
     this.hoveredCumulativePoint = null;
+    this.pinnedCumulativePoint = null;
     this.cdr.markForCheck();
   }
 
@@ -1556,6 +1563,8 @@ export class DashboardComponent implements OnInit {
   }
 
   onCumulativeMouseMove(event: MouseEvent): void {
+    if (this.pinnedCumulativePoint) return; // If pinned, keep selection locked
+
     const target = event.currentTarget as HTMLElement;
     if (!target) return;
     const rect = target.getBoundingClientRect();
@@ -1577,7 +1586,7 @@ export class DashboardComponent implements OnInit {
       }
     }
 
-    if (minDist <= 80) {
+    if (minDist <= 120) {
       this.hoveredCumulativePoint = closest;
     } else {
       this.hoveredCumulativePoint = null;
@@ -1585,9 +1594,51 @@ export class DashboardComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
-  onCumulativeMouseLeave(): void {
+  onCumulativeChartClick(event: MouseEvent): void {
+    const target = event.currentTarget as HTMLElement;
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const scaleX = 960 / rect.width;
+    const svgX = mouseX * scaleX;
+
+    const data = this.getCumulativeDemandChartData();
+    if (data.points.length === 0) return;
+
+    let closest = data.points[0];
+    let minDist = Math.abs(data.points[0].x - svgX);
+
+    for (let i = 1; i < data.points.length; i++) {
+      const dist = Math.abs(data.points[i].x - svgX);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = data.points[i];
+      }
+    }
+
+    if (this.pinnedCumulativePoint && this.pinnedCumulativePoint.x === closest.x) {
+      this.pinnedCumulativePoint = null; // Toggle unpin if clicking same
+    } else {
+      this.pinnedCumulativePoint = closest;
+      this.hoveredCumulativePoint = closest;
+    }
+    this.cdr.markForCheck();
+  }
+
+  unpinCumulativePoint(event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.pinnedCumulativePoint = null;
     this.hoveredCumulativePoint = null;
     this.cdr.markForCheck();
+  }
+
+  onCumulativeMouseLeave(): void {
+    if (!this.pinnedCumulativePoint) {
+      this.hoveredCumulativePoint = null;
+      this.cdr.markForCheck();
+    }
   }
 
   onDensityBarEnter(bar: any, index: number): void {
