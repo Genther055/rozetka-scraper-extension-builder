@@ -122,7 +122,10 @@ export interface AnalyticalSummary {
     avgReviewsPerActiveSku: number;
     cr3: number;
     cr3Level: 'LOW' | 'MEDIUM' | 'HIGH';
-    top3Sellers: Array<{ name: string; share: number; count: number; isRozetka: boolean }>;
+    top3Sellers: Array<{ name: string; share: number; count: number; isRozetka: boolean; rank?: number; color?: string }>;
+    cr10: number;
+    cr10Level: 'LOW' | 'MEDIUM' | 'HIGH';
+    top10Sellers: Array<{ name: string; share: number; count: number; isRozetka: boolean; rank: number; color?: string }>;
     hhi: number;
     hhiLevel: 'LOW' | 'MODERATE' | 'HIGH';
     volatility: {
@@ -184,6 +187,7 @@ export interface AnalyticalSummary {
     color: string;
     rank: number;
     isTop3: boolean;
+    isTop10: boolean;
   }>;
   specAnalytics: SpecCategoryAnalysis[];
 }
@@ -1143,17 +1147,28 @@ export class DashboardComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
-  getTop3SellersList(): Array<{ name: string; count: number; share: number; color: string; isRozetka: boolean }> {
+  sellerColors: string[] = [
+    '#6366f1', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b',
+    '#06b6d4', '#3b82f6', '#a855f7', '#14b8a6', '#f43f5e',
+    '#84cc16', '#e11d48', '#64748b'
+  ];
+
+  getTop10SellersList(): Array<{ name: string; count: number; share: number; color: string; isRozetka: boolean; rank: number }> {
     if (!this.analyticsSummary?.sellersTable || this.analyticsSummary.sellersTable.length === 0) {
       return [];
     }
-    return this.analyticsSummary.sellersTable.slice(0, 3).map(s => ({
+    return this.analyticsSummary.sellersTable.slice(0, 10).map((s, idx) => ({
       name: s.sellerName,
       count: s.productsCount,
       share: s.marketShare,
-      color: s.color || '#6366f1',
-      isRozetka: s.isRozetka
+      color: s.color || this.sellerColors[idx % this.sellerColors.length],
+      isRozetka: s.isRozetka,
+      rank: idx + 1
     }));
+  }
+
+  getTop3SellersList(): Array<{ name: string; count: number; share: number; color: string; isRozetka: boolean; rank: number }> {
+    return this.getTop10SellersList().slice(0, 3);
   }
 
   getBinStoreStats(bin: any): { count: number; reviews: number; pct: number } {
@@ -1162,12 +1177,16 @@ export class DashboardComponent implements OnInit {
       return { count: bin.productsCount, reviews: bin.reviewsSum, pct: bin.productsShare };
     }
     const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
-    const top3Names = this.getTop3SellersList().map(s => s.name.toLowerCase());
+    const top10Names = this.getTop10SellersList().map(s => s.name.toLowerCase());
+    const top3Names = top10Names.slice(0, 3);
     
     const binProds = list.filter(p => {
       const pr = Number(p.price) || 0;
       if (pr < bin.minPrice || pr > bin.maxPrice) return false;
       const s = (p.seller || '').trim().toLowerCase();
+      if (this.scatterStoreFilter === 'top10') {
+        return top10Names.some(t => s === t || (t.includes('rozetka') && s.includes('rozetka')));
+      }
       if (this.scatterStoreFilter === 'top3') {
         return top3Names.some(t => s === t || (t.includes('rozetka') && s.includes('rozetka')));
       }
@@ -1179,6 +1198,9 @@ export class DashboardComponent implements OnInit {
     const reviews = binProds.reduce((acc, p) => acc + (p.reviews || 0), 0);
     const totalMatching = list.filter(p => {
       const s = (p.seller || '').trim().toLowerCase();
+      if (this.scatterStoreFilter === 'top10') {
+        return top10Names.some(t => s === t || (t.includes('rozetka') && s.includes('rozetka')));
+      }
       if (this.scatterStoreFilter === 'top3') {
         return top3Names.some(t => s === t || (t.includes('rozetka') && s.includes('rozetka')));
       }
@@ -1220,7 +1242,8 @@ export class DashboardComponent implements OnInit {
     const maxReviews = Math.max(5, ...list.map(p => p.reviews || 0));
 
     const bins = this.analyticsSummary?.priceDistribution || [];
-    const top3Names = this.getTop3SellersList().map(s => s.name.toLowerCase());
+    const top10Names = this.getTop10SellersList().map(s => s.name.toLowerCase());
+    const top3Names = top10Names.slice(0, 3);
 
     // 1. Calculate Bins Vertical Bands
     const bands = bins.map(b => {
@@ -1255,7 +1278,11 @@ export class DashboardComponent implements OnInit {
       let isDimmed = false;
       let isHighlighted = false;
 
-      if (this.scatterStoreFilter === 'top3') {
+      if (this.scatterStoreFilter === 'top10') {
+        const isTop10 = top10Names.some(t => sellerLower === t || (t.includes('rozetka') && sellerLower.includes('rozetka')));
+        isDimmed = !isTop10;
+        isHighlighted = isTop10;
+      } else if (this.scatterStoreFilter === 'top3') {
         const isTop3 = top3Names.some(t => sellerLower === t || (t.includes('rozetka') && sellerLower.includes('rozetka')));
         isDimmed = !isTop3;
         isHighlighted = isTop3;
@@ -5000,6 +5027,9 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
         cr3: 0,
         cr3Level: 'LOW',
         top3Sellers: [],
+        cr10: 0,
+        cr10Level: 'LOW',
+        top10Sellers: [],
         hhi: 0,
         hhiLevel: 'LOW',
         volatility: {
@@ -5244,7 +5274,8 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       inStockRate: Number(((stats.inStockCount / stats.productsCount) * 100).toFixed(1)),
       color: '#64748b',
       rank: 0,
-      isTop3: false
+      isTop3: false,
+      isTop10: false
     };
   }).sort((a, b) => b.productsCount - a.productsCount);
 
@@ -5252,18 +5283,32 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
   sellersList.forEach((s, idx) => {
     s.rank = idx + 1;
     s.isTop3 = idx < 3;
+    s.isTop10 = idx < 10;
     s.color = sellerColors[idx % sellerColors.length];
   });
 
-  // 3. Концентрація ринку (CR3, HHI)
-  const top3Sellers = sellersList.slice(0, 3).map(s => ({
+  // 3. Концентрація ринку (CR3, CR10, HHI)
+  const top3Sellers = sellersList.slice(0, 3).map((s, idx) => ({
     name: s.sellerName,
     share: s.marketShare,
     count: s.productsCount,
-    isRozetka: s.isRozetka
+    isRozetka: s.isRozetka,
+    rank: idx + 1,
+    color: s.color
   }));
   const cr3 = Number(top3Sellers.reduce((acc, s) => acc + s.share, 0).toFixed(1));
   const cr3Level: 'LOW' | 'MEDIUM' | 'HIGH' = cr3 < 40 ? 'LOW' : cr3 <= 70 ? 'MEDIUM' : 'HIGH';
+
+  const top10Sellers = sellersList.slice(0, 10).map((s, idx) => ({
+    name: s.sellerName,
+    share: s.marketShare,
+    count: s.productsCount,
+    isRozetka: s.isRozetka,
+    rank: idx + 1,
+    color: s.color
+  }));
+  const cr10 = Number(top10Sellers.reduce((acc, s) => acc + s.share, 0).toFixed(1));
+  const cr10Level: 'LOW' | 'MEDIUM' | 'HIGH' = cr10 < 50 ? 'LOW' : cr10 <= 80 ? 'MEDIUM' : 'HIGH';
   
   const hhi = Math.round(sellersList.reduce((acc, s) => acc + Math.pow(s.marketShare, 2), 0));
   const hhiLevel: 'LOW' | 'MODERATE' | 'HIGH' = hhi < 1500 ? 'LOW' : hhi <= 2500 ? 'MODERATE' : 'HIGH';
@@ -5416,6 +5461,9 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       cr3,
       cr3Level,
       top3Sellers,
+      cr10,
+      cr10Level,
+      top10Sellers,
       hhi,
       hhiLevel,
       volatility: {
