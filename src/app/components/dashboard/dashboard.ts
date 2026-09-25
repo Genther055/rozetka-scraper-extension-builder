@@ -4618,29 +4618,28 @@ export class DashboardComponent implements OnInit {
   }
 
   async exportToExcel() {
-    if (this.filteredProducts.length === 0) return;
+    const baseProducts = (this.filteredProducts && this.filteredProducts.length > 0) 
+      ? this.filteredProducts 
+      : this.products;
+    if (!baseProducts || baseProducts.length === 0) return;
 
     // 1. Збираємо всі унікальні НАДІЙНО НОРМАЛІЗОВАНІ назви характеристик
-    const dynamicKeysSet = new Set<string>();
-    this.filteredProducts.forEach(p => {
+    const dynamicSpecsSet = new Set<string>();
+    baseProducts.forEach(p => {
       const specsArr = this.getSpecsArray(p);
       specsArr.forEach(s => {
         const normKey = this.normalizeSpecKey(s.key);
-        dynamicKeysSet.add(normKey);
+        dynamicSpecsSet.add(normKey);
       });
     });
-    const dynamicKeys = Array.from(dynamicKeysSet);
+    const dynamicSpecs = Array.from(dynamicSpecsSet);
 
-    // 2. Створюємо Excel Workbook & Worksheet
+    // 2. Створюємо Excel Workbook
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'TradeScout Analytics';
     workbook.created = new Date();
 
-    const worksheet = workbook.addWorksheet('Товари Rozetka', {
-      views: [{ state: 'frozen', ySplit: 1, showGridLines: true }]
-    });
-
-    // 3. Формуємо опис колонок
+    // 3. Формуємо опис колонок для аркушів
     const columns: Partial<ExcelJS.Column>[] = [
       { header: 'Назва товару', key: 'name', width: 40 },
       { header: 'Ціна без знижки (грн)', key: 'oldPrice', width: 22 },
@@ -4653,7 +4652,7 @@ export class DashboardComponent implements OnInit {
       { header: 'Категорія', key: 'category', width: 22 },
     ];
 
-    dynamicKeys.forEach((k, idx) => {
+    dynamicSpecs.forEach((k, idx) => {
       columns.push({ header: k, key: `spec_${idx}`, width: 22 });
     });
 
@@ -4662,9 +4661,102 @@ export class DashboardComponent implements OnInit {
       { header: 'Посилання', key: 'link', width: 16 }
     );
 
-    worksheet.columns = columns;
+    // 4. Групуємо товари за фірмами / продавцями
+    const sellerGroups = new Map<string, Product[]>();
+    baseProducts.forEach(p => {
+      const rawSeller = (p.seller && String(p.seller).trim()) ? String(p.seller).trim() : 'Rozetka';
+      if (!sellerGroups.has(rawSeller)) {
+        sellerGroups.set(rawSeller, []);
+      }
+      sellerGroups.get(rawSeller)!.push(p);
+    });
 
-    // 4. Стилізуємо заголовок (Row 1)
+    const tabPalette = [
+      'FF4F46E5', // Indigo
+      'FF10B981', // Emerald
+      'FFD97706', // Amber
+      'FF8B5CF6', // Violet
+      'FF06B6D4', // Cyan
+      'FFF43F5E', // Rose
+      'FF3B82F6', // Blue
+      'FF84CC16', // Lime
+      'FFEC4899', // Pink
+      'FF14B8A6'  // Teal
+    ];
+
+    const usedSheetNames = new Set<string>();
+
+    const sanitizeSheetName = (raw: string): string => {
+      let cleaned = raw.replace(/[:\\/?*\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!cleaned) cleaned = 'Продавець';
+      let name = cleaned.slice(0, 28);
+      let uniqueName = name;
+      let counter = 2;
+      while (usedSheetNames.has(uniqueName.toLowerCase())) {
+        uniqueName = `${name.slice(0, 24)} (${counter++})`;
+      }
+      usedSheetNames.add(uniqueName.toLowerCase());
+      return uniqueName;
+    };
+
+    if (sellerGroups.size > 1) {
+      // 4.1 Якщо знайдено 2 або більше фірм:
+      // Аркуш 1: «Всі товари»
+      const allSheetName = sanitizeSheetName('Всі товари');
+      const allWorksheet = workbook.addWorksheet(allSheetName, {
+        views: [{ state: 'frozen', ySplit: 1, showGridLines: true }],
+        properties: { tabColor: { argb: tabPalette[0] } }
+      });
+      this.populateWorksheetWithProducts(allWorksheet, baseProducts, dynamicSpecs, columns);
+
+      // Сортуємо продавців за кількістю товарів (від найбільшої до найменшої)
+      const sortedSellers = Array.from(sellerGroups.entries())
+        .sort((a, b) => b[1].length - a[1].length);
+
+      // Аркуші 2..N: Окремий аркуш для кожної фірми / продавця
+      sortedSellers.forEach(([sellerName, sellerProducts], sIdx) => {
+        const sheetName = sanitizeSheetName(sellerName);
+        const colorArgb = tabPalette[(sIdx + 1) % tabPalette.length];
+        const sellerWorksheet = workbook.addWorksheet(sheetName, {
+          views: [{ state: 'frozen', ySplit: 1, showGridLines: true }],
+          properties: { tabColor: { argb: colorArgb } }
+        });
+        this.populateWorksheetWithProducts(sellerWorksheet, sellerProducts, dynamicSpecs, columns);
+      });
+    } else {
+      // 4.2 Якщо лише 1 фірма у вибірці
+      const singleSellerName = Array.from(sellerGroups.keys())[0] || 'Rozetka';
+      const sheetTitle = sanitizeSheetName(`Товари ${singleSellerName}`);
+      const worksheet = workbook.addWorksheet(sheetTitle, {
+        views: [{ state: 'frozen', ySplit: 1, showGridLines: true }],
+        properties: { tabColor: { argb: tabPalette[1] } }
+      });
+      this.populateWorksheetWithProducts(worksheet, baseProducts, dynamicSpecs, columns);
+    }
+
+    // 5. Генеруємо та завантажуємо нативний .xlsx файл
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `TradeScout_Master_Export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  private populateWorksheetWithProducts(
+    worksheet: ExcelJS.Worksheet,
+    productsList: Product[],
+    dynamicSpecs: string[],
+    columns: Partial<ExcelJS.Column>[]
+  ): void {
+    // 1. Прив'язка колонок
+    worksheet.columns = columns.map(c => ({ ...c }));
+
+    // 2. Стилізуємо заголовок (Row 1)
     const headerRow = worksheet.getRow(1);
     headerRow.height = 30;
     headerRow.eachCell((cell) => {
@@ -4695,8 +4787,8 @@ export class DashboardComponent implements OnInit {
       right: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } }
     };
 
-    // 5. Додаємо та стилізуємо дані
-    this.filteredProducts.forEach((p, index) => {
+    // 3. Додаємо та стилізуємо дані
+    productsList.forEach((p, index) => {
       const specsMap: Record<string, string> = {};
       this.getSpecsArray(p).forEach(s => {
         const normKey = this.normalizeSpecKey(s.key);
@@ -4717,7 +4809,7 @@ export class DashboardComponent implements OnInit {
         category: p.category || ''
       };
 
-      dynamicKeys.forEach((k, idx) => {
+      dynamicSpecs.forEach((k, idx) => {
         rowData[`spec_${idx}`] = specsMap[k] || '—';
       });
 
@@ -4778,13 +4870,13 @@ export class DashboardComponent implements OnInit {
       });
     });
 
-    // 6. Вмикаємо AutoFilter на всі колонки
+    // 4. Вмикаємо AutoFilter на всі колонки
     worksheet.autoFilter = {
       from: { row: 1, column: 1 },
       to: { row: 1, column: columns.length }
     };
 
-    // 7. Автопідбір ширини колонок за вмістом
+    // 5. Автопідбір ширини колонок за вмістом
     worksheet.columns.forEach((col) => {
       let maxLen = col.header ? String(col.header).length : 12;
       col.eachCell?.({ includeEmpty: false }, (cell) => {
@@ -4795,18 +4887,6 @@ export class DashboardComponent implements OnInit {
       });
       col.width = Math.min(Math.max(maxLen + 3, 14), 55);
     });
-
-    // 8. Генеруємо та завантажуємо нативний .xlsx файл
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `TradeScout_Master_Export_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   }
 
 
