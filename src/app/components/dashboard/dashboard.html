@@ -228,7 +228,7 @@
     <header 
       [class.top-10]="isImpersonating"
       [class.top-0]="!isImpersonating"
-      class="h-20 bg-[#0e1424] border-b border-slate-800/80 flex items-center justify-between px-8 z-30 shrink-0 sticky shadow-xl shadow-black/40"
+      class="h-20 bg-[#0e1424] border-b border-slate-800/80 flex items-center justify-between px-8 z-40 shrink-0 sticky shadow-xl shadow-black/40"
     >
       <div class="flex items-center gap-3.5">
         <button 
@@ -589,7 +589,7 @@
       <!-- Stats Grid (Hidden if no products or on settings/history tabs) -->
       <!-- Stats Grid (5 Deterministic Cards: Обсяг вибірки, Цінові орієнтири, Складські залишки, Концентрація CR3, Бар'єр входу) -->
       <!-- Top KPI Stats Grid (6 Core Diagnostic Anchors) -->
-      <section *ngIf="products.length > 0 && analyticsSummary && activeTab !== 'settings' && activeTab !== 'history'" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 relative z-30">
+      <section *ngIf="products.length > 0 && analyticsSummary && activeTab !== 'settings' && activeTab !== 'history'" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 relative z-20">
         
         <!-- 1. Обсяг вибірки -->
         <div class="p-4 sm:p-4.5 premium-card flex flex-col justify-between transition-all duration-200 relative group/sample hover:z-50 cursor-help hover:border-indigo-500/40">
@@ -1569,37 +1569,66 @@
             </div>
 
             <!-- VIEW 2: DEMAND WEIGHT DENSITY SPECTRUM -->
-            <div *ngIf="activePriceChartTab === 'density'" class="bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none space-y-3">
-              <div *ngIf="getCumulativeDemandChartData() as chart">
+            <div *ngIf="activePriceChartTab === 'density'" class="bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 relative select-none space-y-3">
+              <div *ngIf="getCumulativeDemandChartData() as chart" class="relative">
                 <div class="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-slate-800/80">
-                  <span class="font-bold uppercase tracking-wider text-[11px] text-slate-300">
-                    Розподіл вагомості попиту (к-сть замовлень) за 20 ціновими інтервалами
-                  </span>
-                  <span class="font-mono text-[11px] text-amber-400">★ Центр тяжіння: {{ chart.weightedMedianPrice | number }} ₴</span>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold uppercase tracking-wider text-[11px] text-slate-300">
+                      Розподіл вагомості попиту (к-сть замовлень) за 20 ціновими інтервалами
+                    </span>
+                  </div>
+                  <span class="font-mono text-[11px] text-amber-400 font-bold">★ Центр тяжіння: {{ chart.weightedMedianPrice | number }} ₴</span>
                 </div>
 
-                <div class="h-64 pt-4 flex items-end justify-between gap-1 border-b border-slate-800 pb-2">
+                <!-- Floating Dynamic Tooltip inside Density Spectrum -->
+                <div 
+                  *ngIf="hoveredDensityBar" 
+                  class="absolute z-30 p-3 bg-[#0f172a]/95 border border-indigo-500/70 rounded-2xl shadow-2xl text-xs font-mono text-white pointer-events-none ring-1 ring-slate-700/80 backdrop-blur-md transition-all duration-100 -translate-x-1/2"
+                  [style.left.%]="Math.min(80, Math.max(20, (hoveredDensityBarIndex + 0.5) / (chart.densityBars.length || 20) * 100))"
+                  style="top: 36px;"
+                >
+                  <div class="flex items-center justify-between border-b border-slate-800 pb-1 mb-1.5 gap-3">
+                    <span class="text-slate-400 text-[10px] font-sans">Інтервал цін:</span>
+                    <b class="text-amber-300 text-xs">{{ hoveredDensityBar.minP | number }} – {{ hoveredDensityBar.maxP | number }} ₴</b>
+                  </div>
+                  <div class="space-y-1 text-[11px]">
+                    <div class="flex justify-between items-center text-slate-300">
+                      <span class="text-slate-400">Пропозиція (SKU):</span>
+                      <b class="text-white">{{ hoveredDensityBar.count }} шт</b>
+                    </div>
+                    <div class="flex justify-between items-center text-emerald-400">
+                      <span>Реальний попит:</span>
+                      <b>{{ hoveredDensityBar.reviews }} відг.</b>
+                    </div>
+                    <div class="flex justify-between items-center text-indigo-300 pt-1 border-t border-slate-800/80">
+                      <span class="text-slate-400">Вага попиту в ніші:</span>
+                      <b class="text-indigo-300 font-bold">{{ hoveredDensityBar.weight }}</b>
+                    </div>
+                    <div *ngIf="hoveredDensityBar.isSweetSpotBin" class="mt-1 pt-1 border-t border-amber-500/30 text-amber-400 text-[10px] font-sans font-bold flex items-center gap-1">
+                      <span>★</span>
+                      <span>50% медіанна точка рівноваги</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="h-64 pt-4 flex items-end justify-between gap-1 border-b border-slate-800 pb-2 relative">
                   <div 
-                    *ngFor="let bar of chart.densityBars" 
-                    class="flex-1 flex flex-col items-center justify-end h-full group relative cursor-pointer"
+                    *ngFor="let bar of chart.densityBars; let i = index" 
+                    (mouseenter)="onDensityBarEnter(bar, i)"
+                    (mouseleave)="onDensityBarLeave()"
+                    class="flex-1 flex flex-col items-center justify-end h-full relative cursor-pointer"
                   >
                     <div 
-                      class="w-full rounded-t transition-all duration-200 group-hover:brightness-125 min-h-[4px]"
+                      class="w-full rounded-t transition-all duration-200 min-h-[4px]"
                       [class.bg-gradient-to-t]="true"
                       [class.from-amber-600]="bar.isSweetSpotBin"
                       [class.to-amber-400]="bar.isSweetSpotBin"
                       [class.from-indigo-600]="!bar.isSweetSpotBin"
                       [class.to-emerald-400]="!bar.isSweetSpotBin"
+                      [class.brightness-125]="hoveredDensityBarIndex === i"
+                      [class.scale-y-105]="hoveredDensityBarIndex === i"
                       [style.height.px]="bar.height * 2.5"
                     ></div>
-
-                    <!-- Tooltip on hover -->
-                    <div class="absolute bottom-full mb-2 hidden group-hover:flex flex-col p-2 bg-[#0f172a] border border-indigo-500 rounded-xl shadow-2xl text-[10.5px] font-mono text-white z-20 whitespace-nowrap">
-                      <div class="font-bold text-amber-300">{{ bar.minP | number }} – {{ bar.maxP | number }} ₴</div>
-                      <div>Товарів: <b>{{ bar.count }} SKU</b></div>
-                      <div>Відгуків: <b class="text-emerald-400">{{ bar.reviews }} в.</b></div>
-                      <div>Вага попиту: <b>{{ bar.weight }}</b></div>
-                    </div>
                   </div>
                 </div>
 
@@ -4516,7 +4545,7 @@
   </main>
 
   <!-- SLEEK GLASSMORPHISM MODAL FOR FULL SPECS OVERLAY -->
-  <div *ngIf="activeModalProduct" class="fixed inset-0 z-50 bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+  <div *ngIf="activeModalProduct" class="fixed inset-0 z-[100] bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
     <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/60 rounded-3xl p-6 max-w-2xl w-full shadow-2xl shadow-black/50 space-y-6 relative max-h-[85vh] flex flex-col">
       
       <div class="flex items-start justify-between border-b border-slate-800/80 pb-4">
@@ -4558,7 +4587,7 @@
   </div>
 
   <!-- MODAL: CREATE NEW FOLDER -->
-  <div *ngIf="showNewFolderModal" class="fixed inset-0 z-50 bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+  <div *ngIf="showNewFolderModal" class="fixed inset-0 z-[100] bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
     <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/60 rounded-3xl p-6 max-w-md w-full shadow-2xl shadow-black/50 space-y-5 relative">
       
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -4621,7 +4650,7 @@
   </div>
 
   <!-- MODAL: SAVE CURRENT SNAPSHOT -->
-  <div *ngIf="showSaveSnapshotModal" class="fixed inset-0 z-50 bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+  <div *ngIf="showSaveSnapshotModal" class="fixed inset-0 z-[100] bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
     <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/60 rounded-3xl p-6 max-w-md w-full shadow-2xl shadow-black/50 space-y-5 relative">
       
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -4736,7 +4765,7 @@
   </div>
 
   <!-- CUSTOM CONFIRMATION MODAL -->
-  <div *ngIf="showConfirmModal" class="fixed inset-0 z-50 bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+  <div *ngIf="showConfirmModal" class="fixed inset-0 z-[105] bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
     <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/70 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl shadow-black/70 space-y-5 relative">
       
       <!-- Icon & Header -->
@@ -4803,7 +4832,7 @@
   </div>
 
   <!-- MODAL: DRILLDOWN PRODUCTS (ТОГО ЧИ ІНШОГО ПРОДАВЦЯ / ДІАПАЗОНУ) -->
-  <div *ngIf="showDrilldownModal" class="fixed inset-0 z-50 bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+  <div *ngIf="showDrilldownModal" class="fixed inset-0 z-[100] bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
     <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/70 rounded-3xl p-5 sm:p-6 max-w-6xl w-full max-h-[90vh] shadow-2xl shadow-black/80 flex flex-col space-y-3 relative">
       
       <!-- Header -->
@@ -5265,7 +5294,7 @@
   <!-- FLOATING NOTIFICATION TOAST -->
   <div 
     *ngIf="historySuccessMsg" 
-    class="fixed bottom-6 right-6 z-50 bg-[#141c2e]/95 border border-emerald-500/50 text-emerald-300 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fadeIn text-xs font-bold"
+    class="fixed bottom-6 right-6 z-[120] bg-[#141c2e]/95 border border-emerald-500/50 text-emerald-300 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fadeIn text-xs font-bold"
   >
     <span class="material-icons text-emerald-400 text-base">check_circle</span>
     <span>{{ historySuccessMsg }}</span>
@@ -5273,7 +5302,7 @@
 
   <div 
     *ngIf="historyErrorMsg" 
-    class="fixed bottom-6 right-6 z-50 bg-[#141c2e]/95 border border-rose-500/50 text-rose-300 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fadeIn text-xs font-bold"
+    class="fixed bottom-6 right-6 z-[120] bg-[#141c2e]/95 border border-rose-500/50 text-rose-300 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fadeIn text-xs font-bold"
   >
     <span class="material-icons text-rose-400 text-base">error</span>
     <span>{{ historyErrorMsg }}</span>
@@ -5282,7 +5311,7 @@
   <!-- FLOATING COMPARISON BAR -->
   <div 
     *ngIf="selectedSnapshotIdsForComparison.length > 0 && activeTab === 'history'"
-    class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#0f172a]/95 backdrop-blur-xl border border-purple-500/60 p-3 sm:px-6 rounded-2xl shadow-2xl shadow-black/90 flex items-center gap-4 animate-slideUp"
+    class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] bg-[#0f172a]/95 backdrop-blur-xl border border-purple-500/60 p-3 sm:px-6 rounded-2xl shadow-2xl shadow-black/90 flex items-center gap-4 animate-slideUp"
   >
     <div class="flex items-center gap-2.5 text-xs">
       <span class="w-6 h-6 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center text-xs shadow-md">
@@ -5518,7 +5547,7 @@
   </div>
 
   <!-- MODAL: CREATE NEW TEAM USER -->
-  <div *ngIf="showCreateUserModal" class="fixed inset-0 z-50 bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+  <div *ngIf="showCreateUserModal" class="fixed inset-0 z-[100] bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
     <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-indigo-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl shadow-indigo-950/50 space-y-5 relative">
       
       <div class="flex items-center justify-between border-b border-slate-800/80 pb-3.5">
@@ -5642,7 +5671,7 @@
   </div>
 
   <!-- MODAL: CHANGE USER PASSWORD -->
-  <div *ngIf="showChangePasswordModal" class="fixed inset-0 z-50 bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+  <div *ngIf="showChangePasswordModal" class="fixed inset-0 z-[100] bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
     <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/60 rounded-3xl p-6 max-w-sm w-full shadow-2xl shadow-black/50 space-y-5 relative">
       
       <div class="flex items-center justify-between border-b border-slate-800/80 pb-3.5">

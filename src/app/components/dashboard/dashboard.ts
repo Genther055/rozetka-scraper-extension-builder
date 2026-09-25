@@ -1282,10 +1282,14 @@ export class DashboardComponent implements OnInit {
   // --- Price Equilibrium & Cumulative Demand Engine ---
   activePriceChartTab: 'cumulative' | 'density' | 'bins' = 'cumulative';
   hoveredCumulativePoint: any = null;
+  hoveredDensityBar: any = null;
+  hoveredDensityBarIndex: number = -1;
 
   setActivePriceChartTab(tab: 'cumulative' | 'density' | 'bins'): void {
     this.activePriceChartTab = tab;
     this.hoveredCumulativePoint = null;
+    this.hoveredDensityBar = null;
+    this.hoveredDensityBarIndex = -1;
     this.cdr.markForCheck();
   }
 
@@ -1542,6 +1546,18 @@ export class DashboardComponent implements OnInit {
 
   onCumulativeMouseLeave(): void {
     this.hoveredCumulativePoint = null;
+    this.cdr.markForCheck();
+  }
+
+  onDensityBarEnter(bar: any, index: number): void {
+    this.hoveredDensityBar = bar;
+    this.hoveredDensityBarIndex = index;
+    this.cdr.markForCheck();
+  }
+
+  onDensityBarLeave(): void {
+    this.hoveredDensityBar = null;
+    this.hoveredDensityBarIndex = -1;
     this.cdr.markForCheck();
   }
 
