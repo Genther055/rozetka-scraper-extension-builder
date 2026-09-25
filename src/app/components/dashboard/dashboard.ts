@@ -331,6 +331,9 @@ export class DashboardComponent implements OnInit {
   // Navigation & Tabs
   activeTab: 'overview' | 'explorer' | 'demand' | 'quant' | 'details' | 'history' | 'settings' = 'overview';
   quantSimulationPrice: number = 0;
+  quantExpectedRating: number = 4.8;
+  quantExpectedDiscount: number = 0;
+  quantStrategyMode: 'balanced' | 'volume' | 'profit' = 'balanced';
   quantActiveModule: 'all' | 'revenue' | 'elasticity' | 'gini' | 'correlation' | 'montecarlo' = 'all';
   settingsActiveSubTab: 'users' | 'profile' | 'storage' = 'users';
   isSidebarCollapsed: boolean = false;
@@ -5232,6 +5235,7 @@ export class DashboardComponent implements OnInit {
       return {
         hasData: false,
         targetPrice: 0,
+        effectivePrice: 0,
         minSliderPrice: 100,
         maxSliderPrice: 10000,
         p10Sales: 0,
@@ -5280,8 +5284,8 @@ export class DashboardComponent implements OnInit {
     // Seeded/deterministic PRNG step for steady rendering
     for (let k = 0; k < iterations; k++) {
       // Deterministic Box-Muller pseudo-random sequence based on k and simP
-      const u1 = Math.max(1e-6, ((Math.sin(k * 12.9898 + simP * 0.05) * 43758.5453) % 1 + 1) % 1);
-      const u2 = Math.max(1e-6, ((Math.cos(k * 78.233 + simP * 0.03) * 23421.631) % 1 + 1) % 1);
+      const u1 = Math.max(1e-6, ((Math.sin(k * 12.9898 + simP * 0.05 + this.quantExpectedRating) * 43758.5453) % 1 + 1) % 1);
+      const u2 = Math.max(1e-6, ((Math.cos(k * 78.233 + simP * 0.03 + this.quantExpectedDiscount) * 23421.631) % 1 + 1) % 1);
       
       const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
       const z1 = Math.sqrt(-2.0 * Math.log(u1)) * Math.sin(2.0 * Math.PI * u2);
@@ -5291,8 +5295,14 @@ export class DashboardComponent implements OnInit {
       const elasticityFactor = Math.pow(priceRatio, -ed);
       const noise = Math.exp(0.12 * z1);
 
-      const simSales = Math.max(1, Math.round(baseDemand * elasticityFactor * noise));
-      const simRev = simSales * simP;
+      // Social Proof Multiplier
+      const ratingFactor = Math.pow((this.quantExpectedRating || 4.8) / 4.5, 1.3);
+      // Discount Promotion Factor
+      const discountFactor = 1 + ((this.quantExpectedDiscount || 0) / 100) * (ed >= 1.3 ? 0.85 : 0.45);
+
+      const simSales = Math.max(1, Math.round(baseDemand * elasticityFactor * noise * ratingFactor * discountFactor));
+      const effectivePrice = Math.max(10, Math.round(simP * (1 - (this.quantExpectedDiscount || 0) / 100)));
+      const simRev = simSales * effectivePrice;
 
       simulatedRuns.push({ sales: simSales, revenue: simRev });
     }
@@ -5366,6 +5376,7 @@ export class DashboardComponent implements OnInit {
     return {
       hasData: true,
       targetPrice: simP,
+      effectivePrice: Math.max(10, Math.round(simP * (1 - (this.quantExpectedDiscount || 0) / 100))),
       minSliderPrice: Math.max(50, Math.round(minP * 0.5)),
       maxSliderPrice: Math.round(maxP * 1.5),
       p10Sales: p10.sales,
@@ -5383,6 +5394,124 @@ export class DashboardComponent implements OnInit {
       p50X,
       p90X
     };
+  }
+
+  // ========================================================
+  // COMPOSITE NICHE OPPORTUNITY SCORE (Jungle Scout / Helium 10 Benchmark)
+  // ========================================================
+  getQuantOpportunityScore() {
+    const prods = this.getQuantBaseProducts();
+    if (prods.length === 0) {
+      return {
+        hasData: false,
+        score: 50,
+        score10: '5.0 / 10',
+        grade: 'C',
+        badge: 'Недостатньо даних',
+        colorClass: 'text-slate-400 bg-slate-900 border-slate-750',
+        verdict: 'Зберіть дані про категорію для формування квантитативного висновку.',
+        demandScore: 0,
+        compScore: 0,
+        marginScore: 0,
+        strengths: [] as string[],
+        risks: [] as string[]
+      };
+    }
+
+    const totalSales = prods.reduce((acc, p) => acc + Math.max(1, (p.reviews || 0) * 12), 0);
+    const avgSalesPerSku = totalSales / prods.length;
+    const giniData = this.getQuantGiniLorenzData();
+    const elastData = this.getQuantElasticityData();
+
+    // 1. Demand Strength (0 - 35 points)
+    let demandScore = 20;
+    if (avgSalesPerSku >= 80) demandScore = 35;
+    else if (avgSalesPerSku >= 40) demandScore = 28;
+    else if (avgSalesPerSku >= 20) demandScore = 22;
+    else demandScore = 14;
+
+    // 2. Competition & Inequality (0 - 35 points)
+    let compScore = 25;
+    if (giniData.giniIndex < 0.40) compScore = 35;
+    else if (giniData.giniIndex < 0.55) compScore = 28;
+    else if (giniData.giniIndex < 0.70) compScore = 20;
+    else compScore = 12;
+
+    // 3. Profitability & Elasticity Potential (0 - 30 points)
+    let marginScore = 20;
+    if (elastData.elasticityIndex < 0.8) marginScore = 30; // Inelastic -> high margins
+    else if (elastData.elasticityIndex <= 1.3) marginScore = 25; // Balanced
+    else marginScore = 16; // High price war
+
+    const totalScore = Math.min(98, Math.max(15, demandScore + compScore + marginScore));
+    const score10 = (totalScore / 10).toFixed(1) + ' / 10';
+
+    let grade = 'B';
+    let badge = 'Помірний ринковий потенціал';
+    let colorClass = 'text-amber-400 bg-amber-950/40 border-amber-500/40';
+    let verdict = 'Категорія має стабільний базовий попит. Рекомендовано виходити з чітко відбудованою пропозицією та оптимізованою ціною.';
+
+    if (totalScore >= 82) {
+      grade = 'A+';
+      badge = 'Виняткова можливість для запуску';
+      colorClass = 'text-emerald-400 bg-emerald-950/50 border-emerald-500/50';
+      verdict = 'Ідеальна ніша: сильний потік замовлень, відсутність жорсткої монополії та висока стійкість до демпінгу. Висока ймовірність швидкої окупності.';
+    } else if (totalScore >= 72) {
+      grade = 'A';
+      badge = 'Високий комерційний потенціал';
+      colorClass = 'text-teal-400 bg-teal-950/50 border-teal-500/50';
+      verdict = 'Сприятливий ринок із високою ліквідністю. Нові позиції легко отримують замовлення при потраплянні в Sweet Spot ціни.';
+    } else if (totalScore < 50) {
+      grade = 'D';
+      badge = 'Підвищений ризик входу';
+      colorClass = 'text-rose-400 bg-rose-950/50 border-rose-500/50';
+      verdict = 'Ніша перевантажена сильними лідерами або має слабкий обсяг продажів. Запуск вимагає значних рекламних бюджетів.';
+    }
+
+    const strengths: string[] = [];
+    const risks: string[] = [];
+
+    if (demandScore >= 28) strengths.push('Висока місткість ринку та швидкий темп накопичення замовлень');
+    else risks.push('Низька швидкість обігу товарів у категорії');
+
+    if (giniData.giniIndex < 0.50) strengths.push('Здорова конкуренція: відсутня олігополія одного бренду');
+    else risks.push('Топ-продавці утримують левову частку трафіку');
+
+    if (elastData.elasticityIndex <= 1.2) strengths.push('Можливість встановлення високої торгової маржі');
+    else risks.push('Чутливість покупців до найменшого підвищення ціни');
+
+    return {
+      hasData: true,
+      score: totalScore,
+      score10,
+      grade,
+      badge,
+      colorClass,
+      verdict,
+      demandScore,
+      compScore,
+      marginScore,
+      strengths,
+      risks
+    };
+  }
+
+  applyQuantStrategy(mode: 'balanced' | 'volume' | 'profit') {
+    this.quantStrategyMode = mode;
+    const optData = this.getQuantOptimalRevenueData();
+    if (!optData.hasData) return;
+
+    if (mode === 'balanced') {
+      this.quantSimulationPrice = optData.optimalPrice;
+      this.quantExpectedDiscount = 0;
+    } else if (mode === 'volume') {
+      this.quantSimulationPrice = optData.sweetSpotMin;
+      this.quantExpectedDiscount = 10;
+    } else if (mode === 'profit') {
+      this.quantSimulationPrice = optData.sweetSpotMax;
+      this.quantExpectedDiscount = 0;
+    }
+    this.cdr.markForCheck();
   }
 
   getSpecsArray(product: any): { key: string, val: string }[] {

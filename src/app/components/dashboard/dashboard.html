@@ -3768,10 +3768,10 @@
                 <span>Institutional Quantitative Analytics Engine</span>
               </div>
               <h3 class="text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
-                <span>Кількісний та алгоритмічний аналіз ніші</span>
+                <span>Кількісний та алгоритмічний аналіз ніші (Quant Math OS)</span>
               </h3>
               <p class="text-xs text-slate-350 max-w-3xl leading-relaxed font-medium">
-                Математичне моделювання неперервної густини виручки, цінової еластичності попиту, коефіцієнта нерівності Джині, багатофакторної кореляції Пірсона та 1,000 стохастичних симуляцій Монте-Карло для прийняття безпомилкових комерційних рішень.
+                Математичне моделювання неперервної густини виручки, цінової еластичності попиту, коефіцієнта нерівності Джині, багатофакторної кореляції Пірсона та 1,000 стохастичних симуляцій Монте-Карло за стандартами провідних e-commerce intelligence систем.
               </p>
             </div>
 
@@ -3850,6 +3850,81 @@
                 5. Монте-Карло
               </button>
             </div>
+          </div>
+        </div>
+
+        <!-- COMPOSITE NICHE OPPORTUNITY SCORE CARD (Benchmark: Jungle Scout Opportunity Score & Helium 10 Market Tracker) -->
+        <div *ngIf="getQuantOpportunityScore() as opp" class="p-6 premium-card bg-gradient-to-r from-slate-950 via-[#0e172a] to-slate-950 border border-slate-800 shadow-xl space-y-4">
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            
+            <!-- Left Score Badge -->
+            <div class="flex items-center gap-5 shrink-0">
+              <div class="relative flex items-center justify-center w-20 h-20 rounded-2xl bg-slate-900/90 border-2 shadow-xl" [class]="opp.colorClass">
+                <span class="text-3xl font-black font-mono tracking-tight">{{ opp.grade }}</span>
+                <span class="absolute -bottom-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-950 border border-slate-700 text-slate-300">
+                  {{ opp.score }} / 100
+                </span>
+              </div>
+
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] font-extrabold uppercase tracking-widest text-indigo-400">TradeScout Opportunity Index</span>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border" [class]="opp.colorClass">{{ opp.badge }}</span>
+                </div>
+                <h4 class="text-lg font-black text-white leading-tight">Комплексна комерційна оцінка ніші: {{ opp.score10 }}</h4>
+                <p class="text-xs text-slate-350 max-w-xl leading-relaxed font-medium">{{ opp.verdict }}</p>
+              </div>
+            </div>
+
+            <!-- Right 3 Pillars Breakdown -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0 lg:max-w-md w-full">
+              <!-- Pillar 1: Demand -->
+              <div class="p-3 bg-slate-900/80 border border-slate-800 rounded-xl space-y-1">
+                <div class="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
+                  <span>Сила попиту</span>
+                  <span class="text-indigo-400 font-mono">{{ opp.demandScore }}/35</span>
+                </div>
+                <div class="w-full bg-slate-850 h-1.5 rounded-full overflow-hidden">
+                  <div class="bg-indigo-500 h-full rounded-full" [style.width.%]="(opp.demandScore / 35) * 100"></div>
+                </div>
+              </div>
+
+              <!-- Pillar 2: Competition / Gini -->
+              <div class="p-3 bg-slate-900/80 border border-slate-800 rounded-xl space-y-1">
+                <div class="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
+                  <span>Доступність входу</span>
+                  <span class="text-purple-400 font-mono">{{ opp.compScore }}/35</span>
+                </div>
+                <div class="w-full bg-slate-850 h-1.5 rounded-full overflow-hidden">
+                  <div class="bg-purple-500 h-full rounded-full" [style.width.%]="(opp.compScore / 35) * 100"></div>
+                </div>
+              </div>
+
+              <!-- Pillar 3: Margin / Elasticity -->
+              <div class="p-3 bg-slate-900/80 border border-slate-800 rounded-xl space-y-1">
+                <div class="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
+                  <span>Потенціал маржі</span>
+                  <span class="text-emerald-400 font-mono">{{ opp.marginScore }}/30</span>
+                </div>
+                <div class="w-full bg-slate-850 h-1.5 rounded-full overflow-hidden">
+                  <div class="bg-emerald-500 h-full rounded-full" [style.width.%]="(opp.marginScore / 30) * 100"></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Strengths & Risks bullet badges -->
+          <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-850/80 text-xs">
+            <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Діагностика факторів:</span>
+            <span *ngFor="let s of opp.strengths" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 rounded-lg text-[11px] font-medium">
+              <span class="material-icons text-xs text-emerald-400">check_circle</span>
+              <span>{{ s }}</span>
+            </span>
+            <span *ngFor="let r of opp.risks" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-950/40 border border-rose-500/30 text-rose-300 rounded-lg text-[11px] font-medium">
+              <span class="material-icons text-xs text-rose-400">warning</span>
+              <span>{{ r }}</span>
+            </span>
           </div>
         </div>
 
@@ -4269,51 +4344,121 @@
                   <h4 class="text-base font-extrabold text-white tracking-tight">Модуль 5: Стохастичний симулятор Монте-Карло (1,000 ітерацій)</h4>
                 </div>
                 <p class="text-xs text-slate-400 font-medium">
-                  Ймовірнісний аналіз валового виторгу та ризиків (P10 / P50 / P90 / VaR 95%) для обраної ціни запуску.
+                  Ймовірнісний аналіз валового виторгу та ризиків (P10 / P50 / P90 / VaR 95%) для обраної ціни запуску, планованого рейтингу та промо-знижок.
                 </p>
               </div>
 
-              <!-- Interactive Price Input / Reset -->
-              <div class="flex items-center gap-3 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                <div class="space-y-0.5">
-                  <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Цільова ціна запуску:</label>
-                  <div class="flex items-center gap-1.5">
-                    <input 
-                      type="number" 
-                      [value]="mc.targetPrice" 
-                      (input)="setQuantSimulationPrice($any($event.target).value)" 
-                      class="w-28 px-2.5 py-1 bg-slate-900 border border-slate-750 rounded-lg text-white font-mono font-bold text-sm focus:outline-none focus:border-indigo-500"
-                    />
-                    <span class="text-xs text-slate-400 font-bold">₴</span>
-                  </div>
-                </div>
-
+              <!-- Strategic Objective Presets -->
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Стратегічна мета:</span>
                 <button 
-                  (click)="resetQuantSimulationPrice()"
-                  class="px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm"
-                  title="Скинути ціну до глобального математичного оптимуму"
+                  (click)="applyQuantStrategy('volume')"
+                  [class.bg-purple-600]="quantStrategyMode === 'volume'"
+                  [class.text-white]="quantStrategyMode === 'volume'"
+                  [class.border-purple-500]="quantStrategyMode === 'volume'"
+                  [class.bg-slate-900]="quantStrategyMode !== 'volume'"
+                  [class.text-slate-300]="quantStrategyMode !== 'volume'"
+                  [class.border-slate-800]="quantStrategyMode !== 'volume'"
+                  class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer hover:border-purple-500/60 shadow-sm flex items-center gap-1"
+                  title="Захоплення максимальної частки ринку за рахунок вигідної ціни"
                 >
-                  Оптимум
+                  <span>🚀 Захоплення ринку</span>
+                </button>
+                <button 
+                  (click)="applyQuantStrategy('balanced')"
+                  [class.bg-indigo-600]="quantStrategyMode === 'balanced'"
+                  [class.text-white]="quantStrategyMode === 'balanced'"
+                  [class.border-indigo-500]="quantStrategyMode === 'balanced'"
+                  [class.bg-slate-900]="quantStrategyMode !== 'balanced'"
+                  [class.text-slate-300]="quantStrategyMode !== 'balanced'"
+                  [class.border-slate-800]="quantStrategyMode !== 'balanced'"
+                  class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer hover:border-indigo-500/60 shadow-sm flex items-center gap-1"
+                  title="Баланс між високим чеком та швидким темпом продажів"
+                >
+                  <span>⚖️ Збалансований оптимум</span>
+                </button>
+                <button 
+                  (click)="applyQuantStrategy('profit')"
+                  [class.bg-emerald-600]="quantStrategyMode === 'profit'"
+                  [class.text-white]="quantStrategyMode === 'profit'"
+                  [class.border-emerald-500]="quantStrategyMode === 'profit'"
+                  [class.bg-slate-900]="quantStrategyMode !== 'profit'"
+                  [class.text-slate-300]="quantStrategyMode !== 'profit'"
+                  [class.border-slate-800]="quantStrategyMode !== 'profit'"
+                  class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer hover:border-emerald-500/60 shadow-sm flex items-center gap-1"
+                  title="Максимізація маржі на одиницю проданого товару"
+                >
+                  <span>💎 Преміум-маржа</span>
                 </button>
               </div>
             </div>
 
-            <!-- Real-time Slider Control -->
-            <div class="space-y-1.5 bg-slate-950/60 p-4 rounded-xl border border-slate-850">
-              <div class="flex justify-between text-xs font-bold text-slate-400">
-                <span>Мін: {{ mc.minSliderPrice.toLocaleString() }} ₴</span>
-                <span class="text-indigo-300 font-mono">Поточна модельована ціна: {{ mc.targetPrice.toLocaleString() }} ₴</span>
-                <span>Макс: {{ mc.maxSliderPrice.toLocaleString() }} ₴</span>
+            <!-- Multi-Parameter Interactive Scenario Panel -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-950/70 p-4 rounded-2xl border border-slate-850">
+              
+              <!-- Slider 1: Target Price -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center text-xs">
+                  <span class="font-bold text-slate-400">1. Цільова ціна картки:</span>
+                  <span class="text-indigo-300 font-mono font-bold">{{ mc.targetPrice.toLocaleString() }} ₴</span>
+                </div>
+                <input 
+                  type="range" 
+                  [min]="mc.minSliderPrice" 
+                  [max]="mc.maxSliderPrice" 
+                  [step]="10" 
+                  [value]="mc.targetPrice" 
+                  (input)="setQuantSimulationPrice($any($event.target).value)" 
+                  class="w-full accent-indigo-500 cursor-pointer"
+                />
+                <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                  <span>{{ mc.minSliderPrice.toLocaleString() }} ₴</span>
+                  <span>{{ mc.maxSliderPrice.toLocaleString() }} ₴</span>
+                </div>
               </div>
-              <input 
-                type="range" 
-                [min]="mc.minSliderPrice" 
-                [max]="mc.maxSliderPrice" 
-                [step]="10" 
-                [value]="mc.targetPrice" 
-                (input)="setQuantSimulationPrice($any($event.target).value)" 
-                class="w-full accent-indigo-500 cursor-pointer"
-              />
+
+              <!-- Slider 2: Target Rating -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center text-xs">
+                  <span class="font-bold text-slate-400">2. Очікуваний рейтинг:</span>
+                  <span class="text-amber-400 font-mono font-bold">★ {{ quantExpectedRating.toFixed(1) }}</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="3.5" 
+                  max="5.0" 
+                  step="0.1" 
+                  [(ngModel)]="quantExpectedRating" 
+                  (ngModelChange)="cdr.markForCheck()" 
+                  class="w-full accent-amber-500 cursor-pointer"
+                />
+                <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                  <span>★ 3.5 (Базовий)</span>
+                  <span>★ 5.0 (Еталон)</span>
+                </div>
+              </div>
+
+              <!-- Slider 3: Promo Discount -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center text-xs">
+                  <span class="font-bold text-slate-400">3. Промо-знижка:</span>
+                  <span class="text-emerald-400 font-mono font-bold">{{ quantExpectedDiscount }}% (Чек: {{ (mc.effectivePrice || 0).toLocaleString() }} ₴)</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="40" 
+                  step="5" 
+                  [(ngModel)]="quantExpectedDiscount" 
+                  (ngModelChange)="cdr.markForCheck()" 
+                  class="w-full accent-emerald-500 cursor-pointer"
+                />
+                <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                  <span>0% (Без акції)</span>
+                  <span>40% (Сейл)</span>
+                </div>
+              </div>
+
             </div>
 
             <!-- KPI Cards: P10, P50, P90, VaR -->
