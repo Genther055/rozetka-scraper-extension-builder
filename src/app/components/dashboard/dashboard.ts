@@ -1415,22 +1415,34 @@ export class DashboardComponent implements OnInit {
     });
 
     // 3. SVG Paths for Cumulative Curves
+    const pointsInView = points.filter(p => p.price <= maxScalePrice);
+    if (pointsInView.length < points.length) {
+      const firstBeyond = points[pointsInView.length];
+      if (firstBeyond) {
+        pointsInView.push({
+          ...firstBeyond,
+          x: PAD_L + PLOT_W
+        });
+      }
+    }
+    const renderPoints = pointsInView.length > 0 ? pointsInView : points;
+
     let demandLinePath = '';
     let demandAreaPath = '';
     let supplyLinePath = '';
 
-    if (points.length > 0) {
-      demandLinePath = `M ${points[0].x} ${points[0].yDemand}`;
-      demandAreaPath = `M ${points[0].x} ${PAD_T + PLOT_H} L ${points[0].x} ${points[0].yDemand}`;
-      supplyLinePath = `M ${points[0].x} ${points[0].ySupply}`;
+    if (renderPoints.length > 0) {
+      demandLinePath = `M ${renderPoints[0].x} ${renderPoints[0].yDemand}`;
+      demandAreaPath = `M ${renderPoints[0].x} ${PAD_T + PLOT_H} L ${renderPoints[0].x} ${renderPoints[0].yDemand}`;
+      supplyLinePath = `M ${renderPoints[0].x} ${renderPoints[0].ySupply}`;
 
-      for (let i = 1; i < points.length; i++) {
-        demandLinePath += ` L ${points[i].x} ${points[i].yDemand}`;
-        demandAreaPath += ` L ${points[i].x} ${points[i].yDemand}`;
-        supplyLinePath += ` L ${points[i].x} ${points[i].ySupply}`;
+      for (let i = 1; i < renderPoints.length; i++) {
+        demandLinePath += ` L ${renderPoints[i].x} ${renderPoints[i].yDemand}`;
+        demandAreaPath += ` L ${renderPoints[i].x} ${renderPoints[i].yDemand}`;
+        supplyLinePath += ` L ${renderPoints[i].x} ${renderPoints[i].ySupply}`;
       }
 
-      demandAreaPath += ` L ${points[points.length - 1].x} ${PAD_T + PLOT_H} Z`;
+      demandAreaPath += ` L ${renderPoints[renderPoints.length - 1].x} ${PAD_T + PLOT_H} Z`;
     }
 
     // 4. Coordinates for 4 Key Price Anchors

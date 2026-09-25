@@ -1409,6 +1409,97 @@
             <!-- VIEW 1: CUMULATIVE DEMAND CURVE & 50% EQUILIBRIUM POINT -->
             <div *ngIf="activePriceChartTab === 'cumulative'" class="relative bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none" (mouseleave)="onCumulativeMouseLeave()">
               <div *ngIf="getCumulativeDemandChartData() as chart">
+
+                <!-- LIVE INTERACTIVE DEMAND & PRODUCT INSPECTOR BAR -->
+                <div class="mb-3 p-3 rounded-2xl bg-gradient-to-r from-slate-900/95 via-[#131d36]/90 to-slate-900/95 border border-indigo-500/40 shadow-lg min-h-[58px] flex flex-col md:flex-row md:items-center justify-between gap-3 transition-all">
+                  
+                  <!-- Active Hovered State -->
+                  <ng-container *ngIf="hoveredCumulativePoint; else defaultEquilibriumNotice">
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                      <!-- Left Price & Demand Badge -->
+                      <div class="flex items-center gap-2.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-indigo-500/30 shrink-0 font-mono">
+                        <div class="text-right">
+                          <span class="text-[9px] text-slate-400 font-sans block uppercase leading-none">Ціна</span>
+                          <b class="text-white text-sm leading-none">{{ hoveredCumulativePoint.price | number }} ₴</b>
+                        </div>
+                        <div class="h-6 w-px bg-slate-800"></div>
+                        <div>
+                          <span class="text-[9px] text-emerald-400 font-sans block uppercase leading-none">Попит</span>
+                          <b class="text-emerald-400 text-sm leading-none">{{ hoveredCumulativePoint.cumDemandPct }}%</b>
+                        </div>
+                      </div>
+
+                      <!-- Middle: Product Info -->
+                      <div *ngIf="hoveredCumulativePoint.product" class="min-w-0 flex-1">
+                        <p class="text-xs font-bold text-white truncate" [title]="hoveredCumulativePoint.product.name">
+                          {{ hoveredCumulativePoint.product.name }}
+                        </p>
+                        <div class="flex flex-wrap items-center gap-2 mt-0.5 text-[11px]">
+                          <!-- Seller Tag -->
+                          <span 
+                            class="px-1.5 py-0.2 rounded text-[9.5px] font-bold border"
+                            [class.bg-emerald-950]="isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                            [class.text-emerald-300]="isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                            [class.border-emerald-500/40]="isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                            [class.bg-indigo-950]="!isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                            [class.text-indigo-300]="!isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                            [class.border-indigo-500/40]="!isRozetkaSeller(hoveredCumulativePoint.product.seller)"
+                          >
+                            🏪 {{ hoveredCumulativePoint.product.seller || 'Rozetka' }} ({{ isRozetkaSeller(hoveredCumulativePoint.product.seller) ? '1P' : '3P' }})
+                          </span>
+                          <!-- Rating & Reviews -->
+                          <span class="text-amber-300 font-bold font-mono">★ {{ hoveredCumulativePoint.product.rating || '5.0' }}</span>
+                          <span class="text-slate-300 font-mono font-semibold">({{ hoveredCumulativePoint.product.reviews || 0 }} відгуків)</span>
+                          <span class="text-slate-400 font-mono text-[10px] hidden lg:inline">• До цієї ціни: {{ hoveredCumulativePoint.cumProducts }} SKU ({{ hoveredCumulativePoint.cumSupplyPct }}%) / {{ hoveredCumulativePoint.cumReviews | number }} в.</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Right: Action Buttons -->
+                    <div *ngIf="hoveredCumulativePoint.product" class="flex items-center gap-2 shrink-0">
+                      <button 
+                        (click)="openSpecsModal(hoveredCumulativePoint.product)"
+                        class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer"
+                      >
+                        <span class="material-icons text-sm">tune</span>
+                        <span>Характеристики</span>
+                      </button>
+                      <a 
+                        *ngIf="hoveredCumulativePoint.product.link" 
+                        [href]="hoveredCumulativePoint.product.link" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700 cursor-pointer"
+                      >
+                        <span class="material-icons text-sm">open_in_new</span>
+                        <span>Rozetka</span>
+                      </a>
+                    </div>
+                  </ng-container>
+
+                  <!-- Default Idle State (50% Equilibrium Anchor Prompt) -->
+                  <ng-template #defaultEquilibriumNotice>
+                    <div class="flex items-center justify-between w-full text-xs">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center font-bold text-sm shrink-0">
+                          ★
+                        </div>
+                        <div>
+                          <span class="font-bold text-white">Точка 50% рівноваги попиту: </span>
+                          <span class="font-mono font-extrabold text-amber-300 text-sm">{{ chart.weightedMedianPrice | number }} ₴</span>
+                          <span class="text-slate-400 text-[11px] ml-1.5">(Рівно 50% реальних замовлень зосереджено до цієї суми)</span>
+                        </div>
+                      </div>
+                      <div class="text-[11px] text-slate-400 font-medium hidden sm:flex items-center gap-1.5 bg-slate-950/80 px-3 py-1 rounded-xl border border-slate-800">
+                        <span class="material-icons text-indigo-400 text-xs">touch_app</span>
+                        <span>Наведіть курсор на будь-яку точку кривої для аналізу товару</span>
+                      </div>
+                    </div>
+                  </ng-template>
+
+                </div>
+
+                <!-- SVG PLOT AREA -->
                 <svg 
                   viewBox="0 0 960 330" 
                   class="w-full h-72 sm:h-80 cursor-crosshair overflow-visible"
@@ -1504,39 +1595,31 @@
                   <!-- Cumulative Demand Curve (Solid Emerald Line: Demand Mass) -->
                   <path [attr.d]="chart.demandLinePath" fill="none" stroke="#10b981" stroke-width="3.5" class="drop-shadow-lg"/>
 
-                  <!-- 4 Landmark Vertical Beacons -->
+                  <!-- Reference Vertical Guides (Uncluttered, Sleek Lines with Top Markers) -->
                   <!-- 1. Shelf Median Line -->
                   <g>
-                    <line [attr.x1]="chart.medianPriceX" y1="30" [attr.x2]="chart.medianPriceX" y2="280" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 3"/>
-                    <rect [attr.x]="chart.medianPriceX - 42" y="258" width="84" height="18" rx="4" fill="#082f49" stroke="#38bdf8" stroke-width="1"/>
-                    <text [attr.x]="chart.medianPriceX" y="270" text-anchor="middle" fill="#bae6fd" font-size="9" font-weight="bold" font-family="monospace">
-                      Медіана {{ chart.medianPrice | number }} ₴
-                    </text>
+                    <line [attr.x1]="chart.medianPriceX" y1="28" [attr.x2]="chart.medianPriceX" y2="280" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
+                    <circle [attr.cx]="chart.medianPriceX" cy="28" r="3" fill="#38bdf8"/>
                   </g>
 
                   <!-- 2. Shelf Average Line -->
                   <g>
-                    <line [attr.x1]="chart.avgPriceX" y1="30" [attr.x2]="chart.avgPriceX" y2="280" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="3 3"/>
-                    <rect [attr.x]="chart.avgPriceX - 40" y="238" width="80" height="18" rx="4" fill="#3b0764" stroke="#c084fc" stroke-width="1"/>
-                    <text [attr.x]="chart.avgPriceX" y="250" text-anchor="middle" fill="#f3e8ff" font-size="9" font-weight="bold" font-family="monospace">
-                      Сер. {{ chart.avgPrice | number }} ₴
-                    </text>
+                    <line [attr.x1]="chart.avgPriceX" y1="28" [attr.x2]="chart.avgPriceX" y2="280" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
+                    <circle [attr.cx]="chart.avgPriceX" cy="28" r="3" fill="#c084fc"/>
                   </g>
 
                   <!-- 3. Weighted Average Line -->
                   <g>
-                    <line [attr.x1]="chart.weightedAvgPriceX" y1="30" [attr.x2]="chart.weightedAvgPriceX" y2="280" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3"/>
-                    <rect [attr.x]="chart.weightedAvgPriceX - 48" y="218" width="96" height="18" rx="4" fill="#064e3b" stroke="#34d399" stroke-width="1"/>
-                    <text [attr.x]="chart.weightedAvgPriceX" y="230" text-anchor="middle" fill="#d1fae5" font-size="9" font-weight="bold" font-family="monospace">
-                      Зваж.сер. {{ chart.weightedAvgPrice | number }} ₴
-                    </text>
+                    <line [attr.x1]="chart.weightedAvgPriceX" y1="28" [attr.x2]="chart.weightedAvgPriceX" y2="280" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
+                    <circle [attr.cx]="chart.weightedAvgPriceX" cy="28" r="3" fill="#34d399"/>
                   </g>
 
-                  <!-- 4. Weighted Median (50% Mass Equilibrium) -->
+                  <!-- 4. Weighted Median (50% Mass Equilibrium Anchor) -->
                   <g>
-                    <line [attr.x1]="chart.weightedMedianPriceX" y1="30" [attr.x2]="chart.weightedMedianPriceX" y2="280" stroke="#fbbf24" stroke-width="2.5"/>
-                    <rect [attr.x]="chart.weightedMedianPriceX - 52" y="198" width="104" height="18" rx="4" fill="#451a03" stroke="#fbbf24" stroke-width="1.5"/>
-                    <text [attr.x]="chart.weightedMedianPriceX" y="210" text-anchor="middle" fill="#fef3c7" font-size="9.5" font-weight="bold" font-family="monospace">
+                    <line [attr.x1]="chart.weightedMedianPriceX" y1="20" [attr.x2]="chart.weightedMedianPriceX" y2="280" stroke="#fbbf24" stroke-width="2"/>
+                    <!-- Distinctive Top Anchor Pill -->
+                    <rect [attr.x]="chart.weightedMedianPriceX - 48" y="10" width="96" height="18" rx="4" fill="#451a03" stroke="#fbbf24" stroke-width="1.5"/>
+                    <text [attr.x]="chart.weightedMedianPriceX" y="22" text-anchor="middle" fill="#fef3c7" font-size="9" font-weight="bold" font-family="monospace">
                       ★ 50% {{ chart.weightedMedianPrice | number }} ₴
                     </text>
                   </g>
@@ -1557,100 +1640,35 @@
                     </g>
                   </g>
 
-                  <!-- Interactive Cursor Crosshair -->
+                  <!-- Interactive Cursor Crosshairs & Dynamic Axis Pills -->
                   <g *ngIf="hoveredCumulativePoint">
-                    <line [attr.x1]="hoveredCumulativePoint.x" y1="30" [attr.x2]="hoveredCumulativePoint.x" y2="280" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="2 2"/>
+                    <!-- Vertical line -->
+                    <line [attr.x1]="hoveredCumulativePoint.x" y1="20" [attr.x2]="hoveredCumulativePoint.x" y2="280" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="2 2"/>
+                    <!-- Horizontal line to Y axis -->
+                    <line x1="65" [attr.y1]="hoveredCumulativePoint.yDemand" [attr.x2]="hoveredCumulativePoint.x" [attr.y2]="hoveredCumulativePoint.yDemand" stroke="#10b981" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>
+
+                    <!-- Intersection circles -->
                     <circle [attr.cx]="hoveredCumulativePoint.x" [attr.cy]="hoveredCumulativePoint.yDemand" r="6" fill="#10b981" stroke="#ffffff" stroke-width="2"/>
-                    <circle [attr.cx]="hoveredCumulativePoint.x" [attr.cy]="hoveredCumulativePoint.ySupply" r="4.5" fill="#818cf8" stroke="#ffffff" stroke-width="1.5"/>
+                    <circle [attr.cx]="hoveredCumulativePoint.x" [attr.cy]="hoveredCumulativePoint.ySupply" r="4" fill="#818cf8" stroke="#ffffff" stroke-width="1.5"/>
+
+                    <!-- Dynamic X-Axis Price Pill -->
+                    <g>
+                      <rect [attr.x]="hoveredCumulativePoint.x - 36" y="284" width="72" height="18" rx="4" fill="#0369a1" stroke="#38bdf8" stroke-width="1"/>
+                      <text [attr.x]="hoveredCumulativePoint.x" y="296" text-anchor="middle" fill="#ffffff" font-size="9" font-weight="bold" font-family="monospace">
+                        {{ hoveredCumulativePoint.price | number }} ₴
+                      </text>
+                    </g>
+
+                    <!-- Dynamic Y-Axis Demand % Pill -->
+                    <g>
+                      <rect x="18" [attr.y]="hoveredCumulativePoint.yDemand - 8" width="42" height="16" rx="3" fill="#065f46" stroke="#10b981" stroke-width="1"/>
+                      <text x="39" [attr.y]="hoveredCumulativePoint.yDemand + 4" text-anchor="middle" fill="#ffffff" font-size="9" font-weight="bold" font-family="monospace">
+                        {{ hoveredCumulativePoint.cumDemandPct }}%
+                      </text>
+                    </g>
                   </g>
                 </svg>
 
-                <!-- Interactive Floating Tooltip with Full Product Details -->
-                <div 
-                  *ngIf="hoveredCumulativePoint" 
-                  class="absolute z-30 p-3.5 bg-[#0f172a]/95 border border-indigo-500/80 rounded-2xl shadow-2xl text-xs text-white transition-all duration-75 w-80 max-w-[90vw] ring-1 ring-slate-700/80 backdrop-blur-md"
-                  [style.left.px]="Math.min(620, Math.max(20, hoveredCumulativePoint.x - 140))"
-                  [style.top.px]="Math.max(10, Math.min(150, hoveredCumulativePoint.yDemand - 120))"
-                >
-                  <div class="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2 font-mono">
-                    <div>
-                      <span class="text-[10px] text-slate-400 font-sans block">Ціновий поріг:</span>
-                      <b class="text-white text-base leading-none">{{ hoveredCumulativePoint.price | number }} ₴</b>
-                    </div>
-                    <div class="text-right">
-                      <span class="text-[10px] text-emerald-400 font-sans block">Накопичений попит:</span>
-                      <b class="text-emerald-400 text-sm leading-none">{{ hoveredCumulativePoint.cumDemandPct }}%</b>
-                    </div>
-                  </div>
-
-                  <div class="space-y-1 font-mono text-[11px]">
-                    <div class="flex justify-between items-center text-slate-300">
-                      <span class="text-slate-400 font-sans">Асортимент полиці:</span>
-                      <b class="text-indigo-300">{{ hoveredCumulativePoint.cumProducts }} тов. ({{ hoveredCumulativePoint.cumSupplyPct }}%)</b>
-                    </div>
-                    <div class="flex justify-between items-center text-slate-300">
-                      <span class="text-slate-400 font-sans">Сума відгуків:</span>
-                      <b class="text-amber-300">{{ hoveredCumulativePoint.cumReviews | number }} в.</b>
-                    </div>
-                  </div>
-
-                  <!-- Specific SKU Card in this Price Anchor -->
-                  <div *ngIf="hoveredCumulativePoint.product" class="mt-2.5 pt-2 border-t border-slate-800 space-y-2">
-                    <div class="flex items-start gap-2">
-                      <span class="material-icons text-indigo-400 text-sm shrink-0 mt-0.5">inventory_2</span>
-                      <div class="min-w-0 flex-1">
-                        <p class="text-[11px] font-bold text-white leading-tight line-clamp-2" [title]="hoveredCumulativePoint.product.name">
-                          {{ hoveredCumulativePoint.product.name }}
-                        </p>
-                        
-                        <div class="flex flex-wrap items-center gap-1.5 mt-1 text-[10px]">
-                          <!-- Seller Badge -->
-                          <span 
-                            class="px-1.5 py-0.5 rounded text-[9.5px] font-bold border"
-                            [class.bg-emerald-950]="isRozetkaSeller(hoveredCumulativePoint.product.seller)"
-                            [class.text-emerald-300]="isRozetkaSeller(hoveredCumulativePoint.product.seller)"
-                            [class.border-emerald-500/40]="isRozetkaSeller(hoveredCumulativePoint.product.seller)"
-                            [class.bg-indigo-950]="!isRozetkaSeller(hoveredCumulativePoint.product.seller)"
-                            [class.text-indigo-300]="!isRozetkaSeller(hoveredCumulativePoint.product.seller)"
-                            [class.border-indigo-500/40]="!isRozetkaSeller(hoveredCumulativePoint.product.seller)"
-                          >
-                            🏪 {{ hoveredCumulativePoint.product.seller || 'Rozetka' }} ({{ isRozetkaSeller(hoveredCumulativePoint.product.seller) ? '1P' : '3P' }})
-                          </span>
-
-                          <!-- Rating & Reviews -->
-                          <span class="text-amber-300 font-bold font-mono flex items-center gap-0.5">
-                            ★ {{ hoveredCumulativePoint.product.rating || '5.0' }}
-                          </span>
-                          <span class="text-slate-300 font-mono font-semibold">
-                            • {{ hoveredCumulativePoint.product.reviews || 0 }} відгуків
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Quick Action Buttons -->
-                    <div class="pt-1 flex items-center gap-1.5">
-                      <button 
-                        (click)="openSpecsModal(hoveredCumulativePoint.product)"
-                        class="flex-1 py-1 px-2 bg-indigo-600/90 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer shadow"
-                      >
-                        <span class="material-icons text-xs">tune</span>
-                        <span>Характеристики</span>
-                      </button>
-                      
-                      <a 
-                        *ngIf="hoveredCumulativePoint.product.link"
-                        [href]="hoveredCumulativePoint.product.link" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        class="py-1 px-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer border border-slate-700/80"
-                      >
-                        <span class="material-icons text-xs">open_in_new</span>
-                        <span>Rozetka</span>
-                      </a>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
 
