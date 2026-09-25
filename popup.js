@@ -59,7 +59,9 @@ function updateProgress(percent, count, actionMsg, estimatedTotal, pageNum) {
     progressFill.style.width = `${safePercent}%`;
     percentText.innerText = `${safePercent}%`;
     
-    if (estimatedTotal && estimatedTotal > 0) {
+    if (safePercent === 100 && count > 0) {
+        countText.innerText = `📦 ${count} / ${count} тов. (100%)`;
+    } else if (estimatedTotal && estimatedTotal > 0) {
         countText.innerText = `📦 ${count || 0} / ${estimatedTotal} тов.`;
     } else {
         countText.innerText = `📦 ${count || 0} товарів`;

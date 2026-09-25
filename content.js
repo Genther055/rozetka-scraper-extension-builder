@@ -678,7 +678,7 @@
             isTabScrapingActive = false;
             window.__tradeScoutIsScrapingActive = false;
             currentPercent = 100;
-            currentStatusMsg = `Збір завершено! Всього ${sentLinks.size} товарів.`;
+            currentStatusMsg = `Збір завершено! Всього ${sentLinks.size} товарів (100% позицій з ціною).`;
             clearPersistedSession();
             console.log(`TradeScout Tab ${currentTabId}: Scrape completed with ${sentLinks.size} items.`);
 
