@@ -757,6 +757,8 @@ export class DashboardComponent implements OnInit {
     rank?: number;
     xVal: number;
     yVal: number;
+    product?: Product;
+    link?: string;
   } | null = null;
   pinnedOverviewPoint: any = null;
   hoveredChartClientPos: { x: number; y: number } = { x: 0, y: 0 };
@@ -865,7 +867,9 @@ export class DashboardComponent implements OnInit {
         rating: pt.p.rating || 0,
         rank: pt.rank,
         xVal: pt.xVal,
-        yVal: pt.yVal
+        yVal: pt.yVal,
+        product: pt.p,
+        link: pt.p.link
       };
     });
   }
@@ -1829,25 +1833,44 @@ export class DashboardComponent implements OnInit {
 
     // Резервний варіант (розбір рядка)
     const specsStr = product.specs;
-    if (!specsStr) return [];
-    const parts = specsStr.split(';').map((s: any) => s.trim()).filter(Boolean);
+    if (specsStr) {
+      const parts = specsStr.split(';').map((s: any) => s.trim()).filter(Boolean);
 
-    for (const part of parts) {
-      if (/mah|мАг/i.test(part)) {
-        const match = part.match(/\d+[\d\s]*(?:mah|мАг)/i);
-        const text = match ? match[0] : cleanBadgeText(part);
-        badges.push({ text, style: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60' });
-      } else if (/\d+\s*W|\b\d+\s*Вт\b/i.test(part)) {
-        const match = part.match(/\d+(?:\.\d+)?\s*(?:W|Вт)/i);
-        const text = match ? match[0] : cleanBadgeText(part);
-        badges.push({ text, style: 'bg-purple-950/80 text-purple-300 border-purple-700/60' });
-      } else if (/magsafe|quickcharge|qc|pd|бездрот|ліхтарик/i.test(part)) {
-        badges.push({ text: cleanBadgeText(part), style: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60' });
-      } else if (badges.length < 3) {
-        const t = cleanBadgeText(part);
-        if (t.length > 0) {
-          badges.push({ text: t, style: 'bg-slate-900 text-slate-200 border-slate-700/70' });
+      for (const part of parts) {
+        if (/mah|мАг/i.test(part)) {
+          const match = part.match(/\d+[\d\s]*(?:mah|мАг)/i);
+          const text = match ? match[0] : cleanBadgeText(part);
+          badges.push({ text, style: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60' });
+        } else if (/\d+\s*W|\b\d+\s*Вт\b/i.test(part)) {
+          const match = part.match(/\d+(?:\.\d+)?\s*(?:W|Вт)/i);
+          const text = match ? match[0] : cleanBadgeText(part);
+          badges.push({ text, style: 'bg-purple-950/80 text-purple-300 border-purple-700/60' });
+        } else if (/magsafe|quickcharge|qc|pd|бездрот|ліхтарик/i.test(part)) {
+          badges.push({ text: cleanBadgeText(part), style: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60' });
+        } else if (badges.length < 3) {
+          const t = cleanBadgeText(part);
+          if (t.length > 0) {
+            badges.push({ text: t, style: 'bg-slate-900 text-slate-200 border-slate-700/70' });
+          }
         }
+      }
+      if (badges.length > 0) return badges;
+    }
+
+    // Додатковий надійний резерв: витяг з алгоритмічного парсера extractProductSpecsMap
+    const specMap = extractProductSpecsMap(product);
+    if (specMap && Object.keys(specMap).length > 0) {
+      if (specMap['Ємність акумулятора']) {
+        badges.push({ text: cleanBadgeText(specMap['Ємність акумулятора']), style: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60' });
+      }
+      if (specMap['Вихідна потужність']) {
+        badges.push({ text: cleanBadgeText(specMap['Вихідна потужність']), style: 'bg-purple-950/80 text-purple-300 border-purple-700/60' });
+      }
+      if (specMap['Технології заряджання']) {
+        badges.push({ text: cleanBadgeText(specMap['Технології заряджання']), style: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60' });
+      }
+      if (specMap['Бренд'] && badges.length < 3) {
+        badges.push({ text: cleanBadgeText(specMap['Бренд']), style: 'bg-slate-900 text-slate-200 border-slate-700/70' });
       }
     }
     return badges;

@@ -2858,12 +2858,12 @@
             <!-- Floating Crosshair Info Tooltip on Hover / Pin (Adaptive Percentage-Based Coordinates) -->
             <div 
               *ngIf="activeOverviewPoint" 
-              class="absolute z-30 p-3.5 bg-[#0d1424]/95 border rounded-2xl shadow-2xl text-xs text-white transition-all duration-75 max-w-[280px] backdrop-blur-md"
+              class="absolute z-30 p-3.5 bg-[#0d1424]/95 border rounded-2xl shadow-2xl text-xs text-white transition-all duration-75 min-w-[260px] max-w-[320px] backdrop-blur-md pointer-events-auto"
               [class.border-amber-500/80]="pinnedOverviewPoint"
               [class.border-indigo-500/70]="!pinnedOverviewPoint"
               [class.ring-2]="pinnedOverviewPoint"
               [class.ring-amber-500/30]="pinnedOverviewPoint"
-              [style.left.%]="Math.max(12, Math.min(88, (activeOverviewPoint.x / 960) * 100))"
+              [style.left.%]="Math.max(14, Math.min(86, (activeOverviewPoint.x / 960) * 100))"
               [style.top.%]="(activeOverviewPoint.y / 220) * 100"
               [class.-translate-x-1/2]="(activeOverviewPoint.x / 960) >= 0.25 && (activeOverviewPoint.x / 960) <= 0.75"
               [class.-translate-x-4]="(activeOverviewPoint.x / 960) < 0.25"
@@ -2871,9 +2871,10 @@
               [class.-translate-y-full]="activeOverviewPoint.y >= 70"
               [class.-mt-3]="activeOverviewPoint.y >= 70"
               [class.translate-y-4]="activeOverviewPoint.y < 70"
+              (click)="$event.stopPropagation()"
             >
               <div class="flex items-center justify-between gap-2 mb-1.5 border-b border-slate-800/80 pb-1.5">
-                <span *ngIf="pinnedOverviewPoint" class="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider flex items-center gap-0.5">
+                <span *ngIf="pinnedOverviewPoint" class="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider flex items-center gap-0.5">
                   <span class="material-icons text-[10px]">push_pin</span>
                   Зафіксовано
                 </span>
@@ -2883,22 +2884,46 @@
                 <button 
                   *ngIf="pinnedOverviewPoint"
                   (click)="unpinOverviewPoint($event)"
-                  class="text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                  class="text-slate-400 hover:text-white p-0.5 cursor-pointer rounded hover:bg-slate-800 transition-colors"
                   title="Зняти фіксацію"
                 >
                   <span class="material-icons text-xs">close</span>
                 </button>
               </div>
 
-              <div class="font-bold text-white text-xs truncate max-w-[250px] mb-1.5" [title]="activeOverviewPoint.name">
+              <div class="font-bold text-white text-xs truncate max-w-[280px] mb-1.5" [title]="activeOverviewPoint.name">
                 {{ activeOverviewPoint.name }}
               </div>
 
-              <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono text-slate-300">
+              <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono text-slate-300 mb-2.5">
                 <div>Ціна: <b class="text-white">{{ activeOverviewPoint.price | number }} ₴</b></div>
                 <div>Відгуки: <b class="text-emerald-400">{{ activeOverviewPoint.reviews }} в.</b></div>
                 <div>Продавець: <b class="text-indigo-300 truncate">{{ activeOverviewPoint.seller || 'Rozetka' }}</b></div>
                 <div *ngIf="(activeOverviewPoint.discount || 0) > 0">Знижка: <b class="text-rose-400">-{{ activeOverviewPoint.discount }}%</b></div>
+              </div>
+
+              <!-- Action buttons: Specs & Link to Rozetka -->
+              <div class="flex items-center gap-1.5 pt-1.5 border-t border-slate-800/80">
+                <button 
+                  *ngIf="activeOverviewPoint.product"
+                  (click)="openSpecsModal(activeOverviewPoint.product); $event.stopPropagation()"
+                  class="flex-1 py-1.5 px-2 bg-indigo-600/90 hover:bg-indigo-600 text-white rounded-lg text-[10.5px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm shadow-indigo-600/30 cursor-pointer"
+                >
+                  <span class="material-icons text-[12px]">tune</span>
+                  <span>Характеристики</span>
+                </button>
+                <a 
+                  *ngIf="activeOverviewPoint.link" 
+                  [href]="activeOverviewPoint.link" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  (click)="$event.stopPropagation()"
+                  class="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-[10.5px] font-bold transition-all flex items-center justify-center gap-1 border border-slate-700/80 cursor-pointer shrink-0"
+                  title="Відкрити товар на Rozetka"
+                >
+                  <span class="material-icons text-[12px]">open_in_new</span>
+                  <span>Rozetka</span>
+                </a>
               </div>
             </div>
           </div>
@@ -3378,7 +3403,7 @@
                   
                   <!-- Specs Badges -->
                   <td class="py-4 px-4 min-w-[220px]">
-                    <div *ngIf="item.specs" class="flex flex-wrap gap-1.5 items-center">
+                    <div *ngIf="getBadgeSpecs(item).length > 0 || getSpecsArray(item).length > 0" class="flex flex-wrap gap-1.5 items-center">
                       <span 
                         *ngFor="let badge of getBadgeSpecs(item)" 
                         [class]="badge.style" 
@@ -3388,14 +3413,24 @@
                       </span>
                       
                       <button 
-                        *ngIf="getSpecsArray(item).length > getBadgeSpecs(item).length"
                         (click)="openSpecsModal(item)"
-                        class="px-2 py-1 text-xs font-bold bg-slate-900/90 hover:bg-slate-800 text-indigo-300 border border-slate-700 hover:border-indigo-500/40 rounded-xl transition-all cursor-pointer shadow-sm"
+                        class="px-2 py-1 text-xs font-bold bg-slate-900/90 hover:bg-slate-800 text-indigo-300 hover:text-indigo-200 border border-slate-700 hover:border-indigo-500/40 rounded-xl transition-all cursor-pointer shadow-sm flex items-center gap-1"
+                        title="Відкрити всі характеристики"
                       >
-                        +{{ getSpecsArray(item).length - getBadgeSpecs(item).length }} ще
+                        <span class="material-icons text-[11px]">tune</span>
+                        <span *ngIf="getSpecsArray(item).length > getBadgeSpecs(item).length">+{{ getSpecsArray(item).length - getBadgeSpecs(item).length }} ще</span>
+                        <span *ngIf="getSpecsArray(item).length <= getBadgeSpecs(item).length">Опис</span>
                       </button>
                     </div>
-                    <span *ngIf="!item.specs" class="text-slate-500 italic text-xs">Стандартні</span>
+                    <div *ngIf="getBadgeSpecs(item).length === 0 && getSpecsArray(item).length === 0" class="flex items-center gap-1.5">
+                      <button 
+                        (click)="openSpecsModal(item)"
+                        class="px-2.5 py-1 text-xs font-bold bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-300 border border-indigo-700/50 rounded-xl transition-all cursor-pointer shadow-sm flex items-center gap-1"
+                      >
+                        <span class="material-icons text-[11px]">tune</span>
+                        <span>Характеристики</span>
+                      </button>
+                    </div>
                   </td>
 
                   <!-- Price & Discount (Expanded Width & Prominent Values) -->
