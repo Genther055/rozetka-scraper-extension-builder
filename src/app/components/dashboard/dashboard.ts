@@ -174,8 +174,12 @@ export interface AnalyticalSummary {
     productsCount: number;
     marketShare: number;
     reviewsSum: number;
+    reviewsShare?: number;
     avgReviewsPerProduct: number;
     medianPrice: number;
+    avgPrice?: number;
+    minPrice?: number;
+    maxPrice?: number;
     inStockRate: number;
     color: string;
     rank: number;
@@ -1275,9 +1279,175 @@ export class DashboardComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
-  onScatterMouseLeave(): void {
-    this.hoveredScatterPoint = null;
+  // --- Multi-View Competitive Analytics & Price Corridors Engine ---
+  activePriceChartTab: 'matrix' | 'sellers' | 'bins' = 'matrix';
+  hoveredSellerBubble: any = null;
+  hoveredPriceBin: any = null;
+
+  setActivePriceChartTab(tab: 'matrix' | 'sellers' | 'bins'): void {
+    this.activePriceChartTab = tab;
+    this.hoveredSellerBubble = null;
+    this.hoveredPriceBin = null;
     this.cdr.markForCheck();
+  }
+
+  getSellerBubbleMatrixData() {
+    const sellers = this.analyticsSummary?.sellersTable || [];
+    if (!sellers || sellers.length === 0) {
+      return { bubbles: [], xTicks: [], yTicks: [], midX: 480, midY: 170, minPrice: 0, maxPrice: 0, maxReviews: 0 };
+    }
+
+    const SVG_W = 960;
+    const SVG_H = 340;
+    const PAD_L = 70;
+    const PAD_R = 40;
+    const PAD_T = 30;
+    const PAD_B = 40;
+    const PLOT_W = SVG_W - PAD_L - PAD_R;
+    const PLOT_H = SVG_H - PAD_T - PAD_B;
+
+    const prices = sellers.map(s => s.medianPrice || s.avgPrice || 0).filter(p => p > 0);
+    const minP = prices.length > 0 ? Math.min(...prices) : 0;
+    let maxP = prices.length > 0 ? Math.max(...prices) : 1000;
+    if (maxP <= minP) maxP = minP + 500;
+
+    const reviews = sellers.map(s => s.reviewsSum || 0);
+    const maxRev = Math.max(10, ...reviews);
+
+    const top3Names = this.getTop3SellersList().map(s => s.name.toLowerCase());
+    const totalAllNicheReviews = this.products.reduce((acc, p) => acc + (Number(p.reviews) || 0), 0);
+
+    const bubbles = sellers.map(s => {
+      const p = s.medianPrice || s.avgPrice || minP;
+      const r = s.reviewsSum || 0;
+      const share = s.marketShare || 0;
+
+      const normX = Math.max(0, Math.min(1, (p - minP) / (maxP - minP)));
+      const normY = Math.max(0, Math.min(1, r / maxRev));
+
+      const x = PAD_L + normX * PLOT_W;
+      const y = PAD_T + (1 - normY) * PLOT_H;
+
+      const radius = Math.min(32, Math.max(9, 8 + Math.sqrt(share) * 5.5));
+
+      const sellerLower = (s.sellerName || '').trim().toLowerCase();
+      let isDimmed = false;
+      let isHighlighted = false;
+
+      if (this.scatterStoreFilter === 'top3') {
+        const isTop3 = top3Names.some(t => sellerLower === t || (t.includes('rozetka') && sellerLower.includes('rozetka')));
+        isDimmed = !isTop3;
+        isHighlighted = isTop3;
+      } else if (this.scatterStoreFilter !== 'all') {
+        const target = this.scatterStoreFilter.toLowerCase();
+        const isTarget = sellerLower === target || (target.includes('rozetka') && sellerLower.includes('rozetka'));
+        isDimmed = !isTarget;
+        isHighlighted = isTarget;
+      }
+
+      const reviewsShare = s.reviewsShare !== undefined 
+        ? s.reviewsShare 
+        : (totalAllNicheReviews > 0 ? Number(((r / totalAllNicheReviews) * 100).toFixed(1)) : 0);
+
+      return {
+        x: Math.round(x * 10) / 10,
+        y: Math.round(y * 10) / 10,
+        radius: isHighlighted ? Math.round(radius * 1.25) : Math.round(radius),
+        seller: s,
+        sellerName: s.sellerName,
+        isRozetka: s.isRozetka,
+        productsCount: s.productsCount,
+        marketShare: s.marketShare,
+        reviewsSum: s.reviewsSum,
+        reviewsShare,
+        avgPrice: s.avgPrice || s.medianPrice,
+        medianPrice: s.medianPrice,
+        minPrice: s.minPrice || s.medianPrice,
+        maxPrice: s.maxPrice || s.medianPrice,
+        inStockRate: s.inStockRate,
+        avgReviewsPerProduct: s.avgReviewsPerProduct,
+        color: s.color || '#6366f1',
+        rank: s.rank,
+        isTop3: s.isTop3,
+        isDimmed,
+        isHighlighted
+      };
+    });
+
+    const midX = PAD_L + PLOT_W / 2;
+    const midY = PAD_T + PLOT_H / 2;
+
+    // Y-Ticks (Reviews)
+    const yRatios = [1, 0.75, 0.5, 0.25, 0];
+    const yTicks = yRatios.map(ratio => {
+      const val = Math.round(maxRev * ratio);
+      const y = PAD_T + (1 - ratio) * PLOT_H;
+      return { y: Math.round(y), label: val.toLocaleString() + ' в.' };
+    });
+
+    // X-Ticks (Price)
+    const xRatios = [0, 0.25, 0.5, 0.75, 1];
+    const xTicks = xRatios.map(ratio => {
+      const val = Math.round(minP + (maxP - minP) * ratio);
+      const x = PAD_L + ratio * PLOT_W;
+      return { x: Math.round(x), label: val.toLocaleString() + ' ₴' };
+    });
+
+    return { bubbles, xTicks, yTicks, midX, midY, minPrice: minP, maxPrice: maxP, maxReviews: maxRev };
+  }
+
+  onSellerBubbleMouseMove(event: MouseEvent): void {
+    const target = event.currentTarget as HTMLElement;
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    const scaleX = 960 / rect.width;
+    const scaleY = 340 / rect.height;
+    const svgX = mouseX * scaleX;
+    const svgY = mouseY * scaleY;
+
+    const data = this.getSellerBubbleMatrixData();
+    if (data.bubbles.length === 0) return;
+
+    let closest = data.bubbles[0];
+    let minDist = Math.hypot(data.bubbles[0].x - svgX, data.bubbles[0].y - svgY);
+
+    for (let i = 1; i < data.bubbles.length; i++) {
+      const b = data.bubbles[i];
+      const dist = Math.hypot(b.x - svgX, b.y - svgY);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = b;
+      }
+    }
+
+    if (minDist <= closest.radius + 20) {
+      this.hoveredSellerBubble = closest;
+    } else {
+      this.hoveredSellerBubble = null;
+    }
+    this.cdr.markForCheck();
+  }
+
+  onSellerBubbleMouseLeave(): void {
+    this.hoveredSellerBubble = null;
+    this.cdr.markForCheck();
+  }
+
+  getPriceBinsChartData() {
+    const bins = this.analyticsSummary?.priceDistribution || [];
+    if (!bins || bins.length === 0) return [];
+
+    const maxReviewsShare = Math.max(10, ...bins.map(b => b.reviewsShare || 0));
+    const maxProductsShare = Math.max(10, ...bins.map(b => b.productsShare || 0));
+    const maxShare = Math.max(maxReviewsShare, maxProductsShare, 1);
+
+    return bins.map(b => ({
+      ...b,
+      productsBarHeightPct: Math.min(100, Math.round(((b.productsShare || 0) / maxShare) * 100)),
+      reviewsBarHeightPct: Math.min(100, Math.round(((b.reviewsShare || 0) / maxShare) * 100))
+    }));
   }
 
   // --- History Tab Time-Series Chart Engine ---
@@ -4482,14 +4652,23 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       ? (sortedSellerPrices[sortedSellerPrices.length / 2 - 1] + sortedSellerPrices[sortedSellerPrices.length / 2]) / 2
       : sortedSellerPrices[Math.floor(sortedSellerPrices.length / 2)];
 
+    const minP = sortedSellerPrices.length > 0 ? sortedSellerPrices[0] : 0;
+    const maxP = sortedSellerPrices.length > 0 ? sortedSellerPrices[sortedSellerPrices.length - 1] : 0;
+    const avgP = rawPrices.length > 0 ? Math.round(rawPrices.reduce((a, b) => a + b, 0) / rawPrices.length) : 0;
+    const reviewsShare = totalAllReviews > 0 ? Number(((stats.reviewsSum / totalAllReviews) * 100).toFixed(1)) : 0;
+
     return {
       sellerName,
       isRozetka: stats.isRozetka,
       productsCount: stats.productsCount,
       marketShare: Number(((stats.productsCount / rawTotalCount) * 100).toFixed(1)),
       reviewsSum: stats.reviewsSum,
+      reviewsShare,
       avgReviewsPerProduct: Number((stats.reviewsSum / stats.productsCount).toFixed(1)),
       medianPrice: Math.round(sellerMedPrice),
+      avgPrice: avgP,
+      minPrice: minP,
+      maxPrice: maxP,
       inStockRate: Number(((stats.inStockCount / stats.productsCount) * 100).toFixed(1)),
       color: '#64748b',
       rank: 0,
