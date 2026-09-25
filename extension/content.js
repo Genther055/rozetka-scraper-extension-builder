@@ -515,41 +515,39 @@
                 }
 
                 // 3. Reviews Count
-                const reviewsSelectors = [
-                    '.rating-block-rating',
-                    'a.goods-tile__reviews-link',
-                    '.goods-tile__reviews-link',
-                    '[class*="reviews-link"]',
-                    'span.goods-tile__reviews-count',
-                    '[class*="reviews-count"]',
-                    '[class*="rating-count"]',
-                    'rz-rating a',
-                    'app-rating a',
-                    '[class*="comments"]',
-                    '[class*="reviews"]',
-                    'a[href*="#comments"]',
-                    'a[href*="comments"]'
-                ];
                 let reviews = 0;
-                for (const sel of reviewsSelectors) {
-                    const el = item.querySelector(sel);
-                    if (el) {
-                        const txt = (el.innerText || el.textContent || '').trim();
-                        const match = txt.match(/\(?(\d[\d\s\u00A0]*)\)?/);
-                        if (match) {
-                            const val = parseInt(match[1].replace(/\D/g, ''), 10) || 0;
-                            if (val > 0) {
-                                reviews = val;
+                const tileRawText = (item.innerText || item.textContent || '');
+                const hasZeroReviewsBadge = tileRawText.includes('Залишити відгук') || tileRawText.includes('Оставить отзыв');
+
+                if (!hasZeroReviewsBadge) {
+                    // Try direct selectors
+                    const reviewElements = item.querySelectorAll('a[href*="#comments"], a[href*="comments"], button, [class*="rating"], [class*="reviews"], [class*="comments"], span, p, a');
+                    for (const el of reviewElements) {
+                        const t = (el.innerText || '').trim();
+                        if (/^\d+$/.test(t)) {
+                            const num = parseInt(t, 10);
+                            if (num > 0 && num < 50000 && !el.closest('[class*="price"], del, s, strike, rz-promo-label')) {
+                                reviews = num;
                                 break;
                             }
                         }
                     }
-                }
-                if (reviews === 0) {
-                    const tileRaw = item.innerText || '';
-                    const mRev = tileRaw.match(/(\d+)\s*(?:відгук\w*|відгуків|відгуки|отзыв\w*|отзывов|отзыва)/i);
-                    if (mRev && mRev[1]) {
-                        reviews = parseInt(mRev[1], 10) || 0;
+
+                    // Fallback: parse lines in tile text (standalone number before price)
+                    if (reviews === 0) {
+                        const lines = tileRawText.split('\n').map(l => l.trim()).filter(Boolean);
+                        for (let i = 0; i < lines.length; i++) {
+                            const line = lines[i];
+                            if (/^\d+$/.test(line)) {
+                                const num = parseInt(line, 10);
+                                if (num > 0 && num < 50000 && !line.includes('₴') && !line.includes('%')) {
+                                    if (i + 1 < lines.length && lines[i + 1].includes('₴')) {
+                                        reviews = num;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
