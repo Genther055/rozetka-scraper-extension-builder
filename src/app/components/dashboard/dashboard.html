@@ -3652,19 +3652,19 @@
                   Структурована вижимка та особливості
                 </h4>
                 <button 
-                  *ngIf="p.description && p.description.length > 180"
+                  *ngIf="(p.description && p.description.length > 180) || getProductDescription(p).length > 180"
                   (click)="toggleDesc(p.link)"
                   class="text-xs font-bold text-indigo-300 hover:text-white transition-all flex items-center gap-1 cursor-pointer bg-slate-900/60 hover:bg-slate-950 px-3.5 py-1.5 rounded-full border border-[rgba(139,92,246,0.15)] shadow-md"
                 >
-                  <span>{{ isDescExpanded(p.link) ? 'Приховати повний опис' : 'Показати повний оригінальний опис' }}</span>
+                  <span>{{ isDescExpanded(p.link) ? 'Згорнути детальний опис' : 'Показати розгорнутий опис' }}</span>
                   <span class="material-icons text-sm">{{ isDescExpanded(p.link) ? 'expand_less' : 'expand_more' }}</span>
                 </button>
               </div>
 
               <!-- Feature Highlights Badges -->
-              <div *ngIf="p.description && getStructuredDescription(p.description).keyFeatures.length > 0" class="flex flex-wrap gap-2">
+              <div *ngIf="getStructuredDescription(p.description, p).keyFeatures.length > 0" class="flex flex-wrap gap-2">
                 <div 
-                  *ngFor="let feat of getStructuredDescription(p.description).keyFeatures"
+                  *ngFor="let feat of getStructuredDescription(p.description, p).keyFeatures"
                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold shadow-sm"
                   [class]="feat.color"
                 >
@@ -3674,13 +3674,13 @@
               </div>
 
               <!-- Structured Key Bullet Points (if extracted) -->
-              <div *ngIf="p.description && getStructuredDescription(p.description).bulletPoints.length > 0" class="p-4 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2">
+              <div *ngIf="getStructuredDescription(p.description, p).bulletPoints.length > 0" class="p-4 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2">
                 <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                   <span class="material-icons text-xs text-indigo-400">format_list_bulleted</span>
                   Виділені пункти та переваги:
                 </p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div *ngFor="let bullet of getStructuredDescription(p.description).bulletPoints" class="flex items-start gap-2 text-xs text-slate-200 bg-slate-900/40 p-2.5 rounded-lg border border-slate-800/50">
+                  <div *ngFor="let bullet of getStructuredDescription(p.description, p).bulletPoints" class="flex items-start gap-2 text-xs text-slate-200 bg-slate-900/40 p-2.5 rounded-lg border border-slate-800/50">
                     <span class="material-icons text-xs text-emerald-400 mt-0.5 shrink-0">check_circle</span>
                     <span class="leading-relaxed">{{ bullet }}</span>
                   </div>
@@ -3688,24 +3688,20 @@
               </div>
 
               <!-- Summary Paragraph / Collapsed View -->
-              <div *ngIf="p.description && !isDescExpanded(p.link)" class="p-4 bg-black/35 border border-[rgba(139,92,246,0.1)] rounded-xl text-xs text-slate-300 leading-relaxed">
-                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Короткий огляд товару:</p>
-                <p class="leading-relaxed text-slate-300">{{ getStructuredDescription(p.description).summary }}</p>
+              <div *ngIf="!isDescExpanded(p.link)" class="p-4 bg-black/35 border border-[rgba(139,92,246,0.1)] rounded-xl text-xs text-slate-300 leading-relaxed">
+                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Огляд товару:</p>
+                <p class="leading-relaxed text-slate-300">{{ getStructuredDescription(p.description, p).summary || getProductDescription(p) }}</p>
               </div>
 
-              <!-- Full Original Description (Expanded view) -->
-              <div *ngIf="p.description && isDescExpanded(p.link)" class="p-4 bg-black/35 border border-[rgba(139,92,246,0.1)] rounded-xl text-xs text-slate-300 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-line">
-                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Повний текст опису від продавця:</p>
-                <div *ngFor="let para of getStructuredDescription(p.description).cleanParagraphs" class="mb-3 last:mb-0 text-slate-300 leading-relaxed">
+              <!-- Full Description (Expanded view) -->
+              <div *ngIf="isDescExpanded(p.link)" class="p-4 bg-black/35 border border-[rgba(139,92,246,0.1)] rounded-xl text-xs text-slate-300 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-line">
+                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Детальний текст опису:</p>
+                <div *ngFor="let para of getStructuredDescription(p.description, p).cleanParagraphs" class="mb-3 last:mb-0 text-slate-300 leading-relaxed">
                   {{ para }}
                 </div>
-                <div *ngIf="getStructuredDescription(p.description).cleanParagraphs.length === 0">
-                  {{ p.description }}
+                <div *ngIf="getStructuredDescription(p.description, p).cleanParagraphs.length === 0">
+                  {{ p.description || getProductDescription(p) }}
                 </div>
-              </div>
-
-              <div *ngIf="!p.description" class="p-4 bg-slate-950/40 border border-slate-800/40 rounded-xl text-xs text-slate-500 italic">
-                Текстовий опис товару підвантажується фоновим скриптом...
               </div>
             </div>
 
@@ -4649,40 +4645,86 @@
   </main>
 
   <!-- SLEEK GLASSMORPHISM MODAL FOR FULL SPECS OVERLAY -->
-  <div *ngIf="activeModalProduct" class="fixed inset-0 z-[100] bg-[#0b0f19]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-    <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/60 rounded-3xl p-6 max-w-2xl w-full shadow-2xl shadow-black/50 space-y-6 relative max-h-[85vh] flex flex-col">
+  <div *ngIf="activeModalProduct" class="fixed inset-0 z-[100] bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fadeIn">
+    <div class="bg-gradient-to-br from-[#141c2e] via-[#101728] to-[#0e1424] border border-slate-700/60 rounded-3xl p-5 sm:p-7 max-w-3xl w-full shadow-2xl shadow-black/80 space-y-5 relative max-h-[90vh] flex flex-col">
       
-      <div class="flex items-start justify-between border-b border-slate-800/80 pb-4">
-        <div>
-          <h3 class="text-base font-bold text-white flex items-center gap-2">
-            <span class="material-icons text-indigo-400">tune</span>
-            Повні характеристики товару
+      <!-- Modal Header -->
+      <div class="flex items-start justify-between border-b border-slate-800/80 pb-4 gap-3">
+        <div class="space-y-2 flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+              Паспорт товару
+            </span>
+            <span *ngIf="activeModalProduct.inStock" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              В наявності
+            </span>
+            <span *ngIf="!activeModalProduct.inStock" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+              Немає в наявності
+            </span>
+            <span *ngIf="activeModalProduct.price && activeModalProduct.price > 0" class="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              {{ activeModalProduct.price | number }} ₴
+            </span>
+            <span *ngIf="activeModalProduct.seller" class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800/80 text-slate-300 border border-slate-700/60">
+              {{ activeModalProduct.seller }}
+            </span>
+          </div>
+          <h3 class="text-sm sm:text-base font-bold text-white leading-snug break-words">
+            {{ activeModalProduct.name }}
           </h3>
-          <p class="text-xs text-indigo-300 font-semibold mt-1">{{ activeModalProduct.name }}</p>
         </div>
-        <button (click)="closeSpecsModal()" class="p-2 text-slate-400 hover:text-white bg-slate-900/60 hover:bg-black rounded-full border border-white/5 transition-all cursor-pointer flex items-center justify-center">
-          <span class="material-icons text-sm">close</span>
+        <button (click)="closeSpecsModal()" class="p-2 text-slate-400 hover:text-white bg-slate-900/80 hover:bg-black rounded-full border border-white/10 transition-all cursor-pointer flex items-center justify-center shrink-0">
+          <span class="material-icons text-base">close</span>
         </button>
       </div>
 
-      <div class="overflow-y-auto space-y-4 pr-1 flex-1">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div *ngFor="let spec of getSpecsArray(activeModalProduct)" class="p-3 bg-slate-950/60 border border-slate-800/60 rounded-xl">
-            <span class="text-[11px] text-slate-400 font-semibold block uppercase">{{ spec.key }}</span>
-            <span class="text-xs font-bold text-slate-200 mt-0.5 block">{{ spec.val }}</span>
+      <!-- Modal Body -->
+      <div class="overflow-y-auto space-y-5 pr-1.5 flex-1 custom-scrollbar">
+        <!-- Feature Highlights Badges -->
+        <div *ngIf="getStructuredDescription(activeModalProduct.description, activeModalProduct).keyFeatures.length > 0" class="flex flex-wrap gap-2">
+          <div 
+            *ngFor="let feat of getStructuredDescription(activeModalProduct.description, activeModalProduct).keyFeatures"
+            class="flex items-center gap-1.5 px-3 py-1 rounded-xl border text-[11px] font-bold shadow-sm"
+            [class]="feat.color"
+          >
+            <span class="material-icons text-xs">{{ feat.icon }}</span>
+            <span>{{ feat.title }}</span>
           </div>
         </div>
 
-        <div *ngIf="activeModalProduct.description" class="p-4 bg-slate-950/60 border border-slate-800/60 rounded-xl space-y-2 mt-4 shadow-inner">
-          <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Опис товару</h4>
-          <p class="text-xs text-slate-300 leading-relaxed whitespace-pre-line max-h-48 overflow-y-auto pr-1">
-            {{ activeModalProduct.description }}
-          </p>
+        <!-- Specs Grid -->
+        <div>
+          <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
+            <span class="material-icons text-sm text-indigo-400">tune</span>
+            Повні характеристики товару ({{ getSpecsArray(activeModalProduct).length }})
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+            <div *ngFor="let spec of getSpecsArray(activeModalProduct)" class="p-3 bg-slate-950/70 border border-slate-800/70 hover:border-indigo-500/30 rounded-xl transition-colors shadow-sm">
+              <span class="text-[10px] text-indigo-300/80 font-bold uppercase tracking-wider block truncate">{{ spec.key }}</span>
+              <span class="text-xs font-semibold text-slate-100 mt-1 block leading-snug break-words">{{ spec.val }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Description Box -->
+        <div class="p-4 bg-slate-950/70 border border-slate-800/70 rounded-2xl space-y-2 shadow-inner">
+          <h4 class="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2">
+            <span class="material-icons text-sm text-indigo-400">description</span>
+            Опис та огляд товару
+          </h4>
+          <div class="text-xs text-slate-300 leading-relaxed whitespace-pre-line space-y-2">
+            {{ activeModalProduct.description || getProductDescription(activeModalProduct) }}
+          </div>
         </div>
       </div>
 
-      <div class="border-t border-slate-800/80 pt-4 flex justify-end">
-        <button (click)="closeSpecsModal()" class="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-full shadow-lg shadow-indigo-500/25 transition-all cursor-pointer glow-indigo border border-indigo-550/20">
+      <!-- Modal Footer -->
+      <div class="border-t border-slate-800/80 pt-4 flex items-center justify-between gap-3 flex-wrap">
+        <a *ngIf="activeModalProduct.link" [href]="activeModalProduct.link" target="_blank" class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 rounded-xl text-xs font-bold transition-all cursor-pointer">
+          <span>Відкрити на Rozetka</span>
+          <span class="material-icons text-xs">open_in_new</span>
+        </a>
+        <div *ngIf="!activeModalProduct.link"></div>
+        <button (click)="closeSpecsModal()" class="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-full shadow-lg shadow-indigo-500/25 transition-all cursor-pointer glow-indigo border border-indigo-500/20">
           Зрозуміло
         </button>
       </div>

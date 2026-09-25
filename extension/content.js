@@ -582,9 +582,38 @@
                 const itemText = item.innerText || '';
                 const inStock = !(item.classList.contains('tile-disabled') || itemText.includes('Немає в наявності') || itemText.includes('Нет в наличии'));
 
-                const capacityMatch = name.match(/(\d+)\s*(?:mah|мАг|мАч)/i);
-                const powerMatch = name.match(/(\d+(?:\.\d+)?)\s*W/i);
-                const specs = [capacityMatch ? `${capacityMatch[1]} mAh` : '', powerMatch ? `${powerMatch[1]}W` : ''].filter(Boolean).join(', ') || 'Стандартні';
+                // Extract all available DOM params and chips
+                const detailedSpecsMap = {};
+                const paramNodes = item.querySelectorAll('.goods-tile__params li, .goods-tile__param, [class*="param-item"], [class*="tag"], [class*="characteristic"]');
+                paramNodes.forEach(pn => {
+                    const pText = (pn.innerText || '').trim();
+                    if (pText && pText.includes(':')) {
+                        const [k, v] = pText.split(':').map(x => x.trim());
+                        if (k && v) detailedSpecsMap[k] = v;
+                    }
+                });
+
+                const capacityMatch = name.match(/(\d+[\d\s]*)\s*(?:mah|мАг|мАч|мah)/i);
+                if (capacityMatch && !detailedSpecsMap['Ємність']) {
+                    const cNum = parseInt(capacityMatch[1].replace(/\s+/g, ''), 10);
+                    if (!isNaN(cNum)) detailedSpecsMap['Ємність'] = `${cNum.toLocaleString('uk-UA')} mAh`;
+                }
+
+                const powerMatch = name.match(/\b(\d+(?:\.\d+)?)\s*(?:W|Вт)\b/i);
+                if (powerMatch && !detailedSpecsMap['Потужність']) {
+                    detailedSpecsMap['Потужність'] = `${powerMatch[1]}W`;
+                }
+
+                // Brand detection
+                const knownBrands = ['Xiaomi', 'Redmi', 'Baseus', 'Apple', 'Samsung', 'Anker', 'Hoco', 'Borofone', 'Romoss', 'Remax', 'Joyroom', 'ColorWay', '2E', 'Gelius', 'Ugreen', 'ZMI', 'Belkin', 'Choetech', 'Promate', 'Vinga', 'Defender', 'Canyon', 'BLUETTI', 'EcoFlow', 'Jackery'];
+                for (const b of knownBrands) {
+                    if (new RegExp(`\\b${b}\\b`, 'i').test(name)) {
+                        detailedSpecsMap['Бренд'] = b;
+                        break;
+                    }
+                }
+
+                const specs = Object.entries(detailedSpecsMap).map(([k, v]) => `${k}: ${v}`).join('; ') || (capacityMatch ? `${capacityMatch[1]} mAh` : 'Стандартні');
 
                 const idMatch = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
                 const prodId = idMatch ? String(idMatch[1]) : '';
@@ -603,6 +632,7 @@
                     sessionTitle: meta.title,
                     sessionId: currentSessionId,
                     specs,
+                    detailedSpecsMap,
                     description: '',
                     seller,
                     sellersCount: 1,

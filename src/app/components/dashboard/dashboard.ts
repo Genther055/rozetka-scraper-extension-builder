@@ -3711,10 +3711,68 @@ export class DashboardComponent implements OnInit {
     });
   }
 
+  getProductDescription(product: any): string {
+    if (!product) return '';
+    if (product.description && typeof product.description === 'string' && product.description.trim().length > 25) {
+      return product.description.trim();
+    }
+    
+    // Автоматична генерація детального професійного аналітичного опису на основі параметрів
+    const name = product.name || 'Товар';
+    const specs = this.getSpecsArray(product);
+    const brandObj = specs.find(s => s.key === 'Бренд' || s.key === 'Виробник');
+    const brand = brandObj ? brandObj.val : 'Оригінальний виробник';
+    const typeObj = specs.find(s => s.key === 'Тип пристрою' || s.key === 'Категорія' || s.key === 'Тип');
+    const type = typeObj ? typeObj.val : 'Портативний електронний пристрій';
+    const capObj = specs.find(s => s.key.includes('Ємність'));
+    const cap = capObj ? capObj.val : '';
+    const powerObj = specs.find(s => s.key.includes('Потужність') || s.key.includes('Швидкість'));
+    const power = powerObj ? powerObj.val : '';
+    const techObj = specs.find(s => s.key.includes('Технології') || s.key.includes('Швидка зарядка'));
+    const tech = techObj ? techObj.val : '';
+    const portsObj = specs.find(s => s.key.includes('Роз\'єми') || s.key.includes('Інтерфейси'));
+    const ports = portsObj ? portsObj.val : '';
+    const featuresObj = specs.find(s => s.key.includes('Особливості') || s.key.includes('Конструкція'));
+    const features = featuresObj ? featuresObj.val : '';
+    const colorObj = specs.find(s => s.key.includes('Колір'));
+    const color = colorObj ? colorObj.val : '';
+    const sellerObj = specs.find(s => s.key.includes('Продавець'));
+    const seller = sellerObj ? sellerObj.val : (product.seller || 'Rozetka');
+    const price = product.price ? `${Number(product.price).toLocaleString('uk-UA')} ₴` : '';
+    const rating = product.rating ? `${product.rating}` : '5.0';
+    const reviews = product.reviews || 0;
+
+    const paragraphs: string[] = [];
+    paragraphs.push(`📌 ${name} — ${type.toLowerCase()} від виробника ${brand}${cap ? ` з номінальною ємністю акумулятора ${cap}` : ''}.`);
+    
+    const techParts: string[] = [];
+    if (power) techParts.push(`підтримує вихідну потужність до ${power}`);
+    if (tech) techParts.push(`оснащений протоколами прискореного живлення (${tech})`);
+    if (ports) techParts.push(`обладнаний портами: ${ports}`);
+    if (techParts.length > 0) {
+      paragraphs.push(`⚡ Продуктивність та інтерфейси: Пристрій ${techParts.join(', ')}, що забезпечує стабільне та швидке живлення смартфонів, планшетів, смарт-годинників та сумісних аксесуарів.`);
+    }
+
+    const featParts: string[] = [];
+    if (color) featParts.push(`виконаний у привабливому кольорі (${color})`);
+    if (features) featParts.push(`має ергономічні властивості: ${features}`);
+    if (featParts.length > 0) {
+      paragraphs.push(`✨ Дизайн та ергономіка: Корпус ${featParts.join(', ')}, що гарантує комфорт під час щоденного використання та поїздок.`);
+    }
+
+    paragraphs.push(`🛒 Торговельні показники: Продукт пропонується продавцем ${seller}${price ? ` за актуальною ціною ${price}` : ''}. Рівень задоволеності покупців становить ★ ${rating}/5.0 на основі ${reviews} відгуків.`);
+
+    return paragraphs.join('\n\n');
+  }
+
   private structuredDescCache = new Map<string, StructuredDescription>();
 
-  getStructuredDescription(desc: string | undefined): StructuredDescription {
-    if (!desc || !desc.trim()) {
+  getStructuredDescription(desc: string | undefined, product?: any): StructuredDescription {
+    let textToProcess = desc;
+    if ((!textToProcess || !textToProcess.trim() || textToProcess.trim().length < 20) && product) {
+      textToProcess = this.getProductDescription(product);
+    }
+    if (!textToProcess || !textToProcess.trim()) {
       return {
         summary: '',
         keyFeatures: [],
@@ -3723,13 +3781,14 @@ export class DashboardComponent implements OnInit {
       };
     }
 
-    const cacheKey = desc.slice(0, 100) + desc.length;
+    const prodKey = product ? (product.link || product.name || '') : '';
+    const cacheKey = prodKey + textToProcess.slice(0, 100) + textToProcess.length;
     if (this.structuredDescCache.has(cacheKey)) {
       return this.structuredDescCache.get(cacheKey)!;
     }
 
     // 1. Clean HTML tags
-    let clean = desc
+    let clean = textToProcess
       .replace(/<br\s*[\/]?>/gi, '\n')
       .replace(/<\/(p|div|li|tr|h\d)>/gi, '\n')
       .replace(/<[^>]+>/g, ' ')
@@ -3741,20 +3800,20 @@ export class DashboardComponent implements OnInit {
       .replace(/\n{3,}/g, '\n\n')
       .trim();
 
-    // 2. Extract Key Features by logical matching
+    // 2. Extract Features by logical matching
     const keyFeatures: ExtractedFeature[] = [];
-    const lower = clean.toLowerCase();
+    const lower = (clean + ' ' + (product?.name || '') + ' ' + (product?.specs || '')).toLowerCase();
 
     if (/quick\s*charge|power\s*delivery|\bpd\b|\bqc\b|швидк[а-я]* зарядк/i.test(lower)) {
-      keyFeatures.push({ title: 'Швидка зарядка (PD / Quick Charge)', icon: 'bolt', color: 'text-amber-400 bg-amber-950/40 border-amber-800/40' });
+      keyFeatures.push({ title: 'Швидка зарядка (PD / QC)', icon: 'bolt', color: 'text-amber-400 bg-amber-950/40 border-amber-800/40' });
     }
     if (/\b\d+\s*(?:w|вт)\b/i.test(lower)) {
-      const m = clean.match(/\b(\d+\s*(?:W|Вт))\b/i);
+      const m = (clean + ' ' + (product?.name || '')).match(/\b(\d+\s*(?:W|Вт))\b/i);
       const pText = m ? m[1] : 'Висока потужність';
       keyFeatures.push({ title: `Потужність: ${pText}`, icon: 'electric_meter', color: 'text-purple-400 bg-purple-950/40 border-purple-800/40' });
     }
     if (/\b\d{4,6}\s*(?:mah|маг|мА·год|мАг)\b/i.test(lower)) {
-      const m = clean.match(/\b(\d+[\d\s]*(?:mah|маг|мА·год|мАг))\b/i);
+      const m = (clean + ' ' + (product?.name || '')).match(/\b(\d+[\d\s]*(?:mah|маг|мА·год|мАг))\b/i);
       const cText = m ? m[1] : 'Висока ємність';
       keyFeatures.push({ title: `Ємність: ${cText}`, icon: 'battery_charging_full', color: 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40' });
     }
@@ -3766,6 +3825,9 @@ export class DashboardComponent implements OnInit {
     }
     if (/захист|безпек|overheat|short-circuit|перегрів/i.test(lower)) {
       keyFeatures.push({ title: 'Багаторівневий захист', icon: 'shield', color: 'text-rose-400 bg-rose-950/40 border-rose-800/40' });
+    }
+    if (/stand|підставк/i.test(lower)) {
+      keyFeatures.push({ title: 'Вбудована підставка (Stand)', icon: 'support', color: 'text-amber-300 bg-amber-950/40 border-amber-800/40' });
     }
     if (/алюмін|металев|корпус|компактн|легк/i.test(lower)) {
       keyFeatures.push({ title: 'Преміум корпус / Компактність', icon: 'diamond', color: 'text-slate-300 bg-slate-900 border-slate-700/60' });
@@ -4420,26 +4482,242 @@ export class DashboardComponent implements OnInit {
 
   getSpecsArray(product: any): { key: string, val: string }[] {
     if (!product) return [];
-    
-    // Спробуємо зчитати зі структурованого об'єкта
-    if (product.detailedSpecsMap && Object.keys(product.detailedSpecsMap).length > 0) {
-      return Object.entries(product.detailedSpecsMap).map(([key, val]) => ({
-        key: String(key),
-        val: String(val)
-      }));
-    }
-
-    // Резервний варіант з розбором specs рядка
-    const specsStr = product.specs;
-    if (!specsStr) return [];
-    return specsStr.split(';').map((part: string) => {
-      const idx = part.indexOf(':');
-      if (idx !== -1) {
-        return { key: part.slice(0, idx).trim(), val: part.slice(idx + 1).trim() };
-      }
-      return { key: 'Характеристика', val: part.trim() };
-    }).filter((item: any) => item.val.length > 0);
+    const map = extractProductSpecsMap(product);
+    return Object.entries(map).map(([key, val]) => ({
+      key: String(key),
+      val: String(val)
+    }));
   }
+}
+
+export function extractProductSpecsMap(p: any): Record<string, string> {
+  if (!p) return {};
+  const map: Record<string, string> = {};
+
+  // 1. Якщо вже є детальний об'єкт характеристик
+  if (p.detailedSpecsMap && typeof p.detailedSpecsMap === 'object') {
+    for (const [k, v] of Object.entries(p.detailedSpecsMap)) {
+      if (k && v && typeof v === 'string' && v.trim().length > 0) {
+        map[k.trim()] = v.trim();
+      }
+    }
+  }
+
+  // 2. Розбір рядка specs якщо він існує
+  if (p.specs && typeof p.specs === 'string') {
+    const parts = p.specs.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean);
+    for (const part of parts) {
+      if (part.includes(':')) {
+        const [k, v] = part.split(':').map((x: string) => x.trim());
+        if (k && v && !map[k]) map[k] = v;
+      }
+    }
+  }
+
+  const name = String(p.name || '');
+  const lowerName = name.toLowerCase();
+  const category = String(p.category || '');
+  const link = String(p.link || '');
+
+  // 3. Бренд / Виробник
+  if (!map['Бренд'] && !map['Виробник']) {
+    const brands = [
+      'Xiaomi', 'Redmi', 'Baseus', 'Apple', 'Samsung', 'Anker', 'Hoco', 'Borofone',
+      'Romoss', 'Remax', 'Joyroom', 'ColorWay', '2E', 'Gelius', 'Ugreen', 'ZMI',
+      'Belkin', 'Choetech', 'Promate', 'Vinga', 'Defender', 'Canyon', 'Esperanza',
+      'Real-El', 'Sigma', 'PowerPlant', 'BLUETTI', 'EcoFlow', 'Jackery', 'Sandberg',
+      'Trust', 'Dudao', 'Aukey', 'XO', 'Usams', 'Pisen', 'Intenso', 'Silicon Power',
+      'Tronsmart', 'Wopow', 'Energizer', 'Duracell', 'Philips', 'Sony', 'Huawei',
+      'Honor', 'Motorola', 'Asus', 'Lenovo', 'Dell', 'HP', 'Acer', 'Logitech',
+      'Razer', 'HyperX', 'SteelSeries', 'JBL', 'Marshall', 'Sennheiser', 'Canon', 'Nikon', 'DJI'
+    ];
+    for (const b of brands) {
+      const regex = new RegExp(`\\b${b}\\b`, 'i');
+      if (regex.test(name) || regex.test(category)) {
+        map['Бренд'] = b;
+        break;
+      }
+    }
+    if (!map['Бренд']) {
+      const words = name.split(/\s+/).filter(w => w.length > 2);
+      const skipWords = ['повербанк', 'powerbank', 'power', 'bank', 'умб', 'зовнішній', 'акумулятор', 'портативний', 'зарядна', 'станція', 'кабель', 'блок', 'адаптер'];
+      for (const w of words) {
+        const clean = w.replace(/[^a-zA-Zа-яА-ЯіІїЇєЄ0-9]/g, '');
+        if (clean.length > 2 && !skipWords.includes(clean.toLowerCase())) {
+          map['Бренд'] = clean;
+          break;
+        }
+      }
+    }
+  }
+
+  // 4. Тип пристрою
+  if (!map['Тип пристрою'] && !map['Тип']) {
+    if (/зарядна\s*станція|charging\s*station|генератор/i.test(lowerName)) {
+      map['Тип пристрою'] = 'Портативна зарядна станція';
+    } else if (/бездротов[а-я]*\s*заряд|wireless\s*charger|magsafe\s*power/i.test(lowerName)) {
+      map['Тип пристрою'] = 'Бездротовий повербанк (MagSafe / Qi)';
+    } else if (/повербанк|power\s*bank|умб|акумулятор|батарея/i.test(lowerName)) {
+      map['Тип пристрою'] = 'Універсальна мобільна батарея (Power Bank)';
+    } else if (/кабель|cord|шнур/i.test(lowerName)) {
+      map['Тип пристрою'] = 'Кабель живлення та синхронізації';
+    } else if (/зарядний\s*пристрій|адаптер|блок\s*живлення|charger/i.test(lowerName)) {
+      map['Тип пристрою'] = 'Мережевий зарядний пристрій';
+    } else if (category && category !== 'Каталог' && category !== 'Всі товари') {
+      map['Тип пристрою'] = category;
+    } else {
+      map['Тип пристрою'] = 'Портативна електроніка';
+    }
+  }
+
+  // 5. Ємність акумулятора
+  if (!map['Ємність акумулятора'] && !map['Ємність']) {
+    const capMatch = name.match(/(\d+[\d\s]*)\s*(?:mah|мАг|мАч|мah)/i) || (p.specs || '').match(/(\d+[\d\s]*)\s*(?:mah|мАг|мАч|мah)/i);
+    if (capMatch) {
+      const num = parseInt(capMatch[1].replace(/\s+/g, ''), 10);
+      if (!isNaN(num) && num > 0) {
+        map['Ємність акумулятора'] = `${num.toLocaleString('uk-UA')} mAh`;
+      }
+    } else {
+      const whMatch = name.match(/(\d+(?:\.\d+)?)\s*(?:wh|Вт\*год|Втгод|Втг)/i);
+      if (whMatch) {
+        map['Ємність акумулятора'] = `${whMatch[1]} Wh (Вт*год)`;
+      }
+    }
+  }
+
+  // 6. Вихідна потужність
+  if (!map['Вихідна потужність'] && !map['Потужність']) {
+    const powerMatch = name.match(/\b(\d+(?:\.\d+)?)\s*(?:W|Вт)\b/i) || (p.specs || '').match(/\b(\d+(?:\.\d+)?)\s*(?:W|Вт)\b/i);
+    if (powerMatch) {
+      const wVal = parseFloat(powerMatch[1]);
+      if (wVal >= 60) {
+        map['Вихідна потужність'] = `${wVal}W (Швидкісна зарядка ноутбуків)`;
+      } else if (wVal >= 20) {
+        map['Вихідна потужність'] = `${wVal}W (Швидка зарядка смартфонів)`;
+      } else {
+        map['Вихідна потужність'] = `${wVal}W`;
+      }
+    }
+  }
+
+  // 7. Технології швидкого заряджання
+  if (!map['Технології заряджання'] && !map['Швидка зарядка']) {
+    const techs: string[] = [];
+    if (/power\s*delivery|pd\s*3\.\d|pd\s*30|pd\s*20|\bpd\b/i.test(lowerName)) techs.push('Power Delivery (PD 3.0)');
+    if (/quick\s*charge|qc\s*4|qc\s*3|\bqc\b/i.test(lowerName)) techs.push('Quick Charge (QC 3.0)');
+    if (/magsafe|magnetic/i.test(lowerName)) techs.push('MagSafe / Magnetic Wireless');
+    if (/qi\s*wireless|бездротов/i.test(lowerName) && !techs.includes('MagSafe / Magnetic Wireless')) techs.push('Бездротова зарядка Qi');
+    if (/fast\s*charg|швидк[а-я]* зарядк/i.test(lowerName) && techs.length === 0) techs.push('Fast Charging');
+    if (/supercharge|scp|fcp|vooc/i.test(lowerName)) techs.push('SuperCharge');
+    if (techs.length > 0) {
+      map['Технології заряджання'] = techs.join(', ');
+    }
+  }
+
+  // 8. Інтерфейси та роз'єми
+  if (!map['Інтерфейси підключення'] && !map['Роз\'єми']) {
+    const ports: string[] = [];
+    if (/type-c|usb-c|тайп-сі/i.test(lowerName)) ports.push('USB Type-C');
+    if (/micro-usb|micro usb|мікро-юсб/i.test(lowerName)) ports.push('Micro-USB');
+    if (/lightning|лайтнінг/i.test(lowerName)) ports.push('Lightning');
+    if (/usb-a|usb 3|usb 2/i.test(lowerName) || (!ports.includes('USB Type-C') && /usb/i.test(lowerName))) ports.push('USB-A');
+    if (/wireless|бездрот/i.test(lowerName)) ports.push('Бездротова індукційна панель');
+    if (/ac\s*220v|220\s*в|розетка/i.test(lowerName)) ports.push('Розетка AC 220V');
+    if (ports.length > 0) {
+      map['Інтерфейси підключення'] = ports.join(', ');
+    }
+  }
+
+  // 9. Конструктивні особливості
+  if (!map['Особливості'] && !map['Конструкція']) {
+    const features: string[] = [];
+    if (/stand|підставк/i.test(lowerName)) features.push('Вбудована підставка (Stand)');
+    if (/magnetic|магніт/i.test(lowerName)) features.push('Магнітне позиціонування');
+    if (/дисплей|display|екран|led-екран/i.test(lowerName)) features.push('Цифровий LED-дисплей');
+    else if (/індикатор|led/i.test(lowerName)) features.push('LED-індикатор заряду');
+    if (/ліхтарик|фонарик|torch|flashlight/i.test(lowerName)) features.push('Вбудований ліхтарик');
+    if (/вбудований кабель|вбудовані кабелі|built-in cable/i.test(lowerName)) features.push('Вбудований кабель живлення');
+    if (/solar|сонячн/i.test(lowerName)) features.push('Сонячна панель');
+    if (/металев|алюмін|metal|aluminum/i.test(lowerName)) features.push('Металевий міцний корпус');
+    if (/waterproof|вологозахист|ip\d{2}/i.test(lowerName)) features.push('Захист від пилу та вологи');
+    if (features.length > 0) {
+      map['Особливості'] = features.join(', ');
+    }
+  }
+
+  // 10. Колір
+  if (!map['Колір']) {
+    const colors: { pattern: RegExp, name: string }[] = [
+      { pattern: /чорн[ий|а|е|і]|black/i, name: 'Чорний (Black)' },
+      { pattern: /біл[ий|а|е|і]|white/i, name: 'Білий (White)' },
+      { pattern: /бежев[ий|а|е|і]|beige/i, name: 'Бежевий (Beige)' },
+      { pattern: /синій|синя|синє|blue|navy/i, name: 'Синій (Blue)' },
+      { pattern: /сір[ий|а|е|і]|gray|grey|space gray/i, name: 'Сірий (Grey)' },
+      { pattern: /зелен[ий|а|е|і]|green/i, name: 'Зелений (Green)' },
+      { pattern: /рожев[ий|а|е|і]|pink/i, name: 'Рожевий (Pink)' },
+      { pattern: /срібляст[ий|а|е|і]|silver/i, name: 'Сріблястий (Silver)' },
+      { pattern: /золот[ий|а|е|і]|gold/i, name: 'Золотистий (Gold)' },
+      { pattern: /червон[ий|а|е|і]|red/i, name: 'Червоний (Red)' },
+      { pattern: /жовт[ий|а|е|і]|yellow/i, name: 'Жовтий (Yellow)' },
+      { pattern: /фіолетов[ий|а|е|і]|purple/i, name: 'Фіолетовий (Purple)' }
+    ];
+    for (const c of colors) {
+      if (c.pattern.test(lowerName)) {
+        map['Колір'] = c.name;
+        break;
+      }
+    }
+  }
+
+  // 11. Модель / Артикул
+  if (!map['Модель / Артикул'] && !map['Артикул']) {
+    const skuMatch = name.match(/\(([A-Z0-9\-\_]{4,15})\)/i) || name.match(/\b([A-Z0-9]{2,}\-[A-Z0-9]{2,}|[A-Z0-9]{6,12})\b/);
+    if (skuMatch && !/^(power|bank|mah|watt|usb|type|black|white|beige)$/i.test(skuMatch[1])) {
+      map['Модель / Артикул'] = skuMatch[1];
+    } else {
+      const idMatch = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
+      if (idMatch) {
+        map['Модель / Артикул'] = `Rozetka ID: ${idMatch[1]}`;
+      }
+    }
+  }
+
+  // 12. Статус наявності
+  if (!map['Статус наявності']) {
+    map['Статус наявності'] = (p.inStock === false) ? 'Немає в наявності' : 'В наявності (Готовий до відправки)';
+  }
+
+  // 13. Продавець
+  if (!map['Продавець']) {
+    const seller = p.seller || 'Rozetka';
+    map['Продавець'] = seller.toLowerCase().includes('rozetka') ? 'Rozetka (1P Офіційний)' : `${seller} (3P Маркетплейс)`;
+  }
+
+  // 14. Ціна та знижка
+  if (!map['Цінова пропозиція']) {
+    const price = Number(p.price) || 0;
+    const oldPrice = Number(p.oldPrice) || 0;
+    const discount = Number(p.discount) || 0;
+    if (price > 0) {
+      let priceStr = `${price.toLocaleString('uk-UA')} ₴`;
+      if (discount > 0 && oldPrice > price) {
+        priceStr += ` (Знижка -${discount}%, Стара ціна: ${oldPrice.toLocaleString('uk-UA')} ₴)`;
+      }
+      map['Цінова пропозиція'] = priceStr;
+    }
+  }
+
+  // 15. Рейтинг та відгуки
+  if (!map['Рейтинг та відгуки']) {
+    const rating = Number(p.rating) || 0;
+    const reviews = Number(p.reviews) || 0;
+    if (rating > 0 || reviews > 0) {
+      map['Рейтинг та відгуки'] = `★ ${rating > 0 ? rating.toFixed(1) : '5.0'} (${reviews} відгуків)`;
+    }
+  }
+
+  return map;
 }
 
 export function computeSpecDistribution(products: any[], totalProductsCount: number): SpecCategoryAnalysis[] {
@@ -4449,37 +4727,37 @@ export function computeSpecDistribution(products: any[], totalProductsCount: num
   const keyToValues = new Map<string, Map<string, { products: any[]; reviewsSum: number; prices: number[] }>>();
 
   products.forEach(p => {
-    if (p && p.detailedSpecsMap && typeof p.detailedSpecsMap === 'object') {
-      for (const [rawKey, rawVal] of Object.entries(p.detailedSpecsMap)) {
-        if (!rawKey || !rawVal || typeof rawVal !== 'string') continue;
-        const normKey = rawKey.trim();
-        if (normKey.length < 2) continue;
+    if (!p) return;
+    const specMap = extractProductSpecsMap(p);
+    for (const [rawKey, rawVal] of Object.entries(specMap)) {
+      if (!rawKey || !rawVal || typeof rawVal !== 'string') continue;
+      const normKey = rawKey.trim();
+      if (normKey.length < 2) continue;
 
-        const lowKey = normKey.toLowerCase();
-        if (lowKey === 'гарантія' || lowKey === 'країна реєстрації бренду' || lowKey === 'країна-виробник товару') {
-          continue;
-        }
-
-        keyFrequency.set(normKey, (keyFrequency.get(normKey) || 0) + 1);
-
-        let valuesMap = keyToValues.get(normKey);
-        if (!valuesMap) {
-          valuesMap = new Map();
-          keyToValues.set(normKey, valuesMap);
-        }
-
-        let cleanVal = String(rawVal).trim();
-        if (cleanVal.length > 55) cleanVal = cleanVal.slice(0, 52) + '...';
-
-        let valEntry = valuesMap.get(cleanVal);
-        if (!valEntry) {
-          valEntry = { products: [], reviewsSum: 0, prices: [] };
-          valuesMap.set(cleanVal, valEntry);
-        }
-        valEntry.products.push(p);
-        valEntry.reviewsSum += (Number(p.reviews) || 0);
-        if (Number(p.price) > 0) valEntry.prices.push(Number(p.price));
+      const lowKey = normKey.toLowerCase();
+      if (lowKey === 'гарантія' || lowKey === 'країна реєстрації бренду' || lowKey === 'країна-виробник товару' || lowKey === 'статус наявності' || lowKey === 'цінова пропозиція' || lowKey === 'модель / артикул' || lowKey === 'рейтинг та відгуки') {
+        continue;
       }
+
+      keyFrequency.set(normKey, (keyFrequency.get(normKey) || 0) + 1);
+
+      let valuesMap = keyToValues.get(normKey);
+      if (!valuesMap) {
+        valuesMap = new Map();
+        keyToValues.set(normKey, valuesMap);
+      }
+
+      let cleanVal = String(rawVal).trim();
+      if (cleanVal.length > 55) cleanVal = cleanVal.slice(0, 52) + '...';
+
+      let valEntry = valuesMap.get(cleanVal);
+      if (!valEntry) {
+        valEntry = { products: [], reviewsSum: 0, prices: [] };
+        valuesMap.set(cleanVal, valEntry);
+      }
+      valEntry.products.push(p);
+      valEntry.reviewsSum += (Number(p.reviews) || 0);
+      if (Number(p.price) > 0) valEntry.prices.push(Number(p.price));
     }
   });
 
