@@ -759,6 +759,14 @@ export class DashboardComponent implements OnInit {
   cumulativeChartZoom: number = 1; // 1 = 100%, 2 = 200%, 4 = 400%, 8 = 800%
   activeExpandedChartModal: 'cumulative' | 'overview' | null = null;
 
+  get overviewChartSvgWidth(): number {
+    return 960 * (this.overviewChartZoom || 1);
+  }
+
+  get cumulativeChartSvgWidth(): number {
+    return 960 * (this.cumulativeChartZoom || 1);
+  }
+
   setOverviewChartZoom(z: number): void {
     this.overviewChartZoom = z;
     this.hoveredOverviewPoint = null;
@@ -830,7 +838,7 @@ export class DashboardComponent implements OnInit {
     const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
     if (!list || list.length === 0) return [];
 
-    const SVG_W = 960;
+    const SVG_W = this.overviewChartSvgWidth;
     const SVG_H = 220;
     const PAD_L = 60;
     const PAD_R = 25;
@@ -975,15 +983,20 @@ export class DashboardComponent implements OnInit {
     const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
     if (!list || list.length === 0) return [];
 
-    const SVG_W = 960;
+    const SVG_W = this.overviewChartSvgWidth;
     const PAD_L = 60;
     const PAD_R = 25;
     const PLOT_W = SVG_W - PAD_L - PAD_R;
 
+    const numTicks = this.overviewChartZoom === 1 ? 5 : (this.overviewChartZoom * 4 + 1);
+    const ratios: number[] = [];
+    for (let i = 0; i < numTicks; i++) {
+      ratios.push(i / (numTicks - 1));
+    }
+
     if (this.overviewChartMetric === 'price_reviews' || this.overviewChartMetric === 'discounts') {
       const minP = Math.min(...list.map(p => p.price || 0));
       const maxP = Math.max(...list.map(p => p.price || 0)) || 1;
-      const ratios = [0, 0.25, 0.5, 0.75, 1];
       return ratios.map(r => {
         const val = Math.round(minP + (maxP - minP) * r);
         const x = PAD_L + r * PLOT_W;
@@ -991,7 +1004,6 @@ export class DashboardComponent implements OnInit {
       });
     } else {
       const count = list.length;
-      const ratios = [0, 0.25, 0.5, 0.75, 1];
       return ratios.map(r => {
         const val = Math.max(1, Math.round(count * r));
         const x = PAD_L + r * PLOT_W;
@@ -1007,8 +1019,8 @@ export class DashboardComponent implements OnInit {
     if (!target) return;
     const rect = target.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
-    const svgWidth = rect.width;
-    const scale = 960 / svgWidth;
+    const svgWidth = this.overviewChartSvgWidth;
+    const scale = svgWidth / rect.width;
     const svgMouseX = mouseX * scale;
 
     const pts = this.getOverviewChartProcessedPoints();
@@ -1038,8 +1050,8 @@ export class DashboardComponent implements OnInit {
     if (!target) return;
     const rect = target.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
-    const svgWidth = rect.width;
-    const scale = 960 / svgWidth;
+    const svgWidth = this.overviewChartSvgWidth;
+    const scale = svgWidth / rect.width;
     const svgMouseX = mouseX * scale;
 
     const pts = this.getOverviewChartProcessedPoints();
@@ -1602,6 +1614,8 @@ export class DashboardComponent implements OnInit {
 
     if (totalCount === 0) {
       return {
+        svgWidth: this.cumulativeChartSvgWidth,
+        plotWidth: this.cumulativeChartSvgWidth - 100,
         points: [],
         demandLinePath: '',
         demandAreaPath: '',
@@ -1631,7 +1645,7 @@ export class DashboardComponent implements OnInit {
       };
     }
 
-    const SVG_W = 960;
+    const SVG_W = this.cumulativeChartSvgWidth;
     const SVG_H = 330;
     const PAD_L = 65;
     const PAD_R = 35;
@@ -1821,7 +1835,11 @@ export class DashboardComponent implements OnInit {
     ];
 
     // 7. X-Ticks (Price)
-    const xRatios = [0, 0.25, 0.5, 0.75, 1];
+    const numXTicks = this.cumulativeChartZoom === 1 ? 5 : (this.cumulativeChartZoom * 4 + 1);
+    const xRatios: number[] = [];
+    for (let i = 0; i < numXTicks; i++) {
+      xRatios.push(i / (numXTicks - 1));
+    }
     const xTicks = xRatios.map(r => {
       const val = Math.round(minPrice + (maxScalePrice - minPrice) * r);
       const x = PAD_L + r * PLOT_W;
@@ -1829,6 +1847,8 @@ export class DashboardComponent implements OnInit {
     });
 
     return {
+      svgWidth: SVG_W,
+      plotWidth: PLOT_W,
       points,
       demandLinePath,
       demandAreaPath,
@@ -1862,7 +1882,7 @@ export class DashboardComponent implements OnInit {
     if (!target) return;
     const rect = target.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
-    const scaleX = 960 / rect.width;
+    const scaleX = this.cumulativeChartSvgWidth / rect.width;
     const svgX = mouseX * scaleX;
 
     const data = this.getCumulativeDemandChartData();
@@ -1888,7 +1908,7 @@ export class DashboardComponent implements OnInit {
     if (!target) return;
     const rect = target.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
-    const scaleX = 960 / rect.width;
+    const scaleX = this.cumulativeChartSvgWidth / rect.width;
     const svgX = mouseX * scaleX;
 
     const data = this.getCumulativeDemandChartData();

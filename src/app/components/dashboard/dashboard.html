@@ -1696,10 +1696,10 @@
                 </div>
 
                 <!-- SVG PLOT AREA (With Horizontal Scroll on Zoom) -->
-                <div class="w-full overflow-x-auto custom-scrollbar pb-1">
-                  <div [style.minWidth]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" class="transition-all">
+                <div class="w-full overflow-x-auto custom-scrollbar pb-1 flex items-center justify-center">
+                  <div [style.width]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" [style.minWidth]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" class="transition-all flex items-center justify-center">
                     <svg 
-                      viewBox="0 0 960 330" 
+                      [attr.viewBox]="'0 0 ' + chart.svgWidth + ' 330'" 
                       class="w-full h-72 sm:h-80 cursor-pointer overflow-visible"
                       (mousemove)="onCumulativeMouseMove($event)"
                       (click)="onCumulativeChartClick($event)"
@@ -1718,7 +1718,7 @@
                   </defs>
 
                   <!-- 50% Horizontal Equilibrium Baseline Grid Band -->
-                  <rect x="65" y="155" width="860" height="125" fill="#10b981" fill-opacity="0.02"/>
+                  <rect x="65" y="155" [attr.width]="chart.svgWidth - 100" height="125" fill="#10b981" fill-opacity="0.02"/>
 
                   <!-- Shift Corridor Area (Between Shelf Median and Weighted Median 50%) -->
                   <rect 
@@ -1764,7 +1764,7 @@
                       <line 
                         x1="65" 
                         [attr.y1]="tick.y" 
-                        x2="925" 
+                        [attr.x2]="chart.svgWidth - 35" 
                         [attr.y2]="tick.y" 
                         [attr.stroke]="tick.y === 155 ? '#f59e0b' : '#1e293b'" 
                         [attr.stroke-width]="tick.y === 155 ? '1.5' : '1'" 
@@ -1831,7 +1831,7 @@
                   </g>
 
                   <!-- X-Axis Baseline & Ticks -->
-                  <line x1="65" y1="280" x2="925" y2="280" stroke="#334155" stroke-width="1"/>
+                  <line x1="65" y1="280" [attr.x2]="chart.svgWidth - 35" y2="280" stroke="#334155" stroke-width="1"/>
                   <g class="x-labels">
                     <g *ngFor="let xtick of chart.xTicks">
                       <line [attr.x1]="xtick.x" y1="280" [attr.x2]="xtick.x" y2="285" stroke="#475569" stroke-width="1"/>
@@ -2940,10 +2940,10 @@
 
           <!-- Interactive SVG Plot Canvas Container (With Horizontal Scroll on Zoom) -->
           <div class="relative bg-slate-950/80 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none">
-            <div class="w-full overflow-x-auto custom-scrollbar pb-1">
-              <div [style.minWidth]="overviewChartZoom === 1 ? '100%' : (overviewChartZoom * 100) + '%'" class="transition-all relative">
+            <div class="w-full overflow-x-auto custom-scrollbar pb-1 flex items-center justify-center">
+              <div [style.width]="overviewChartZoom === 1 ? '100%' : (overviewChartZoom * 100) + '%'" [style.minWidth]="overviewChartZoom === 1 ? '100%' : (overviewChartZoom * 100) + '%'" class="transition-all relative flex items-center justify-center">
                 <svg 
-                  viewBox="0 0 960 220" 
+                  [attr.viewBox]="'0 0 ' + overviewChartSvgWidth + ' 220'" 
                   class="w-full h-56 sm:h-64 cursor-pointer overflow-visible"
                   (mousemove)="onOverviewChartMouseMove($event)"
                   (click)="onOverviewChartClick($event)"
@@ -2970,7 +2970,7 @@
                   <line 
                     x1="60" 
                     [attr.y1]="tick.y" 
-                    x2="935" 
+                    [attr.x2]="overviewChartSvgWidth - 25" 
                     [attr.y2]="tick.y" 
                     stroke="#1e293b" 
                     stroke-width="1" 
@@ -2990,7 +2990,7 @@
               </g>
 
               <!-- X-Axis Baseline & Ticks -->
-              <line x1="60" y1="190" x2="935" y2="190" stroke="#334155" stroke-width="1"/>
+              <line x1="60" y1="190" [attr.x2]="overviewChartSvgWidth - 25" y2="190" stroke="#334155" stroke-width="1"/>
               <g class="x-labels">
                 <g *ngFor="let xtick of getOverviewChartXTicks()">
                   <line 
@@ -3048,7 +3048,7 @@
                 <line 
                   x1="60" 
                   [attr.y1]="activeOverviewPoint.y" 
-                  x2="935" 
+                  [attr.x2]="overviewChartSvgWidth - 25" 
                   [attr.y2]="activeOverviewPoint.y" 
                   [attr.stroke]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8')" 
                   stroke-width="1.5" 
@@ -3071,7 +3071,7 @@
                 </g>
 
                 <!-- Dynamic X-Axis Pill Badge -->
-                <g [attr.transform]="'translate(' + Math.max(60, Math.min(875, activeOverviewPoint.x - 30)) + ', 192)'">
+                <g [attr.transform]="'translate(' + Math.max(60, Math.min(overviewChartSvgWidth - 85, activeOverviewPoint.x - 30)) + ', 192)'">
                   <rect width="60" height="18" rx="4" 
                     [attr.fill]="pinnedOverviewPoint ? '#78350f' : (overviewChartMetric === 'discounts' ? '#4c0519' : overviewChartMetric === 'rank_reviews' ? '#064e3b' : '#1e1b4b')" 
                     [attr.stroke]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8')" 
@@ -3111,11 +3111,11 @@
               [class.border-indigo-500/70]="!pinnedOverviewPoint"
               [class.ring-2]="pinnedOverviewPoint"
               [class.ring-amber-500/30]="pinnedOverviewPoint"
-              [style.left.%]="Math.max(14, Math.min(86, (activeOverviewPoint.x / 960) * 100))"
+              [style.left.%]="Math.max(10, Math.min(90, (activeOverviewPoint.x / overviewChartSvgWidth) * 100))"
               [style.top.%]="(activeOverviewPoint.y / 220) * 100"
-              [class.-translate-x-1/2]="(activeOverviewPoint.x / 960) >= 0.25 && (activeOverviewPoint.x / 960) <= 0.75"
-              [class.-translate-x-4]="(activeOverviewPoint.x / 960) < 0.25"
-              [class.-translate-x-[96%]]="(activeOverviewPoint.x / 960) > 0.75"
+              [class.-translate-x-1/2]="(activeOverviewPoint.x / overviewChartSvgWidth) >= 0.25 && (activeOverviewPoint.x / overviewChartSvgWidth) <= 0.75"
+              [class.-translate-x-4]="(activeOverviewPoint.x / overviewChartSvgWidth) < 0.25"
+              [class.-translate-x-[96%]]="(activeOverviewPoint.x / overviewChartSvgWidth) > 0.75"
               [class.-translate-y-full]="activeOverviewPoint.y >= 70"
               [class.-mt-3]="activeOverviewPoint.y >= 70"
               [class.translate-y-4]="activeOverviewPoint.y < 70"
@@ -7400,11 +7400,11 @@
 
         <!-- EXPANDED SVG CANVAS (CUMULATIVE MODAL) -->
         <div *ngIf="activeExpandedChartModal === 'cumulative'" class="flex-1 bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden flex flex-col justify-center relative select-none">
-          <div *ngIf="getCumulativeDemandChartData() as chart" class="w-full h-full overflow-x-auto custom-scrollbar flex items-center">
-            <div [style.minWidth]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" class="w-full transition-all">
+          <div *ngIf="getCumulativeDemandChartData() as chart" class="w-full h-full overflow-x-auto custom-scrollbar flex items-center justify-center">
+            <div [style.width]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" [style.minWidth]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" class="h-full flex items-center justify-center transition-all">
               <svg 
-                viewBox="0 0 960 330" 
-                class="w-full h-[420px] sm:h-[480px] cursor-pointer overflow-visible"
+                [attr.viewBox]="'0 0 ' + chart.svgWidth + ' 330'" 
+                class="w-full h-full max-h-[520px] cursor-pointer overflow-visible"
                 (mousemove)="onCumulativeMouseMove($event)"
                 (click)="onCumulativeChartClick($event)"
               >
@@ -7421,7 +7421,7 @@
                 </defs>
 
                 <!-- 50% Horizontal Equilibrium Baseline Grid Band -->
-                <rect x="65" y="155" width="860" height="125" fill="#10b981" fill-opacity="0.03"/>
+                <rect x="65" y="155" [attr.width]="chart.svgWidth - 100" height="125" fill="#10b981" fill-opacity="0.03"/>
 
                 <!-- Shift Corridor Area -->
                 <rect 
@@ -7442,7 +7442,7 @@
                     <line 
                       x1="65" 
                       [attr.y1]="tick.y" 
-                      x2="925" 
+                      [attr.x2]="chart.svgWidth - 35" 
                       [attr.y2]="tick.y" 
                       [attr.stroke]="tick.y === 155 ? '#f59e0b' : '#1e293b'" 
                       [attr.stroke-width]="tick.y === 155 ? '1.5' : '1'" 
@@ -7503,7 +7503,7 @@
                 </g>
 
                 <!-- X-Axis Baseline & Ticks -->
-                <line x1="65" y1="280" x2="925" y2="280" stroke="#334155" stroke-width="1"/>
+                <line x1="65" y1="280" [attr.x2]="chart.svgWidth - 35" y2="280" stroke="#334155" stroke-width="1"/>
                 <g class="x-labels">
                   <g *ngFor="let xtick of chart.xTicks">
                     <line [attr.x1]="xtick.x" y1="280" [attr.x2]="xtick.x" y2="285" stroke="#475569" stroke-width="1"/>
@@ -7524,7 +7524,7 @@
                   <!-- Dynamic Floating Smart Pill -->
                   <g>
                     <rect 
-                      [attr.x]="Math.max(70, Math.min(800, activeCumulativePoint.x - 70))" 
+                      [attr.x]="Math.max(70, Math.min(chart.svgWidth - 160, activeCumulativePoint.x - 70))" 
                       [attr.y]="Math.max(14, activeCumulativePoint.yDemand - 32)" 
                       width="140" 
                       height="24" 
@@ -7535,7 +7535,7 @@
                       stroke-width="1.5"
                     />
                     <text 
-                      [attr.x]="Math.max(70, Math.min(800, activeCumulativePoint.x - 70)) + 70" 
+                      [attr.x]="Math.max(70, Math.min(chart.svgWidth - 160, activeCumulativePoint.x - 70)) + 70" 
                       [attr.y]="Math.max(14, activeCumulativePoint.yDemand - 32) + 16" 
                       text-anchor="middle" 
                       fill="#ffffff" 
@@ -7554,11 +7554,11 @@
 
         <!-- EXPANDED SVG CANVAS (OVERVIEW FLUCTUATIONS MODAL) -->
         <div *ngIf="activeExpandedChartModal === 'overview'" class="flex-1 bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden flex flex-col justify-center relative select-none">
-          <div class="w-full h-full overflow-x-auto custom-scrollbar flex items-center">
-            <div [style.minWidth]="overviewChartZoom === 1 ? '100%' : (overviewChartZoom * 100) + '%'" class="w-full transition-all relative">
+          <div class="w-full h-full overflow-x-auto custom-scrollbar flex items-center justify-center">
+            <div [style.width]="overviewChartZoom === 1 ? '100%' : (overviewChartZoom * 100) + '%'" [style.minWidth]="overviewChartZoom === 1 ? '100%' : (overviewChartZoom * 100) + '%'" class="h-full flex items-center justify-center transition-all relative">
               <svg 
-                viewBox="0 0 960 220" 
-                class="w-full h-[420px] sm:h-[480px] cursor-pointer overflow-visible"
+                [attr.viewBox]="'0 0 ' + overviewChartSvgWidth + ' 220'" 
+                class="w-full h-full max-h-[520px] cursor-pointer overflow-visible"
                 (mousemove)="onOverviewChartMouseMove($event)"
                 (click)="onOverviewChartClick($event)"
                 (mouseleave)="onOverviewChartMouseLeave()"
@@ -7581,7 +7581,7 @@
                 <!-- Gridlines -->
                 <g class="gridlines">
                   <g *ngFor="let tick of getOverviewChartYTicks()">
-                    <line x1="60" [attr.y1]="tick.y" x2="935" [attr.y2]="tick.y" stroke="#1e293b" stroke-width="1" stroke-dasharray="3 3"/>
+                    <line x1="60" [attr.y1]="tick.y" [attr.x2]="overviewChartSvgWidth - 25" [attr.y2]="tick.y" stroke="#1e293b" stroke-width="1" stroke-dasharray="3 3"/>
                     <text x="50" [attr.y]="tick.y + 4" text-anchor="end" fill="#64748b" font-size="10" font-family="monospace">
                       {{ tick.label }}
                     </text>
@@ -7589,7 +7589,7 @@
                 </g>
 
                 <!-- Baseline & X Ticks -->
-                <line x1="60" y1="190" x2="935" y2="190" stroke="#334155" stroke-width="1"/>
+                <line x1="60" y1="190" [attr.x2]="overviewChartSvgWidth - 25" y2="190" stroke="#334155" stroke-width="1"/>
                 <g class="x-labels">
                   <g *ngFor="let xtick of getOverviewChartXTicks()">
                     <line [attr.x1]="xtick.x" y1="190" [attr.x2]="xtick.x" y2="195" stroke="#475569" stroke-width="1"/>
@@ -7606,7 +7606,7 @@
                 <!-- Active Intersecting Crosshairs -->
                 <g *ngIf="activeOverviewPoint">
                   <line [attr.x1]="activeOverviewPoint.x" y1="20" [attr.x2]="activeOverviewPoint.x" y2="190" [attr.stroke]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8')" stroke-width="1.5" stroke-dasharray="3 3"/>
-                  <line x1="60" [attr.y1]="activeOverviewPoint.y" x2="935" [attr.y2]="activeOverviewPoint.y" [attr.stroke]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8')" stroke-width="1.5" stroke-dasharray="3 3"/>
+                  <line x1="60" [attr.y1]="activeOverviewPoint.y" [attr.x2]="overviewChartSvgWidth - 25" [attr.y2]="activeOverviewPoint.y" [attr.stroke]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8')" stroke-width="1.5" stroke-dasharray="3 3"/>
                   <circle [attr.cx]="activeOverviewPoint.x" [attr.cy]="activeOverviewPoint.y" [attr.r]="pinnedOverviewPoint ? 14 : 9" [attr.fill]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8')" fill-opacity="0.25"/>
                   <circle [attr.cx]="activeOverviewPoint.x" [attr.cy]="activeOverviewPoint.y" [attr.r]="pinnedOverviewPoint ? 6 : 5" [attr.fill]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8')" stroke="#ffffff" stroke-width="2"/>
                 </g>
