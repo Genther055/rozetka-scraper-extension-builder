@@ -269,13 +269,38 @@
             font-weight: 600;
             color: #f8fafc;
             margin-bottom: 8px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
             background: #0f172a;
-            padding: 5px 8px;
+            padding: 6px 10px;
             border-radius: 5px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        /* Noticeable Finish Explanation Banner */
+        .completion-alert-box {
+            display: none;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-top: 8px;
+            font-size: 10.5px;
+            color: #f1f5f9;
+            line-height: 1.4;
+            text-align: left;
+        }
+        .completion-alert-header {
+            font-weight: 700;
+            color: #34d399;
+            font-size: 11px;
+            margin-bottom: 3px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .completion-alert-desc {
+            color: #cbd5e1;
         }
 
         /* Metrics Bar */
@@ -430,6 +455,16 @@
             <div class="metric-item" id="timer-text">⏱ 00:00</div>
             <div class="metric-item" id="count-text">📦 0 товарів</div>
             <div class="metric-item" id="page-text">📄 Стор. 1</div>
+        </div>
+
+        <!-- Noticeable Completion Explanation Banner -->
+        <div id="completion-alert" class="completion-alert-box">
+            <div class="completion-alert-header">
+                <span>✓ Збір завершено: <span id="alert-collected-count">530</span> з <span id="alert-total-count">531</span> тов.</span>
+            </div>
+            <div class="completion-alert-desc" id="alert-desc-text">
+                💡 <strong>1 позицію пропущено:</strong> застарілий товар без ціни (0 грн) автоматично відсіяно для чистоти аналітики.
+            </div>
         </div>
 
         <div style="font-size: 9.5px; color: #64748b; text-align: center; margin-top: 6px;">

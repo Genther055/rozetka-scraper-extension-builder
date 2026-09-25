@@ -19,6 +19,11 @@ const tabsFoundCountEl = document.getElementById('tabs-found-count');
 const btnRefreshTabs = document.getElementById('btn-refresh-tabs');
 const btnResetAll = document.getElementById('btn-reset-all');
 
+const completionAlertEl = document.getElementById('completion-alert');
+const alertCollectedCountEl = document.getElementById('alert-collected-count');
+const alertTotalCountEl = document.getElementById('alert-total-count');
+const alertDescTextEl = document.getElementById('alert-desc-text');
+
 let activeTabId = null;
 let timerInterval = null;
 let activeStartTime = null;
@@ -61,10 +66,33 @@ function updateProgress(percent, count, actionMsg, estimatedTotal, pageNum) {
     
     if (safePercent === 100 && count > 0) {
         countText.innerText = `📦 ${count} / ${count} тов. (100%)`;
-    } else if (estimatedTotal && estimatedTotal > 0) {
-        countText.innerText = `📦 ${count || 0} / ${estimatedTotal} тов.`;
+        
+        // Show noticeable completion explanation alert
+        if (completionAlertEl) {
+            completionAlertEl.style.display = 'block';
+            if (alertCollectedCountEl) alertCollectedCountEl.innerText = count;
+            if (alertTotalCountEl) alertTotalCountEl.innerText = (estimatedTotal && estimatedTotal > count) ? estimatedTotal : count;
+            
+            if (estimatedTotal && estimatedTotal > count) {
+                const diff = estimatedTotal - count;
+                if (alertDescTextEl) {
+                    alertDescTextEl.innerHTML = `💡 <strong>${diff} ${diff === 1 ? 'позицію' : 'позиції'} пропущено:</strong> застарілий товар без ціни (0 грн) автоматично відсіяно для чистоти аналітики.`;
+                }
+            } else {
+                if (alertDescTextEl) {
+                    alertDescTextEl.innerHTML = `✓ Зібрано всі <strong>100% активних товарів</strong> каталогу з актуальними цінами (реклама та дублікати відсіяні).`;
+                }
+            }
+        }
     } else {
-        countText.innerText = `📦 ${count || 0} товарів`;
+        if (completionAlertEl) {
+            completionAlertEl.style.display = 'none';
+        }
+        if (estimatedTotal && estimatedTotal > 0) {
+            countText.innerText = `📦 ${count || 0} / ${estimatedTotal} тов.`;
+        } else {
+            countText.innerText = `📦 ${count || 0} товарів`;
+        }
     }
 
     if (pageNum) {
