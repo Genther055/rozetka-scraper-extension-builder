@@ -1467,7 +1467,7 @@
                 </div>
 
                 <!-- Legend, Zoom & Shift Indicator -->
-                <div class="flex flex-wrap items-center gap-2.5">
+                <div class="flex flex-wrap items-center gap-2">
                   <!-- Cumulative Zoom Mode Toggle -->
                   <div *ngIf="activePriceChartTab === 'cumulative'" class="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
                     <button 
@@ -1498,9 +1498,59 @@
                     </button>
                   </div>
 
+                  <!-- Horizontal Zoom Factor Selector (1x, 2x, 4x, 8x) -->
+                  <div *ngIf="activePriceChartTab === 'cumulative'" class="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
+                    <span class="text-[10px] text-slate-400 font-bold px-1.5 flex items-center gap-0.5 hidden sm:flex">
+                      <span class="material-icons text-[12px] text-indigo-400">swap_horiz</span>
+                      Вісь X:
+                    </span>
+                    <button 
+                      (click)="setCumulativeChartZoom(1)"
+                      [class.bg-indigo-600]="cumulativeChartZoom === 1"
+                      [class.text-white]="cumulativeChartZoom === 1"
+                      [class.text-slate-400]="cumulativeChartZoom !== 1"
+                      class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
+                      title="Стандартний масштаб (1x)"
+                    >1x</button>
+                    <button 
+                      (click)="setCumulativeChartZoom(2)"
+                      [class.bg-indigo-600]="cumulativeChartZoom === 2"
+                      [class.text-white]="cumulativeChartZoom === 2"
+                      [class.text-slate-400]="cumulativeChartZoom !== 2"
+                      class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
+                      title="Розширена вісь (2x) — горизонтальний скрол для точкового наведення"
+                    >2x</button>
+                    <button 
+                      (click)="setCumulativeChartZoom(4)"
+                      [class.bg-indigo-600]="cumulativeChartZoom === 4"
+                      [class.text-white]="cumulativeChartZoom === 4"
+                      [class.text-slate-400]="cumulativeChartZoom !== 4"
+                      class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
+                      title="Детальний масштаб (4x) — плавний рух курсору"
+                    >4x</button>
+                    <button 
+                      (click)="setCumulativeChartZoom(8)"
+                      [class.bg-indigo-600]="cumulativeChartZoom === 8"
+                      [class.text-white]="cumulativeChartZoom === 8"
+                      [class.text-slate-400]="cumulativeChartZoom !== 8"
+                      class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
+                      title="Точковий масштаб (8x) — поштучний аналіз кожного товару"
+                    >8x</button>
+                  </div>
+
+                  <!-- Fullscreen Modal Trigger Button -->
+                  <button 
+                    (click)="openExpandedChartModal('cumulative')"
+                    class="px-2.5 py-1 bg-slate-900 hover:bg-indigo-600 text-slate-300 hover:text-white rounded-xl border border-slate-800 hover:border-indigo-500 transition-all cursor-pointer shadow-sm flex items-center gap-1 text-[11px] font-bold"
+                    title="Відкрити графік у широкоформатному спливаючому вікні на весь екран"
+                  >
+                    <span class="material-icons text-[13px] text-indigo-400 group-hover:text-white">open_in_full</span>
+                    <span>Розгорнути</span>
+                  </button>
+
                   <!-- Shift Indicator -->
                   <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/90 border border-slate-800 text-[11px] font-mono text-slate-300">
-                    <span class="text-slate-400">Зсув попиту:</span>
+                    <span class="text-slate-400">Зсув:</span>
                     <span 
                       [class.text-amber-400]="analyticsSummary.kpi.demandPriceDiffPct < -3"
                       [class.text-emerald-400]="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3"
@@ -1645,13 +1695,15 @@
 
                 </div>
 
-                <!-- SVG PLOT AREA -->
-                <svg 
-                  viewBox="0 0 960 330" 
-                  class="w-full h-72 sm:h-80 cursor-pointer overflow-visible"
-                  (mousemove)="onCumulativeMouseMove($event)"
-                  (click)="onCumulativeChartClick($event)"
-                >
+                <!-- SVG PLOT AREA (With Horizontal Scroll on Zoom) -->
+                <div class="w-full overflow-x-auto custom-scrollbar pb-1">
+                  <div [style.minWidth]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" class="transition-all">
+                    <svg 
+                      viewBox="0 0 960 330" 
+                      class="w-full h-72 sm:h-80 cursor-pointer overflow-visible"
+                      (mousemove)="onCumulativeMouseMove($event)"
+                      (click)="onCumulativeChartClick($event)"
+                    >
                   <defs>
                     <!-- Gradients -->
                     <linearGradient id="cumDemandAreaGrad" x1="0" y1="0" x2="0" y2="1">
@@ -1877,6 +1929,8 @@
                     </g>
                   </g>
                 </svg>
+              </div>
+            </div>
 
               </div>
             </div>
@@ -2778,50 +2832,102 @@
               </div>
             </div>
 
-            <!-- Metric Mode Switcher Tabs (Keepa / Bloomberg style) -->
-            <div class="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800 self-start lg:self-auto">
-              <button 
-                (click)="setOverviewChartMetric('price_reviews')"
-                [class.bg-indigo-600]="overviewChartMetric === 'price_reviews'"
-                [class.text-white]="overviewChartMetric === 'price_reviews'"
-                [class.text-slate-400]="overviewChartMetric !== 'price_reviews'"
-                class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer hover:text-white flex items-center gap-1.5"
-              >
-                <span class="material-icons text-xs">analytics</span>
-                <span>Ціна vs Попит</span>
-              </button>
+            <div class="flex flex-wrap items-center gap-2 self-start lg:self-auto">
+              <!-- Metric Mode Switcher Tabs (Keepa / Bloomberg style) -->
+              <div class="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+                <button 
+                  (click)="setOverviewChartMetric('price_reviews')"
+                  [class.bg-indigo-600]="overviewChartMetric === 'price_reviews'"
+                  [class.text-white]="overviewChartMetric === 'price_reviews'"
+                  [class.text-slate-400]="overviewChartMetric !== 'price_reviews'"
+                  class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer hover:text-white flex items-center gap-1.5"
+                >
+                  <span class="material-icons text-xs">analytics</span>
+                  <span>Ціна vs Попит</span>
+                </button>
 
-              <button 
-                (click)="setOverviewChartMetric('rank_price')"
-                [class.bg-indigo-600]="overviewChartMetric === 'rank_price'"
-                [class.text-white]="overviewChartMetric === 'rank_price'"
-                [class.text-slate-400]="overviewChartMetric !== 'rank_price'"
-                class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer hover:text-white flex items-center gap-1.5"
-              >
-                <span class="material-icons text-xs">payments</span>
-                <span>Ціна за позиціями</span>
-              </button>
+                <button 
+                  (click)="setOverviewChartMetric('rank_price')"
+                  [class.bg-indigo-600]="overviewChartMetric === 'rank_price'"
+                  [class.text-white]="overviewChartMetric === 'rank_price'"
+                  [class.text-slate-400]="overviewChartMetric !== 'rank_price'"
+                  class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer hover:text-white flex items-center gap-1.5"
+                >
+                  <span class="material-icons text-xs">payments</span>
+                  <span>Ціна за позиціями</span>
+                </button>
 
-              <button 
-                (click)="setOverviewChartMetric('rank_reviews')"
-                [class.bg-indigo-600]="overviewChartMetric === 'rank_reviews'"
-                [class.text-white]="overviewChartMetric === 'rank_reviews'"
-                [class.text-slate-400]="overviewChartMetric !== 'rank_reviews'"
-                class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer hover:text-white flex items-center gap-1.5"
-              >
-                <span class="material-icons text-xs">forum</span>
-                <span>Попит за позиціями</span>
-              </button>
+                <button 
+                  (click)="setOverviewChartMetric('rank_reviews')"
+                  [class.bg-indigo-600]="overviewChartMetric === 'rank_reviews'"
+                  [class.text-white]="overviewChartMetric === 'rank_reviews'"
+                  [class.text-slate-400]="overviewChartMetric !== 'rank_reviews'"
+                  class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer hover:text-white flex items-center gap-1.5"
+                >
+                  <span class="material-icons text-xs">forum</span>
+                  <span>Попит за позиціями</span>
+                </button>
 
+                <button 
+                  (click)="setOverviewChartMetric('discounts')"
+                  [class.bg-indigo-600]="overviewChartMetric === 'discounts'"
+                  [class.text-white]="overviewChartMetric === 'discounts'"
+                  [class.text-slate-400]="overviewChartMetric !== 'discounts'"
+                  class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer hover:text-white flex items-center gap-1.5"
+                >
+                  <span class="material-icons text-xs">local_offer</span>
+                  <span>Глибина знижок</span>
+                </button>
+              </div>
+
+              <!-- Horizontal Zoom Selector for Market Fluctuations Chart -->
+              <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                <span class="text-[10px] text-slate-400 font-bold px-1.5 flex items-center gap-0.5 hidden sm:flex">
+                  <span class="material-icons text-[12px] text-indigo-400">swap_horiz</span>
+                  Вісь X:
+                </span>
+                <button 
+                  (click)="setOverviewChartZoom(1)"
+                  [class.bg-indigo-600]="overviewChartZoom === 1"
+                  [class.text-white]="overviewChartZoom === 1"
+                  [class.text-slate-400]="overviewChartZoom !== 1"
+                  class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
+                  title="Стандартний масштаб (1x)"
+                >1x</button>
+                <button 
+                  (click)="setOverviewChartZoom(2)"
+                  [class.bg-indigo-600]="overviewChartZoom === 2"
+                  [class.text-white]="overviewChartZoom === 2"
+                  [class.text-slate-400]="overviewChartZoom !== 2"
+                  class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
+                  title="Розширена вісь (2x) — плавний горизонтальний скрол"
+                >2x</button>
+                <button 
+                  (click)="setOverviewChartZoom(4)"
+                  [class.bg-indigo-600]="overviewChartZoom === 4"
+                  [class.text-white]="overviewChartZoom === 4"
+                  [class.text-slate-400]="overviewChartZoom !== 4"
+                  class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
+                  title="Детальний масштаб (4x) — точкове наведення без стрибків"
+                >4x</button>
+                <button 
+                  (click)="setOverviewChartZoom(8)"
+                  [class.bg-indigo-600]="overviewChartZoom === 8"
+                  [class.text-white]="overviewChartZoom === 8"
+                  [class.text-slate-400]="overviewChartZoom !== 8"
+                  class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
+                  title="Точковий масштаб (8x) — поштучний аналіз кожного товару"
+                >8x</button>
+              </div>
+
+              <!-- Fullscreen Modal Button -->
               <button 
-                (click)="setOverviewChartMetric('discounts')"
-                [class.bg-indigo-600]="overviewChartMetric === 'discounts'"
-                [class.text-white]="overviewChartMetric === 'discounts'"
-                [class.text-slate-400]="overviewChartMetric !== 'discounts'"
-                class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer hover:text-white flex items-center gap-1.5"
+                (click)="openExpandedChartModal('overview')"
+                class="px-2.5 py-1.5 bg-slate-950 hover:bg-indigo-600 text-slate-300 hover:text-white rounded-xl border border-slate-800 hover:border-indigo-500 transition-all cursor-pointer shadow-sm flex items-center gap-1 text-[11px] font-bold"
+                title="Відкрити графік коливань у широкоформатному модальному вікні на весь екран"
               >
-                <span class="material-icons text-xs">local_offer</span>
-                <span>Глибина знижок</span>
+                <span class="material-icons text-sm text-indigo-400 group-hover:text-white">open_in_full</span>
+                <span>Розгорнути</span>
               </button>
             </div>
           </div>
@@ -2832,15 +2938,17 @@
             <span>У поточній вибірці ({{ (filteredProducts.length || products.length) }} шт) активні акційні знижки відсутні — усі товари реалізуються за стандартною регулярною ціною (дисконт 0%). При зборі лістингів із промо-акціями тут відображатиметься векторна крива коливань знижок.</span>
           </div>
 
-          <!-- Interactive SVG Plot Canvas Container -->
+          <!-- Interactive SVG Plot Canvas Container (With Horizontal Scroll on Zoom) -->
           <div class="relative bg-slate-950/80 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none">
-            <svg 
-              viewBox="0 0 960 220" 
-              class="w-full h-56 sm:h-64 cursor-pointer overflow-visible"
-              (mousemove)="onOverviewChartMouseMove($event)"
-              (click)="onOverviewChartClick($event)"
-              (mouseleave)="onOverviewChartMouseLeave()"
-            >
+            <div class="w-full overflow-x-auto custom-scrollbar pb-1">
+              <div [style.minWidth]="overviewChartZoom === 1 ? '100%' : (overviewChartZoom * 100) + '%'" class="transition-all relative">
+                <svg 
+                  viewBox="0 0 960 220" 
+                  class="w-full h-56 sm:h-64 cursor-pointer overflow-visible"
+                  (mousemove)="onOverviewChartMouseMove($event)"
+                  (click)="onOverviewChartClick($event)"
+                  (mouseleave)="onOverviewChartMouseLeave()"
+                >
               <defs>
                 <linearGradient id="fluctuationAreaGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.30"/>
@@ -3067,6 +3175,8 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
 
           <!-- Bottom Metric Badges Summary for Chart -->
           <div *ngIf="analyticsSummary && analyticsSummary.kpi" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-xs font-mono">
@@ -6956,6 +7066,555 @@
           <span class="material-icons text-sm">save</span>
           <span>Зберегти пароль</span>
         </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: EXPANDED WIDE-SCREEN CHART VIEW (CUMULATIVE & MARKET FLUCTUATIONS) -->
+  <div 
+    *ngIf="activeExpandedChartModal" 
+    class="fixed inset-0 z-[160] bg-slate-950/85 backdrop-blur-xl flex flex-col items-center justify-center p-2 sm:p-4 animate-fadeIn"
+    (window:keydown.escape)="closeExpandedChartModal()"
+  >
+    <div class="w-full max-w-[98vw] h-[94vh] bg-gradient-to-b from-[#0f172a] via-[#0b0f19] to-[#080d1a] border border-indigo-500/50 rounded-3xl shadow-2xl shadow-black/90 flex flex-col overflow-hidden relative">
+      
+      <!-- MODAL HEADER -->
+      <div class="px-5 py-3.5 border-b border-slate-800/90 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-950/60 shrink-0">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-10 h-10 rounded-2xl bg-indigo-950/80 border border-indigo-500/40 text-indigo-300 flex items-center justify-center shadow-md shrink-0">
+            <span class="material-icons text-xl" *ngIf="activeExpandedChartModal === 'cumulative'">stacked_line_chart</span>
+            <span class="material-icons text-xl" *ngIf="activeExpandedChartModal === 'overview'">analytics</span>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <h2 class="text-sm sm:text-base font-extrabold text-white uppercase tracking-wider truncate">
+                <span *ngIf="activeExpandedChartModal === 'cumulative'">Цінові орієнтири, баланс попиту та точка 50% ринкової маси</span>
+                <span *ngIf="activeExpandedChartModal === 'overview'">Графік коливань ринку та векторних трендів попиту</span>
+              </h2>
+              <span class="text-[10px] font-mono font-bold bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-700/60 shrink-0 hidden sm:inline">
+                Широкоформатний аналіз
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 truncate">
+              <span *ngIf="activeExpandedChartModal === 'cumulative'">Деталізований поштучний огляд кумулятивної кривої попиту, медіан полиці та точки ринкової рівноваги</span>
+              <span *ngIf="activeExpandedChartModal === 'overview'">Векторний аналіз розподілу цін, кількості замовлень/відгуків та знижок по каталогу лістингу</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- Header Controls & Close Button -->
+        <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+          <!-- Cumulative View Controls -->
+          <ng-container *ngIf="activeExpandedChartModal === 'cumulative'">
+            <!-- Tab Switcher inside Modal -->
+            <div class="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs">
+              <button 
+                (click)="setCumulativeZoomMode('full')"
+                class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                [class.bg-indigo-600]="cumulativeZoomMode === 'full'"
+                [class.text-white]="cumulativeZoomMode === 'full'"
+                [class.text-slate-400]="cumulativeZoomMode !== 'full'"
+              >
+                100% Ринок
+              </button>
+              <button 
+                (click)="setCumulativeZoomMode('focus')"
+                class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                [class.bg-amber-600]="cumulativeZoomMode === 'focus'"
+                [class.text-white]="cumulativeZoomMode === 'focus'"
+                [class.text-slate-400]="cumulativeZoomMode !== 'focus'"
+              >
+                Фокус (85%)
+              </button>
+            </div>
+
+            <!-- Horizontal Zoom Selector -->
+            <div class="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs">
+              <span class="text-[10px] text-slate-400 font-bold px-1.5 flex items-center gap-0.5">
+                <span class="material-icons text-xs text-indigo-400">swap_horiz</span>
+                Масштаб осі X:
+              </span>
+              <button 
+                *ngFor="let z of [1, 2, 4, 8]"
+                (click)="setCumulativeChartZoom(z)"
+                [class.bg-indigo-600]="cumulativeChartZoom === z"
+                [class.text-white]="cumulativeChartZoom === z"
+                [class.text-slate-400]="cumulativeChartZoom !== z"
+                class="px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all cursor-pointer hover:text-white"
+                [title]="z + 'x масштаб'"
+              >
+                {{ z }}x
+              </button>
+            </div>
+          </ng-container>
+
+          <!-- Overview View Controls -->
+          <ng-container *ngIf="activeExpandedChartModal === 'overview'">
+            <div class="flex flex-wrap items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs">
+              <button 
+                (click)="setOverviewChartMetric('price_reviews')"
+                [class.bg-indigo-600]="overviewChartMetric === 'price_reviews'"
+                [class.text-white]="overviewChartMetric === 'price_reviews'"
+                [class.text-slate-400]="overviewChartMetric !== 'price_reviews'"
+                class="px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer"
+              >
+                Ціна vs Попит
+              </button>
+              <button 
+                (click)="setOverviewChartMetric('rank_price')"
+                [class.bg-indigo-600]="overviewChartMetric === 'rank_price'"
+                [class.text-white]="overviewChartMetric === 'rank_price'"
+                [class.text-slate-400]="overviewChartMetric !== 'rank_price'"
+                class="px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer"
+              >
+                Ціна за поз.
+              </button>
+              <button 
+                (click)="setOverviewChartMetric('rank_reviews')"
+                [class.bg-indigo-600]="overviewChartMetric === 'rank_reviews'"
+                [class.text-white]="overviewChartMetric === 'rank_reviews'"
+                [class.text-slate-400]="overviewChartMetric !== 'rank_reviews'"
+                class="px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer"
+              >
+                Попит за поз.
+              </button>
+              <button 
+                (click)="setOverviewChartMetric('discounts')"
+                [class.bg-indigo-600]="overviewChartMetric === 'discounts'"
+                [class.text-white]="overviewChartMetric === 'discounts'"
+                [class.text-slate-400]="overviewChartMetric !== 'discounts'"
+                class="px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer"
+              >
+                Знижки
+              </button>
+            </div>
+
+            <!-- Horizontal Zoom Selector -->
+            <div class="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs">
+              <span class="text-[10px] text-slate-400 font-bold px-1.5 flex items-center gap-0.5">
+                <span class="material-icons text-xs text-indigo-400">swap_horiz</span>
+                Масштаб осі X:
+              </span>
+              <button 
+                *ngFor="let z of [1, 2, 4, 8]"
+                (click)="setOverviewChartZoom(z)"
+                [class.bg-indigo-600]="overviewChartZoom === z"
+                [class.text-white]="overviewChartZoom === z"
+                [class.text-slate-400]="overviewChartZoom !== z"
+                class="px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all cursor-pointer hover:text-white"
+                [title]="z + 'x масштаб'"
+              >
+                {{ z }}x
+              </button>
+            </div>
+          </ng-container>
+
+          <!-- Close Modal Button -->
+          <button 
+            (click)="closeExpandedChartModal()"
+            class="p-2 bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white rounded-2xl border border-slate-700 hover:border-rose-500 transition-all cursor-pointer shadow-md"
+            title="Закрити широкоформатний режим (Esc)"
+          >
+            <span class="material-icons text-base">close</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- MODAL BODY -->
+      <div class="flex-1 flex flex-col p-4 sm:p-5 gap-3 overflow-hidden">
+        
+        <!-- STICKY TOP INSPECTOR BAR (CUMULATIVE MODAL) -->
+        <div *ngIf="activeExpandedChartModal === 'cumulative'" class="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900/95 via-[#131d36]/90 to-slate-900/95 border border-indigo-500/40 shadow-lg min-h-[58px] flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+          <ng-container *ngIf="activeCumulativePoint; else modalDefaultEquilibrium">
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+              <!-- Left Price & Demand Badge -->
+              <div class="flex items-center gap-3 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-indigo-500/40 shrink-0 font-mono">
+                <div class="text-right">
+                  <span class="text-[9px] text-slate-400 font-sans block uppercase leading-none">Ціна</span>
+                  <b class="text-white text-base leading-none">{{ activeCumulativePoint.price | number }} ₴</b>
+                </div>
+                <div class="h-6 w-px bg-slate-800"></div>
+                <div>
+                  <span class="text-[9px] text-emerald-400 font-sans block uppercase leading-none">Попит</span>
+                  <b class="text-emerald-400 text-base leading-none">{{ activeCumulativePoint.cumDemandPct }}%</b>
+                </div>
+              </div>
+
+              <!-- Product Info -->
+              <div *ngIf="activeCumulativePoint.product" class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span *ngIf="pinnedCumulativePoint" class="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider flex items-center gap-0.5 shrink-0">
+                    <span class="material-icons text-[10px]">push_pin</span>
+                    Зафіксовано
+                  </span>
+                  <p class="text-sm font-bold text-white truncate" [title]="activeCumulativePoint.product.name">
+                    {{ activeCumulativePoint.product.name }}
+                  </p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 mt-1 text-xs">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold border bg-indigo-950 text-indigo-300 border-indigo-500/40">
+                    🏪 {{ activeCumulativePoint.product.seller || 'Rozetka' }}
+                  </span>
+                  <span class="text-amber-300 font-bold font-mono">★ {{ activeCumulativePoint.product.rating || '5.0' }}</span>
+                  <span class="text-slate-300 font-mono font-semibold">({{ activeCumulativePoint.product.reviews || 0 }} відгуків)</span>
+                  <span class="text-slate-400 font-mono text-xs">• До цієї ціни: {{ activeCumulativePoint.cumProducts }} SKU ({{ activeCumulativePoint.cumSupplyPct }}%) / {{ activeCumulativePoint.cumReviews | number }} відгуків</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div *ngIf="activeCumulativePoint.product" class="flex items-center gap-2 shrink-0">
+              <button 
+                (click)="openSpecsModal(activeCumulativePoint.product)"
+                class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
+              >
+                <span class="material-icons text-sm">tune</span>
+                <span>Характеристики</span>
+              </button>
+              <a 
+                *ngIf="activeCumulativePoint.product.link" 
+                [href]="activeCumulativePoint.product.link" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700 cursor-pointer"
+              >
+                <span class="material-icons text-sm">open_in_new</span>
+                <span>Rozetka</span>
+              </a>
+              <button 
+                *ngIf="pinnedCumulativePoint"
+                (click)="unpinCumulativePoint($event)"
+                class="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all cursor-pointer"
+                title="Зняти фіксацію"
+              >
+                <span class="material-icons text-sm">close</span>
+              </button>
+            </div>
+          </ng-container>
+
+          <ng-template #modalDefaultEquilibrium>
+            <div *ngIf="getCumulativeDemandChartData() as chart" class="flex items-center justify-between w-full text-xs">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center font-bold text-sm shrink-0">
+                  ★
+                </div>
+                <div>
+                  <span class="font-bold text-white text-sm">Точка 50% рівноваги попиту: </span>
+                  <span class="font-mono font-extrabold text-amber-300 text-base">{{ chart.weightedMedianPrice | number }} ₴</span>
+                  <span class="text-slate-400 text-xs ml-2">(Рівно половина всіх покупок у вибірці зосереджена до цієї ціни)</span>
+                </div>
+              </div>
+              <div class="text-xs text-slate-400 font-medium hidden sm:flex items-center gap-2 bg-slate-950/80 px-3.5 py-1.5 rounded-xl border border-slate-800">
+                <span class="material-icons text-indigo-400 text-sm">touch_app</span>
+                <span>Наведіть або клікніть на будь-яку точку для поштучного дослідження товару</span>
+              </div>
+            </div>
+          </ng-template>
+        </div>
+
+        <!-- STICKY TOP INSPECTOR BAR (OVERVIEW FLUCTUATIONS MODAL) -->
+        <div *ngIf="activeExpandedChartModal === 'overview'" class="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900/95 via-[#131d36]/90 to-slate-900/95 border border-indigo-500/40 shadow-lg min-h-[58px] flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+          <ng-container *ngIf="activeOverviewPoint; else modalDefaultOverviewPrompt">
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+              <div class="flex items-center gap-3 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-indigo-500/40 shrink-0 font-mono">
+                <div>
+                  <span class="text-[9px] text-slate-400 font-sans block uppercase leading-none">Позиція</span>
+                  <b class="text-white text-base leading-none">#{{ activeOverviewPoint.rank || 1 }}</b>
+                </div>
+                <div class="h-6 w-px bg-slate-800"></div>
+                <div>
+                  <span class="text-[9px] text-emerald-400 font-sans block uppercase leading-none">Ціна</span>
+                  <b class="text-emerald-400 text-base leading-none">{{ activeOverviewPoint.price | number }} ₴</b>
+                </div>
+                <div class="h-6 w-px bg-slate-800"></div>
+                <div>
+                  <span class="text-[9px] text-indigo-300 font-sans block uppercase leading-none">Відгуки</span>
+                  <b class="text-indigo-300 text-base leading-none">{{ activeOverviewPoint.reviews }} в.</b>
+                </div>
+              </div>
+
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span *ngIf="pinnedOverviewPoint" class="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider flex items-center gap-0.5 shrink-0">
+                    <span class="material-icons text-[10px]">push_pin</span>
+                    Зафіксовано
+                  </span>
+                  <p class="text-sm font-bold text-white truncate" [title]="activeOverviewPoint.name">
+                    {{ activeOverviewPoint.name }}
+                  </p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 mt-1 text-xs">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold border bg-indigo-950 text-indigo-300 border-indigo-500/40">
+                    🏪 {{ activeOverviewPoint.seller || 'Rozetka' }}
+                  </span>
+                  <span class="text-amber-300 font-bold font-mono">★ {{ activeOverviewPoint.rating || '5.0' }}</span>
+                  <span *ngIf="(activeOverviewPoint.discount || 0) > 0" class="text-rose-400 font-bold font-mono">Знижка: -{{ activeOverviewPoint.discount }}%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+              <button 
+                *ngIf="activeOverviewPoint.product"
+                (click)="openSpecsModal(activeOverviewPoint.product)"
+                class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
+              >
+                <span class="material-icons text-sm">tune</span>
+                <span>Характеристики</span>
+              </button>
+              <a 
+                *ngIf="activeOverviewPoint.link" 
+                [href]="activeOverviewPoint.link" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700 cursor-pointer"
+              >
+                <span class="material-icons text-sm">open_in_new</span>
+                <span>Rozetka</span>
+              </a>
+              <button 
+                *ngIf="pinnedOverviewPoint"
+                (click)="unpinOverviewPoint($event)"
+                class="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all cursor-pointer"
+                title="Зняти фіксацію"
+              >
+                <span class="material-icons text-sm">close</span>
+              </button>
+            </div>
+          </ng-container>
+
+          <ng-template #modalDefaultOverviewPrompt>
+            <div class="flex items-center justify-between w-full text-xs">
+              <div class="flex items-center gap-2.5 text-slate-300">
+                <span class="material-icons text-indigo-400 text-base">analytics</span>
+                <span>Векторний аналіз ніші: переміщуйте курсор вздовж осі X для дослідження окремих SKU</span>
+              </div>
+              <div class="text-xs text-slate-400 font-medium hidden sm:flex items-center gap-1.5 bg-slate-950/80 px-3 py-1 rounded-xl border border-slate-800">
+                <span class="material-icons text-indigo-400 text-xs">swap_horiz</span>
+                <span>Використовуйте горизонтальний скрол при масштабі 2x, 4x або 8x для точного фокусування</span>
+              </div>
+            </div>
+          </ng-template>
+        </div>
+
+        <!-- EXPANDED SVG CANVAS (CUMULATIVE MODAL) -->
+        <div *ngIf="activeExpandedChartModal === 'cumulative'" class="flex-1 bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden flex flex-col justify-center relative select-none">
+          <div *ngIf="getCumulativeDemandChartData() as chart" class="w-full h-full overflow-x-auto custom-scrollbar flex items-center">
+            <div [style.minWidth]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" class="w-full transition-all">
+              <svg 
+                viewBox="0 0 960 330" 
+                class="w-full h-[420px] sm:h-[480px] cursor-pointer overflow-visible"
+                (mousemove)="onCumulativeMouseMove($event)"
+                (click)="onCumulativeChartClick($event)"
+              >
+                <defs>
+                  <linearGradient id="cumDemandAreaGradModal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.35"/>
+                    <stop offset="60%" stop-color="#06b6d4" stop-opacity="0.12"/>
+                    <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.01"/>
+                  </linearGradient>
+                  <linearGradient id="shiftBandGradModal" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.22"/>
+                    <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.06"/>
+                  </linearGradient>
+                </defs>
+
+                <!-- 50% Horizontal Equilibrium Baseline Grid Band -->
+                <rect x="65" y="155" width="860" height="125" fill="#10b981" fill-opacity="0.03"/>
+
+                <!-- Shift Corridor Area -->
+                <rect 
+                  [attr.x]="chart.shiftMinX" 
+                  y="30" 
+                  [attr.width]="chart.shiftWidth" 
+                  height="250" 
+                  fill="url(#shiftBandGradModal)" 
+                  stroke="#f59e0b" 
+                  stroke-width="1.5" 
+                  stroke-dasharray="4 4"
+                  rx="4"
+                />
+
+                <!-- Horizontal Y-Axis Gridlines & Labels -->
+                <g class="gridlines">
+                  <g *ngFor="let tick of chart.yTicks">
+                    <line 
+                      x1="65" 
+                      [attr.y1]="tick.y" 
+                      x2="925" 
+                      [attr.y2]="tick.y" 
+                      [attr.stroke]="tick.y === 155 ? '#f59e0b' : '#1e293b'" 
+                      [attr.stroke-width]="tick.y === 155 ? '1.5' : '1'" 
+                      [attr.stroke-dasharray]="tick.y === 155 ? '4 4' : '2 3'"
+                    />
+                    <text 
+                      x="56" 
+                      [attr.y]="tick.y + 4" 
+                      text-anchor="end" 
+                      [attr.fill]="tick.y === 155 ? '#f59e0b' : '#64748b'" 
+                      [attr.font-weight]="tick.y === 155 ? 'bold' : 'normal'"
+                      font-size="10" 
+                      font-family="monospace"
+                    >
+                      {{ tick.label }}
+                    </text>
+                  </g>
+                </g>
+
+                <!-- Cumulative Area Fill (Demand) -->
+                <path [attr.d]="chart.demandAreaPath" fill="url(#cumDemandAreaGradModal)"/>
+
+                <!-- Cumulative Supply Curve -->
+                <path [attr.d]="chart.supplyLinePath" fill="none" stroke="#818cf8" stroke-width="2" stroke-dasharray="4 4" stroke-opacity="0.8"/>
+
+                <!-- Cumulative Demand Curve -->
+                <path [attr.d]="chart.demandLinePath" fill="none" stroke="#10b981" stroke-width="3.5" class="drop-shadow-lg"/>
+
+                <!-- 1. Shelf Median Line -->
+                <g>
+                  <line [attr.x1]="chart.medianPriceX" y1="28" [attr.x2]="chart.medianPriceX" y2="280" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.8"/>
+                  <circle [attr.cx]="chart.medianPriceX" cy="28" r="3.5" fill="#38bdf8"/>
+                </g>
+
+                <!-- 2. Shelf Average Line -->
+                <g>
+                  <line [attr.x1]="chart.avgPriceX" y1="28" [attr.x2]="chart.avgPriceX" y2="280" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.8"/>
+                  <circle [attr.cx]="chart.avgPriceX" cy="28" r="3.5" fill="#c084fc"/>
+                </g>
+
+                <!-- 3. Weighted Average Line -->
+                <g>
+                  <line [attr.x1]="chart.weightedAvgPriceX" y1="28" [attr.x2]="chart.weightedAvgPriceX" y2="280" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.8"/>
+                  <circle [attr.cx]="chart.weightedAvgPriceX" cy="28" r="3.5" fill="#34d399"/>
+                </g>
+
+                <!-- 4. Weighted Median 50% Equilibrium Line -->
+                <g>
+                  <line [attr.x1]="chart.weightedMedianPriceX" y1="28" [attr.x2]="chart.weightedMedianPriceX" y2="280" stroke="#fbbf24" stroke-width="2.5" class="drop-shadow-md"/>
+                  <circle [attr.cx]="chart.weightedMedianPriceX" cy="28" r="5" fill="#fbbf24" stroke="#000" stroke-width="1.5"/>
+                </g>
+
+                <!-- 50% Intersection Golden Star -->
+                <g>
+                  <circle [attr.cx]="chart.eqX" [attr.cy]="chart.eqY" r="16" fill="#fbbf24" fill-opacity="0.25"/>
+                  <circle [attr.cx]="chart.eqX" [attr.cy]="chart.eqY" r="8" fill="#fbbf24" stroke="#000000" stroke-width="2"/>
+                  <text [attr.x]="chart.eqX" [attr.y]="chart.eqY + 3.5" text-anchor="middle" fill="#000000" font-size="9" font-weight="black">★</text>
+                </g>
+
+                <!-- X-Axis Baseline & Ticks -->
+                <line x1="65" y1="280" x2="925" y2="280" stroke="#334155" stroke-width="1"/>
+                <g class="x-labels">
+                  <g *ngFor="let xtick of chart.xTicks">
+                    <line [attr.x1]="xtick.x" y1="280" [attr.x2]="xtick.x" y2="285" stroke="#475569" stroke-width="1"/>
+                    <text [attr.x]="xtick.x" y="300" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="monospace">
+                      {{ xtick.label }}
+                    </text>
+                  </g>
+                </g>
+
+                <!-- Hovered / Pinned Dynamic Crosshairs -->
+                <g *ngIf="activeCumulativePoint">
+                  <line [attr.x1]="activeCumulativePoint.x" y1="25" [attr.x2]="activeCumulativePoint.x" y2="280" [attr.stroke]="pinnedCumulativePoint ? '#fbbf24' : '#38bdf8'" stroke-width="1.5" stroke-dasharray="3 3"/>
+                  <line x1="65" [attr.y1]="activeCumulativePoint.yDemand" [attr.x2]="activeCumulativePoint.x" [attr.y2]="activeCumulativePoint.yDemand" stroke="#10b981" stroke-width="1" stroke-dasharray="2 2" opacity="0.7"/>
+
+                  <circle [attr.cx]="activeCumulativePoint.x" [attr.cy]="activeCumulativePoint.yDemand" [attr.r]="pinnedCumulativePoint ? 8 : 6" [attr.fill]="pinnedCumulativePoint ? '#fbbf24' : '#10b981'" stroke="#ffffff" stroke-width="2"/>
+                  <circle [attr.cx]="activeCumulativePoint.x" [attr.cy]="activeCumulativePoint.ySupply" r="4.5" fill="#818cf8" stroke="#ffffff" stroke-width="1.5"/>
+
+                  <!-- Dynamic Floating Smart Pill -->
+                  <g>
+                    <rect 
+                      [attr.x]="Math.max(70, Math.min(800, activeCumulativePoint.x - 70))" 
+                      [attr.y]="Math.max(14, activeCumulativePoint.yDemand - 32)" 
+                      width="140" 
+                      height="24" 
+                      rx="6" 
+                      fill="#090d16" 
+                      fill-opacity="0.95"
+                      [attr.stroke]="pinnedCumulativePoint ? '#fbbf24' : '#38bdf8'" 
+                      stroke-width="1.5"
+                    />
+                    <text 
+                      [attr.x]="Math.max(70, Math.min(800, activeCumulativePoint.x - 70)) + 70" 
+                      [attr.y]="Math.max(14, activeCumulativePoint.yDemand - 32) + 16" 
+                      text-anchor="middle" 
+                      fill="#ffffff" 
+                      font-size="10" 
+                      font-weight="bold" 
+                      font-family="monospace"
+                    >
+                      {{ activeCumulativePoint.price | number }} ₴ • {{ activeCumulativePoint.cumDemandPct }}%
+                    </text>
+                  </g>
+                </g>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- EXPANDED SVG CANVAS (OVERVIEW FLUCTUATIONS MODAL) -->
+        <div *ngIf="activeExpandedChartModal === 'overview'" class="flex-1 bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden flex flex-col justify-center relative select-none">
+          <div class="w-full h-full overflow-x-auto custom-scrollbar flex items-center">
+            <div [style.minWidth]="overviewChartZoom === 1 ? '100%' : (overviewChartZoom * 100) + '%'" class="w-full transition-all relative">
+              <svg 
+                viewBox="0 0 960 220" 
+                class="w-full h-[420px] sm:h-[480px] cursor-pointer overflow-visible"
+                (mousemove)="onOverviewChartMouseMove($event)"
+                (click)="onOverviewChartClick($event)"
+                (mouseleave)="onOverviewChartMouseLeave()"
+              >
+                <defs>
+                  <linearGradient id="fluctGradModal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.35"/>
+                    <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+                  </linearGradient>
+                  <linearGradient id="discGradModal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.35"/>
+                    <stop offset="100%" stop-color="#f43f5e" stop-opacity="0.0"/>
+                  </linearGradient>
+                  <linearGradient id="revGradModal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.35"/>
+                    <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+                  </linearGradient>
+                </defs>
+
+                <!-- Gridlines -->
+                <g class="gridlines">
+                  <g *ngFor="let tick of getOverviewChartYTicks()">
+                    <line x1="60" [attr.y1]="tick.y" x2="935" [attr.y2]="tick.y" stroke="#1e293b" stroke-width="1" stroke-dasharray="3 3"/>
+                    <text x="50" [attr.y]="tick.y + 4" text-anchor="end" fill="#64748b" font-size="10" font-family="monospace">
+                      {{ tick.label }}
+                    </text>
+                  </g>
+                </g>
+
+                <!-- Baseline & X Ticks -->
+                <line x1="60" y1="190" x2="935" y2="190" stroke="#334155" stroke-width="1"/>
+                <g class="x-labels">
+                  <g *ngFor="let xtick of getOverviewChartXTicks()">
+                    <line [attr.x1]="xtick.x" y1="190" [attr.x2]="xtick.x" y2="195" stroke="#475569" stroke-width="1"/>
+                    <text [attr.x]="xtick.x" y="210" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="monospace">
+                      {{ xtick.label }}
+                    </text>
+                  </g>
+                </g>
+
+                <!-- Area & Curve -->
+                <path [attr.d]="getOverviewChartAreaPath()" [attr.fill]="overviewChartMetric === 'discounts' ? 'url(#discGradModal)' : overviewChartMetric === 'rank_reviews' ? 'url(#revGradModal)' : 'url(#fluctGradModal)'"/>
+                <path [attr.d]="getOverviewChartPath()" fill="none" [attr.stroke]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8'" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+                <!-- Active Intersecting Crosshairs -->
+                <g *ngIf="activeOverviewPoint">
+                  <line [attr.x1]="activeOverviewPoint.x" y1="20" [attr.x2]="activeOverviewPoint.x" y2="190" [attr.stroke]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8')" stroke-width="1.5" stroke-dasharray="3 3"/>
+                  <line x1="60" [attr.y1]="activeOverviewPoint.y" x2="935" [attr.y2]="activeOverviewPoint.y" [attr.stroke]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8')" stroke-width="1.5" stroke-dasharray="3 3"/>
+                  <circle [attr.cx]="activeOverviewPoint.x" [attr.cy]="activeOverviewPoint.y" [attr.r]="pinnedOverviewPoint ? 14 : 9" [attr.fill]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8')" fill-opacity="0.25"/>
+                  <circle [attr.cx]="activeOverviewPoint.x" [attr.cy]="activeOverviewPoint.y" [attr.r]="pinnedOverviewPoint ? 6 : 5" [attr.fill]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8')" stroke="#ffffff" stroke-width="2"/>
+                </g>
+              </svg>
+            </div>
+          </div>
+        </div>
+
       </div>
 
     </div>

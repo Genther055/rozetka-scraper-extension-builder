@@ -754,6 +754,35 @@ export class DashboardComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
+  // --- Horizontal Zoom & Fullscreen / Wide-screen Modal Engine ---
+  overviewChartZoom: number = 1; // 1 = 100%, 2 = 200%, 4 = 400%, 8 = 800%
+  cumulativeChartZoom: number = 1; // 1 = 100%, 2 = 200%, 4 = 400%, 8 = 800%
+  activeExpandedChartModal: 'cumulative' | 'overview' | null = null;
+
+  setOverviewChartZoom(z: number): void {
+    this.overviewChartZoom = z;
+    this.hoveredOverviewPoint = null;
+    this.cdr.markForCheck();
+  }
+
+  setCumulativeChartZoom(z: number): void {
+    this.cumulativeChartZoom = z;
+    this.hoveredCumulativePoint = null;
+    this.cdr.markForCheck();
+  }
+
+  openExpandedChartModal(type: 'cumulative' | 'overview'): void {
+    this.activeExpandedChartModal = type;
+    this.hoveredOverviewPoint = null;
+    this.hoveredCumulativePoint = null;
+    this.cdr.markForCheck();
+  }
+
+  closeExpandedChartModal(): void {
+    this.activeExpandedChartModal = null;
+    this.cdr.markForCheck();
+  }
+
   // --- Vector Fluctuation & Trendline Chart Engine (Keepa / Bloomberg / Helium 10 Style) ---
   overviewChartMetric: 'price_reviews' | 'rank_price' | 'rank_reviews' | 'discounts' = 'price_reviews';
   hoveredOverviewPoint: {
