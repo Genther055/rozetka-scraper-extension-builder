@@ -1670,11 +1670,7 @@ export class DashboardComponent implements OnInit {
       }
     }
 
-    if (minDist <= 120) {
-      this.hoveredCumulativePoint = closest;
-    } else {
-      this.hoveredCumulativePoint = null;
-    }
+    this.hoveredCumulativePoint = closest;
     this.cdr.markForCheck();
   }
 

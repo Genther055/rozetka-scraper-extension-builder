@@ -2330,27 +2330,40 @@
               </p>
             </div>
 
-            <!-- Card 4: Лідери ринку ніші (Топ-3 селери з графічними шкалами) -->
-            <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2 relative transition-colors hover:border-slate-700">
+            <!-- Card 4: Лідери ринку ніші (Топ-10 селерів з графічними шкалами) -->
+            <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-2.5 relative transition-colors hover:border-slate-700">
               <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Лідери ринку (Топ-3)</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Лідери ринку (Топ-10)</span>
+                  <span class="text-[10px] font-mono font-bold text-violet-300 bg-violet-950/80 px-1.5 py-0.2 rounded border border-violet-800/50">
+                    CR10: {{ (analyticsSummary.kpi.cr10 || analyticsSummary.kpi.cr3) }}%
+                  </span>
+                </div>
                 <span class="material-icons text-amber-400 text-sm">workspace_premium</span>
               </div>
-              <div class="space-y-2">
-                <div *ngFor="let s of analyticsSummary.sellersTable.slice(0, 3)" 
+              
+              <div class="space-y-1.5 max-h-80 overflow-y-auto custom-scrollbar pr-0.5">
+                <div *ngFor="let s of analyticsSummary.sellersTable.slice(0, 10); let i = index" 
                      (click)="openSellerProductsModal(s.sellerName)"
-                     class="p-2 rounded-xl bg-slate-900/60 hover:bg-indigo-950/60 border border-slate-800 hover:border-indigo-500/40 text-xs cursor-pointer transition-colors group space-y-1.5"
-                     [title]="'Переглянути товари продавця ' + s.sellerName">
+                     class="p-2 rounded-xl bg-slate-900/60 hover:bg-indigo-950/60 border border-slate-800/80 hover:border-indigo-500/40 text-xs cursor-pointer transition-colors group space-y-1.5"
+                     [title]="'#' + (i + 1) + ' — Переглянути товари продавця ' + s.sellerName">
                   <div class="flex items-center justify-between gap-2 min-w-0">
-                    <div class="flex items-center gap-2 min-w-0">
-                      <span class="w-2.5 h-2.5 rounded-full shrink-0" [style.backgroundColor]="s.color"></span>
+                    <div class="flex items-center gap-1.5 min-w-0">
+                      <span class="w-3.5 text-[10px] text-center font-bold" 
+                            [class.text-amber-400]="i === 0" 
+                            [class.text-slate-300]="i === 1" 
+                            [class.text-amber-600]="i === 2" 
+                            [class.text-slate-500]="i > 2">
+                        #{{ i + 1 }}
+                      </span>
+                      <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" [style.backgroundColor]="s.color"></span>
                       <span class="font-bold text-white truncate text-xs group-hover:text-indigo-300">{{ s.sellerName }}</span>
-                      <span *ngIf="s.isRozetka" class="text-[9px] font-extrabold bg-emerald-950 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-800/60">1P</span>
-                      <span *ngIf="!s.isRozetka" class="text-[9px] font-semibold bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">3P</span>
+                      <span *ngIf="s.isRozetka" class="text-[9px] font-extrabold bg-emerald-950 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-800/60">1P</span>
+                      <span *ngIf="!s.isRozetka" class="text-[9px] font-semibold bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded">3P</span>
                     </div>
-                    <div class="flex items-center gap-2 shrink-0 font-mono text-xs">
-                      <span class="text-slate-400 group-hover:text-white">{{ s.productsCount }} шт</span>
-                      <span class="font-bold text-indigo-300 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800 group-hover:border-indigo-500/40">{{ s.marketShare }}%</span>
+                    <div class="flex items-center gap-1.5 shrink-0 font-mono text-xs">
+                      <span class="text-slate-400 group-hover:text-white text-[11px]">{{ s.productsCount }} шт</span>
+                      <span class="font-bold text-indigo-300 bg-slate-950 px-1.5 py-0.5 rounded-md border border-slate-800 group-hover:border-indigo-500/40 text-[11px]">{{ s.marketShare }}%</span>
                     </div>
                   </div>
                   <!-- Scale Bar for Seller Share -->
