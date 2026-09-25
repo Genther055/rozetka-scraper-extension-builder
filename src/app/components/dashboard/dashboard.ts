@@ -495,11 +495,12 @@ export class DashboardComponent implements OnInit {
 
   normalizeSessionTitle(title: string): string {
     if (!title) return 'Загальна';
-    let t = title.trim();
+    let t = title.replace(/\uFFFD/g, '').trim();
     // Normalize Rozetka variations such as "Повербанки та УМБ Brand" -> "Повербанки Brand"
     t = t.replace(/^Повербанки\s+та\s+УМБ\s+/i, 'Повербанки ');
     t = t.replace(/^Power\s*banks?\s+and\s+UMB\s+/i, 'Повербанки ');
-    return t;
+    t = t.replace(/Повербан[^\s]*\s+/i, 'Повербанки ');
+    return t.trim() || 'Повербанки Xiaomi';
   }
 
   getAvailableSessions(): Array<{ title: string, count: number }> {

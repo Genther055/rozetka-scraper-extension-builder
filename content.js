@@ -545,6 +545,13 @@
                         }
                     }
                 }
+                if (reviews === 0) {
+                    const tileRaw = item.innerText || '';
+                    const mRev = tileRaw.match(/(\d+)\s*(?:відгук\w*|відгуків|відгуки|отзыв\w*|отзывов|отзыва)/i);
+                    if (mRev && mRev[1]) {
+                        reviews = parseInt(mRev[1], 10) || 0;
+                    }
+                }
 
                 // 4. Rating (1.0 to 5.0)
                 let rating = 0;
