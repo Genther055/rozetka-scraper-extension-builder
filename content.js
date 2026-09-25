@@ -157,7 +157,7 @@
         return currentDomTiles > 0 ? currentDomTiles : 60;
     }
 
-    // Precise filter: eliminate recently viewed sliders, recommendation carousels, sidebars, and explicit ads/sponsored items
+    // Precise filter: eliminate recently viewed sliders, recommendation carousels, sidebars, and all sponsored/ad items
     function isUnwantedTile(item) {
         if (!item || !(item instanceof Element)) return true;
         
@@ -172,7 +172,19 @@
         `);
         if (unwantedContainer) return true;
         
-        // 2. Exclude sponsored / advertising classes and attributes (NOT promo badges or discounts!)
+        // 2. Direct full-text check for sponsored & advertising markers (drops all 9 injected Rozetka ads)
+        const tileText = (item.innerText || item.textContent || '').toLowerCase();
+        if (
+            tileText.includes('спонсор') || 
+            tileText.includes('реклама') || 
+            tileText.includes('рекламн') || 
+            tileText.includes('партнерськ') || 
+            tileText.includes('promoted')
+        ) {
+            return true;
+        }
+
+        // 3. Exclude sponsored / advertising classes and attributes
         const tileClasses = (item.className || '').toLowerCase();
         if (
             tileClasses.includes('catalog-banner') || 
@@ -193,28 +205,6 @@
             item.closest('[data-sponsored], [data-ad], [class*="sponsored"], [class*="advertisement"]')
         ) {
             return true;
-        }
-
-        // 3. Check for explicit "Реклама" / "Спонсор" / "Спонсорський" / "Promoted" text inside badge/label elements
-        const adElements = item.querySelectorAll(`
-            .goods-tile__label--ad, .goods-tile__label_type_ad, .goods-tile__label_type_sponsored, .goods-tile__label--sponsored,
-            [data-testid*="ad"], [data-testid*="sponsor"], .ad-label, .sponsored-label, [class*="sponsored"], [class*="advertisement"],
-            .goods-tile__label, [class*="badge"], [class*="label"]
-        `);
-        for (const el of adElements) {
-            if (el.tagName === 'RZ-PROMO-LABEL' || el.closest('rz-promo-label')) continue; // Skip standard discount badges
-            const txt = (el.textContent || '').trim().toLowerCase();
-            if (
-                txt.includes('реклама') || 
-                txt.includes('спонсор') || 
-                txt.includes('спонсорськ') || 
-                txt.includes('promoted') || 
-                txt.includes('партнерськ') || 
-                txt === 'ad' || 
-                txt === 'adv'
-            ) {
-                return true;
-            }
         }
 
         // 4. Must have a valid product link
