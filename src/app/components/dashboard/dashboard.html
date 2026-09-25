@@ -1184,15 +1184,15 @@
               <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
                   <div class="w-10 h-10 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shadow-sm shrink-0">
-                    <span class="material-icons text-xl" *ngIf="activePriceChartTab === 'matrix'">bubble_chart</span>
-                    <span class="material-icons text-xl" *ngIf="activePriceChartTab === 'sellers'">leaderboard</span>
-                    <span class="material-icons text-xl" *ngIf="activePriceChartTab === 'bins'">bar_chart</span>
+                    <span class="material-icons text-xl" *ngIf="activePriceChartTab === 'cumulative'">stacked_line_chart</span>
+                    <span class="material-icons text-xl" *ngIf="activePriceChartTab === 'density'">bar_chart</span>
+                    <span class="material-icons text-xl" *ngIf="activePriceChartTab === 'bins'">view_column</span>
                   </div>
                   <div>
                     <div class="flex items-center gap-2">
                       <h3 class="text-sm font-bold text-white uppercase tracking-wider">
-                        <span *ngIf="activePriceChartTab === 'matrix'">Матриця конкурентів: Ціна vs Попит vs Частка ринку</span>
-                        <span *ngIf="activePriceChartTab === 'sellers'">Рейтинг часток ринку та цінових діапазонів продавців</span>
+                        <span *ngIf="activePriceChartTab === 'cumulative'">Цінові орієнтири, баланс попиту та точка 50% ринкової маси</span>
+                        <span *ngIf="activePriceChartTab === 'density'">Спектр щільності та концентрації ваги попиту за ціною</span>
                         <span *ngIf="activePriceChartTab === 'bins'">Цінові коридори: Пропозиція (Товари) vs Попит (Відгуки)</span>
                       </h3>
                       
@@ -1205,25 +1205,37 @@
                         <div class="absolute left-0 top-full mt-2 w-80 sm:w-96 p-4 bg-[#0f172a] border border-indigo-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/disthelp:opacity-100 group-hover/disthelp:pointer-events-auto transition-all duration-200 ring-1 ring-slate-700/80 backdrop-blur-md">
                           <div class="font-bold text-white border-b border-slate-800 pb-1.5 mb-2 flex items-center justify-between">
                             <div class="flex items-center gap-1.5">
-                              <span class="material-icons text-sm text-indigo-400">insights</span>
-                              <span>Аналітичні зрізи ніші</span>
+                              <span class="material-icons text-sm text-indigo-400">balance</span>
+                              <span>Модель 50% ринкової рівноваги</span>
                             </div>
                             <span class="text-[10px] font-mono font-bold bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-800/60">
-                              3 Режими
+                              Математика попиту
                             </span>
                           </div>
                           <p class="text-[11px] text-slate-300 leading-relaxed mb-2">
-                            <b>🏆 Матриця конкурентів:</b> Позиціонування кожного продавця за середньою ціною, обсягом відгуків та розміром частки асортименту на ринку.<br/>
-                            <b>📊 Частки продавців:</b> Рейтинг магазинів за обсягом полиці, часткою замовлень та ціновими межами.<br/>
-                            <b>📈 Цінові коридори:</b> Порівняння пропозиції та попиту за діапазонами цін з визначенням Sweet Spot.
+                            <b>Кумулятивна крива попиту</b> відображає накопичення реальних замовлень у міру зростання ціни. Точка, де крива перетинає позначку <b>50%</b> (Зважена медіана), є <b>головним ціновим якорем ринку</b> — рівно половина покупців платять менше за цю суму.
                           </p>
+                          <div class="space-y-1.5 text-[10px] pt-1">
+                            <div class="flex items-center gap-1.5 text-indigo-400">
+                              <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0"></span>
+                              <span><b>Пунктирна лінія:</b> Розподіл товарів на полиці (% каталогу).</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-emerald-400">
+                              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
+                              <span><b>Суцільна крива:</b> Накопичений попит за логарифмічною вагою відгуків.</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-amber-300">
+                              <span class="material-icons text-[12px] text-amber-400 shrink-0">star</span>
+                              <span><b>★ Точка 50%:</b> Рівновага ринку (половина всіх покупок).</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                     <p class="text-xs text-slate-400">
-                      <span *ngIf="activePriceChartTab === 'matrix'">Розмір бабла = частка асортименту продавця (% ринку). Клікніть на продавця для списку товарів.</span>
-                      <span *ngIf="activePriceChartTab === 'sellers'">Рейтинг продавців за часткою каталогу та залученим попитом у ніші.</span>
-                      <span *ngIf="activePriceChartTab === 'bins'">Гістограма співвідношення активної пропозиції та зафіксованого попиту покупців.</span>
+                      <span *ngIf="activePriceChartTab === 'cumulative'">Аналіз точок тяжіння покупців: порівняння полиці та реального попиту за вагою замовлень</span>
+                      <span *ngIf="activePriceChartTab === 'density'">Гістограма щільності попиту: де саме сконцентрована основна маса продажів</span>
+                      <span *ngIf="activePriceChartTab === 'bins'">Гістограма співвідношення активної пропозиції та зафіксованого попиту покупців</span>
                     </p>
                   </div>
                 </div>
@@ -1231,33 +1243,33 @@
                 <!-- Tab Switcher Navigation Buttons -->
                 <div class="flex items-center gap-1.5 bg-slate-950/90 p-1 rounded-xl border border-slate-800 shrink-0 self-start sm:self-auto">
                   <button 
-                    (click)="setActivePriceChartTab('matrix')"
+                    (click)="setActivePriceChartTab('cumulative')"
                     class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                    [class.bg-gradient-to-r]="activePriceChartTab === 'matrix'"
-                    [class.from-indigo-600]="activePriceChartTab === 'matrix'"
-                    [class.to-purple-600]="activePriceChartTab === 'matrix'"
-                    [class.text-white]="activePriceChartTab === 'matrix'"
-                    [class.shadow-md]="activePriceChartTab === 'matrix'"
-                    [class.text-slate-400]="activePriceChartTab !== 'matrix'"
-                    [class.hover:text-slate-200]="activePriceChartTab !== 'matrix'"
+                    [class.bg-gradient-to-r]="activePriceChartTab === 'cumulative'"
+                    [class.from-indigo-600]="activePriceChartTab === 'cumulative'"
+                    [class.to-purple-600]="activePriceChartTab === 'cumulative'"
+                    [class.text-white]="activePriceChartTab === 'cumulative'"
+                    [class.shadow-md]="activePriceChartTab === 'cumulative'"
+                    [class.text-slate-400]="activePriceChartTab !== 'cumulative'"
+                    [class.hover:text-slate-200]="activePriceChartTab !== 'cumulative'"
                   >
-                    <span class="material-icons text-sm">bubble_chart</span>
-                    <span>Матриця конкурентів</span>
+                    <span class="material-icons text-sm">stacked_line_chart</span>
+                    <span>Кумулятивна крива та 50%</span>
                   </button>
 
                   <button 
-                    (click)="setActivePriceChartTab('sellers')"
+                    (click)="setActivePriceChartTab('density')"
                     class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                    [class.bg-gradient-to-r]="activePriceChartTab === 'sellers'"
-                    [class.from-indigo-600]="activePriceChartTab === 'sellers'"
-                    [class.to-purple-600]="activePriceChartTab === 'sellers'"
-                    [class.text-white]="activePriceChartTab === 'sellers'"
-                    [class.shadow-md]="activePriceChartTab === 'sellers'"
-                    [class.text-slate-400]="activePriceChartTab !== 'sellers'"
-                    [class.hover:text-slate-200]="activePriceChartTab !== 'sellers'"
+                    [class.bg-gradient-to-r]="activePriceChartTab === 'density'"
+                    [class.from-indigo-600]="activePriceChartTab === 'density'"
+                    [class.to-purple-600]="activePriceChartTab === 'density'"
+                    [class.text-white]="activePriceChartTab === 'density'"
+                    [class.shadow-md]="activePriceChartTab === 'density'"
+                    [class.text-slate-400]="activePriceChartTab !== 'density'"
+                    [class.hover:text-slate-200]="activePriceChartTab !== 'density'"
                   >
-                    <span class="material-icons text-sm">leaderboard</span>
-                    <span>Частки продавців</span>
+                    <span class="material-icons text-sm">bar_chart</span>
+                    <span>Спектр щільності</span>
                   </button>
 
                   <button 
@@ -1271,7 +1283,7 @@
                     [class.text-slate-400]="activePriceChartTab !== 'bins'"
                     [class.hover:text-slate-200]="activePriceChartTab !== 'bins'"
                   >
-                    <span class="material-icons text-sm">bar_chart</span>
+                    <span class="material-icons text-sm">view_column</span>
                     <span>Цінові коридори</span>
                   </button>
                 </div>
@@ -1363,273 +1375,239 @@
               </div>
             </div>
 
-            <!-- VIEW 1: SELLER BUBBLE MATRIX -->
-            <div *ngIf="activePriceChartTab === 'matrix'" class="relative bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none" (mouseleave)="onSellerBubbleMouseLeave()">
-              <div *ngIf="getSellerBubbleMatrixData() as matrixData">
+            <!-- VIEW 1: CUMULATIVE DEMAND CURVE & 50% EQUILIBRIUM POINT -->
+            <div *ngIf="activePriceChartTab === 'cumulative'" class="relative bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none" (mouseleave)="onCumulativeMouseLeave()">
+              <div *ngIf="getCumulativeDemandChartData() as chart">
                 <svg 
-                  viewBox="0 0 960 340" 
+                  viewBox="0 0 960 320" 
                   class="w-full h-72 sm:h-80 cursor-crosshair overflow-visible"
-                  (mousemove)="onSellerBubbleMouseMove($event)"
+                  (mousemove)="onCumulativeMouseMove($event)"
                 >
                   <defs>
-                    <!-- Quadrant Gradients -->
-                    <linearGradient id="qVolumeGrad" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stop-color="#10b981" stop-opacity="0.08"/>
-                      <stop offset="100%" stop-color="#10b981" stop-opacity="0.01"/>
-                    </linearGradient>
-                    <linearGradient id="qPremiumLeadersGrad" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.08"/>
-                      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.01"/>
-                    </linearGradient>
-                    <linearGradient id="qBudgetGrad" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.05"/>
+                    <!-- Gradients -->
+                    <linearGradient id="cumDemandAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#10b981" stop-opacity="0.30"/>
+                      <stop offset="60%" stop-color="#06b6d4" stop-opacity="0.10"/>
                       <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.01"/>
                     </linearGradient>
-                    <linearGradient id="qNicheGrad" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.05"/>
-                      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.01"/>
+                    <linearGradient id="shiftBandGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.18"/>
+                      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.05"/>
                     </linearGradient>
                   </defs>
 
-                  <!-- 4 Strategic Quadrant Background Rectangles -->
-                  <!-- Top-Left: Volume Drivers (Low Price / High Demand) -->
-                  <rect x="70" y="30" [attr.width]="matrixData.midX - 70" [attr.height]="matrixData.midY - 30" fill="url(#qVolumeGrad)" rx="8"/>
-                  <text [attr.x]="80" [attr.y]="48" fill="#10b981" font-size="10" font-weight="bold" letter-spacing="0.5" opacity="0.85">⚡ ДРАЙВЕРИ ОБСЯГУ (Попит ↑ / Ціна ↓)</text>
+                  <!-- 50% Horizontal Equilibrium Baseline Grid Band -->
+                  <rect x="65" y="155" width="860" height="125" fill="#10b981" fill-opacity="0.02"/>
 
-                  <!-- Top-Right: Premium Leaders (High Price / High Demand) -->
-                  <rect [attr.x]="matrixData.midX" y="30" [attr.width]="920 - matrixData.midX" [attr.height]="matrixData.midY - 30" fill="url(#qPremiumLeadersGrad)" rx="8"/>
-                  <text [attr.x]="910" [attr.y]="48" text-anchor="end" fill="#c084fc" font-size="10" font-weight="bold" letter-spacing="0.5" opacity="0.85">👑 ПРЕМІУМ ЛІДЕРИ (Попит ↑ / Ціна ↑)</text>
-
-                  <!-- Bottom-Left: Price Competition (Low Price / Low Demand) -->
-                  <rect x="70" [attr.y]="matrixData.midY" [attr.width]="matrixData.midX - 70" [attr.height]="300 - matrixData.midY" fill="url(#qBudgetGrad)" rx="8"/>
-                  <text [attr.x]="80" [attr.y]="292" fill="#60a5fa" font-size="10" font-weight="bold" letter-spacing="0.5" opacity="0.75">🏷️ ЦІНОВА КОНКУРЕНЦІЯ (Попит ↓ / Ціна ↓)</text>
-
-                  <!-- Bottom-Right: Niche Premium (High Price / Low Demand) -->
-                  <rect [attr.x]="matrixData.midX" [attr.y]="matrixData.midY" [attr.width]="920 - matrixData.midX" [attr.height]="300 - matrixData.midY" fill="url(#qNicheGrad)" rx="8"/>
-                  <text [attr.x]="910" [attr.y]="292" text-anchor="end" fill="#fbbf24" font-size="10" font-weight="bold" letter-spacing="0.5" opacity="0.75">💎 НІШЕВИЙ ПРЕМІУМ (Попит ↓ / Ціна ↑)</text>
-
-                  <!-- Quadrant Center Cross Axis Lines -->
-                  <line [attr.x1]="matrixData.midX" y1="30" [attr.x2]="matrixData.midX" y2="300" stroke="#475569" stroke-width="1" stroke-dasharray="4 4" stroke-opacity="0.6"/>
-                  <line x1="70" [attr.y1]="matrixData.midY" x2="920" [attr.y2]="matrixData.midY" stroke="#475569" stroke-width="1" stroke-dasharray="4 4" stroke-opacity="0.6"/>
+                  <!-- Shift Corridor Area (Between Shelf Median and Weighted Median 50%) -->
+                  <rect 
+                    [attr.x]="chart.shiftMinX" 
+                    y="30" 
+                    [attr.width]="chart.shiftWidth" 
+                    height="250" 
+                    fill="url(#shiftBandGrad)" 
+                    stroke="#f59e0b" 
+                    stroke-width="1" 
+                    stroke-dasharray="3 3"
+                    stroke-opacity="0.6"
+                    rx="4"
+                  />
+                  <!-- Shift Corridor Top Label -->
+                  <g>
+                    <rect 
+                      [attr.x]="chart.shiftMinX + 2" 
+                      y="34" 
+                      [attr.width]="Math.max(105, chart.shiftWidth - 4)" 
+                      height="18" 
+                      rx="4" 
+                      fill="#451a03" 
+                      stroke="#f59e0b" 
+                      stroke-width="1"
+                    />
+                    <text 
+                      [attr.x]="chart.shiftMinX + Math.max(105, chart.shiftWidth - 4) / 2" 
+                      y="46" 
+                      text-anchor="middle" 
+                      fill="#fef3c7" 
+                      font-size="9.5" 
+                      font-weight="bold" 
+                      font-family="monospace"
+                    >
+                      ЗСУВ: {{ analyticsSummary.kpi.demandPriceDiffPct > 0 ? '+' : '' }}{{ analyticsSummary.kpi.demandPriceDiffPct }}%
+                    </text>
+                  </g>
 
                   <!-- Horizontal Y-Axis Gridlines & Labels -->
                   <g class="gridlines">
-                    <g *ngFor="let tick of matrixData.yTicks">
-                      <line x1="70" [attr.y1]="tick.y" x2="920" [attr.y2]="tick.y" stroke="#1e293b" stroke-width="1" stroke-dasharray="2 3" stroke-opacity="0.6"/>
-                      <text x="62" [attr.y]="tick.y + 4" text-anchor="end" fill="#64748b" font-size="10" font-family="monospace">{{ tick.label }}</text>
-                    </g>
-                  </g>
-
-                  <!-- X-Axis Baseline & Ticks -->
-                  <line x1="70" y1="300" x2="920" y2="300" stroke="#334155" stroke-width="1"/>
-                  <g class="x-labels">
-                    <g *ngFor="let xtick of matrixData.xTicks">
-                      <line [attr.x1]="xtick.x" y1="300" [attr.x2]="xtick.x" y2="305" stroke="#475569" stroke-width="1"/>
-                      <text [attr.x]="xtick.x" y="322" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="monospace">{{ xtick.label }}</text>
-                    </g>
-                  </g>
-
-                  <!-- Seller Bubbles -->
-                  <g class="seller-bubbles">
-                    <g *ngFor="let b of matrixData.bubbles">
-                      <!-- Outer Glow Halo for Hover/Highlighted Bubbles -->
-                      <circle 
-                        *ngIf="b.isHighlighted || (hoveredSellerBubble && hoveredSellerBubble.sellerName === b.sellerName)"
-                        [attr.cx]="b.x" 
-                        [attr.cy]="b.y" 
-                        [attr.r]="b.radius + 6" 
-                        [attr.fill]="b.color"
-                        fill-opacity="0.25"
+                    <g *ngFor="let tick of chart.yTicks">
+                      <line 
+                        x1="65" 
+                        [attr.y1]="tick.y" 
+                        x2="925" 
+                        [attr.y2]="tick.y" 
+                        [attr.stroke]="tick.y === 155 ? '#f59e0b' : '#1e293b'" 
+                        [attr.stroke-width]="tick.y === 155 ? '1.5' : '1'" 
+                        [attr.stroke-dasharray]="tick.y === 155 ? '4 4' : '2 3'"
+                        [attr.stroke-opacity]="tick.y === 155 ? '0.8' : '0.6'"
                       />
-                      <!-- Main Seller Bubble Circle -->
-                      <circle 
-                        (click)="openSellerProductsModal(b.sellerName)"
-                        [attr.cx]="b.x" 
-                        [attr.cy]="b.y" 
-                        [attr.r]="b.radius" 
-                        [attr.fill]="b.color"
-                        [attr.fill-opacity]="b.isDimmed ? '0.15' : '0.80'"
-                        [attr.stroke]="b.isHighlighted || (hoveredSellerBubble && hoveredSellerBubble.sellerName === b.sellerName) ? '#ffffff' : (b.isRozetka ? '#34d399' : '#ffffff')"
-                        [attr.stroke-width]="b.isHighlighted || (hoveredSellerBubble && hoveredSellerBubble.sellerName === b.sellerName) ? '2.5' : (b.radius > 16 ? '1.5' : '1')"
-                        [attr.opacity]="b.isDimmed ? '0.25' : '1'"
-                        class="transition-all duration-200 hover:scale-110 cursor-pointer shadow-lg"
-                      />
-                      <!-- Inner Text Label for larger bubbles -->
                       <text 
-                        *ngIf="b.radius >= 16 && !b.isDimmed"
-                        (click)="openSellerProductsModal(b.sellerName)"
-                        [attr.x]="b.x" 
-                        [attr.y]="b.y + 4" 
-                        text-anchor="middle" 
-                        fill="#ffffff" 
-                        font-size="9" 
-                        font-weight="bold" 
-                        font-family="sans-serif"
-                        class="pointer-events-none select-none drop-shadow-md"
+                        x="56" 
+                        [attr.y]="tick.y + 4" 
+                        text-anchor="end" 
+                        [attr.fill]="tick.y === 155 ? '#f59e0b' : '#64748b'" 
+                        [attr.font-weight]="tick.y === 155 ? 'bold' : 'normal'"
+                        font-size="10" 
+                        font-family="monospace"
                       >
-                        {{ b.sellerName.length > 12 ? b.sellerName.slice(0, 10) + '..' : b.sellerName }}
+                        {{ tick.label }}
                       </text>
                     </g>
                   </g>
 
-                  <!-- Active Hover Crosshair Lines -->
-                  <g *ngIf="hoveredSellerBubble">
-                    <line [attr.x1]="hoveredSellerBubble.x" y1="30" [attr.x2]="hoveredSellerBubble.x" y2="300" [attr.stroke]="hoveredSellerBubble.color" stroke-width="1.5" stroke-dasharray="3 3" stroke-opacity="0.8"/>
-                    <line x1="70" [attr.y1]="hoveredSellerBubble.y" x2="920" [attr.y2]="hoveredSellerBubble.y" [attr.stroke]="hoveredSellerBubble.color" stroke-width="1.5" stroke-dasharray="3 3" stroke-opacity="0.8"/>
+                  <!-- Cumulative Area Fill (Demand) -->
+                  <path [attr.d]="chart.demandAreaPath" fill="url(#cumDemandAreaGrad)"/>
+
+                  <!-- Cumulative Supply Curve (Dashed Lavender Line: Shelf Distribution) -->
+                  <path [attr.d]="chart.supplyLinePath" fill="none" stroke="#818cf8" stroke-width="2" stroke-dasharray="4 4" stroke-opacity="0.75"/>
+
+                  <!-- Cumulative Demand Curve (Solid Emerald Line: Demand Mass) -->
+                  <path [attr.d]="chart.demandLinePath" fill="none" stroke="#10b981" stroke-width="3.5" class="drop-shadow-lg"/>
+
+                  <!-- 4 Landmark Vertical Beacons -->
+                  <!-- 1. Shelf Median Line -->
+                  <g>
+                    <line [attr.x1]="chart.medianPriceX" y1="30" [attr.x2]="chart.medianPriceX" y2="280" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 3"/>
+                    <rect [attr.x]="chart.medianPriceX - 42" y="258" width="84" height="18" rx="4" fill="#082f49" stroke="#38bdf8" stroke-width="1"/>
+                    <text [attr.x]="chart.medianPriceX" y="270" text-anchor="middle" fill="#bae6fd" font-size="9" font-weight="bold" font-family="monospace">
+                      Медіана {{ chart.medianPrice | number }} ₴
+                    </text>
+                  </g>
+
+                  <!-- 2. Shelf Average Line -->
+                  <g>
+                    <line [attr.x1]="chart.avgPriceX" y1="30" [attr.x2]="chart.avgPriceX" y2="280" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="3 3"/>
+                    <rect [attr.x]="chart.avgPriceX - 40" y="238" width="80" height="18" rx="4" fill="#3b0764" stroke="#c084fc" stroke-width="1"/>
+                    <text [attr.x]="chart.avgPriceX" y="250" text-anchor="middle" fill="#f3e8ff" font-size="9" font-weight="bold" font-family="monospace">
+                      Сер. {{ chart.avgPrice | number }} ₴
+                    </text>
+                  </g>
+
+                  <!-- 3. Weighted Average Line -->
+                  <g>
+                    <line [attr.x1]="chart.weightedAvgPriceX" y1="30" [attr.x2]="chart.weightedAvgPriceX" y2="280" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3"/>
+                    <rect [attr.x]="chart.weightedAvgPriceX - 48" y="218" width="96" height="18" rx="4" fill="#064e3b" stroke="#34d399" stroke-width="1"/>
+                    <text [attr.x]="chart.weightedAvgPriceX" y="230" text-anchor="middle" fill="#d1fae5" font-size="9" font-weight="bold" font-family="monospace">
+                      Зваж.сер. {{ chart.weightedAvgPrice | number }} ₴
+                    </text>
+                  </g>
+
+                  <!-- 4. Weighted Median (50% Mass Equilibrium) -->
+                  <g>
+                    <line [attr.x1]="chart.weightedMedianPriceX" y1="30" [attr.x2]="chart.weightedMedianPriceX" y2="280" stroke="#fbbf24" stroke-width="2.5"/>
+                    <rect [attr.x]="chart.weightedMedianPriceX - 52" y="198" width="104" height="18" rx="4" fill="#451a03" stroke="#fbbf24" stroke-width="1.5"/>
+                    <text [attr.x]="chart.weightedMedianPriceX" y="210" text-anchor="middle" fill="#fef3c7" font-size="9.5" font-weight="bold" font-family="monospace">
+                      ★ 50% {{ chart.weightedMedianPrice | number }} ₴
+                    </text>
+                  </g>
+
+                  <!-- ★ 50% Equilibrium Intersection Target Marker -->
+                  <g>
+                    <circle [attr.cx]="chart.eqX" [attr.cy]="chart.eqY" r="14" fill="#f59e0b" fill-opacity="0.25"/>
+                    <circle [attr.cx]="chart.eqX" [attr.cy]="chart.eqY" r="7" fill="#f59e0b" stroke="#ffffff" stroke-width="2.5"/>
+                    <circle [attr.cx]="chart.eqX" [attr.cy]="chart.eqY" r="3" fill="#ffffff"/>
+                  </g>
+
+                  <!-- X-Axis Baseline & Ticks -->
+                  <line x1="65" y1="280" x2="925" y2="280" stroke="#334155" stroke-width="1"/>
+                  <g class="x-labels">
+                    <g *ngFor="let xtick of chart.xTicks">
+                      <line [attr.x1]="xtick.x" y1="280" [attr.x2]="xtick.x" y2="285" stroke="#475569" stroke-width="1"/>
+                      <text [attr.x]="xtick.x" y="302" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="monospace">{{ xtick.label }}</text>
+                    </g>
+                  </g>
+
+                  <!-- Interactive Cursor Crosshair -->
+                  <g *ngIf="hoveredCumulativePoint">
+                    <line [attr.x1]="hoveredCumulativePoint.x" y1="30" [attr.x2]="hoveredCumulativePoint.x" y2="280" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="2 2"/>
+                    <circle [attr.cx]="hoveredCumulativePoint.x" [attr.cy]="hoveredCumulativePoint.yDemand" r="6" fill="#10b981" stroke="#ffffff" stroke-width="2"/>
+                    <circle [attr.cx]="hoveredCumulativePoint.x" [attr.cy]="hoveredCumulativePoint.ySupply" r="4.5" fill="#818cf8" stroke="#ffffff" stroke-width="1.5"/>
                   </g>
                 </svg>
 
-                <!-- Hover Floating Seller Tooltip Card -->
+                <!-- Interactive Floating Tooltip -->
                 <div 
-                  *ngIf="hoveredSellerBubble" 
+                  *ngIf="hoveredCumulativePoint" 
                   class="absolute z-30 p-3.5 bg-[#0f172a] border border-indigo-500/70 rounded-2xl shadow-2xl text-xs text-white transition-all duration-75 max-w-xs ring-1 ring-slate-700/80 backdrop-blur-md"
-                  [style.left.px]="Math.min(680, Math.max(80, hoveredSellerBubble.x - 130))"
-                  [style.top.px]="Math.max(10, hoveredSellerBubble.y - 120)"
+                  [style.left.px]="Math.min(680, Math.max(80, hoveredCumulativePoint.x - 120))"
+                  [style.top.px]="Math.max(15, hoveredCumulativePoint.yDemand - 90)"
                 >
-                  <div class="flex items-center justify-between gap-2 border-b border-slate-800 pb-2 mb-2">
-                    <div class="flex items-center gap-2">
-                      <span class="w-3 h-3 rounded-full shrink-0" [style.backgroundColor]="hoveredSellerBubble.color"></span>
-                      <span class="font-bold text-white text-xs truncate max-w-[170px]">{{ hoveredSellerBubble.sellerName }}</span>
-                    </div>
-                    <span *ngIf="hoveredSellerBubble.isRozetka" class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700">Rozetka</span>
-                    <span *ngIf="!hoveredSellerBubble.isRozetka" class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-900 text-slate-300 border border-slate-700">#{{ hoveredSellerBubble.rank }}</span>
+                  <div class="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2 font-mono">
+                    <span class="text-slate-400">Ціновий поріг:</span>
+                    <b class="text-white text-sm">{{ hoveredCumulativePoint.price | number }} ₴</b>
                   </div>
 
-                  <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] font-mono text-slate-300">
-                    <div>Частка ринку: <b class="text-indigo-300">{{ hoveredSellerBubble.marketShare }}%</b></div>
-                    <div>Товарів (SKU): <b class="text-white">{{ hoveredSellerBubble.productsCount }}</b></div>
-                    <div>Заг. відгуки: <b class="text-emerald-400">{{ hoveredSellerBubble.reviewsSum }} в.</b></div>
-                    <div>Частка попиту: <b class="text-emerald-300">{{ hoveredSellerBubble.reviewsShare }}%</b></div>
-                    <div>Сер. ціна: <b class="text-white">{{ hoveredSellerBubble.avgPrice | number }} ₴</b></div>
-                    <div>Медіана: <b class="text-white">{{ hoveredSellerBubble.medianPrice | number }} ₴</b></div>
-                    <div class="col-span-2 text-[10.5px] text-slate-400 pt-1 border-t border-slate-800 flex justify-between">
-                      <span>Діапазон цін:</span>
-                      <b class="text-slate-200">{{ hoveredSellerBubble.minPrice | number }} – {{ hoveredSellerBubble.maxPrice | number }} ₴</b>
+                  <div class="space-y-1.5 font-mono text-[11px]">
+                    <div class="flex justify-between items-center text-emerald-400">
+                      <span>Накопичений попит:</span>
+                      <b>{{ hoveredCumulativePoint.cumDemandPct }}%</b>
                     </div>
-                    <div class="col-span-2 text-[10.5px] text-slate-400 flex justify-between">
-                      <span>Віддача на 1 SKU:</span>
-                      <b class="text-amber-400">{{ hoveredSellerBubble.avgReviewsPerProduct }} в/SKU</b>
+                    <div class="flex justify-between items-center text-indigo-300">
+                      <span>Асортимент полиці:</span>
+                      <b>{{ hoveredCumulativePoint.cumSupplyPct }}%</b>
                     </div>
-                  </div>
-
-                  <div class="pt-2.5 mt-2 border-t border-slate-800/80">
-                    <button 
-                      (click)="openSellerProductsModal(hoveredSellerBubble.sellerName)"
-                      class="w-full py-1.5 px-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                    >
-                      <span class="material-icons text-[14px]">view_list</span>
-                      <span>Переглянути всі {{ hoveredSellerBubble.productsCount }} товарів</span>
-                    </button>
+                    <div class="flex justify-between items-center text-slate-300 pt-1 border-t border-slate-800">
+                      <span class="text-slate-400">Товарів до цієї ціни:</span>
+                      <b>{{ hoveredCumulativePoint.cumProducts }} SKU</b>
+                    </div>
+                    <div class="flex justify-between items-center text-slate-300">
+                      <span class="text-slate-400">Сума відгуків:</span>
+                      <b class="text-amber-300">{{ hoveredCumulativePoint.cumReviews }} в.</b>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- VIEW 2: SELLER MARKET SHARE RANKING -->
-            <div *ngIf="activePriceChartTab === 'sellers'" class="bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none space-y-3">
-              <div class="flex items-center justify-between text-xs text-slate-400 pb-1 border-b border-slate-800/80">
-                <span class="font-bold uppercase tracking-wider text-[11px] text-slate-300">Рейтинг продавців за обсягом полиці та попитом</span>
-                <span class="font-mono text-[11px]">Всього продавців: {{ analyticsSummary.sellersTable.length }}</span>
-              </div>
+            <!-- VIEW 2: DEMAND WEIGHT DENSITY SPECTRUM -->
+            <div *ngIf="activePriceChartTab === 'density'" class="bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none space-y-3">
+              <div *ngIf="getCumulativeDemandChartData() as chart">
+                <div class="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-slate-800/80">
+                  <span class="font-bold uppercase tracking-wider text-[11px] text-slate-300">
+                    Розподіл вагомості попиту (к-сть замовлень) за 20 ціновими інтервалами
+                  </span>
+                  <span class="font-mono text-[11px] text-amber-400">★ Центр тяжіння: {{ chart.weightedMedianPrice | number }} ₴</span>
+                </div>
 
-              <!-- Sellers List Cards / Bars -->
-              <div class="space-y-2 max-h-[340px] overflow-y-auto pr-1">
-                <div 
-                  *ngFor="let s of analyticsSummary.sellersTable.slice(0, 12); let idx = index"
-                  (click)="openSellerProductsModal(s.sellerName)"
-                  class="p-3 bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-indigo-500/50 rounded-xl transition-all duration-150 cursor-pointer group flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <!-- Rank + Seller Identity -->
-                  <div class="flex items-center gap-3 min-w-[200px]">
+                <div class="h-64 pt-4 flex items-end justify-between gap-1 border-b border-slate-800 pb-2">
+                  <div 
+                    *ngFor="let bar of chart.densityBars" 
+                    class="flex-1 flex flex-col items-center justify-end h-full group relative cursor-pointer"
+                  >
                     <div 
-                      class="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-mono font-bold shrink-0 shadow-sm"
-                      [class.bg-amber-500]="idx === 0"
-                      [class.text-amber-950]="idx === 0"
-                      [class.bg-slate-300]="idx === 1"
-                      [class.text-slate-950]="idx === 1"
-                      [class.bg-amber-700]="idx === 2"
-                      [class.text-amber-100]="idx === 2"
-                      [class.bg-slate-800]="idx > 2"
-                      [class.text-slate-300]="idx > 2"
-                    >
-                      #{{ idx + 1 }}
-                    </div>
+                      class="w-full rounded-t transition-all duration-200 group-hover:brightness-125 min-h-[4px]"
+                      [class.bg-gradient-to-t]="true"
+                      [class.from-amber-600]="bar.isSweetSpotBin"
+                      [class.to-amber-400]="bar.isSweetSpotBin"
+                      [class.from-indigo-600]="!bar.isSweetSpotBin"
+                      [class.to-emerald-400]="!bar.isSweetSpotBin"
+                      [style.height.px]="bar.height * 2.5"
+                    ></div>
 
-                    <div class="truncate">
-                      <div class="flex items-center gap-1.5">
-                        <span class="w-2.5 h-2.5 rounded-full shrink-0" [style.backgroundColor]="s.color"></span>
-                        <span class="font-bold text-white text-xs truncate group-hover:text-indigo-300 transition-colors">
-                          {{ s.sellerName }}
-                        </span>
-                        <span *ngIf="s.isRozetka" class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700/60 shrink-0">
-                          Rozetka
-                        </span>
-                      </div>
-                      <div class="text-[10px] text-slate-400 font-mono flex items-center gap-2 mt-0.5">
-                        <span>{{ s.productsCount }} товарів</span>
-                        <span>•</span>
-                        <span class="text-emerald-400 font-semibold">{{ s.reviewsSum }} відгуків</span>
-                      </div>
+                    <!-- Tooltip on hover -->
+                    <div class="absolute bottom-full mb-2 hidden group-hover:flex flex-col p-2 bg-[#0f172a] border border-indigo-500 rounded-xl shadow-2xl text-[10.5px] font-mono text-white z-20 whitespace-nowrap">
+                      <div class="font-bold text-amber-300">{{ bar.minP | number }} – {{ bar.maxP | number }} ₴</div>
+                      <div>Товарів: <b>{{ bar.count }} SKU</b></div>
+                      <div>Відгуків: <b class="text-emerald-400">{{ bar.reviews }} в.</b></div>
+                      <div>Вага попиту: <b>{{ bar.weight }}</b></div>
                     </div>
                   </div>
-
-                  <!-- Dual Progress Bars: Market Share & Reviews Share -->
-                  <div class="flex-1 min-w-[180px] max-w-sm space-y-1.5">
-                    <!-- Market Share (Assortment) -->
-                    <div>
-                      <div class="flex justify-between text-[10px] font-mono mb-0.5">
-                        <span class="text-indigo-300">Частка полиці: <b>{{ s.marketShare }}%</b></span>
-                        <span class="text-slate-400">{{ s.productsCount }} SKU</span>
-                      </div>
-                      <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-                        <div class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-300" [style.width.%]="s.marketShare"></div>
-                      </div>
-                    </div>
-
-                    <!-- Demand Share (Reviews) -->
-                    <div>
-                      <div class="flex justify-between text-[10px] font-mono mb-0.5">
-                        <span class="text-emerald-300">Частка попиту: <b>{{ s.reviewsShare }}%</b></span>
-                        <span class="text-slate-400">{{ s.avgReviewsPerProduct }} в/SKU</span>
-                      </div>
-                      <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-                        <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-300" [style.width.%]="s.reviewsShare"></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Price Range & Action -->
-                  <div class="flex items-center justify-between sm:justify-end gap-3 text-right shrink-0">
-                    <div class="text-right font-mono">
-                      <div class="text-xs font-bold text-white">{{ s.medianPrice | number }} ₴ <span class="text-[10px] font-normal text-slate-400">медіана</span></div>
-                      <div class="text-[10px] text-slate-400">{{ s.minPrice | number }} – {{ s.maxPrice | number }} ₴</div>
-                    </div>
-
-                    <button 
-                      class="px-2.5 py-1.5 rounded-lg bg-slate-800 group-hover:bg-indigo-600 text-slate-300 group-hover:text-white transition-all text-xs font-bold flex items-center gap-1 cursor-pointer"
-                      title="Відкрити товари продавця"
-                    >
-                      <span class="material-icons text-sm">open_in_new</span>
-                    </button>
-                  </div>
                 </div>
-              </div>
 
-              <!-- Market Concentration Summary Footer -->
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-800 text-xs font-mono">
-                <div class="p-2 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between">
-                  <span class="text-slate-400">Концентрація Топ-3 (CR3):</span>
-                  <b [class.text-emerald-400]="analyticsSummary.kpi.cr3Level === 'LOW'" [class.text-amber-400]="analyticsSummary.kpi.cr3Level === 'MEDIUM'" [class.text-rose-400]="analyticsSummary.kpi.cr3Level === 'HIGH'">
-                    {{ analyticsSummary.kpi.cr3 }}% ({{ analyticsSummary.kpi.cr3Level }})
-                  </b>
-                </div>
-                <div class="p-2 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between">
-                  <span class="text-slate-400">Індекс монополії HHI:</span>
-                  <b class="text-indigo-300">{{ analyticsSummary.kpi.hhi }} ({{ analyticsSummary.kpi.hhiLevel }})</b>
-                </div>
-                <div class="p-2 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between">
-                  <span class="text-slate-400">Rozetka vs Інші:</span>
-                  <b class="text-white">{{ analyticsSummary.kpi.vendorSplit.rozetkaShare }}% / {{ analyticsSummary.kpi.vendorSplit.thirdPartyShare }}%</b>
+                <!-- X Axis Range Labels -->
+                <div class="flex justify-between text-[10px] font-mono text-slate-400 pt-1">
+                  <span>{{ chart.minPrice | number }} ₴</span>
+                  <span class="text-amber-400 font-bold">50% Попиту: {{ chart.weightedMedianPrice | number }} ₴</span>
+                  <span>{{ chart.maxPrice | number }} ₴</span>
                 </div>
               </div>
             </div>
@@ -1717,6 +1695,98 @@
                       {{ bin.demandSupplyRatio }} в/SKU
                     </b>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4 Benchmark Landmark Cards (Цінові маяки ніші) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              <!-- Card 1: Медіана полиці -->
+              <div class="p-3.5 bg-slate-950/80 border border-sky-500/30 rounded-2xl flex flex-col justify-between space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                    Медіана полиці
+                  </span>
+                  <span class="text-[10px] font-mono text-slate-400">50% пропозиції</span>
+                </div>
+                <div class="text-xl font-extrabold text-white font-mono">
+                  {{ analyticsSummary.kpi.medianPrice | number }} ₴
+                </div>
+                <p class="text-[10.5px] text-slate-400 leading-tight">
+                  Рівно половина товарів каталогу коштують дешевше за цю ціну.
+                </p>
+              </div>
+
+              <!-- Card 2: Середня ціна полиці -->
+              <div class="p-3.5 bg-slate-950/80 border border-purple-500/30 rounded-2xl flex flex-col justify-between space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+                    Середня ціна
+                  </span>
+                  <span class="text-[10px] font-mono text-slate-400">Базовий чек</span>
+                </div>
+                <div class="text-xl font-extrabold text-white font-mono">
+                  {{ analyticsSummary.kpi.avgPrice | number }} ₴
+                </div>
+                <p class="text-[10.5px] text-slate-400 leading-tight">
+                  Просте арифметичне середнє всіх карток без урахування попиту.
+                </p>
+              </div>
+
+              <!-- Card 3: Зважена середня ціна -->
+              <div class="p-3.5 bg-slate-950/80 border border-emerald-500/30 rounded-2xl flex flex-col justify-between space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    Зважена середня
+                  </span>
+                  <span class="text-[10px] font-mono text-emerald-400">Центр грошей</span>
+                </div>
+                <div class="text-xl font-extrabold text-white font-mono">
+                  {{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴
+                </div>
+                <p class="text-[10.5px] text-slate-400 leading-tight">
+                  Середня ціна з урахуванням обсягу реальних замовлень.
+                </p>
+              </div>
+
+              <!-- Card 4: Зважена медіана 50% -->
+              <div class="p-3.5 bg-slate-950/80 border border-amber-500/50 rounded-2xl flex flex-col justify-between space-y-2 bg-gradient-to-br from-amber-950/20 to-transparent">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1">
+                    <span class="material-icons text-sm text-amber-400">star</span>
+                    Зважена медіана
+                  </span>
+                  <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">50% ваги</span>
+                </div>
+                <div class="text-xl font-extrabold text-amber-300 font-mono">
+                  {{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴
+                </div>
+                <p class="text-[10.5px] text-slate-300 leading-tight">
+                  <b>Головний орієнтир:</b> 50% усіх покупців обирають товар до цієї суми.
+                </p>
+              </div>
+            </div>
+
+            <!-- Strategic Actionable Takeaway Banner -->
+            <div class="p-3.5 rounded-xl bg-slate-950/90 border border-purple-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs mt-1">
+              <div class="flex items-start sm:items-center gap-2.5">
+                <div class="w-7 h-7 rounded-lg bg-purple-900/50 border border-purple-500/40 text-purple-300 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+                  <span class="material-icons text-sm">lightbulb</span>
+                </div>
+                <div class="text-slate-300 leading-relaxed">
+                  <span class="font-bold text-white uppercase tracking-wider text-[11px] mr-1.5">Стратегічний орієнтир:</span>
+                  <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct < -3">
+                    Попит зміщений у доступніший сегмент: 50% усіх замовлень зосереджено до <b>{{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</b> (проти полиці <b>{{ analyticsSummary.kpi.medianPrice | number }} ₴</b>). Для швидкого старту встановлюйте ціну в коридорі <b>{{ analyticsSummary.kpi.weightedMedianPrice | number }} – {{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</b>.
+                  </span>
+                  <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct > 3">
+                    Покупці віддають перевагу якіснішим модифікаціям (попит тяжіє до <b>{{ analyticsSummary.kpi.weightedAvgPrice | number }} ₴</b>). Можна запускати дорожчі товари з підвищеною маржинальністю.
+                  </span>
+                  <span *ngIf="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3">
+                    Ринковий баланс збалансований. Пропозиція полиці відповідає запитам покупців. Оптимальний ціновий якір входу — <b>{{ analyticsSummary.kpi.weightedMedianPrice | number }} ₴</b>.
+                  </span>
                 </div>
               </div>
             </div>

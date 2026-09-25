@@ -1279,159 +1279,269 @@ export class DashboardComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
-  // --- Multi-View Competitive Analytics & Price Corridors Engine ---
-  activePriceChartTab: 'matrix' | 'sellers' | 'bins' = 'matrix';
-  hoveredSellerBubble: any = null;
-  hoveredPriceBin: any = null;
+  // --- Price Equilibrium & Cumulative Demand Engine ---
+  activePriceChartTab: 'cumulative' | 'density' | 'bins' = 'cumulative';
+  hoveredCumulativePoint: any = null;
 
-  setActivePriceChartTab(tab: 'matrix' | 'sellers' | 'bins'): void {
+  setActivePriceChartTab(tab: 'cumulative' | 'density' | 'bins'): void {
     this.activePriceChartTab = tab;
-    this.hoveredSellerBubble = null;
-    this.hoveredPriceBin = null;
+    this.hoveredCumulativePoint = null;
     this.cdr.markForCheck();
   }
 
-  getSellerBubbleMatrixData() {
-    const sellers = this.analyticsSummary?.sellersTable || [];
-    if (!sellers || sellers.length === 0) {
-      return { bubbles: [], xTicks: [], yTicks: [], midX: 480, midY: 170, minPrice: 0, maxPrice: 0, maxReviews: 0 };
+  getCumulativeDemandChartData() {
+    const allProducts = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const inStockValidProducts = allProducts.filter(p => p && Number(p.price) > 0 && p.inStock !== false);
+    const validProducts = inStockValidProducts.length > 0 ? inStockValidProducts : allProducts.filter(p => p && Number(p.price) > 0);
+    const totalCount = validProducts.length;
+
+    if (totalCount === 0) {
+      return {
+        points: [],
+        demandLinePath: '',
+        demandAreaPath: '',
+        supplyLinePath: '',
+        xTicks: [],
+        yTicks: [],
+        medianPriceX: 480,
+        avgPriceX: 480,
+        weightedAvgPriceX: 480,
+        weightedMedianPriceX: 480,
+        eqX: 480,
+        eqY: 155,
+        shiftMinX: 460,
+        shiftWidth: 40,
+        minPrice: 0,
+        maxPrice: 0,
+        densityBars: [],
+        totalWeight: 0,
+        totalReviews: 0,
+        medianPrice: 0,
+        avgPrice: 0,
+        weightedAvgPrice: 0,
+        weightedMedianPrice: 0
+      };
     }
 
     const SVG_W = 960;
-    const SVG_H = 340;
-    const PAD_L = 70;
-    const PAD_R = 40;
+    const SVG_H = 320;
+    const PAD_L = 65;
+    const PAD_R = 35;
     const PAD_T = 30;
     const PAD_B = 40;
     const PLOT_W = SVG_W - PAD_L - PAD_R;
     const PLOT_H = SVG_H - PAD_T - PAD_B;
 
-    const prices = sellers.map(s => s.medianPrice || s.avgPrice || 0).filter(p => p > 0);
-    const minP = prices.length > 0 ? Math.min(...prices) : 0;
-    let maxP = prices.length > 0 ? Math.max(...prices) : 1000;
-    if (maxP <= minP) maxP = minP + 500;
+    // 1. Calculate weights and sort ascending
+    const sorted = [...validProducts].map(p => {
+      const price = Number(p.price) || 0;
+      const rev = Math.max(0, Number(p.reviews) || 0);
+      const weight = 1 + Math.log(1 + rev);
+      return { price, reviews: rev, weight, product: p };
+    }).sort((a, b) => a.price - b.price);
 
-    const reviews = sellers.map(s => s.reviewsSum || 0);
-    const maxRev = Math.max(10, ...reviews);
+    const minPrice = sorted[0].price;
+    const p95Index = Math.floor(0.96 * (sorted.length - 1));
+    let maxScalePrice = sorted[p95Index].price;
+    if (maxScalePrice <= minPrice) maxScalePrice = sorted[sorted.length - 1].price;
+    if (maxScalePrice <= minPrice) maxScalePrice = minPrice + 1000;
 
-    const top3Names = this.getTop3SellersList().map(s => s.name.toLowerCase());
-    const totalAllNicheReviews = this.products.reduce((acc, p) => acc + (Number(p.reviews) || 0), 0);
+    const totalWeight = sorted.reduce((acc, p) => acc + p.weight, 0);
+    const totalReviews = sorted.reduce((acc, p) => acc + p.reviews, 0);
 
-    const bubbles = sellers.map(s => {
-      const p = s.medianPrice || s.avgPrice || minP;
-      const r = s.reviewsSum || 0;
-      const share = s.marketShare || 0;
+    // 2. Build cumulative distribution curve points
+    let runningWeight = 0;
+    let runningReviews = 0;
 
-      const normX = Math.max(0, Math.min(1, (p - minP) / (maxP - minP)));
-      const normY = Math.max(0, Math.min(1, r / maxRev));
+    const points = sorted.map((p, idx) => {
+      runningWeight += p.weight;
+      runningReviews += p.reviews;
+      const cumDemandPct = Number(((runningWeight / totalWeight) * 100).toFixed(1));
+      const cumSupplyPct = Number((((idx + 1) / totalCount) * 100).toFixed(1));
+
+      const normX = Math.max(0, Math.min(1, (p.price - minPrice) / (maxScalePrice - minPrice)));
+      const normYDemand = Math.max(0, Math.min(1, cumDemandPct / 100));
+      const normYSupply = Math.max(0, Math.min(1, cumSupplyPct / 100));
 
       const x = PAD_L + normX * PLOT_W;
-      const y = PAD_T + (1 - normY) * PLOT_H;
-
-      const radius = Math.min(32, Math.max(9, 8 + Math.sqrt(share) * 5.5));
-
-      const sellerLower = (s.sellerName || '').trim().toLowerCase();
-      let isDimmed = false;
-      let isHighlighted = false;
-
-      if (this.scatterStoreFilter === 'top3') {
-        const isTop3 = top3Names.some(t => sellerLower === t || (t.includes('rozetka') && sellerLower.includes('rozetka')));
-        isDimmed = !isTop3;
-        isHighlighted = isTop3;
-      } else if (this.scatterStoreFilter !== 'all') {
-        const target = this.scatterStoreFilter.toLowerCase();
-        const isTarget = sellerLower === target || (target.includes('rozetka') && sellerLower.includes('rozetka'));
-        isDimmed = !isTarget;
-        isHighlighted = isTarget;
-      }
-
-      const reviewsShare = s.reviewsShare !== undefined 
-        ? s.reviewsShare 
-        : (totalAllNicheReviews > 0 ? Number(((r / totalAllNicheReviews) * 100).toFixed(1)) : 0);
+      const yDemand = PAD_T + (1 - normYDemand) * PLOT_H;
+      const ySupply = PAD_T + (1 - normYSupply) * PLOT_H;
 
       return {
         x: Math.round(x * 10) / 10,
-        y: Math.round(y * 10) / 10,
-        radius: isHighlighted ? Math.round(radius * 1.25) : Math.round(radius),
-        seller: s,
-        sellerName: s.sellerName,
-        isRozetka: s.isRozetka,
-        productsCount: s.productsCount,
-        marketShare: s.marketShare,
-        reviewsSum: s.reviewsSum,
-        reviewsShare,
-        avgPrice: s.avgPrice || s.medianPrice,
-        medianPrice: s.medianPrice,
-        minPrice: s.minPrice || s.medianPrice,
-        maxPrice: s.maxPrice || s.medianPrice,
-        inStockRate: s.inStockRate,
-        avgReviewsPerProduct: s.avgReviewsPerProduct,
-        color: s.color || '#6366f1',
-        rank: s.rank,
-        isTop3: s.isTop3,
-        isDimmed,
-        isHighlighted
+        yDemand: Math.round(yDemand * 10) / 10,
+        ySupply: Math.round(ySupply * 10) / 10,
+        price: p.price,
+        cumDemandPct,
+        cumSupplyPct,
+        cumReviews: runningReviews,
+        cumProducts: idx + 1,
+        diffPct: Number((cumDemandPct - cumSupplyPct).toFixed(1)),
+        product: p.product
       };
     });
 
-    const midX = PAD_L + PLOT_W / 2;
-    const midY = PAD_T + PLOT_H / 2;
+    // 3. SVG Paths for Cumulative Curves
+    let demandLinePath = '';
+    let demandAreaPath = '';
+    let supplyLinePath = '';
 
-    // Y-Ticks (Reviews)
-    const yRatios = [1, 0.75, 0.5, 0.25, 0];
-    const yTicks = yRatios.map(ratio => {
-      const val = Math.round(maxRev * ratio);
-      const y = PAD_T + (1 - ratio) * PLOT_H;
-      return { y: Math.round(y), label: val.toLocaleString() + ' в.' };
+    if (points.length > 0) {
+      demandLinePath = `M ${points[0].x} ${points[0].yDemand}`;
+      demandAreaPath = `M ${points[0].x} ${PAD_T + PLOT_H} L ${points[0].x} ${points[0].yDemand}`;
+      supplyLinePath = `M ${points[0].x} ${points[0].ySupply}`;
+
+      for (let i = 1; i < points.length; i++) {
+        demandLinePath += ` L ${points[i].x} ${points[i].yDemand}`;
+        demandAreaPath += ` L ${points[i].x} ${points[i].yDemand}`;
+        supplyLinePath += ` L ${points[i].x} ${points[i].ySupply}`;
+      }
+
+      demandAreaPath += ` L ${points[points.length - 1].x} ${PAD_T + PLOT_H} Z`;
+    }
+
+    // 4. Coordinates for 4 Key Price Anchors
+    const kpi = this.analyticsSummary?.kpi;
+    const medianPrice = kpi?.medianPrice || minPrice;
+    const avgPrice = kpi?.avgPrice || minPrice;
+    const weightedAvgPrice = kpi?.weightedAvgPrice || avgPrice;
+    const weightedMedianPrice = kpi?.weightedMedianPrice || medianPrice;
+
+    const calcX = (val: number) => {
+      const norm = Math.max(0, Math.min(1, (val - minPrice) / (maxScalePrice - minPrice)));
+      return Math.round((PAD_L + norm * PLOT_W) * 10) / 10;
+    };
+
+    const medianPriceX = calcX(medianPrice);
+    const avgPriceX = calcX(avgPrice);
+    const weightedAvgPriceX = calcX(weightedAvgPrice);
+    const weightedMedianPriceX = calcX(weightedMedianPrice);
+
+    // 50% Horizontal line Y
+    const y50 = PAD_T + 0.5 * PLOT_H;
+    const eqX = weightedMedianPriceX;
+    const eqY = y50;
+
+    const shiftMinX = Math.min(medianPriceX, weightedMedianPriceX);
+    const shiftWidth = Math.max(4, Math.abs(medianPriceX - weightedMedianPriceX));
+
+    // 5. Density Spectrum Bars (20 intervals)
+    const DENSITY_BINS = 20;
+    const binStep = (maxScalePrice - minPrice) / DENSITY_BINS;
+    const rawBins: Array<{ minP: number; maxP: number; weight: number; reviews: number; count: number }> = [];
+
+    for (let i = 0; i < DENSITY_BINS; i++) {
+      const bMin = minPrice + i * binStep;
+      const bMax = bMin + binStep;
+      rawBins.push({ minP: bMin, maxP: bMax, weight: 0, reviews: 0, count: 0 });
+    }
+
+    sorted.forEach(p => {
+      const binIdx = Math.min(DENSITY_BINS - 1, Math.max(0, Math.floor((p.price - minPrice) / (binStep || 1))));
+      rawBins[binIdx].weight += p.weight;
+      rawBins[binIdx].reviews += p.reviews;
+      rawBins[binIdx].count++;
     });
 
-    // X-Ticks (Price)
+    const maxBinWeight = Math.max(1, ...rawBins.map(b => b.weight));
+    const densityBars = rawBins.map((b, idx) => {
+      const x = PAD_L + (idx / DENSITY_BINS) * PLOT_W;
+      const barW = Math.max(4, (PLOT_W / DENSITY_BINS) - 2);
+      const heightPct = (b.weight / maxBinWeight);
+      const barH = Math.max(2, Math.round(heightPct * 65));
+      const y = PAD_T + PLOT_H - barH;
+      const isSweetSpotBin = b.minP <= weightedMedianPrice && b.maxP >= weightedMedianPrice;
+
+      return {
+        x: Math.round(x),
+        y,
+        width: Math.round(barW),
+        height: barH,
+        minP: Math.round(b.minP),
+        maxP: Math.round(b.maxP),
+        weight: Math.round(b.weight * 10) / 10,
+        reviews: b.reviews,
+        count: b.count,
+        isSweetSpotBin
+      };
+    });
+
+    // 6. Y-Ticks (0%, 25%, 50%, 75%, 100%)
+    const yTicks = [
+      { y: PAD_T, label: '100%' },
+      { y: PAD_T + 0.25 * PLOT_H, label: '75%' },
+      { y: PAD_T + 0.5 * PLOT_H, label: '50% (Баланс)' },
+      { y: PAD_T + 0.75 * PLOT_H, label: '25%' },
+      { y: PAD_T + PLOT_H, label: '0%' }
+    ];
+
+    // 7. X-Ticks (Price)
     const xRatios = [0, 0.25, 0.5, 0.75, 1];
-    const xTicks = xRatios.map(ratio => {
-      const val = Math.round(minP + (maxP - minP) * ratio);
-      const x = PAD_L + ratio * PLOT_W;
+    const xTicks = xRatios.map(r => {
+      const val = Math.round(minPrice + (maxScalePrice - minPrice) * r);
+      const x = PAD_L + r * PLOT_W;
       return { x: Math.round(x), label: val.toLocaleString() + ' ₴' };
     });
 
-    return { bubbles, xTicks, yTicks, midX, midY, minPrice: minP, maxPrice: maxP, maxReviews: maxRev };
+    return {
+      points,
+      demandLinePath,
+      demandAreaPath,
+      supplyLinePath,
+      xTicks,
+      yTicks,
+      medianPriceX,
+      avgPriceX,
+      weightedAvgPriceX,
+      weightedMedianPriceX,
+      eqX,
+      eqY,
+      shiftMinX,
+      shiftWidth,
+      minPrice,
+      maxPrice: maxScalePrice,
+      densityBars,
+      totalWeight: Math.round(totalWeight),
+      totalReviews,
+      medianPrice,
+      avgPrice,
+      weightedAvgPrice,
+      weightedMedianPrice
+    };
   }
 
-  onSellerBubbleMouseMove(event: MouseEvent): void {
+  onCumulativeMouseMove(event: MouseEvent): void {
     const target = event.currentTarget as HTMLElement;
     if (!target) return;
     const rect = target.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
     const scaleX = 960 / rect.width;
-    const scaleY = 340 / rect.height;
     const svgX = mouseX * scaleX;
-    const svgY = mouseY * scaleY;
 
-    const data = this.getSellerBubbleMatrixData();
-    if (data.bubbles.length === 0) return;
+    const data = this.getCumulativeDemandChartData();
+    if (data.points.length === 0) return;
 
-    let closest = data.bubbles[0];
-    let minDist = Math.hypot(data.bubbles[0].x - svgX, data.bubbles[0].y - svgY);
+    let closest = data.points[0];
+    let minDist = Math.abs(data.points[0].x - svgX);
 
-    for (let i = 1; i < data.bubbles.length; i++) {
-      const b = data.bubbles[i];
-      const dist = Math.hypot(b.x - svgX, b.y - svgY);
+    for (let i = 1; i < data.points.length; i++) {
+      const dist = Math.abs(data.points[i].x - svgX);
       if (dist < minDist) {
         minDist = dist;
-        closest = b;
+        closest = data.points[i];
       }
     }
 
-    if (minDist <= closest.radius + 20) {
-      this.hoveredSellerBubble = closest;
+    if (minDist <= 80) {
+      this.hoveredCumulativePoint = closest;
     } else {
-      this.hoveredSellerBubble = null;
+      this.hoveredCumulativePoint = null;
     }
     this.cdr.markForCheck();
   }
 
-  onSellerBubbleMouseLeave(): void {
-    this.hoveredSellerBubble = null;
+  onCumulativeMouseLeave(): void {
+    this.hoveredCumulativePoint = null;
     this.cdr.markForCheck();
   }
 
