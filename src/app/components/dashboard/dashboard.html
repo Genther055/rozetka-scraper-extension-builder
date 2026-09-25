@@ -2696,8 +2696,9 @@
           <div class="relative bg-slate-950/80 border border-slate-800/90 rounded-2xl p-4 overflow-hidden select-none">
             <svg 
               viewBox="0 0 960 220" 
-              class="w-full h-56 sm:h-64 cursor-crosshair overflow-visible"
+              class="w-full h-56 sm:h-64 cursor-pointer overflow-visible"
               (mousemove)="onOverviewChartMouseMove($event)"
+              (click)="onOverviewChartClick($event)"
               (mouseleave)="onOverviewChartMouseLeave()"
             >
               <defs>
@@ -2782,14 +2783,14 @@
               />
 
               <!-- Hover Dual-Axis Intersecting Crosshair Guide Lines & Coordinate Indicators -->
-              <g *ngIf="hoveredOverviewPoint">
+              <g *ngIf="activeOverviewPoint">
                 <!-- Vertical Guide Line -->
                 <line 
-                  [attr.x1]="hoveredOverviewPoint.x" 
+                  [attr.x1]="activeOverviewPoint.x" 
                   y1="20" 
-                  [attr.x2]="hoveredOverviewPoint.x" 
+                  [attr.x2]="activeOverviewPoint.x" 
                   y2="190" 
-                  [attr.stroke]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8'" 
+                  [attr.stroke]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8')" 
                   stroke-width="1.5" 
                   stroke-dasharray="3 3"
                   stroke-opacity="0.85"
@@ -2798,38 +2799,38 @@
                 <!-- Horizontal Intersecting Guide Line -->
                 <line 
                   x1="60" 
-                  [attr.y1]="hoveredOverviewPoint.y" 
+                  [attr.y1]="activeOverviewPoint.y" 
                   x2="935" 
-                  [attr.y2]="hoveredOverviewPoint.y" 
-                  [attr.stroke]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8'" 
+                  [attr.y2]="activeOverviewPoint.y" 
+                  [attr.stroke]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8')" 
                   stroke-width="1.5" 
                   stroke-dasharray="3 3"
                   stroke-opacity="0.85"
                 />
 
                 <!-- Dynamic Y-Axis Pill Badge -->
-                <g [attr.transform]="'translate(4, ' + (hoveredOverviewPoint.y - 10) + ')'">
+                <g [attr.transform]="'translate(4, ' + (activeOverviewPoint.y - 10) + ')'">
                   <rect width="52" height="20" rx="4" 
-                    [attr.fill]="overviewChartMetric === 'discounts' ? '#4c0519' : overviewChartMetric === 'rank_reviews' ? '#064e3b' : '#1e1b4b'" 
-                    [attr.stroke]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8'" 
+                    [attr.fill]="pinnedOverviewPoint ? '#78350f' : (overviewChartMetric === 'discounts' ? '#4c0519' : overviewChartMetric === 'rank_reviews' ? '#064e3b' : '#1e1b4b')" 
+                    [attr.stroke]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8')" 
                     stroke-width="1"
                   />
                   <text x="26" y="14" text-anchor="middle" 
-                    [attr.fill]="overviewChartMetric === 'discounts' ? '#fecdd3' : overviewChartMetric === 'rank_reviews' ? '#a7f3d0' : '#c7d2fe'" 
+                    [attr.fill]="pinnedOverviewPoint ? '#fef3c7' : (overviewChartMetric === 'discounts' ? '#fecdd3' : overviewChartMetric === 'rank_reviews' ? '#a7f3d0' : '#c7d2fe')" 
                     font-size="9.5" font-family="monospace" font-weight="bold">
                     {{ getCrosshairYLabel() }}
                   </text>
                 </g>
 
                 <!-- Dynamic X-Axis Pill Badge -->
-                <g [attr.transform]="'translate(' + Math.max(60, Math.min(875, hoveredOverviewPoint.x - 30)) + ', 192)'">
+                <g [attr.transform]="'translate(' + Math.max(60, Math.min(875, activeOverviewPoint.x - 30)) + ', 192)'">
                   <rect width="60" height="18" rx="4" 
-                    [attr.fill]="overviewChartMetric === 'discounts' ? '#4c0519' : overviewChartMetric === 'rank_reviews' ? '#064e3b' : '#1e1b4b'" 
-                    [attr.stroke]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8'" 
+                    [attr.fill]="pinnedOverviewPoint ? '#78350f' : (overviewChartMetric === 'discounts' ? '#4c0519' : overviewChartMetric === 'rank_reviews' ? '#064e3b' : '#1e1b4b')" 
+                    [attr.stroke]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#818cf8')" 
                     stroke-width="1"
                   />
                   <text x="30" y="13" text-anchor="middle" 
-                    [attr.fill]="overviewChartMetric === 'discounts' ? '#fecdd3' : overviewChartMetric === 'rank_reviews' ? '#a7f3d0' : '#c7d2fe'" 
+                    [attr.fill]="pinnedOverviewPoint ? '#fef3c7' : (overviewChartMetric === 'discounts' ? '#fecdd3' : overviewChartMetric === 'rank_reviews' ? '#a7f3d0' : '#c7d2fe')" 
                     font-size="9.5" font-family="monospace" font-weight="bold">
                     {{ getCrosshairXLabel() }}
                   </text>
@@ -2837,39 +2838,67 @@
 
                 <!-- Target Intersection Halo & Center Node -->
                 <circle 
-                  [attr.cx]="hoveredOverviewPoint.x" 
-                  [attr.cy]="hoveredOverviewPoint.y" 
-                  r="9" 
-                  [attr.fill]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8'" 
+                  [attr.cx]="activeOverviewPoint.x" 
+                  [attr.cy]="activeOverviewPoint.y" 
+                  [attr.r]="pinnedOverviewPoint ? 14 : 9" 
+                  [attr.fill]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8')" 
                   fill-opacity="0.25"
                 />
                 <circle 
-                  [attr.cx]="hoveredOverviewPoint.x" 
-                  [attr.cy]="hoveredOverviewPoint.y" 
-                  r="5" 
-                  [attr.fill]="overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8'" 
+                  [attr.cx]="activeOverviewPoint.x" 
+                  [attr.cy]="activeOverviewPoint.y" 
+                  [attr.r]="pinnedOverviewPoint ? 6 : 5" 
+                  [attr.fill]="pinnedOverviewPoint ? '#fbbf24' : (overviewChartMetric === 'discounts' ? '#f43f5e' : overviewChartMetric === 'rank_reviews' ? '#10b981' : '#38bdf8')" 
                   stroke="#ffffff" 
                   stroke-width="2"
                 />
               </g>
             </svg>
 
-            <!-- Floating Crosshair Info Tooltip on Hover -->
+            <!-- Floating Crosshair Info Tooltip on Hover / Pin (Adaptive Percentage-Based Coordinates) -->
             <div 
-              *ngIf="hoveredOverviewPoint" 
-              class="absolute z-30 p-3 bg-[#0f172a] border border-indigo-500/60 rounded-xl shadow-2xl text-xs text-white pointer-events-none transition-all duration-75 max-w-xs"
-              [style.left.px]="Math.min(700, Math.max(70, hoveredOverviewPoint.x - 120))"
-              [style.top.px]="Math.max(10, hoveredOverviewPoint.y - 80)"
+              *ngIf="activeOverviewPoint" 
+              class="absolute z-30 p-3.5 bg-[#0d1424]/95 border rounded-2xl shadow-2xl text-xs text-white transition-all duration-75 max-w-[280px] backdrop-blur-md"
+              [class.border-amber-500/80]="pinnedOverviewPoint"
+              [class.border-indigo-500/70]="!pinnedOverviewPoint"
+              [class.ring-2]="pinnedOverviewPoint"
+              [class.ring-amber-500/30]="pinnedOverviewPoint"
+              [style.left.%]="Math.max(12, Math.min(88, (activeOverviewPoint.x / 960) * 100))"
+              [style.top.%]="(activeOverviewPoint.y / 220) * 100"
+              [class.-translate-x-1/2]="(activeOverviewPoint.x / 960) >= 0.25 && (activeOverviewPoint.x / 960) <= 0.75"
+              [class.-translate-x-4]="(activeOverviewPoint.x / 960) < 0.25"
+              [class.-translate-x-[96%]]="(activeOverviewPoint.x / 960) > 0.75"
+              [class.-translate-y-full]="activeOverviewPoint.y >= 70"
+              [class.-mt-3]="activeOverviewPoint.y >= 70"
+              [class.translate-y-4]="activeOverviewPoint.y < 70"
             >
-              <div class="font-bold text-white text-xs truncate max-w-[240px] mb-1">
-                {{ hoveredOverviewPoint.name }}
+              <div class="flex items-center justify-between gap-2 mb-1.5 border-b border-slate-800/80 pb-1.5">
+                <span *ngIf="pinnedOverviewPoint" class="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider flex items-center gap-0.5">
+                  <span class="material-icons text-[10px]">push_pin</span>
+                  Зафіксовано
+                </span>
+                <span *ngIf="!pinnedOverviewPoint" class="text-[10px] text-slate-400 font-mono">
+                  Позиція #{{ activeOverviewPoint.rank || 1 }}
+                </span>
+                <button 
+                  *ngIf="pinnedOverviewPoint"
+                  (click)="unpinOverviewPoint($event)"
+                  class="text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                  title="Зняти фіксацію"
+                >
+                  <span class="material-icons text-xs">close</span>
+                </button>
               </div>
+
+              <div class="font-bold text-white text-xs truncate max-w-[250px] mb-1.5" [title]="activeOverviewPoint.name">
+                {{ activeOverviewPoint.name }}
+              </div>
+
               <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono text-slate-300">
-                <div>Ціна: <b class="text-white">{{ hoveredOverviewPoint.price | number }} ₴</b></div>
-                <div>Відгуки: <b class="text-emerald-400">{{ hoveredOverviewPoint.reviews }} в.</b></div>
-                <div>Продавець: <b class="text-indigo-300 truncate">{{ hoveredOverviewPoint.seller }}</b></div>
-                <div *ngIf="(hoveredOverviewPoint.discount || 0) > 0">Знижка: <b class="text-rose-400">-{{ hoveredOverviewPoint.discount }}%</b></div>
-                <div *ngIf="hoveredOverviewPoint.rank">Позиція: <b class="text-amber-400">#{{ hoveredOverviewPoint.rank }}</b></div>
+                <div>Ціна: <b class="text-white">{{ activeOverviewPoint.price | number }} ₴</b></div>
+                <div>Відгуки: <b class="text-emerald-400">{{ activeOverviewPoint.reviews }} в.</b></div>
+                <div>Продавець: <b class="text-indigo-300 truncate">{{ activeOverviewPoint.seller || 'Rozetka' }}</b></div>
+                <div *ngIf="(activeOverviewPoint.discount || 0) > 0">Знижка: <b class="text-rose-400">-{{ activeOverviewPoint.discount }}%</b></div>
               </div>
             </div>
           </div>

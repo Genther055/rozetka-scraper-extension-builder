@@ -758,11 +758,17 @@ export class DashboardComponent implements OnInit {
     xVal: number;
     yVal: number;
   } | null = null;
+  pinnedOverviewPoint: any = null;
   hoveredChartClientPos: { x: number; y: number } = { x: 0, y: 0 };
+
+  get activeOverviewPoint(): any {
+    return this.pinnedOverviewPoint || this.hoveredOverviewPoint;
+  }
 
   setOverviewChartMetric(m: 'price_reviews' | 'rank_price' | 'rank_reviews' | 'discounts'): void {
     this.overviewChartMetric = m;
     this.hoveredOverviewPoint = null;
+    this.pinnedOverviewPoint = null;
     this.cdr.markForCheck();
   }
 
@@ -951,6 +957,8 @@ export class DashboardComponent implements OnInit {
   }
 
   onOverviewChartMouseMove(event: MouseEvent): void {
+    if (this.pinnedOverviewPoint) return;
+
     const target = event.currentTarget as HTMLElement;
     if (!target) return;
     const rect = target.getBoundingClientRect();
@@ -981,28 +989,73 @@ export class DashboardComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
-  onOverviewChartMouseLeave(): void {
+  onOverviewChartClick(event: MouseEvent): void {
+    const target = event.currentTarget as HTMLElement;
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const svgWidth = rect.width;
+    const scale = 960 / svgWidth;
+    const svgMouseX = mouseX * scale;
+
+    const pts = this.getOverviewChartProcessedPoints();
+    if (pts.length === 0) return;
+
+    let closest = pts[0];
+    let minDiff = Math.abs(pts[0].x - svgMouseX);
+
+    for (let i = 1; i < pts.length; i++) {
+      const diff = Math.abs(pts[i].x - svgMouseX);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = pts[i];
+      }
+    }
+
+    if (this.pinnedOverviewPoint && this.pinnedOverviewPoint.x === closest.x) {
+      this.pinnedOverviewPoint = null;
+    } else {
+      this.pinnedOverviewPoint = closest;
+      this.hoveredOverviewPoint = closest;
+    }
+    this.cdr.markForCheck();
+  }
+
+  unpinOverviewPoint(event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.pinnedOverviewPoint = null;
     this.hoveredOverviewPoint = null;
     this.cdr.markForCheck();
   }
 
+  onOverviewChartMouseLeave(): void {
+    if (!this.pinnedOverviewPoint) {
+      this.hoveredOverviewPoint = null;
+      this.cdr.markForCheck();
+    }
+  }
+
   getCrosshairYLabel(): string {
-    if (!this.hoveredOverviewPoint) return '';
+    const pt = this.activeOverviewPoint;
+    if (!pt) return '';
     if (this.overviewChartMetric === 'rank_price') {
-      return (this.hoveredOverviewPoint.price || 0).toLocaleString() + ' ₴';
+      return (pt.price || 0).toLocaleString() + ' ₴';
     } else if (this.overviewChartMetric === 'discounts') {
-      return '-' + (this.hoveredOverviewPoint.discount || 0) + '%';
+      return '-' + (pt.discount || 0) + '%';
     } else {
-      return (this.hoveredOverviewPoint.reviews || 0).toLocaleString() + ' в.';
+      return (pt.reviews || 0).toLocaleString() + ' в.';
     }
   }
 
   getCrosshairXLabel(): string {
-    if (!this.hoveredOverviewPoint) return '';
+    const pt = this.activeOverviewPoint;
+    if (!pt) return '';
     if (this.overviewChartMetric === 'price_reviews' || this.overviewChartMetric === 'discounts') {
-      return (this.hoveredOverviewPoint.price || 0).toLocaleString() + ' ₴';
+      return (pt.price || 0).toLocaleString() + ' ₴';
     } else {
-      return '#' + (this.hoveredOverviewPoint.rank || 1);
+      return '#' + (pt.rank || 1);
     }
   }
 
