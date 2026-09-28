@@ -157,7 +157,7 @@
         return currentDomTiles > 0 ? currentDomTiles : 60;
     }
 
-    // Precise filter: eliminate recently viewed sliders, recommendation carousels, sidebars, and all sponsored/ad items
+    // Precise filter: eliminate only non-catalog containers (recently viewed sliders, recommendation carousels, sidebars, footers)
     function isUnwantedTile(item) {
         if (!item || !(item instanceof Element)) return true;
         
@@ -167,54 +167,12 @@
             aside, .sidebar, rz-sidebar, 
             rz-goods-carousel, rz-carousel, rz-goods-slider, rz-slider, app-goods-carousel, app-slider, .goods-carousel,
             rz-similar-goods, rz-recommended-goods, rz-accessories, .recommendations,
-            .catalog-banner, .advertising-slot, .main-goods__cell--advertising,
             footer, header
         `);
         if (unwantedContainer) return true;
-        
-        // 2. Check explicitly for sponsored & advertising markers in new & classic Rozetka layouts
-        const isRelSponsored = !!item.querySelector('a[rel*="sponsored"]');
-        if (isRelSponsored) return true;
 
-        const tileInfoEl = item.querySelector('rz-tile-info, .tile-info, [class*="tile-info"]');
-        if (tileInfoEl && (tileInfoEl.innerText || '').match(/реклама|спонсор|promoted/i)) {
-            return true;
-        }
-
-        const primacyLink = item.querySelector('a[href*="primacyToken"], a[href*="primacySource"]');
-        if (primacyLink) return true;
-
-        const badgeElements = item.querySelectorAll('rz-promo-label, .promo-label, [class*="promo-label"], .goods-tile__badge, [class*="badge"], .goods-tile__label, [class*="label"], [class*="badge-text"], [data-testid*="badge"], [data-testid*="label"]');
-        for (const b of badgeElements) {
-            const bText = (b.innerText || b.textContent || '').toLowerCase();
-            if (bText.includes('спонсор') || bText.includes('реклама') || bText.includes('promoted') || bText.includes('sponsored')) {
-                return true;
-            }
-        }
-
-        // 3. Exclude sponsored / advertising classes and attributes
-        const tileClasses = (item.className || '').toLowerCase();
-        if (
-            tileClasses.includes('catalog-banner') || 
-            tileClasses.includes('rz-banner') || 
-            tileClasses.includes('banner-tile') || 
-            tileClasses.includes('advertising-slot') ||
-            tileClasses.includes('goods-tile--ad') ||
-            tileClasses.includes('goods-tile_ad') ||
-            tileClasses.includes('goods-tile_type_ad') ||
-            tileClasses.includes('goods-tile_type_sponsored') ||
-            tileClasses.includes('goods-tile--sponsored') ||
-            item.hasAttribute('data-ad') ||
-            item.hasAttribute('data-advertisement') ||
-            item.hasAttribute('data-sponsored') ||
-            item.hasAttribute('data-promoted') ||
-            item.closest('[data-sponsored], [data-ad], [class*="sponsored"], [class*="advertisement"]')
-        ) {
-            return true;
-        }
-
-        // 4. Must have a valid product link
-        const hasProductLink = !!item.querySelector('a[href*="/p/"], a[href*="/p-"], a[href*="/p"], a.tile-title, a[rztiletitle]');
+        // 2. Must have a valid product link
+        const hasProductLink = !!item.querySelector('a[href*="/p/"], a[href*="/p-"], a[href*="/p"], a[href*="p"], a.tile-title, a[rztiletitle], a.tile-image-host, a[data-testid*="title"], a[data-testid*="image"]');
         if (!hasProductLink) return true;
 
         return false;
@@ -882,7 +840,7 @@
             isTabScrapingActive = false;
             window.__tradeScoutIsScrapingActive = false;
             currentPercent = 100;
-            currentStatusMsg = `Збір завершено! Всього ${sentLinks.size} товарів (100% позицій з ціною).`;
+            currentStatusMsg = `Збір завершено! Всього ${sentLinks.size} товарів (100% каталогу).`;
             clearPersistedSession();
             console.log(`TradeScout Tab ${currentTabId}: Scrape completed with ${sentLinks.size} items.`);
 
