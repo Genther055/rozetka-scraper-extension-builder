@@ -655,94 +655,100 @@
                 // 4. Rating (1.0 to 5.0) - Exact Mathematical & API Resolution
                 let rating = 0;
 
-                // Priority 1: Target filler width directly (e.g. style="width: calc(60% - 2px)" -> 3.0)
-                const fillerElements = item.querySelectorAll('[class*="stars-rating__filler"], [class*="stars_rating__filler"], [class*="stars-rating-progress"], rz-stars-rating-progress, [data-testid="stars-rating"] [style*="%"]');
-                for (const el of fillerElements) {
-                    const style = el.getAttribute('style') || '';
-                    const match = style.match(/([\d.]+)%/);
-                    if (match && match[1]) {
-                        const pct = parseFloat(match[1]);
-                        if (pct > 0 && pct <= 100) {
-                            rating = parseFloat((pct / 20).toFixed(1));
-                            break;
-                        }
-                    }
-                }
-
-                // Priority 2: aria-label with exact "/ 5" or "з 5" pattern (e.g. aria-label="3.0 з 5" or "3 з 5")
-                if (rating === 0) {
-                    const starAriaElements = item.querySelectorAll('[data-testid="stars-rating"], rz-tile-rating, rz-stars-rating-progress, .goods-tile__stars, [class*="stars"], [class*="rating"]');
-                    for (const el of starAriaElements) {
-                        const aria = el.getAttribute('aria-label') || el.getAttribute('title') || '';
-                        const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
-                        if (ariaMatch && ariaMatch[1]) {
-                            const val = parseFloat(ariaMatch[1].replace(',', '.'));
-                            if (val > 0 && val <= 5) {
-                                rating = val;
+                // Products with 0 reviews on Rozetka have no rating (always 0)
+                if (reviews > 0) {
+                    // Priority 1: Target filler width directly (e.g. style="width: calc(60% - 2px)" -> 3.0)
+                    const fillerElements = item.querySelectorAll('[class*="stars-rating__filler"], [class*="stars_rating__filler"], [class*="stars-rating-progress"], rz-stars-rating-progress, [data-testid="stars-rating"] [style*="%"]');
+                    for (const el of fillerElements) {
+                        const style = el.getAttribute('style') || '';
+                        const match = style.match(/([\d.]+)%/);
+                        if (match && match[1]) {
+                            const pct = parseFloat(match[1]);
+                            if (pct > 0 && pct <= 100) {
+                                rating = parseFloat((pct / 20).toFixed(1));
                                 break;
                             }
                         }
                     }
-                }
 
-                // Priority 3: Count active yellow stars vs grey stars (excluding chat/comment icons)
-                if (rating === 0) {
-                    const starsContainer = item.querySelector('[data-testid="stars-rating"], .goods-tile__stars, .stars_rating, [class*="stars-rating"], rz-stars-rating-progress') || item.querySelector('rz-tile-rating');
-                    if (starsContainer) {
-                        const allStars = Array.from(starsContainer.querySelectorAll('svg, use, [class*="star"]')).filter(el => {
-                            const cls = (el.getAttribute('class') || el.className || '').toString().toLowerCase();
-                            const href = (el.getAttribute('href') || el.getAttribute('xlink:href') || '').toLowerCase();
-                            const name = (el.getAttribute('rziconname') || el.getAttribute('name') || '').toLowerCase();
-                            if (cls.includes('comment') || cls.includes('chat') || href.includes('comment') || href.includes('chat') || name.includes('comment') || name.includes('chat')) {
-                                return false;
-                            }
-                            return true;
-                        });
-
-                        let activeCount = 0;
-                        let foundActive = false;
-                        for (const s of allStars) {
-                            const cls = (s.getAttribute('class') || s.className || '').toString().toLowerCase();
-                            const href = (s.getAttribute('href') || s.getAttribute('xlink:href') || '').toLowerCase();
-                            const fillAttr = (s.getAttribute('fill') || '').toLowerCase();
-                            const html = (s.innerHTML || '').toLowerCase();
-                            
-                            const isInactive = cls.includes('inactive') || cls.includes('empty') || cls.includes('gray') || cls.includes('grey') || 
-                                               href.includes('inactive') || href.includes('empty') || 
-                                               fillAttr.includes('e9e9e9') || fillAttr.includes('cbd5') || fillAttr.includes('d1d5') || fillAttr.includes('none');
-
-                            const isActive = cls.includes('active') || cls.includes('filled') || cls.includes('yellow') || cls.includes('amber') || cls.includes('orange') ||
-                                             href.includes('active') || href.includes('filled') || href.includes('star-full') ||
-                                             fillAttr.includes('ffa') || fillAttr.includes('ff9') || fillAttr.includes('f59') || fillAttr.includes('fbb') || fillAttr.includes('orange') || fillAttr.includes('yellow') ||
-                                             html.includes('active') || html.includes('filled') || html.includes('ffa');
-
-                            if (isActive && !isInactive) {
-                                activeCount++;
-                                foundActive = true;
+                    // Priority 2: aria-label with exact "/ 5" or "з 5" pattern (e.g. aria-label="3.0 з 5" or "3 з 5")
+                    if (rating === 0) {
+                        const starAriaElements = item.querySelectorAll('[data-testid="stars-rating"], rz-tile-rating, rz-stars-rating-progress, .goods-tile__stars, [class*="stars"], [class*="rating"]');
+                        for (const el of starAriaElements) {
+                            const aria = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+                            const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
+                            if (ariaMatch && ariaMatch[1]) {
+                                const val = parseFloat(ariaMatch[1].replace(',', '.'));
+                                if (val > 0 && val <= 5) {
+                                    rating = val;
+                                    break;
+                                }
                             }
                         }
+                    }
 
-                        if (foundActive && activeCount > 0 && activeCount <= 5) {
-                            rating = activeCount;
+                    // Priority 3: Count active yellow stars vs grey stars (excluding chat/comment icons)
+                    if (rating === 0) {
+                        const starsContainer = item.querySelector('[data-testid="stars-rating"], .goods-tile__stars, .stars_rating, [class*="stars-rating"], rz-stars-rating-progress') || item.querySelector('rz-tile-rating');
+                        if (starsContainer) {
+                            const allStars = Array.from(starsContainer.querySelectorAll('svg, use, [class*="star"]')).filter(el => {
+                                const cls = (el.getAttribute('class') || el.className || '').toString().toLowerCase();
+                                const href = (el.getAttribute('href') || el.getAttribute('xlink:href') || '').toLowerCase();
+                                const name = (el.getAttribute('rziconname') || el.getAttribute('name') || '').toLowerCase();
+                                if (cls.includes('comment') || cls.includes('chat') || href.includes('comment') || href.includes('chat') || name.includes('comment') || name.includes('chat')) {
+                                    return false;
+                                }
+                                return true;
+                            });
+
+                            let activeCount = 0;
+                            let foundActive = false;
+                            for (const s of allStars) {
+                                const cls = (s.getAttribute('class') || s.className || '').toString().toLowerCase();
+                                const href = (s.getAttribute('href') || s.getAttribute('xlink:href') || '').toLowerCase();
+                                const fillAttr = (s.getAttribute('fill') || '').toLowerCase();
+                                const html = (s.innerHTML || '').toLowerCase();
+                                
+                                const isInactive = cls.includes('inactive') || cls.includes('empty') || cls.includes('gray') || cls.includes('grey') || 
+                                                   href.includes('inactive') || href.includes('empty') || 
+                                                   fillAttr.includes('e9e9e9') || fillAttr.includes('cbd5') || fillAttr.includes('d1d5') || fillAttr.includes('none');
+
+                                const isActive = cls.includes('active') || cls.includes('filled') || cls.includes('yellow') || cls.includes('amber') || cls.includes('orange') ||
+                                                 href.includes('active') || href.includes('filled') || href.includes('star-full') ||
+                                                 fillAttr.includes('ffa') || fillAttr.includes('ff9') || fillAttr.includes('f59') || fillAttr.includes('fbb') || fillAttr.includes('orange') || fillAttr.includes('yellow') ||
+                                                 html.includes('active') || html.includes('filled') || html.includes('ffa');
+
+                                if (isActive && !isInactive) {
+                                    activeCount++;
+                                    foundActive = true;
+                                }
+                            }
+
+                            if (foundActive && activeCount > 0 && activeCount <= 5) {
+                                rating = activeCount;
+                            }
                         }
                     }
-                }
 
-                // Priority 4: Official Rozetka API Backend Details (supports multiple API field formats)
-                if (rating === 0 && apiDetails) {
-                    if (apiDetails.stars_rating) {
-                        const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
-                        if (apiVal > 0 && apiVal <= 5) rating = apiVal;
+                    // Priority 4: Official Rozetka API Backend Details (supports multiple API field formats)
+                    if (rating === 0 && apiDetails) {
+                        if (apiDetails.stars_rating) {
+                            const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
+                            if (apiVal > 0 && apiVal <= 5) rating = apiVal;
+                        }
+                        if (rating === 0 && apiDetails.stars) {
+                            const apiVal = parseFloat(String(apiDetails.stars).replace(',', '.'));
+                            if (apiVal > 5 && apiVal <= 100) rating = parseFloat((apiVal / 20).toFixed(1));
+                            else if (apiVal > 0 && apiVal <= 5) rating = apiVal;
+                        }
+                        if (rating === 0 && apiDetails.rating) {
+                            const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
+                            if (apiVal > 0 && apiVal <= 5) rating = apiVal;
+                        }
                     }
-                    if (rating === 0 && apiDetails.stars) {
-                        const apiVal = parseFloat(String(apiDetails.stars).replace(',', '.'));
-                        if (apiVal > 5 && apiVal <= 100) rating = parseFloat((apiVal / 20).toFixed(1));
-                        else if (apiVal > 0 && apiVal <= 5) rating = apiVal;
-                    }
-                    if (rating === 0 && apiDetails.rating) {
-                        const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
-                        if (apiVal > 0 && apiVal <= 5) rating = apiVal;
-                    }
+                } else {
+                    // No reviews = no rating
+                    rating = 0;
                 }
 
                 let questions = 0;
