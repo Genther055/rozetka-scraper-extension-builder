@@ -854,16 +854,13 @@
             a[href*="page=${nextPg};"]
         `);
 
-        // Target for this page: if there's a next page or total > 60, target is 60 items. Otherwise remaining category items.
+        // Target for this page: if there's a next page, target is 60 items. Otherwise remaining category items.
         let targetForThisPage = 60;
-        if (currentEstimatedTotal > 0) {
-            const remaining = currentEstimatedTotal - sentLinks.size;
-            if (remaining > 0 && remaining < 60) {
-                targetForThisPage = remaining;
-            }
+        if (!hasNextPageInDom && currentEstimatedTotal > 0 && currentEstimatedTotal > sentLinks.size) {
+            targetForThisPage = Math.max(1, Math.min(60, currentEstimatedTotal - sentLinks.size));
         }
 
-        // Continuous incremental step-by-step downward & upward harvesting
+        // 1 & 2. Continuous incremental step-by-step downward & upward harvesting
         const pageNewProducts = [];
         const pageLinksSeen = new Set();
 
@@ -877,43 +874,56 @@
             }
         };
 
-        // Pass 1: Harvest top elements immediately
+        // Step 1: Harvest top elements immediately
         await harvestBatch();
 
-        // Pass 2: Progressive smooth downward scroll through full page height (45 steps * 400px)
+        // Step 2: Progressive smooth downward scroll through full page height
         let currentY = 0;
-        for (let s = 0; s < 45; s++) {
+        let plateauStreak = 0;
+        let prevScannedCount = 0;
+
+        for (let s = 0; s < 30; s++) {
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
 
-            currentY += 450;
+            currentY += 550;
             window.scrollTo({ top: currentY, behavior: 'auto' });
             window.dispatchEvent(new Event('scroll'));
             
-            // Allow Rozetka DOM render & Angular change detection
-            await new Promise(r => setTimeout(r, 200));
+            // Allow Rozetka DOM render & change detection
+            await new Promise(r => setTimeout(r, 160));
             await harvestBatch();
 
             if (pageNewProducts.length >= targetForThisPage) {
                 break;
             }
+
+            const docMax = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            if (currentY > docMax + 1000) {
+                if (pageNewProducts.length === prevScannedCount) {
+                    plateauStreak++;
+                    if (plateauStreak >= 3) break;
+                } else {
+                    plateauStreak = 0;
+                }
+            }
+            prevScannedCount = pageNewProducts.length;
         }
 
-        // Final scroll to absolute bottom to trigger any bottom cards and pagination
-        const docBottom = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 12000);
-        window.scrollTo({ top: docBottom, behavior: 'auto' });
+        // Final scroll to absolute bottom to trigger any remaining bottom cards & pagination
+        window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 10000), behavior: 'auto' });
         window.dispatchEvent(new Event('scroll'));
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 300));
         await harvestBatch();
 
-        // Pass 3: Upward scroll back to top if still under target (captures any unmounted top/middle items)
+        // Step 3: Upward scroll back to top if still under target (captures any recycled top items)
         if (pageNewProducts.length < targetForThisPage) {
             let upY = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-            for (let s = 0; s < 25; s++) {
+            for (let s = 0; s < 15; s++) {
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                upY = Math.max(0, upY - 450);
+                upY = Math.max(0, upY - 600);
                 window.scrollTo({ top: upY, behavior: 'auto' });
                 window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 180));
+                await new Promise(r => setTimeout(r, 140));
                 await harvestBatch();
 
                 if (pageNewProducts.length >= targetForThisPage) break;
@@ -921,21 +931,7 @@
             }
         }
 
-        // Pass 4: Secondary bottom sweep if still under target
-        if (pageNewProducts.length < targetForThisPage) {
-            const checkPoints = [0.25, 0.5, 0.75, 1.0];
-            const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-            for (const pct of checkPoints) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                window.scrollTo({ top: Math.round(maxH * pct), behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 300));
-                await harvestBatch();
-                if (pageNewProducts.length >= targetForThisPage) break;
-            }
-        }
-
-        // Back to top
+        // Step 4: Back to top final check
         window.scrollTo({ top: 0, behavior: 'auto' });
         await new Promise(r => setTimeout(r, 100));
         await harvestBatch();
