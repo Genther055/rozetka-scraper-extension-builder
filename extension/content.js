@@ -642,18 +642,28 @@
                     }
                 }
 
-                // 4. Rating (1.0 to 5.0) - Exact Mathematical Calculation
+                // 4. Rating (1.0 to 5.0) - Exact Mathematical & API Resolution
                 let rating = 0;
 
-                // Priority 1: Target data-testid="stars-rating" directly anywhere inside item
-                const starsFillEl = item.querySelector('[data-testid="stars-rating"], [class*="stars-rating__filler"], [class*="stars_rating__filler"]');
-                if (starsFillEl) {
-                    const style = starsFillEl.getAttribute('style') || '';
+                // Priority 1: Target data-testid="stars-rating" or any filler width directly
+                const starElements = item.querySelectorAll('[data-testid="stars-rating"], [class*="stars-rating__filler"], [class*="stars_rating__filler"], [class*="stars-rating-progress"], rz-stars-rating-progress, rz-tile-rating');
+                for (const el of starElements) {
+                    const style = el.getAttribute('style') || '';
                     const match = style.match(/([\d.]+)%/);
                     if (match && match[1]) {
                         const pct = parseFloat(match[1]);
                         if (pct > 0 && pct <= 100) {
                             rating = parseFloat((pct / 20).toFixed(1));
+                            break;
+                        }
+                    }
+                    const aria = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+                    const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i) || aria.match(/([\d.,]+)/);
+                    if (ariaMatch && ariaMatch[1]) {
+                        const val = parseFloat(ariaMatch[1].replace(',', '.'));
+                        if (val > 0 && val <= 5) {
+                            rating = val;
+                            break;
                         }
                     }
                 }
@@ -684,17 +694,34 @@
                     }
                 }
 
-                // Priority 3: Official Rozetka API Backend Details
-                if (rating === 0 && apiDetails && apiDetails.stars_rating) {
-                    const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
-                    if (apiVal > 0 && apiVal <= 5) rating = apiVal;
+                // Priority 3: Official Rozetka API Backend Details (supports multiple API field formats)
+                if (rating === 0 && apiDetails) {
+                    if (apiDetails.stars_rating) {
+                        const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
+                        if (apiVal > 0 && apiVal <= 5) rating = apiVal;
+                    }
+                    if (rating === 0 && apiDetails.stars) {
+                        const apiVal = parseFloat(String(apiDetails.stars).replace(',', '.'));
+                        if (apiVal > 5 && apiVal <= 100) rating = parseFloat((apiVal / 20).toFixed(1));
+                        else if (apiVal > 0 && apiVal <= 5) rating = apiVal;
+                    }
+                    if (rating === 0 && apiDetails.rating) {
+                        const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
+                        if (apiVal > 0 && apiVal <= 5) rating = apiVal;
+                    }
+                }
+
+                // Priority 4: Count individual SVG filled stars if present
+                if (rating === 0) {
+                    const filledStars = item.querySelectorAll('svg [href*="star-filled"], svg [href*="star-active"], svg [rzIconName*="star-filled"], [class*="star--filled"], [class*="star-full"]');
+                    if (filledStars.length > 0 && filledStars.length <= 5) {
+                        rating = filledStars.length;
+                    }
                 }
 
                 // If no reviews exist, rating is 0 (displayed as '—')
                 if (reviews === 0) {
                     rating = 0;
-                } else if (rating === 0) {
-                    rating = 5.0;
                 }
 
                 let questions = 0;
