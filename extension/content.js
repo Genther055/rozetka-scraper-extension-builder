@@ -293,8 +293,9 @@
     }
 
     // Trigger Rozetka's "Показати ще" button if present to mount remaining products on the current page
-    function clickShowMoreIfPresent() {
+    async function triggerShowMoreAndWait() {
         try {
+            const candidates = [];
             const showMoreSelectors = [
                 'a.show-more',
                 'button.show-more',
@@ -311,36 +312,39 @@
             ];
             
             for (const sel of showMoreSelectors) {
-                const btns = document.querySelectorAll(sel);
-                for (const b of btns) {
-                    if (b.classList.contains('pagination__link') || b.classList.contains('pagination__direction')) continue;
-                    if (b.closest('header, footer, aside, rz-filter-stack, .sidebar, rz-sidebar')) continue;
-                    
-                    const txt = (b.textContent || b.innerText || '').toLowerCase();
-                    if (txt.includes('ще') || txt.includes('еще') || txt.includes('показати') || txt.includes('показать') || txt.includes('more') || b.hasAttribute('data-testid')) {
-                        b.scrollIntoView({ behavior: 'auto', block: 'center' });
-                        b.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
-                        b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                        b.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                        b.click();
-                        return true;
-                    }
-                }
+                document.querySelectorAll(sel).forEach(el => candidates.push(el));
             }
-            
-            const allButtons = document.querySelectorAll('main button, main a, rz-catalog button, rz-catalog a, .catalog-grid button, .catalog-grid a, rz-paginator button, rz-paginator a, [class*="paginator"] button, [class*="paginator"] a, button, a');
-            for (const b of allButtons) {
-                if (b.classList.contains('pagination__link') || b.classList.contains('pagination__direction')) continue;
-                if (b.closest('header, footer, aside, rz-filter-stack, .sidebar, rz-sidebar')) continue;
-                const txt = (b.textContent || b.innerText || '').toLowerCase();
+
+            // Also search all buttons and links in main catalog area with matching text
+            document.querySelectorAll('main a, main button, rz-catalog a, rz-catalog button, .catalog-grid a, .catalog-grid button, rz-paginator a, rz-paginator button, [class*="paginator"] a, [class*="paginator"] button, button, a').forEach(el => {
+                if (el.classList.contains('pagination__link') || el.classList.contains('pagination__direction')) return;
+                if (el.closest('header, footer, aside, rz-filter-stack, .sidebar, rz-sidebar')) return;
+                const txt = (el.textContent || el.innerText || '').toLowerCase();
                 if (/показати\s+ще|показать\s+еще|ще\s+\d+\s+товар|показати\s+більше|показать\s+больше/i.test(txt)) {
-                    b.scrollIntoView({ behavior: 'auto', block: 'center' });
-                    b.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
-                    b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                    b.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                    b.click();
-                    return true;
+                    candidates.push(el);
                 }
+            });
+
+            let clicked = false;
+            for (const btn of candidates) {
+                if (btn.classList.contains('pagination__link') || btn.classList.contains('pagination__direction')) continue;
+                if (btn.closest('header, footer, aside, rz-filter-stack')) continue;
+
+                btn.scrollIntoView({ behavior: 'auto', block: 'center' });
+                window.dispatchEvent(new Event('scroll'));
+                
+                ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evtType => {
+                    try {
+                        btn.dispatchEvent(new MouseEvent(evtType, { bubbles: true, cancelable: true, view: window }));
+                    } catch (_) {}
+                });
+                try { btn.click(); } catch (_) {}
+                clicked = true;
+            }
+
+            if (clicked) {
+                await new Promise(r => setTimeout(r, 800));
+                return true;
             }
         } catch (_) {}
         return false;
@@ -914,9 +918,8 @@
 
             // When approaching item 35-42, trigger "Show more" button if Rozetka halted lazy load
             if (pageNewProducts.length >= 35 && pageNewProducts.length < targetForThisPage) {
-                const clicked = clickShowMoreIfPresent();
+                const clicked = await triggerShowMoreAndWait();
                 if (clicked) {
-                    await new Promise(r => setTimeout(r, 500));
                     await harvestBatch();
                 }
             }
@@ -926,15 +929,14 @@
             }
         }
 
-        // Final scroll to absolute bottom to trigger any bottom cards and pagination
-        const docBottom = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 12000);
-        window.scrollTo({ top: docBottom, behavior: 'auto' });
-        window.dispatchEvent(new Event('scroll'));
+        // Dedicated bottom pass with show-more trigger
         if (pageNewProducts.length < targetForThisPage) {
-            clickShowMoreIfPresent();
+            const docBottom = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 12000);
+            window.scrollTo({ top: docBottom, behavior: 'auto' });
+            window.dispatchEvent(new Event('scroll'));
+            await triggerShowMoreAndWait();
+            await harvestBatch();
         }
-        await new Promise(r => setTimeout(r, 500));
-        await harvestBatch();
 
         // Pass 3: Upward scroll back to top if still under target (captures any unmounted top/middle items)
         if (pageNewProducts.length < targetForThisPage) {
@@ -954,8 +956,7 @@
 
         // Pass 4: Secondary checkpoint sweep if still under target
         if (pageNewProducts.length < targetForThisPage) {
-            clickShowMoreIfPresent();
-            await new Promise(r => setTimeout(r, 400));
+            await triggerShowMoreAndWait();
             const checkPoints = [0.25, 0.5, 0.75, 1.0];
             const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
             for (const pct of checkPoints) {
@@ -970,10 +971,15 @@
 
         // Patient bottom check if still under target
         if (pageNewProducts.length < targetForThisPage) {
-            window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight), behavior: 'auto' });
-            window.dispatchEvent(new Event('scroll'));
-            clickShowMoreIfPresent();
-            await new Promise(r => setTimeout(r, 700));
+            const bottomElem = document.querySelector('rz-paginator, .pagination, [class*="paginator"], [class*="catalog-grid__more"], footer');
+            if (bottomElem) {
+                bottomElem.scrollIntoView({ behavior: 'auto', block: 'center' });
+                window.dispatchEvent(new Event('scroll'));
+            } else {
+                window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight), behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll'));
+            }
+            await triggerShowMoreAndWait();
             await harvestBatch();
         }
 
@@ -1112,15 +1118,6 @@
         currentEstimatedTotal = getEstimatedTotalFromPage();
         currentPercent = 1;
         currentStatusMsg = `Запуск скрейпінгу: ${meta.title}...`;
-
-        // If the URL has pagination available and does not currently have 'page=' in it,
-        // normalize to page=1 so Rozetka immediately renders in full 60-item catalog mode
-        const page1Url = getRozetkaNextPageUrl(window.location.href, 1);
-        if (page1Url && page1Url !== window.location.href && !window.location.href.includes('page=')) {
-            persistSessionState(1);
-            window.location.href = page1Url;
-            return;
-        }
 
         persistSessionState(1);
 
