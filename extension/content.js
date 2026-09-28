@@ -172,16 +172,13 @@
         `);
         if (unwantedContainer) return true;
         
-        // 2. Direct full-text check for sponsored & advertising markers (drops all 9 injected Rozetka ads)
-        const tileText = (item.innerText || item.textContent || '').toLowerCase();
-        if (
-            tileText.includes('спонсор') || 
-            tileText.includes('реклама') || 
-            tileText.includes('рекламн') || 
-            tileText.includes('партнерськ') || 
-            tileText.includes('promoted')
-        ) {
-            return true;
+        // 2. Check explicitly for sponsored & advertising badges/labels (avoids false positives in regular text)
+        const badgeElements = item.querySelectorAll('rz-promo-label, .promo-label, [class*="promo-label"], .goods-tile__badge, [class*="badge"], .goods-tile__label, [class*="label"], [class*="badge-text"], [data-testid*="badge"], [data-testid*="label"]');
+        for (const b of badgeElements) {
+            const bText = (b.innerText || b.textContent || '').toLowerCase();
+            if (bText.includes('спонсор') || bText.includes('реклама') || bText.includes('promoted') || bText.includes('sponsored')) {
+                return true;
+            }
         }
 
         // 3. Exclude sponsored / advertising classes and attributes
@@ -196,8 +193,6 @@
             tileClasses.includes('goods-tile_type_ad') ||
             tileClasses.includes('goods-tile_type_sponsored') ||
             tileClasses.includes('goods-tile--sponsored') ||
-            tileClasses.includes('sponsored') ||
-            tileClasses.includes('promoted') ||
             item.hasAttribute('data-ad') ||
             item.hasAttribute('data-advertisement') ||
             item.hasAttribute('data-sponsored') ||
@@ -226,6 +221,10 @@
             '.tile-title',
             'span.goods-tile__title',
             '.goods-tile__title',
+            '[data-testid*="title"]',
+            '[data-testid*="heading"]',
+            '[class*="goods-tile__title"]',
+            '[class*="goods-tile__heading"]',
             '[class*="heading"] a',
             '[class*="title"] a',
             'a[class*="heading"]',
@@ -273,15 +272,18 @@
         return '';
     }
 
-    // Fast 400ms background scroll to ensure lazy elements mount
+    // 3-step thorough background scroll to ensure all 60 lazy elements mount
     async function silentBackgroundScroll() {
         try {
             const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1200);
-            const midY = Math.round(totalHeight / 2);
-            window.scrollTo({ top: midY, behavior: 'auto' });
-            await new Promise(r => setTimeout(r, 150));
-            window.scrollTo({ top: totalHeight - window.innerHeight, behavior: 'auto' });
+            window.scrollTo({ top: Math.round(totalHeight * 0.33), behavior: 'auto' });
             await new Promise(r => setTimeout(r, 200));
+            window.scrollTo({ top: Math.round(totalHeight * 0.66), behavior: 'auto' });
+            await new Promise(r => setTimeout(r, 200));
+            window.scrollTo({ top: totalHeight, behavior: 'auto' });
+            await new Promise(r => setTimeout(r, 300));
+            window.scrollTo({ top: 0, behavior: 'auto' });
+            await new Promise(r => setTimeout(r, 100));
         } catch (_) {}
     }
 
