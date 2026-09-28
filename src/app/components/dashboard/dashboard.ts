@@ -4121,7 +4121,7 @@ export class DashboardComponent implements OnInit {
     const sellerObj = specs.find(s => s.key.includes('Продавець'));
     const seller = sellerObj ? sellerObj.val : (product.seller || 'Rozetka');
     const price = product.price ? `${Number(product.price).toLocaleString('uk-UA')} ₴` : '';
-    const rating = product.rating ? `${product.rating}` : '5.0';
+    const rating = (product.rating && Number(product.rating) > 0) ? `${Number(product.rating).toFixed(1)}` : '';
     const reviews = product.reviews || 0;
 
     const paragraphs: string[] = [];
@@ -4142,7 +4142,7 @@ export class DashboardComponent implements OnInit {
       paragraphs.push(`✨ Дизайн та ергономіка: Корпус ${featParts.join(', ')}, що гарантує комфорт під час щоденного використання та поїздок.`);
     }
 
-    paragraphs.push(`🛒 Торговельні показники: Продукт пропонується продавцем ${seller}${price ? ` за актуальною ціною ${price}` : ''}. Рівень задоволеності покупців становить ★ ${rating}/5.0 на основі ${reviews} відгуків.`);
+    paragraphs.push(`🛒 Торговельні показники: Продукт пропонується продавцем ${seller}${price ? ` за актуальною ціною ${price}` : ''}.${reviews > 0 ? ` Рівень задоволеності покупців становить ${rating ? `★ ${rating}/5.0` : ''} на основі ${reviews} відгуків.` : ' Відгуки про товар поки відсутні.'}`);
 
     return paragraphs.join('\n\n');
   }
@@ -6061,7 +6061,7 @@ export function extractProductSpecsMap(p: any): Record<string, string> {
     const rating = Number(p.rating) || 0;
     const reviews = Number(p.reviews) || 0;
     if (rating > 0 || reviews > 0) {
-      map['Рейтинг та відгуки'] = `★ ${rating > 0 ? rating.toFixed(1) : '5.0'} (${reviews} відгуків)`;
+      map['Рейтинг та відгуки'] = rating > 0 ? `★ ${rating.toFixed(1)} (${reviews} відгуків)` : `${reviews} відгуків`;
     }
   }
 

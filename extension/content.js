@@ -669,11 +669,43 @@
                     }
                 }
 
-                // Priority 4: Count individual SVG filled stars if present
+                // Priority 4: Direct counting of active/filled star SVG/use elements
                 if (rating === 0) {
-                    const filledStars = item.querySelectorAll('svg [href*="star-filled"], svg [href*="star-active"], svg [rzIconName*="star-filled"], [class*="star--filled"], [class*="star-full"]');
-                    if (filledStars.length > 0 && filledStars.length <= 5) {
-                        rating = filledStars.length;
+                    const activeStarSelectors = [
+                        'svg[class*="active"]', 'svg[class*="filled"]', 'svg[class*="yellow"]', 'svg[class*="amber"]', 'svg[class*="orange"]',
+                        'use[href*="star-active"]', 'use[href*="star-filled"]', 'use[href*="star_active"]', 'use[href*="star_filled"]', 'use[href*="star-full"]',
+                        'use[*|href*="star-active"]', 'use[*|href*="star-filled"]', 'use[*|href*="star_active"]', 'use[*|href*="star_filled"]',
+                        '[rzIconName*="star-active"]', '[rzIconName*="star-filled"]', '[rzIconName*="star_active"]', '[rzIconName*="star_filled"]',
+                        '[class*="star-active"]', '[class*="star--active"]', '[class*="star-filled"]', '[class*="star--filled"]',
+                        '[class*="stars__item--active"]', '[class*="stars__item_active"]', '[class*="stars-item--active"]', '[class*="stars-item_active"]'
+                    ];
+                    const activeStarNodes = item.querySelectorAll(activeStarSelectors.join(', '));
+                    if (activeStarNodes.length > 0 && activeStarNodes.length <= 5) {
+                        rating = activeStarNodes.length;
+                    }
+                }
+
+                // Priority 5: Scan any 5-star SVG set inside rating container for colored vs grey fill
+                if (rating === 0) {
+                    const ratingContainer = item.querySelector('rz-tile-rating, [class*="rating"], [class*="stars"]');
+                    if (ratingContainer) {
+                        const svgs = Array.from(ratingContainer.querySelectorAll('svg'));
+                        if (svgs.length === 5) {
+                            let activeCount = 0;
+                            for (const s of svgs) {
+                                const fillAttr = (s.getAttribute('fill') || '').toLowerCase();
+                                const cls = (s.getAttribute('class') || '').toLowerCase();
+                                const html = (s.innerHTML || '').toLowerCase();
+                                const isGrey = fillAttr.includes('e9e9e9') || fillAttr.includes('cbd5') || fillAttr.includes('none') || fillAttr.includes('gray') || fillAttr.includes('grey') || cls.includes('empty') || cls.includes('inactive') || html.includes('empty') || html.includes('inactive');
+                                const isColored = fillAttr.includes('ffa') || fillAttr.includes('ff9') || fillAttr.includes('f59') || fillAttr.includes('fbb') || fillAttr.includes('orange') || fillAttr.includes('yellow') || cls.includes('active') || cls.includes('filled') || html.includes('active') || html.includes('filled');
+                                if (isColored && !isGrey) {
+                                    activeCount++;
+                                }
+                            }
+                            if (activeCount > 0 && activeCount <= 5) {
+                                rating = activeCount;
+                            }
+                        }
                     }
                 }
 
