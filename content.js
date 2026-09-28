@@ -86,8 +86,8 @@
         if (!text || typeof text !== 'string') return 0;
         const cleaned = text.replace(/&nbsp;/g, ' ').replace(/\u00A0/g, ' ').replace(/\u202F/g, ' ').trim();
         
-        // Match: "Знайдено 508 товарів" or "Знайдено 531 товар"
-        const m1 = cleaned.match(/(?:знайдено|найдено|показано)?\s*([\d\s\u00A0\u202F.,]+)\s*(?:товар\w*|тов\w*)/i);
+        // Match: "Знайдено 508 товарів" or "Знайдено 531 товар" or "показано 60 товарів"
+        const m1 = cleaned.match(/(?:знайдено|найдено|показано)\s*([\d\s\u00A0\u202F.,]+)\s*(?:товар\w*|тов\w*)?/i);
         if (m1 && m1[1]) {
             const num = parseInt(m1[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
             if (!isNaN(num) && num > 0 && num < 1000000) return num;
@@ -100,33 +100,20 @@
             if (!isNaN(num) && num > 0 && num < 1000000) return num;
         }
 
-        // Match: "Знайдено 508"
-        const m3 = cleaned.match(/(?:знайдено|найдено)\s*([\d\s\u00A0\u202F.,]+)/i);
-        if (m3 && m3[1]) {
-            const num = parseInt(m3[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
-            if (!isNaN(num) && num > 0 && num < 1000000) return num;
-        }
-
-        const digitsOnly = cleaned.replace(/[^\d]/g, '');
-        if (digitsOnly.length > 0) {
-            const num = parseInt(digitsOnly, 10);
-            if (!isNaN(num) && num > 0 && num < 1000000) return num;
-        }
-
         return 0;
     }
 
     function getEstimatedTotalFromPage() {
-        // Priority 1: Search top heading, counter, and settings elements
+        // Priority 1: Search top heading, counter, and settings elements (exclude filter chips/tags)
         const topElements = document.querySelectorAll(`
             rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection,
             [data-testid*="found"], [data-testid*="counter"], [data-testid*="total"],
             [class*="found-goods"], [class*="goods-count"], [class*="heading__goods"], [class*="total-goods"],
             .catalog-selection__label, [class*="selection__label"],
-            h1, h2, rz-selected-filters, [class*="filters-tags"]
+            h1, h2
         `);
         for (const el of topElements) {
-            if (el.closest('aside, .sidebar, rz-filter-stack, .sidebar-block, rz-section-slider, rz-viewed-goods, [class*="viewed"], .recently-viewed')) continue;
+            if (el.closest('aside, .sidebar, rz-filter-stack, .sidebar-block, rz-section-slider, rz-viewed-goods, [class*="viewed"], .recently-viewed, rz-selected-filters, [class*="filters-tags"], [class*="filter"]')) continue;
             const txt = (el.textContent || el.innerText || '').trim();
             if (txt.toLowerCase().includes('знайдено') || txt.toLowerCase().includes('найдено') || txt.toLowerCase().includes('товар')) {
                 const count = parseCountFromText(txt);
@@ -136,7 +123,7 @@
 
         // Priority 2: Broad body scan for "Знайдено X товарів" or "X товарів" in header area
         try {
-            const headerSection = document.querySelector('rz-category-page, rz-catalog, main, body');
+            const headerSection = document.querySelector('rz-category-page, rz-catalog, main');
             if (headerSection) {
                 const fullText = (headerSection.innerText || '').slice(0, 3000);
                 const count = parseCountFromText(fullText);
@@ -854,9 +841,16 @@
             a[href*="page=${nextPg};"]
         `);
 
-        // Target for this page: if there's a next page or total > 60, target is 60 items. Otherwise remaining category items.
+        // Target for this page:
+        // If there is pagination/next page, this page MUST harvest strictly 60 items!
+        // Only if there is DEFINITELY no next page AND remaining < 60, target is remaining.
         let targetForThisPage = 60;
-        if (currentEstimatedTotal > 0) {
+        if (hasNextPageInDom) {
+            targetForThisPage = 60;
+            if (currentEstimatedTotal < (currentPage + 1) * 60) {
+                currentEstimatedTotal = Math.max(currentEstimatedTotal, (currentPage + 1) * 60);
+            }
+        } else if (currentEstimatedTotal > 0 && currentEstimatedTotal > sentLinks.size) {
             const remaining = currentEstimatedTotal - sentLinks.size;
             if (remaining > 0 && remaining < 60) {
                 targetForThisPage = remaining;
@@ -930,6 +924,27 @@
                 window.scrollTo({ top: Math.round(maxH * pct), behavior: 'auto' });
                 window.dispatchEvent(new Event('scroll'));
                 await new Promise(r => setTimeout(r, 300));
+                await harvestBatch();
+                if (pageNewProducts.length >= targetForThisPage) break;
+            }
+        }
+
+        // Pass 5: Slow Network / Async Chunk Render Recovery Loop
+        if (pageNewProducts.length < targetForThisPage && (hasNextPageInDom || currentEstimatedTotal > sentLinks.size + pageNewProducts.length)) {
+            for (let retry = 1; retry <= 3; retry++) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+                if (pageNewProducts.length >= targetForThisPage) break;
+
+                const maxDocH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 12000);
+                window.scrollTo({ top: maxDocH, behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll'));
+                await new Promise(r => setTimeout(r, 700));
+                await harvestBatch();
+                if (pageNewProducts.length >= targetForThisPage) break;
+
+                window.scrollTo({ top: Math.round(maxDocH * 0.5), behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll'));
+                await new Promise(r => setTimeout(r, 600));
                 await harvestBatch();
                 if (pageNewProducts.length >= targetForThisPage) break;
             }
