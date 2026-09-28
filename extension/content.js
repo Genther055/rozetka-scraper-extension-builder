@@ -7,7 +7,7 @@
     console.log('TradeScout Content Script v3.5 Pro loaded on:', window.location.href);
 
     const SESSION_STORAGE_KEY = '__tradeScout_active_session';
-    const TILE_SELECTORS = 'rz-product-tile, rz-catalog-tile, .goods-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default, article.goods-tile, div.goods-tile, article.content, rz-product-tile article';
+    const TILE_SELECTORS = 'rz-product-tile, rz-catalog-tile, .goods-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default, article.goods-tile, div.goods-tile, article.content, rz-product-tile article, .catalog-grid__cell, rz-grid > *, ul.catalog-grid > li, .catalog-grid > div';
 
     let isTabScrapingActive = false;
     window.__tradeScoutIsScrapingActive = false;
@@ -249,18 +249,20 @@
         return '';
     }
 
-    // 3-step thorough background scroll to ensure all 60 lazy elements mount
+    // Progressive smooth multi-step scroll from top to bottom to trigger Rozetka's lazy element loading
     async function silentBackgroundScroll() {
         try {
-            const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1200);
-            window.scrollTo({ top: Math.round(totalHeight * 0.33), behavior: 'auto' });
-            await new Promise(r => setTimeout(r, 200));
-            window.scrollTo({ top: Math.round(totalHeight * 0.66), behavior: 'auto' });
-            await new Promise(r => setTimeout(r, 200));
-            window.scrollTo({ top: totalHeight, behavior: 'auto' });
-            await new Promise(r => setTimeout(r, 300));
-            window.scrollTo({ top: 0, behavior: 'auto' });
-            await new Promise(r => setTimeout(r, 100));
+            const steps = 6;
+            for (let s = 1; s <= steps; s++) {
+                const maxScroll = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
+                const targetY = Math.round((maxScroll / steps) * s);
+                window.scrollTo({ top: targetY, behavior: 'smooth' });
+                await new Promise(r => setTimeout(r, 220));
+            }
+            // Final reach to bottom
+            const finalBottom = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            window.scrollTo({ top: finalBottom, behavior: 'smooth' });
+            await new Promise(r => setTimeout(r, 350));
         } catch (_) {}
     }
 
@@ -812,22 +814,33 @@
         currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
         currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
 
-        // 1. Silent scroll to mount lazy elements
-        await silentBackgroundScroll();
-        if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+        // 1 & 2. Progressive multi-pass DOM harvesting: scroll and collect all items on current page
+        let pageNewProducts = [];
+        let previousCollected = -1;
+        let passes = 0;
 
-        // 2. Scrape all items on current page
-        let newProducts = await scrapeCurrentDomItems(meta, currentPage);
-        if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-
-        if (newProducts.length === 0 && (currentEstimatedTotal <= 0 || sentLinks.size < currentEstimatedTotal)) {
-            await new Promise(r => setTimeout(r, 400));
-            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+        while (passes < 4) {
+            passes++;
             await silentBackgroundScroll();
-            newProducts = await scrapeCurrentDomItems(meta, currentPage);
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+
+            const batch = await scrapeCurrentDomItems(meta, currentPage);
+            if (batch.length > 0) {
+                pageNewProducts.push(...batch);
+            }
+
+            // Expected items on page (60 for full pages, or remaining items for last page)
+            const remainingToEst = currentEstimatedTotal > 0 ? (currentEstimatedTotal - (sentLinks.size - pageNewProducts.length)) : 60;
+            const targetForThisPage = Math.min(60, Math.max(1, remainingToEst));
+
+            if (pageNewProducts.length >= targetForThisPage || (passes > 1 && pageNewProducts.length === previousCollected)) {
+                break;
+            }
+            previousCollected = pageNewProducts.length;
+            await new Promise(r => setTimeout(r, 350));
         }
 
-        if (newProducts.length > 0 && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
+        if (pageNewProducts.length > 0 && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
             currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100));
             currentStatusMsg = `Зібрано ${sentLinks.size} з ${currentEstimatedTotal} товарів (стор. ${currentPage})...`;
 
@@ -846,7 +859,7 @@
             });
 
             await sendWebhookPayload({
-                products: newProducts,
+                products: pageNewProducts,
                 page: currentPage,
                 sessionId: currentSessionId,
                 sessionTitle: meta.title,
@@ -864,7 +877,7 @@
 
         const maxPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
         const isFinished = (!hasNextPageInDom && currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || 
-                           (newProducts.length === 0 && currentPage > 1 && !hasNextPageInDom) || 
+                           (pageNewProducts.length === 0 && currentPage > 1 && !hasNextPageInDom) || 
                            (!hasNextPageInDom && (!targetUrl || targetUrl === window.location.href)) || 
                            (currentPage >= maxPages && !hasNextPageInDom);
 
