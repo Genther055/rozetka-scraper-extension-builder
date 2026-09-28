@@ -296,42 +296,48 @@
     function clickShowMoreIfPresent() {
         try {
             const showMoreSelectors = [
-                'button.show-more',
                 'a.show-more',
+                'button.show-more',
                 'rz-button-show-more button',
                 'rz-button-show-more a',
                 'rz-button-show-more',
                 '[data-testid="show-more-goods"]',
                 '[data-testid*="show-more"]',
-                '[class*="show-more"]',
+                '.show-more-button',
                 '[class*="catalog-selection__btn"]',
                 '[class*="catalog-grid__more"]',
-                '.show-more-button',
-                'button[class*="more"]',
-                'a[class*="more"]'
+                '[class*="show-more"]',
+                '[class*="show_more"]'
             ];
             
             for (const sel of showMoreSelectors) {
                 const btns = document.querySelectorAll(sel);
                 for (const b of btns) {
-                    if (b.closest('rz-paginator, .pagination, [class*="paginator"], header, footer, aside, rz-filter-stack')) continue;
+                    if (b.classList.contains('pagination__link') || b.classList.contains('pagination__direction')) continue;
+                    if (b.closest('header, footer, aside, rz-filter-stack, .sidebar, rz-sidebar')) continue;
+                    
                     const txt = (b.textContent || b.innerText || '').toLowerCase();
                     if (txt.includes('ще') || txt.includes('еще') || txt.includes('показати') || txt.includes('показать') || txt.includes('more') || b.hasAttribute('data-testid')) {
-                        if (b.offsetParent !== null || b.getBoundingClientRect().height > 0) {
-                            b.scrollIntoView({ behavior: 'auto', block: 'center' });
-                            b.click();
-                            return true;
-                        }
+                        b.scrollIntoView({ behavior: 'auto', block: 'center' });
+                        b.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
+                        b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                        b.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                        b.click();
+                        return true;
                     }
                 }
             }
             
-            const allButtons = document.querySelectorAll('button, a.button, div[role="button"]');
+            const allButtons = document.querySelectorAll('main button, main a, rz-catalog button, rz-catalog a, .catalog-grid button, .catalog-grid a, rz-paginator button, rz-paginator a, [class*="paginator"] button, [class*="paginator"] a, button, a');
             for (const b of allButtons) {
-                if (b.closest('rz-paginator, .pagination, [class*="paginator"], header, footer, aside, rz-filter-stack')) continue;
+                if (b.classList.contains('pagination__link') || b.classList.contains('pagination__direction')) continue;
+                if (b.closest('header, footer, aside, rz-filter-stack, .sidebar, rz-sidebar')) continue;
                 const txt = (b.textContent || b.innerText || '').toLowerCase();
-                if (txt.includes('показати ще') || txt.includes('показать еще') || txt.includes('показати більше') || txt.includes('показать больше')) {
+                if (/показати\s+ще|показать\s+еще|ще\s+\d+\s+товар|показати\s+більше|показать\s+больше/i.test(txt)) {
                     b.scrollIntoView({ behavior: 'auto', block: 'center' });
+                    b.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
+                    b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                    b.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
                     b.click();
                     return true;
                 }
@@ -910,7 +916,7 @@
             if (pageNewProducts.length >= 35 && pageNewProducts.length < targetForThisPage) {
                 const clicked = clickShowMoreIfPresent();
                 if (clicked) {
-                    await new Promise(r => setTimeout(r, 350));
+                    await new Promise(r => setTimeout(r, 500));
                     await harvestBatch();
                 }
             }
@@ -927,7 +933,7 @@
         if (pageNewProducts.length < targetForThisPage) {
             clickShowMoreIfPresent();
         }
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 500));
         await harvestBatch();
 
         // Pass 3: Upward scroll back to top if still under target (captures any unmounted top/middle items)
@@ -949,6 +955,7 @@
         // Pass 4: Secondary checkpoint sweep if still under target
         if (pageNewProducts.length < targetForThisPage) {
             clickShowMoreIfPresent();
+            await new Promise(r => setTimeout(r, 400));
             const checkPoints = [0.25, 0.5, 0.75, 1.0];
             const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
             for (const pct of checkPoints) {
@@ -959,6 +966,15 @@
                 await harvestBatch();
                 if (pageNewProducts.length >= targetForThisPage) break;
             }
+        }
+
+        // Patient bottom check if still under target
+        if (pageNewProducts.length < targetForThisPage) {
+            window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight), behavior: 'auto' });
+            window.dispatchEvent(new Event('scroll'));
+            clickShowMoreIfPresent();
+            await new Promise(r => setTimeout(r, 700));
+            await harvestBatch();
         }
 
         // Back to top
