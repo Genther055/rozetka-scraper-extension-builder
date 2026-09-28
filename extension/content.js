@@ -117,11 +117,16 @@
     }
 
     function getEstimatedTotalFromPage() {
-        // Priority 1: Top catalog counter text (e.g. "Знайдено 531 товар")
-        const topElements = document.querySelectorAll('rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection, [data-testid*="found"], [data-testid*="counter"], [class*="found-goods"], [class*="goods-count"], [class*="heading__goods"], .catalog-selection__label, h1, h2, p, span, div');
+        // Priority 1: Search top heading, counter, and settings elements
+        const topElements = document.querySelectorAll(`
+            rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection,
+            [data-testid*="found"], [data-testid*="counter"], [data-testid*="total"],
+            [class*="found-goods"], [class*="goods-count"], [class*="heading__goods"], [class*="total-goods"],
+            .catalog-selection__label, [class*="selection__label"],
+            h1, h2, rz-selected-filters, [class*="filters-tags"]
+        `);
         for (const el of topElements) {
             if (el.closest('aside, .sidebar, rz-filter-stack, .sidebar-block, rz-section-slider, rz-viewed-goods, [class*="viewed"], .recently-viewed')) continue;
-            if (el.children.length > 5) continue;
             const txt = (el.textContent || el.innerText || '').trim();
             if (txt.toLowerCase().includes('знайдено') || txt.toLowerCase().includes('найдено') || txt.toLowerCase().includes('товар')) {
                 const count = parseCountFromText(txt);
@@ -129,9 +134,19 @@
             }
         }
 
-        // Priority 2: Check pagination links
+        // Priority 2: Broad body scan for "Знайдено X товарів" or "X товарів" in header area
         try {
-            const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a, rz-paginator a');
+            const headerSection = document.querySelector('rz-category-page, rz-catalog, main, body');
+            if (headerSection) {
+                const fullText = (headerSection.innerText || '').slice(0, 3000);
+                const count = parseCountFromText(fullText);
+                if (count > 0 && count < 1000000) return count;
+            }
+        } catch (_) {}
+
+        // Priority 3: Check pagination links (max page * 60)
+        try {
+            const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a, rz-paginator a, [class*="paginator"] a');
             let maxPage = 1;
             pageLinks.forEach(link => {
                 const txt = (link.textContent || '').trim();
@@ -153,8 +168,13 @@
             }
         } catch (_) {}
 
-        const currentDomTiles = document.querySelectorAll(TILE_SELECTORS).length;
-        return currentDomTiles > 0 ? currentDomTiles : 60;
+        // Check if forward pagination button exists
+        const hasForward = !!document.querySelector('a.pagination__direction--forward, a[rel="next"], [class*="pagination__direction_type_forward"], [class*="pagination__direction--forward"]');
+        if (hasForward) {
+            return 120;
+        }
+
+        return 60;
     }
 
     // Precise filter: eliminate only non-catalog containers (recently viewed sliders, recommendation carousels, sidebars, footers)
@@ -172,8 +192,8 @@
         if (unwantedContainer) return true;
 
         // 2. Must have a valid product link
-        const hasProductLink = item.matches('a[href*="/p/"], a[href*="/p"], a[href*="p"]') || !!item.querySelector('a[href*="/p/"], a[href*="/p-"], a[href*="/p"], a[href*="p"], a.tile-title, a[rztiletitle], a.tile-image-host, a[data-testid*="title"], a[data-testid*="image"]');
-        if (!hasProductLink) return true;
+        const link = extractLink(item);
+        if (!link) return true;
 
         return false;
     }
@@ -803,39 +823,106 @@
     // Main scraping runner
     async function runTabScraper(initialPage) {
         const meta = getPageMetadata();
-        if (currentEstimatedTotal <= 0) {
-            currentEstimatedTotal = getEstimatedTotalFromPage();
-        }
         currentPage = initialPage || 1;
-        console.log(`TradeScout Tab ${currentTabId}: Started scraping "${meta.title}" (Page ${currentPage})... Target: ${currentEstimatedTotal}`);
+
+        // Dynamically establish or refresh estimated total
+        const detectedEst = getEstimatedTotalFromPage();
+        if (detectedEst > currentEstimatedTotal) {
+            currentEstimatedTotal = detectedEst;
+        }
+        if (currentEstimatedTotal <= 0) {
+            currentEstimatedTotal = 60;
+        }
+
+        console.log(`TradeScout Tab ${currentTabId}: Started scraping "${meta.title}" (Page ${currentPage})... Target Total: ${currentEstimatedTotal}`);
 
         currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
         currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
 
-        // 1 & 2. Progressive multi-pass DOM harvesting: scroll and collect all items on current page
-        let pageNewProducts = [];
-        let previousCollected = -1;
-        let passes = 0;
+        // Check if forward pagination exists on Rozetka
+        const nextPg = currentPage + 1;
+        const targetUrl = getRozetkaNextPageUrl(window.location.href, nextPg);
+        const hasNextPageInDom = !!document.querySelector(`
+            a.pagination__direction--forward, 
+            a[rel="next"], 
+            [class*="pagination__direction_type_forward"], 
+            [class*="pagination__direction--forward"],
+            a.pagination__link[href*="page=${nextPg}"], 
+            a.pagination__link[href*="page=${nextPg};"], 
+            [class*="paginator"] a[href*="page=${nextPg}"],
+            a[href*="page=${nextPg}"],
+            a[href*="page=${nextPg};"]
+        `);
 
-        while (passes < 4) {
-            passes++;
-            await silentBackgroundScroll();
-            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+        // Target for this page: if there's a next page, target is 60 items. Otherwise remaining category items.
+        let targetForThisPage = 60;
+        if (!hasNextPageInDom && currentEstimatedTotal > 0 && currentEstimatedTotal > sentLinks.size) {
+            targetForThisPage = Math.max(1, Math.min(60, currentEstimatedTotal - sentLinks.size));
+        }
 
+        // 1 & 2. Continuous incremental step-by-step downward & upward harvesting
+        const pageNewProducts = [];
+        const pageLinksSeen = new Set();
+
+        const harvestBatch = async () => {
             const batch = await scrapeCurrentDomItems(meta, currentPage);
-            if (batch.length > 0) {
-                pageNewProducts.push(...batch);
+            for (const item of batch) {
+                if (item.link && !pageLinksSeen.has(item.link)) {
+                    pageLinksSeen.add(item.link);
+                    pageNewProducts.push(item);
+                }
             }
+        };
 
-            // Expected items on page (60 for full pages, or remaining items for last page)
-            const remainingToEst = currentEstimatedTotal > 0 ? (currentEstimatedTotal - (sentLinks.size - pageNewProducts.length)) : 60;
-            const targetForThisPage = Math.min(60, Math.max(1, remainingToEst));
+        // Step 1: Harvest top elements immediately
+        await harvestBatch();
 
-            if (pageNewProducts.length >= targetForThisPage || (passes >= 3 && pageNewProducts.length === previousCollected)) {
-                break;
+        // Step 2: Progressive smooth downward scroll with harvesting at each step
+        let currentY = 0;
+        for (let s = 0; s < 18; s++) {
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+            const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
+            currentY = Math.min(maxH, currentY + 550);
+            window.scrollTo({ top: currentY, behavior: 'auto' });
+            window.dispatchEvent(new Event('scroll'));
+            await new Promise(r => setTimeout(r, 140));
+            await harvestBatch();
+
+            if (pageNewProducts.length >= targetForThisPage) break;
+            if (currentY >= maxH) break;
+        }
+
+        // Reach bottom
+        window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight), behavior: 'auto' });
+        window.dispatchEvent(new Event('scroll'));
+        await new Promise(r => setTimeout(r, 250));
+        await harvestBatch();
+
+        // Step 3: Upward scroll back to top if still under target (captures any unmounted top items)
+        if (pageNewProducts.length < targetForThisPage) {
+            currentY = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            for (let s = 0; s < 10; s++) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+                currentY = Math.max(0, currentY - 700);
+                window.scrollTo({ top: currentY, behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll'));
+                await new Promise(r => setTimeout(r, 130));
+                await harvestBatch();
+
+                if (pageNewProducts.length >= targetForThisPage) break;
+                if (currentY <= 0) break;
             }
-            previousCollected = pageNewProducts.length;
-            await new Promise(r => setTimeout(r, 400));
+        }
+
+        // Step 4: Back to top final check
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        await new Promise(r => setTimeout(r, 100));
+        await harvestBatch();
+
+        // Update total estimate if catalog counter rendered during scroll
+        const postEst = getEstimatedTotalFromPage();
+        if (postEst > currentEstimatedTotal) {
+            currentEstimatedTotal = postEst;
         }
 
         if (pageNewProducts.length > 0 && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
@@ -869,15 +956,23 @@
         }
 
         // 3. Check if all items in catalog are collected
-        const nextPg = currentPage + 1;
-        const targetUrl = getRozetkaNextPageUrl(window.location.href, nextPg);
-        const hasNextPageInDom = !!document.querySelector(`a.pagination__direction--forward, a[rel="next"], [class*="pagination__direction_type_forward"], a.pagination__link[href*="page=${nextPg}"], a.pagination__link[href*="page=${nextPg};"], [class*="paginator"] a[href*="page=${nextPg}"]`);
+        const freshNextInDom = !!document.querySelector(`
+            a.pagination__direction--forward, 
+            a[rel="next"], 
+            [class*="pagination__direction_type_forward"], 
+            [class*="pagination__direction--forward"], 
+            a.pagination__link[href*="page=${nextPg}"], 
+            a.pagination__link[href*="page=${nextPg};"], 
+            [class*="paginator"] a[href*="page=${nextPg}"],
+            a[href*="page=${nextPg}"],
+            a[href*="page=${nextPg};"]
+        `);
 
         const maxPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
-        const isFinished = (!hasNextPageInDom && currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || 
-                           (pageNewProducts.length === 0 && currentPage > 1 && !hasNextPageInDom) || 
-                           (!hasNextPageInDom && (!targetUrl || targetUrl === window.location.href)) || 
-                           (currentPage >= maxPages && !hasNextPageInDom);
+        const isFinished = (!freshNextInDom && currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || 
+                           (pageNewProducts.length === 0 && currentPage > 1 && !freshNextInDom) || 
+                           (!freshNextInDom && (!targetUrl || targetUrl === window.location.href)) || 
+                           (currentPage >= maxPages && !freshNextInDom);
 
         if (isFinished) {
             isTabScrapingActive = false;
