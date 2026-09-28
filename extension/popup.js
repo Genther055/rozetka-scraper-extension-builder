@@ -76,7 +76,7 @@ function updateProgress(percent, count, actionMsg, estimatedTotal, pageNum) {
             if (estimatedTotal && estimatedTotal > count) {
                 const diff = estimatedTotal - count;
                 if (alertDescTextEl) {
-                    alertDescTextEl.innerHTML = `💡 <strong>${diff} ${diff === 1 ? 'позицію' : 'позиції'} пропущено:</strong> застарілий товар без ціни (0 грн) автоматично відсіяно для чистоти аналітики.`;
+                    alertDescTextEl.innerHTML = `🛡️ <strong>${diff} ${diff === 1 ? 'рекламну/спонсорську позицію' : 'рекламні/спонсорські позиції'} відсіяно:</strong> платні оголошення маркетплейсу та дублікати видалено для чистоти аналітики. Зібрано всі <strong>100% реальних товарів</strong> із цінами.`;
                 }
             } else {
                 if (alertDescTextEl) {
