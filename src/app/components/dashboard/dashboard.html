@@ -1636,8 +1636,8 @@
                             🏪 {{ activeCumulativePoint.product.seller || 'Rozetka' }} ({{ isRozetkaSeller(activeCumulativePoint.product.seller) ? '1P' : '3P' }})
                           </span>
                           <!-- Rating & Reviews -->
-                          <span class="text-amber-300 font-bold font-mono">★ {{ activeCumulativePoint.product.rating || '5.0' }}</span>
-                          <span class="text-slate-300 font-mono font-semibold">({{ activeCumulativePoint.product.reviews || 0 }} відгуків)</span>
+                          <span class="text-amber-300 font-bold font-mono" *ngIf="activeCumulativePoint.product.rating && activeCumulativePoint.product.rating > 0">★ {{ activeCumulativePoint.product.rating }}</span>
+                          <span class="text-slate-300 font-mono font-semibold">({{ formatReviewsCount(activeCumulativePoint.product.reviews) }})</span>
                           <span class="text-slate-400 font-mono text-[10px] hidden lg:inline">• До цієї ціни: {{ activeCumulativePoint.cumProducts }} SKU ({{ activeCumulativePoint.cumSupplyPct }}%) / {{ activeCumulativePoint.cumReviews | number }} в.</span>
                         </div>
                       </div>
@@ -6606,11 +6606,11 @@
               </td>
 
               <td class="py-3 px-3 whitespace-nowrap text-center font-mono">
-                <div class="flex items-center justify-center gap-1" *ngIf="(p.reviews || 0) > 0">
-                  <span class="text-amber-400 text-xs">★ {{ p.rating || 5.0 }}</span>
-                  <span class="text-xs text-slate-400">({{ p.reviews }} відг.)</span>
+                <div class="flex items-center justify-center gap-1" *ngIf="(p.reviews || 0) > 0 || (p.rating || 0) > 0">
+                  <span class="text-amber-400 text-xs font-bold" *ngIf="(p.rating || 0) > 0">★ {{ p.rating }}</span>
+                  <span class="text-xs text-slate-400" *ngIf="(p.reviews || 0) > 0">({{ p.reviews }} відг.)</span>
                 </div>
-                <span *ngIf="!p.reviews || p.reviews === 0" class="text-xs text-slate-500 font-mono">—</span>
+                <span *ngIf="(!p.reviews || p.reviews === 0) && (!p.rating || p.rating === 0)" class="text-xs text-slate-500 font-mono">—</span>
               </td>
 
               <td class="py-3 px-3 whitespace-nowrap text-center">
@@ -7304,8 +7304,8 @@
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold border bg-indigo-950 text-indigo-300 border-indigo-500/40">
                     🏪 {{ activeCumulativePoint.product.seller || 'Rozetka' }}
                   </span>
-                  <span class="text-amber-300 font-bold font-mono">★ {{ activeCumulativePoint.product.rating || '5.0' }}</span>
-                  <span class="text-slate-300 font-mono font-semibold">({{ activeCumulativePoint.product.reviews || 0 }} відгуків)</span>
+                  <span class="text-amber-300 font-bold font-mono" *ngIf="activeCumulativePoint.product.rating && activeCumulativePoint.product.rating > 0">★ {{ activeCumulativePoint.product.rating }}</span>
+                  <span class="text-slate-300 font-mono font-semibold">({{ formatReviewsCount(activeCumulativePoint.product.reviews) }})</span>
                   <span class="text-slate-400 font-mono text-xs">• До цієї ціни: {{ activeCumulativePoint.cumProducts }} SKU ({{ activeCumulativePoint.cumSupplyPct }}%) / {{ activeCumulativePoint.cumReviews | number }} відгуків</span>
                 </div>
               </div>
@@ -7396,7 +7396,7 @@
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold border bg-indigo-950 text-indigo-300 border-indigo-500/40">
                     🏪 {{ activeOverviewPoint.seller || 'Rozetka' }}
                   </span>
-                  <span class="text-amber-300 font-bold font-mono">★ {{ activeOverviewPoint.rating || '5.0' }}</span>
+                  <span class="text-amber-300 font-bold font-mono" *ngIf="activeOverviewPoint.rating && activeOverviewPoint.rating > 0">★ {{ activeOverviewPoint.rating }}</span>
                   <span *ngIf="(activeOverviewPoint.discount || 0) > 0" class="text-rose-400 font-bold font-mono">Знижка: -{{ activeOverviewPoint.discount }}%</span>
                 </div>
               </div>
