@@ -401,410 +401,31 @@
         return 'Rozetka';
     }
 
-    // --- DECOUPLED COLUMN EXTRACTORS (Zero cross-interference) ---
+    async function scrapeCurrentDomItems(meta, pageIndex) {
+        // Query tiles across entire main content area (filtering non-catalog via isUnwantedTile)
+        let rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
 
-    function extractPrice(item, apiDetails) {
-        try {
-            const priceSelectors = [
-                'rz-tile-price .price',
-                '.price.color-red',
-                '.goods-tile__price-value',
-                '.goods-tile__price.price_color_red',
-                '.goods-tile__price',
-                'rz-price',
-                'app-price',
-                '.price:not(.old-price):not([class*="old"])',
-                '[class*="price-value"]',
-                '[class*="price__value"]',
-                '[class*="price__current"]',
-                '[class*="price_type_current"]',
-                '[data-testid*="price"]'
-            ];
-            for (const sel of priceSelectors) {
-                const el = item.querySelector(sel);
-                if (el && el.innerText) {
-                    if (el.closest('.goods-tile__price--old, .old-price, [class*="old"], del, s, strike')) continue;
-                    const val = parseInt(el.innerText.replace(/\D/g, ''), 10) || 0;
-                    if (val > 0) return val;
-                }
-            }
+        // Filter out unwanted slider/carousel/banner/viewed elements and avoid duplicates
+        const distinctTiles = [];
+        const seenElements = new Set();
 
-            const tileText = (item.innerText || item.textContent || '');
-            const mPrice = tileText.match(/(\d[\d\s\u00A0\u202F.,]*)\s*(?:₴|грн|uah)/i);
-            if (mPrice && mPrice[1]) {
-                const val = parseInt(mPrice[1].replace(/\D/g, ''), 10) || 0;
-                if (val > 0) return val;
-            }
-
-            if (apiDetails) {
-                if (apiDetails.price) {
-                    const val = parseInt(String(apiDetails.price).replace(/\D/g, ''), 10) || 0;
-                    if (val > 0) return val;
-                }
-                if (apiDetails.old_price) {
-                    const val = parseInt(String(apiDetails.old_price).replace(/\D/g, ''), 10) || 0;
-                    if (val > 0) return val;
-                }
-            }
-        } catch (_) {}
-        return 0;
-    }
-
-    function extractOldPriceAndDiscount(item, price, apiDetails) {
-        let discount = 0;
-        let oldPrice = 0;
-        try {
-            const promoBadges = item.querySelectorAll('rz-promo-label, .promo-label, [class*="promo-label"], .goods-tile__badge, [class*="badge"]');
-            for (const p of promoBadges) {
-                const txt = (p.textContent || '').trim();
-                const match = txt.match(/[−–-](\d+)\s*%/);
-                if (match) {
-                    discount = parseInt(match[1], 10);
-                    break;
-                }
-            }
-
-            const oldPriceSelectors = [
-                'rz-tile-price .old-price',
-                '.old-price',
-                '.goods-tile__price--old',
-                '.goods-tile__price.type_old',
-                '.goods-tile__price_type_old',
-                '[class*="price--old"]',
-                '[class*="price_type_old"]',
-                '[class*="old-price"]',
-                '.price--old',
-                'del', 's', 'strike'
-            ];
-            for (const sel of oldPriceSelectors) {
-                const el = item.querySelector(sel);
-                if (el && el.innerText) {
-                    const val = parseInt(el.innerText.replace(/\D/g, ''), 10) || 0;
-                    if (val > price) {
-                        oldPrice = val;
-                        break;
-                    }
-                }
-            }
-
-            if (!oldPrice && apiDetails && apiDetails.old_price) {
-                const apiOld = parseInt(String(apiDetails.old_price).replace(/\D/g, ''), 10) || 0;
-                if (apiOld > price) oldPrice = apiOld;
-            }
-
-            if (oldPrice > price && discount === 0) {
-                discount = Math.round(((oldPrice - price) / oldPrice) * 100);
-            } else if (discount > 0 && (!oldPrice || oldPrice <= price) && price > 0) {
-                oldPrice = Math.round(price / (1 - (discount / 100)));
-            }
-        } catch (_) {}
-        return { oldPrice: oldPrice || price, discount };
-    }
-
-    function extractReviews(item, apiDetails) {
-        try {
-            const tileRawText = (item.innerText || item.textContent || '');
-            if (tileRawText.includes('Залишити відгук') || tileRawText.includes('Оставить отзыв')) {
-                return 0;
-            }
-
-            // Priority 1: rz-tile-rating container
-            const rzRating = item.querySelector('rz-tile-rating');
-            if (rzRating) {
-                const revSpan = rzRating.querySelector('span, a, [data-testid*="review"], [class*="review"]');
-                if (revSpan) {
-                    const countMatch = (revSpan.textContent || '').match(/(\d[\d\s\u00A0]*)/);
-                    if (countMatch && countMatch[1]) {
-                        const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
-                        if (num > 0 && num < 1000000) return num;
-                    }
-                }
-            }
-
-            // Priority 2: dedicated review elements
-            const reviewSelectors = [
-                '[data-testid="reviews-link"]',
-                '[data-testid*="review"]',
-                '[data-testid*="comment"]',
-                'a.goods-tile__reviews-link',
-                '.goods-tile__reviews-link',
-                '.goods-tile__reviews-count',
-                'a[href*="#comments"]',
-                'a[href*="comments"]',
-                'a[href*="reviews"]',
-                '[class*="reviews-link"]',
-                '[class*="reviews-count"]'
-            ];
-            for (const sel of reviewSelectors) {
-                const el = item.querySelector(sel);
-                if (el) {
-                    if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price')) continue;
-                    const t = (el.innerText || el.textContent || '').trim();
-                    const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
-                    if (countMatch && countMatch[1]) {
-                        const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
-                        if (num > 0 && num < 1000000) return num;
-                    }
-                }
-            }
-
-            // Priority 3: Regex match
-            const revTextMatch = tileRawText.match(/(\d[\d\s\u00A0]*)\s*(?:відгук|відгуки|відгуків|отзыв|отзыва|отзывов)/i);
-            if (revTextMatch && revTextMatch[1]) {
-                const num = parseInt(revTextMatch[1].replace(/\D/g, ''), 10);
-                if (num > 0 && num < 1000000) return num;
-            }
-
-            // Priority 4: API
-            if (apiDetails && apiDetails.comments_amount) {
-                const num = parseInt(String(apiDetails.comments_amount), 10) || 0;
-                if (num > 0) return num;
-            }
-        } catch (_) {}
-        return 0;
-    }
-
-    function extractRating(item, reviews, apiDetails) {
-        if (reviews === 0) return 0;
-        try {
-            // Priority 1: style="width: calc(X% - 2px)" on [data-testid="stars-rating"]
-            const fillerElements = item.querySelectorAll('[data-testid="stars-rating"], [class*="stars-rating__filler"], [class*="stars_rating__filler"], [class*="stars-rating-progress"] [style*="%"], rz-stars-rating-progress [style*="%"], [data-testid="stars-rating"][style*="%"]');
-            for (const el of fillerElements) {
-                const style = el.getAttribute('style') || '';
-                const match = style.match(/([\d.]+)%/);
-                if (match && match[1]) {
-                    const pct = parseFloat(match[1]);
-                    if (pct > 0 && pct <= 100) {
-                        return parseFloat((pct / 20).toFixed(1));
-                    }
-                }
-            }
-
-            // Priority 2: aria-label with "X / 5" or "X з 5"
-            const starAriaElements = item.querySelectorAll('[data-testid="stars-rating"], rz-tile-rating, rz-stars-rating-progress, .goods-tile__stars, [class*="stars"], [class*="rating"]');
-            for (const el of starAriaElements) {
-                const aria = el.getAttribute('aria-label') || el.getAttribute('title') || '';
-                const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
-                if (ariaMatch && ariaMatch[1]) {
-                    const val = parseFloat(ariaMatch[1].replace(',', '.'));
-                    if (val > 0 && val <= 5) return val;
-                }
-            }
-
-            // Priority 3: API
-            if (apiDetails) {
-                if (apiDetails.stars_rating) {
-                    const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
-                    if (apiVal > 0 && apiVal <= 5) return apiVal;
-                }
-                if (apiDetails.stars) {
-                    const apiVal = parseFloat(String(apiDetails.stars).replace(',', '.'));
-                    if (apiVal > 5 && apiVal <= 100) return parseFloat((apiVal / 20).toFixed(1));
-                    else if (apiVal > 0 && apiVal <= 5) return apiVal;
-                }
-                if (apiDetails.rating) {
-                    const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
-                    if (apiVal > 0 && apiVal <= 5) return apiVal;
-                }
-            }
-        } catch (_) {}
-        return 0;
-    }
-
-    function extractInStock(item, apiDetails) {
-        try {
-            const itemText = item.innerText || '';
-            let inStock = !(item.classList.contains('tile-disabled') || itemText.includes('Немає в наявності') || itemText.includes('Нет в наличии'));
-            if (apiDetails && apiDetails.sell_status) {
-                inStock = (apiDetails.sell_status !== 'unavailable');
-            }
-            return inStock;
-        } catch (_) {
-            return true;
-        }
-    }
-
-    function extractSpecs(item, name) {
-        try {
-            const detailedSpecsMap = {};
-            const paramNodes = item.querySelectorAll('.goods-tile__params li, .goods-tile__param, [class*="param-item"], [class*="tag"], [class*="characteristic"]');
-            paramNodes.forEach(pn => {
-                const pText = (pn.innerText || '').trim();
-                if (pText && pText.includes(':')) {
-                    const [k, v] = pText.split(':').map(x => x.trim());
-                    if (k && v) detailedSpecsMap[k] = v;
-                }
-            });
-
-            const capacityMatch = name.match(/(\d+[\d\s]*)\s*(?:mah|мАг|мАч|мah)/i);
-            if (capacityMatch && !detailedSpecsMap['Ємність']) {
-                const cNum = parseInt(capacityMatch[1].replace(/\s+/g, ''), 10);
-                if (!isNaN(cNum)) detailedSpecsMap['Ємність'] = `${cNum.toLocaleString('uk-UA')} mAh`;
-            }
-
-            const powerMatch = name.match(/\b(\d+(?:\.\d+)?)\s*(?:W|Вт)\b/i);
-            if (powerMatch && !detailedSpecsMap['Потужність']) {
-                detailedSpecsMap['Потужність'] = `${powerMatch[1]}W`;
-            }
-
-            const knownBrands = ['Xiaomi', 'Redmi', 'Baseus', 'Apple', 'Samsung', 'Anker', 'Hoco', 'Borofone', 'Romoss', 'Remax', 'Joyroom', 'ColorWay', '2E', 'Gelius', 'Ugreen', 'ZMI', 'Belkin', 'Choetech', 'Promate', 'Vinga', 'Defender', 'Canyon', 'BLUETTI', 'EcoFlow', 'Jackery'];
-            for (const b of knownBrands) {
-                if (new RegExp(`\\b${b}\\b`, 'i').test(name)) {
-                    detailedSpecsMap['Бренд'] = b;
-                    break;
-                }
-            }
-
-            const specs = Object.entries(detailedSpecsMap).map(([k, v]) => `${k}: ${v}`).join('; ') || (capacityMatch ? `${capacityMatch[1]} mAh` : 'Стандартні');
-            return { specs, detailedSpecsMap };
-        } catch (_) {
-            return { specs: 'Стандартні', detailedSpecsMap: {} };
-        }
-    }
-
-    function extractSellerInfo(item, apiDetails) {
-        let seller = 'Rozetka';
-        let sellerRating = 0;
-        let sellerReviews = 0;
-        try {
-            if (apiDetails && apiDetails.seller) {
-                seller = (apiDetails.seller.title || apiDetails.seller.name || '').trim() || 'Rozetka';
-                if (apiDetails.seller.rating) sellerRating = parseFloat(String(apiDetails.seller.rating)) || 0;
-                if (apiDetails.seller.feedbacks) sellerReviews = parseInt(String(apiDetails.seller.feedbacks), 10) || 0;
-            } else {
-                seller = extractSeller(item) || 'Rozetka';
-            }
-        } catch (_) {}
-        return { seller, sellerRating, sellerReviews };
-    }
-
-    // --- PHASE 1: PURE TILE HARVESTER (Zero Column Cross-Interference) ---
-
-    function scanDomForNewTiles(seenMap) {
-        const rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
         for (const item of rawTiles) {
             if (isUnwantedTile(item)) continue;
-
+            
             const link = extractLink(item);
-            if (!link || sentLinks.has(link) || seenMap.has(link)) continue;
+            if (!link) continue;
 
             const name = extractTitle(item, link);
             if (!name || name.length < 2) continue;
 
-            seenMap.set(link, { item, link, name });
-        }
-    }
-
-    async function harvestPageTiles(targetCount) {
-        const pageTilesMap = new Map();
-
-        // 1. Setup reactive MutationObserver on catalog grid
-        const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, .catalog-grid, rz-catalog, [class*="catalog-grid"], main') || document.body;
-        const observer = new MutationObserver(() => {
-            scanDomForNewTiles(pageTilesMap);
-        });
-
-        try {
-            observer.observe(catalogContainer, { childList: true, subtree: true });
-        } catch (_) {}
-
-        // Pass 1: Harvest top elements immediately
-        scanDomForNewTiles(pageTilesMap);
-
-        // Pass 2: Progressive smooth downward scroll through full page height (45 steps * 450px)
-        let currentY = 0;
-        for (let s = 0; s < 45; s++) {
-            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-            if (pageTilesMap.size >= targetCount) break;
-
-            currentY += 450;
-            window.scrollTo({ top: currentY, behavior: 'auto' });
-            window.dispatchEvent(new Event('scroll'));
-            try {
-                window.dispatchEvent(new WheelEvent('wheel', { deltaY: 450 }));
-            } catch (_) {}
-
-            await new Promise(r => setTimeout(r, 160));
-            scanDomForNewTiles(pageTilesMap);
+            if (sentLinks.has(link) || seenElements.has(link)) continue;
+            seenElements.add(link);
+            distinctTiles.push({ item, link, name });
         }
 
-        // Pass 3: Final scroll to absolute bottom to trigger bottom chunk & pagination
-        const docBottom = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 12000);
-        window.scrollTo({ top: docBottom, behavior: 'auto' });
-        window.dispatchEvent(new Event('scroll'));
-        window.dispatchEvent(new Event('resize'));
-        await new Promise(r => setTimeout(r, 350));
-        scanDomForNewTiles(pageTilesMap);
+        if (distinctTiles.length === 0) return [];
 
-        // Pass 4: Reactive Chunk-3 & 'Show More' Resolver (patiently waits at bottom if under target)
-        if (pageTilesMap.size < targetCount) {
-            for (let retry = 0; retry < 15; retry++) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                if (pageTilesMap.size >= targetCount) break;
-
-                // 1. Click 'Показати ще' button if Rozetka presents it
-                const showMoreBtn = Array.from(document.querySelectorAll('button, a, .show-more, [class*="show-more"]')).find(b => {
-                    const t = (b.innerText || b.textContent || '').trim().toLowerCase();
-                    return t.includes('показати ще') || t.includes('показать еще') || t.includes('показати більше');
-                });
-                if (showMoreBtn) {
-                    try { showMoreBtn.click(); } catch (_) {}
-                }
-
-                // 2. Scroll the last tile or paginator into view
-                const tiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
-                if (tiles.length > 0) {
-                    try { tiles[tiles.length - 1].scrollIntoView({ block: 'center', behavior: 'auto' }); } catch (_) {}
-                }
-                const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"]');
-                if (paginator) {
-                    try { paginator.scrollIntoView({ block: 'nearest', behavior: 'auto' }); } catch (_) {}
-                }
-
-                window.scrollBy(0, (retry % 2 === 0 ? 180 : -180));
-                window.dispatchEvent(new Event('scroll'));
-                window.dispatchEvent(new Event('resize'));
-                document.dispatchEvent(new Event('scroll'));
-
-                await new Promise(r => setTimeout(r, 400));
-                scanDomForNewTiles(pageTilesMap);
-            }
-        }
-
-        // Pass 5: Upward scroll back to top if still under target (captures any unmounted middle items)
-        if (pageTilesMap.size < targetCount) {
-            let upY = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-            for (let s = 0; s < 25; s++) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
-                if (pageTilesMap.size >= targetCount) break;
-
-                upY = Math.max(0, upY - 450);
-                window.scrollTo({ top: upY, behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 150));
-                scanDomForNewTiles(pageTilesMap);
-                if (upY <= 0) break;
-            }
-        }
-
-        // Back to top
-        window.scrollTo({ top: 0, behavior: 'auto' });
-        await new Promise(r => setTimeout(r, 100));
-        scanDomForNewTiles(pageTilesMap);
-
-        try {
-            observer.disconnect();
-        } catch (_) {}
-
-        return Array.from(pageTilesMap.values());
-    }
-
-    // --- PHASE 2: DECOUPLED COLUMN ENRICHER (Enriches Harvested Tiles) ---
-
-    async function enrichTilesToProducts(distinctTiles, meta) {
-        if (!distinctTiles || distinctTiles.length === 0) return [];
-
-        // Batch fetch official Rozetka product details
+        // Batch fetch official Rozetka product details (seller title, exact pricing, stock, reviews)
         const apiProductMap = new Map();
         try {
             const productIds = [];
@@ -843,14 +464,295 @@
                 const prodId = idMatch ? String(idMatch[1]) : '';
                 const apiDetails = prodId ? apiProductMap.get(prodId) : null;
 
-                const price = extractPrice(item, apiDetails);
-                const { oldPrice, discount } = extractOldPriceAndDiscount(item, price, apiDetails);
-                const reviews = extractReviews(item, apiDetails);
-                const rating = extractRating(item, reviews, apiDetails);
-                const inStock = extractInStock(item, apiDetails);
-                const { specs, detailedSpecsMap } = extractSpecs(item, name);
-                const { seller, sellerRating, sellerReviews } = extractSellerInfo(item, apiDetails);
-                const questions = (apiDetails && apiDetails.questions_amount) ? parseInt(String(apiDetails.questions_amount), 10) || 0 : 0;
+                // 1. Current Price (Triple-layer Bulletproof Resolution)
+                let price = 0;
+
+                // Layer 1: Dedicated DOM Selectors
+                const priceSelectors = [
+                    'rz-tile-price .price',
+                    '.price.color-red',
+                    '.goods-tile__price-value',
+                    '.goods-tile__price.price_color_red',
+                    '.goods-tile__price',
+                    'rz-price',
+                    'app-price',
+                    '.price:not(.old-price):not([class*="old"])',
+                    '[class*="price-value"]',
+                    '[class*="price__value"]',
+                    '[class*="price__current"]',
+                    '[class*="price_type_current"]',
+                    '[data-testid*="price"]'
+                ];
+                for (const sel of priceSelectors) {
+                    const el = item.querySelector(sel);
+                    if (el && el.innerText) {
+                        if (el.closest('.goods-tile__price--old, .old-price, [class*="old"], del, s, strike')) continue;
+                        const val = parseInt(el.innerText.replace(/\D/g, ''), 10) || 0;
+                        if (val > 0) {
+                            price = val;
+                            break;
+                        }
+                    }
+                }
+
+                // Layer 2: Text RegEx with currency symbol ₴ or грн
+                if (price <= 0) {
+                    const tileText = (item.innerText || item.textContent || '');
+                    const mPrice = tileText.match(/(\d[\d\s\u00A0\u202F.,]*)\s*(?:₴|грн|uah)/i);
+                    if (mPrice && mPrice[1]) {
+                        const val = parseInt(mPrice[1].replace(/\D/g, ''), 10) || 0;
+                        if (val > 0) price = val;
+                    }
+                }
+
+                // Layer 3: Official Rozetka API Backend Details
+                if (price <= 0 && apiDetails) {
+                    if (apiDetails.price) {
+                        price = parseInt(String(apiDetails.price).replace(/\D/g, ''), 10) || 0;
+                    }
+                    if (price <= 0 && apiDetails.old_price) {
+                        price = parseInt(String(apiDetails.old_price).replace(/\D/g, ''), 10) || 0;
+                    }
+                }
+
+                // 2. Discount & Old Price
+                let discount = 0;
+                const promoBadges = item.querySelectorAll('rz-promo-label, .promo-label, [class*="promo-label"], .goods-tile__badge, [class*="badge"]');
+                for (const p of promoBadges) {
+                    const txt = (p.textContent || '').trim();
+                    const match = txt.match(/[−–-](\d+)\s*%/);
+                    if (match) {
+                        discount = parseInt(match[1], 10);
+                        break;
+                    }
+                }
+
+                const oldPriceSelectors = [
+                    'rz-tile-price .old-price',
+                    '.old-price',
+                    '.goods-tile__price--old',
+                    '.goods-tile__price.type_old',
+                    '.goods-tile__price_type_old',
+                    '[class*="price--old"]',
+                    '[class*="price_type_old"]',
+                    '[class*="old-price"]',
+                    '.price--old',
+                    'del', 's', 'strike'
+                ];
+                let oldPrice = 0;
+                for (const sel of oldPriceSelectors) {
+                    const el = item.querySelector(sel);
+                    if (el && el.innerText) {
+                        const val = parseInt(el.innerText.replace(/\D/g, ''), 10) || 0;
+                        if (val > price) {
+                            oldPrice = val;
+                            break;
+                        }
+                    }
+                }
+
+                if (!oldPrice && apiDetails && apiDetails.old_price) {
+                    const apiOld = parseInt(String(apiDetails.old_price).replace(/\D/g, ''), 10) || 0;
+                    if (apiOld > price) oldPrice = apiOld;
+                }
+
+                if (oldPrice > price && discount === 0) {
+                    discount = Math.round(((oldPrice - price) / oldPrice) * 100);
+                } else if (discount > 0 && (!oldPrice || oldPrice <= price) && price > 0) {
+                    oldPrice = Math.round(price / (1 - (discount / 100)));
+                }
+
+                // 3. Reviews Count
+                let reviews = 0;
+                const tileRawText = (item.innerText || item.textContent || '');
+                const hasZeroReviewsBadge = tileRawText.includes('Залишити відгук') || tileRawText.includes('Оставить отзыв');
+
+                if (!hasZeroReviewsBadge) {
+                    // Try rz-tile-rating specifically first
+                    const rzRatingEl = item.querySelector('rz-tile-rating');
+                    if (rzRatingEl) {
+                        const rzRevSpan = rzRatingEl.querySelector('span, a, [data-testid*="review"], [class*="review"]');
+                        if (rzRevSpan) {
+                            const countMatch = (rzRevSpan.textContent || '').match(/(\d[\d\s\u00A0]*)/);
+                            if (countMatch && countMatch[1]) {
+                                const revVal = parseInt(countMatch[1].replace(/\D/g, ''), 10);
+                                if (revVal > 0 && revVal < 500000) {
+                                    reviews = revVal;
+                                }
+                            }
+                        }
+                    }
+
+                    // Try direct selectors if not found
+                    if (reviews === 0) {
+                        const reviewElements = item.querySelectorAll('a[href*="#comments"], a[href*="comments"], [class*="rating"], [class*="reviews"], [class*="comments"]');
+                        for (const el of reviewElements) {
+                            if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price')) continue;
+                            const t = (el.innerText || el.textContent || '').trim();
+                            const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
+                            if (countMatch && countMatch[1]) {
+                                const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
+                                if (num > 0 && num < 500000) {
+                                    reviews = num;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback: parse lines in tile text (standalone number before price)
+                    if (reviews === 0) {
+                        const lines = tileRawText.split('\n').map(l => l.trim()).filter(Boolean);
+                        for (let i = 0; i < lines.length; i++) {
+                            const line = lines[i];
+                            if (/^\d+$/.test(line)) {
+                                const num = parseInt(line, 10);
+                                if (num > 0 && num < 500000 && !line.includes('₴') && !line.includes('%')) {
+                                    if (i + 1 < lines.length && lines[i + 1].includes('₴')) {
+                                        reviews = num;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback to official API
+                    if (reviews === 0 && apiDetails && apiDetails.comments_amount) {
+                        reviews = parseInt(String(apiDetails.comments_amount), 10) || 0;
+                    }
+                }
+
+                // 4. Rating (1.0 to 5.0) - Exact Mathematical & API Resolution
+                let rating = 0;
+
+                if (reviews > 0) {
+                    // Priority 1: Target data-testid="stars-rating" style="width: calc(X% - 2px)" or any filler width directly
+                    const starElements = item.querySelectorAll('[data-testid="stars-rating"], [class*="stars-rating__filler"], [class*="stars_rating__filler"], [class*="stars-rating-progress"] [style*="%"], rz-stars-rating-progress [style*="%"], rz-tile-rating [style*="%"]');
+                    for (const el of starElements) {
+                        const style = el.getAttribute('style') || '';
+                        const match = style.match(/([\d.]+)%/);
+                        if (match && match[1]) {
+                            const pct = parseFloat(match[1]);
+                            if (pct > 0 && pct <= 100) {
+                                rating = parseFloat((pct / 20).toFixed(1));
+                                break;
+                            }
+                        }
+                        const aria = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+                        const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
+                        if (ariaMatch && ariaMatch[1]) {
+                            const val = parseFloat(ariaMatch[1].replace(',', '.'));
+                            if (val > 0 && val <= 5) {
+                                rating = val;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Priority 2: Generic rating container (aria-label or inner element style)
+                    if (rating === 0) {
+                        const starsEl = item.querySelector('rz-stars-rating-progress, rz-tile-rating, rz-rating, app-rating, .stars_rating, .goods-tile__stars, [class*="stars"], [class*="rating"]');
+                        if (starsEl) {
+                            const aria = starsEl.getAttribute('aria-label') || starsEl.querySelector('[aria-label]')?.getAttribute('aria-label') || '';
+                            const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
+                            if (ariaMatch) {
+                                const rVal = parseFloat(ariaMatch[1].replace(',', '.'));
+                                if (rVal > 0 && rVal <= 5) rating = rVal;
+                            }
+                            if (rating === 0) {
+                                const fill = starsEl.querySelector('[style*="%"], [class*="fill"]');
+                                if (fill) {
+                                    const style = fill.getAttribute('style') || '';
+                                    const match = style.match(/([\d.]+)%/);
+                                    if (match && match[1]) {
+                                        const pct = parseFloat(match[1]);
+                                        if (pct > 0 && pct <= 100) {
+                                            rating = parseFloat((pct / 20).toFixed(1));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Priority 3: Official Rozetka API Backend Details
+                    if (rating === 0 && apiDetails) {
+                        if (apiDetails.stars_rating) {
+                            const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
+                            if (apiVal > 0 && apiVal <= 5) rating = apiVal;
+                        }
+                        if (rating === 0 && apiDetails.stars) {
+                            const apiVal = parseFloat(String(apiDetails.stars).replace(',', '.'));
+                            if (apiVal > 5 && apiVal <= 100) rating = parseFloat((apiVal / 20).toFixed(1));
+                            else if (apiVal > 0 && apiVal <= 5) rating = apiVal;
+                        }
+                        if (rating === 0 && apiDetails.rating) {
+                            const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
+                            if (apiVal > 0 && apiVal <= 5) rating = apiVal;
+                        }
+                    }
+                }
+
+                // If no reviews exist, rating is strictly 0 (displayed as '—')
+                if (reviews === 0) {
+                    rating = 0;
+                }
+
+                let questions = 0;
+                if (apiDetails && apiDetails.questions_amount) {
+                    questions = parseInt(String(apiDetails.questions_amount), 10) || 0;
+                }
+
+                const itemText = item.innerText || '';
+                let inStock = !(item.classList.contains('tile-disabled') || itemText.includes('Немає в наявності') || itemText.includes('Нет в наличии'));
+                if (apiDetails && apiDetails.sell_status) {
+                    inStock = (apiDetails.sell_status !== 'unavailable');
+                }
+
+                // Extract all available DOM params and chips
+                const detailedSpecsMap = {};
+                const paramNodes = item.querySelectorAll('.goods-tile__params li, .goods-tile__param, [class*="param-item"], [class*="tag"], [class*="characteristic"]');
+                paramNodes.forEach(pn => {
+                    const pText = (pn.innerText || '').trim();
+                    if (pText && pText.includes(':')) {
+                        const [k, v] = pText.split(':').map(x => x.trim());
+                        if (k && v) detailedSpecsMap[k] = v;
+                    }
+                });
+
+                const capacityMatch = name.match(/(\d+[\d\s]*)\s*(?:mah|мАг|мАч|мah)/i);
+                if (capacityMatch && !detailedSpecsMap['Ємність']) {
+                    const cNum = parseInt(capacityMatch[1].replace(/\s+/g, ''), 10);
+                    if (!isNaN(cNum)) detailedSpecsMap['Ємність'] = `${cNum.toLocaleString('uk-UA')} mAh`;
+                }
+
+                const powerMatch = name.match(/\b(\d+(?:\.\d+)?)\s*(?:W|Вт)\b/i);
+                if (powerMatch && !detailedSpecsMap['Потужність']) {
+                    detailedSpecsMap['Потужність'] = `${powerMatch[1]}W`;
+                }
+
+                // Brand detection
+                const knownBrands = ['Xiaomi', 'Redmi', 'Baseus', 'Apple', 'Samsung', 'Anker', 'Hoco', 'Borofone', 'Romoss', 'Remax', 'Joyroom', 'ColorWay', '2E', 'Gelius', 'Ugreen', 'ZMI', 'Belkin', 'Choetech', 'Promate', 'Vinga', 'Defender', 'Canyon', 'BLUETTI', 'EcoFlow', 'Jackery'];
+                for (const b of knownBrands) {
+                    if (new RegExp(`\\b${b}\\b`, 'i').test(name)) {
+                        detailedSpecsMap['Бренд'] = b;
+                        break;
+                    }
+                }
+
+                const specs = Object.entries(detailedSpecsMap).map(([k, v]) => `${k}: ${v}`).join('; ') || (capacityMatch ? `${capacityMatch[1]} mAh` : 'Стандартні');
+
+                let seller = 'Rozetka';
+                let sellerRating = 0;
+                let sellerReviews = 0;
+                if (apiDetails && apiDetails.seller) {
+                    seller = (apiDetails.seller.title || apiDetails.seller.name || '').trim() || 'Rozetka';
+                    if (apiDetails.seller.rating) sellerRating = parseFloat(String(apiDetails.seller.rating)) || 0;
+                    if (apiDetails.seller.feedbacks) sellerReviews = parseInt(String(apiDetails.seller.feedbacks), 10) || 0;
+                } else {
+                    seller = extractSeller(item) || 'Rozetka';
+                }
 
                 newItems.push({
                     name,
@@ -883,7 +785,7 @@
         return newItems;
     }
 
-    // Main scraping runner (Two-Phase Pipeline Orchestrator)
+    // Main scraping runner
     async function runTabScraper(initialPage) {
         const meta = getPageMetadata();
         currentPage = initialPage || 1;
@@ -926,11 +828,82 @@
             }
         }
 
-        // --- PHASE 1: Pure Harvest of Tiles ---
-        const harvestedTiles = await harvestPageTiles(targetForThisPage);
+        // Continuous incremental step-by-step downward & upward harvesting
+        const pageNewProducts = [];
+        const pageLinksSeen = new Set();
 
-        // --- PHASE 2: Enrich Harvested Tiles into Full Products ---
-        const pageNewProducts = await enrichTilesToProducts(harvestedTiles, meta);
+        const harvestBatch = async () => {
+            const batch = await scrapeCurrentDomItems(meta, currentPage);
+            for (const item of batch) {
+                if (item.link && !pageLinksSeen.has(item.link)) {
+                    pageLinksSeen.add(item.link);
+                    pageNewProducts.push(item);
+                }
+            }
+        };
+
+        // Pass 1: Harvest top elements immediately
+        await harvestBatch();
+
+        // Pass 2: Progressive smooth downward scroll through full page height (45 steps * 450px)
+        let currentY = 0;
+        for (let s = 0; s < 45; s++) {
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+
+            currentY += 450;
+            window.scrollTo({ top: currentY, behavior: 'auto' });
+            window.dispatchEvent(new Event('scroll'));
+            
+            // Allow Rozetka DOM render & change detection
+            await new Promise(r => setTimeout(r, 200));
+            await harvestBatch();
+
+            if (pageNewProducts.length >= targetForThisPage) {
+                break;
+            }
+        }
+
+        // Final scroll to absolute bottom to trigger any bottom cards and pagination
+        const docBottom = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 12000);
+        window.scrollTo({ top: docBottom, behavior: 'auto' });
+        window.dispatchEvent(new Event('scroll'));
+        await new Promise(r => setTimeout(r, 400));
+        await harvestBatch();
+
+        // Pass 3: Upward scroll back to top if still under target (captures any unmounted top/middle items)
+        if (pageNewProducts.length < targetForThisPage) {
+            let upY = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            for (let s = 0; s < 25; s++) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+                upY = Math.max(0, upY - 450);
+                window.scrollTo({ top: upY, behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll'));
+                await new Promise(r => setTimeout(r, 180));
+                await harvestBatch();
+
+                if (pageNewProducts.length >= targetForThisPage) break;
+                if (upY <= 0) break;
+            }
+        }
+
+        // Pass 4: Secondary checkpoint sweep if still under target
+        if (pageNewProducts.length < targetForThisPage) {
+            const checkPoints = [0.25, 0.5, 0.75, 1.0];
+            const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            for (const pct of checkPoints) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+                window.scrollTo({ top: Math.round(maxH * pct), behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll'));
+                await new Promise(r => setTimeout(r, 300));
+                await harvestBatch();
+                if (pageNewProducts.length >= targetForThisPage) break;
+            }
+        }
+
+        // Back to top
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        await new Promise(r => setTimeout(r, 100));
+        await harvestBatch();
 
         // Update total estimate if catalog counter rendered during scroll
         const postEst = getEstimatedTotalFromPage();
