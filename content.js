@@ -568,51 +568,54 @@
                 const hasZeroReviewsBadge = tileRawText.includes('Залишити відгук') || tileRawText.includes('Оставить отзыв');
 
                 if (!hasZeroReviewsBadge) {
-                    // Priority 1: Check elements with data-testid or review/comment classes or links
-                    const reviewSelectors = [
-                        '[data-testid="reviews-link"]',
-                        '[data-testid*="review"]',
-                        '[data-testid*="comment"]',
-                        'a.goods-tile__reviews-link',
-                        '.goods-tile__reviews-link',
-                        '.goods-tile__reviews-count',
-                        'rz-tile-rating a',
-                        'rz-tile-rating span',
-                        'rz-rating-reviews',
-                        'a[href*="comments"]',
-                        'a[href*="#comments"]',
-                        'a[href*="reviews"]',
-                        '[class*="reviews-link"]',
-                        '[class*="reviews-count"]',
-                        '[class*="comments-count"]'
-                    ];
-
-                    for (const sel of reviewSelectors) {
-                        const el = item.querySelector(sel);
-                        if (el) {
-                            if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price')) continue;
-                            const t = (el.innerText || el.textContent || '').trim();
-                            const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
-                            if (countMatch && countMatch[1]) {
-                                const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
-                                if (num > 0 && num < 100000) {
-                                    reviews = num;
-                                    break;
-                                }
+                    // Priority 1: Direct Rozetka tile rating reviews container
+                    const rzRating = item.querySelector('rz-tile-rating');
+                    if (rzRating) {
+                        const revSpan = rzRating.querySelector('span, a, [data-testid*="review"], [class*="review"]');
+                        if (revSpan) {
+                            const num = parseInt((revSpan.textContent || '').replace(/\D/g, ''), 10);
+                            if (num > 0 && num < 100000) {
+                                reviews = num;
+                            }
+                        }
+                        if (reviews === 0) {
+                            const raw = (rzRating.innerText || rzRating.textContent || '').trim();
+                            const num = parseInt(raw.replace(/\D/g, ''), 10);
+                            if (num > 0 && num < 100000) {
+                                reviews = num;
                             }
                         }
                     }
 
-                    // Priority 2: Direct inside rz-tile-rating container text
+                    // Priority 2: Check standard links and testids
                     if (reviews === 0) {
-                        const rzRatingEl = item.querySelector('rz-tile-rating');
-                        if (rzRatingEl) {
-                            const rzText = (rzRatingEl.innerText || rzRatingEl.textContent || '').trim();
-                            const rzMatch = rzText.match(/(\d[\d\s\u00A0]*)/);
-                            if (rzMatch && rzMatch[1]) {
-                                const num = parseInt(rzMatch[1].replace(/\D/g, ''), 10);
-                                if (num > 0 && num < 100000) {
-                                    reviews = num;
+                        const reviewSelectors = [
+                            '[data-testid="reviews-link"]',
+                            '[data-testid*="review"]',
+                            '[data-testid*="comment"]',
+                            'a.goods-tile__reviews-link',
+                            '.goods-tile__reviews-link',
+                            '.goods-tile__reviews-count',
+                            'a[href*="comments"]',
+                            'a[href*="#comments"]',
+                            'a[href*="reviews"]',
+                            '[class*="reviews-link"]',
+                            '[class*="reviews-count"]',
+                            '[class*="comments-count"]'
+                        ];
+
+                        for (const sel of reviewSelectors) {
+                            const el = item.querySelector(sel);
+                            if (el) {
+                                if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price')) continue;
+                                const t = (el.innerText || el.textContent || '').trim();
+                                const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
+                                if (countMatch && countMatch[1]) {
+                                    const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
+                                    if (num > 0 && num < 100000) {
+                                        reviews = num;
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -629,24 +632,7 @@
                         }
                     }
 
-                    // Priority 4: Fallback line parsing (standalone number preceding price)
-                    if (reviews === 0) {
-                        const lines = tileRawText.split('\n').map(l => l.trim()).filter(Boolean);
-                        for (let i = 0; i < lines.length; i++) {
-                            const line = lines[i];
-                            if (/^\d+$/.test(line)) {
-                                const num = parseInt(line, 10);
-                                if (num > 0 && num < 50000 && !line.includes('₴') && !line.includes('%')) {
-                                    if (i + 1 < lines.length && lines[i + 1].includes('₴')) {
-                                        reviews = num;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Priority 5: Fallback to official API
+                    // Priority 4: Fallback to official API
                     if (reviews === 0 && apiDetails && apiDetails.comments_amount) {
                         reviews = parseInt(String(apiDetails.comments_amount), 10) || 0;
                     }
@@ -655,99 +641,55 @@
                 // 4. Rating (1.0 to 5.0) - Exact Mathematical & API Resolution
                 let rating = 0;
 
-                // Products with 0 reviews on Rozetka have no rating (always 0)
-                if (reviews > 0) {
-                    // Priority 1: Target filler width directly (e.g. style="width: calc(60% - 2px)" -> 3.0)
-                    const fillerElements = item.querySelectorAll('[class*="stars-rating__filler"], [class*="stars_rating__filler"], [class*="stars-rating-progress"], rz-stars-rating-progress, [data-testid="stars-rating"] [style*="%"]');
-                    for (const el of fillerElements) {
-                        const style = el.getAttribute('style') || '';
-                        const match = style.match(/([\d.]+)%/);
-                        if (match && match[1]) {
-                            const pct = parseFloat(match[1]);
-                            if (pct > 0 && pct <= 100) {
-                                rating = parseFloat((pct / 20).toFixed(1));
+                // Priority 1: Target filler width on data-testid="stars-rating" directly (e.g. style="width: calc(92% - 2px)" -> 4.6, 60% -> 3.0)
+                const fillerElements = item.querySelectorAll('[data-testid="stars-rating"], [class*="stars-rating__filler"], [class*="stars_rating__filler"], [class*="stars-rating-progress"] [style*="%"], rz-stars-rating-progress [style*="%"], [data-testid="stars-rating"][style*="%"]');
+                for (const el of fillerElements) {
+                    const style = el.getAttribute('style') || '';
+                    const match = style.match(/([\d.]+)%/);
+                    if (match && match[1]) {
+                        const pct = parseFloat(match[1]);
+                        if (pct > 0 && pct <= 100) {
+                            rating = parseFloat((pct / 20).toFixed(1));
+                            break;
+                        }
+                    }
+                }
+
+                // Priority 2: aria-label with exact "/ 5" or "з 5" pattern (e.g. aria-label="3.0 з 5" or "3 з 5")
+                if (rating === 0) {
+                    const starAriaElements = item.querySelectorAll('[data-testid="stars-rating"], rz-tile-rating, rz-stars-rating-progress, .goods-tile__stars, [class*="stars"], [class*="rating"]');
+                    for (const el of starAriaElements) {
+                        const aria = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+                        const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
+                        if (ariaMatch && ariaMatch[1]) {
+                            const val = parseFloat(ariaMatch[1].replace(',', '.'));
+                            if (val > 0 && val <= 5) {
+                                rating = val;
                                 break;
                             }
                         }
                     }
+                }
 
-                    // Priority 2: aria-label with exact "/ 5" or "з 5" pattern (e.g. aria-label="3.0 з 5" or "3 з 5")
-                    if (rating === 0) {
-                        const starAriaElements = item.querySelectorAll('[data-testid="stars-rating"], rz-tile-rating, rz-stars-rating-progress, .goods-tile__stars, [class*="stars"], [class*="rating"]');
-                        for (const el of starAriaElements) {
-                            const aria = el.getAttribute('aria-label') || el.getAttribute('title') || '';
-                            const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
-                            if (ariaMatch && ariaMatch[1]) {
-                                const val = parseFloat(ariaMatch[1].replace(',', '.'));
-                                if (val > 0 && val <= 5) {
-                                    rating = val;
-                                    break;
-                                }
-                            }
-                        }
+                // Priority 3: Official Rozetka API Backend Details (supports multiple API field formats)
+                if (rating === 0 && apiDetails) {
+                    if (apiDetails.stars_rating) {
+                        const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
+                        if (apiVal > 0 && apiVal <= 5) rating = apiVal;
                     }
-
-                    // Priority 3: Count active yellow stars vs grey stars (excluding chat/comment icons)
-                    if (rating === 0) {
-                        const starsContainer = item.querySelector('[data-testid="stars-rating"], .goods-tile__stars, .stars_rating, [class*="stars-rating"], rz-stars-rating-progress') || item.querySelector('rz-tile-rating');
-                        if (starsContainer) {
-                            const allStars = Array.from(starsContainer.querySelectorAll('svg, use, [class*="star"]')).filter(el => {
-                                const cls = (el.getAttribute('class') || el.className || '').toString().toLowerCase();
-                                const href = (el.getAttribute('href') || el.getAttribute('xlink:href') || '').toLowerCase();
-                                const name = (el.getAttribute('rziconname') || el.getAttribute('name') || '').toLowerCase();
-                                if (cls.includes('comment') || cls.includes('chat') || href.includes('comment') || href.includes('chat') || name.includes('comment') || name.includes('chat')) {
-                                    return false;
-                                }
-                                return true;
-                            });
-
-                            let activeCount = 0;
-                            let foundActive = false;
-                            for (const s of allStars) {
-                                const cls = (s.getAttribute('class') || s.className || '').toString().toLowerCase();
-                                const href = (s.getAttribute('href') || s.getAttribute('xlink:href') || '').toLowerCase();
-                                const fillAttr = (s.getAttribute('fill') || '').toLowerCase();
-                                const html = (s.innerHTML || '').toLowerCase();
-                                
-                                const isInactive = cls.includes('inactive') || cls.includes('empty') || cls.includes('gray') || cls.includes('grey') || 
-                                                   href.includes('inactive') || href.includes('empty') || 
-                                                   fillAttr.includes('e9e9e9') || fillAttr.includes('cbd5') || fillAttr.includes('d1d5') || fillAttr.includes('none');
-
-                                const isActive = cls.includes('active') || cls.includes('filled') || cls.includes('yellow') || cls.includes('amber') || cls.includes('orange') ||
-                                                 href.includes('active') || href.includes('filled') || href.includes('star-full') ||
-                                                 fillAttr.includes('ffa') || fillAttr.includes('ff9') || fillAttr.includes('f59') || fillAttr.includes('fbb') || fillAttr.includes('orange') || fillAttr.includes('yellow') ||
-                                                 html.includes('active') || html.includes('filled') || html.includes('ffa');
-
-                                if (isActive && !isInactive) {
-                                    activeCount++;
-                                    foundActive = true;
-                                }
-                            }
-
-                            if (foundActive && activeCount > 0 && activeCount <= 5) {
-                                rating = activeCount;
-                            }
-                        }
+                    if (rating === 0 && apiDetails.stars) {
+                        const apiVal = parseFloat(String(apiDetails.stars).replace(',', '.'));
+                        if (apiVal > 5 && apiVal <= 100) rating = parseFloat((apiVal / 20).toFixed(1));
+                        else if (apiVal > 0 && apiVal <= 5) rating = apiVal;
                     }
-
-                    // Priority 4: Official Rozetka API Backend Details (supports multiple API field formats)
-                    if (rating === 0 && apiDetails) {
-                        if (apiDetails.stars_rating) {
-                            const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
-                            if (apiVal > 0 && apiVal <= 5) rating = apiVal;
-                        }
-                        if (rating === 0 && apiDetails.stars) {
-                            const apiVal = parseFloat(String(apiDetails.stars).replace(',', '.'));
-                            if (apiVal > 5 && apiVal <= 100) rating = parseFloat((apiVal / 20).toFixed(1));
-                            else if (apiVal > 0 && apiVal <= 5) rating = apiVal;
-                        }
-                        if (rating === 0 && apiDetails.rating) {
-                            const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
-                            if (apiVal > 0 && apiVal <= 5) rating = apiVal;
-                        }
+                    if (rating === 0 && apiDetails.rating) {
+                        const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
+                        if (apiVal > 0 && apiVal <= 5) rating = apiVal;
                     }
-                } else {
-                    // No reviews = no rating
+                }
+
+                // If product has 0 reviews, it has no rating on Rozetka (always 0)
+                if (reviews === 0) {
                     rating = 0;
                 }
 
