@@ -857,25 +857,14 @@
             }
         }
 
-        // Pass 3: Bottom Chunk-3 Resolver (patiently waits at bottom for Rozetka goods 43-60 to mount)
-        if (pageNewProducts.length < targetForThisPage) {
-            for (let waitAttempt = 0; waitAttempt < 15; waitAttempt++) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                if (pageNewProducts.length >= targetForThisPage) break;
+        // Final scroll to absolute bottom to trigger any bottom cards and pagination
+        const docBottom = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 12000);
+        window.scrollTo({ top: docBottom, behavior: 'auto' });
+        window.dispatchEvent(new Event('scroll'));
+        await new Promise(r => setTimeout(r, 400));
+        await harvestBatch();
 
-                const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 12000);
-                const targetScroll = (waitAttempt % 2 === 0) ? maxH : Math.max(0, maxH - 350);
-                window.scrollTo({ top: targetScroll, behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll'));
-                window.dispatchEvent(new Event('resize'));
-                document.dispatchEvent(new Event('scroll'));
-
-                await new Promise(r => setTimeout(r, 400));
-                await harvestBatch();
-            }
-        }
-
-        // Pass 4: Upward scroll back to top if still under target (captures any unmounted top/middle items)
+        // Pass 3: Upward scroll back to top if still under target (captures any unmounted top/middle items)
         if (pageNewProducts.length < targetForThisPage) {
             let upY = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
             for (let s = 0; s < 25; s++) {
@@ -888,6 +877,20 @@
 
                 if (pageNewProducts.length >= targetForThisPage) break;
                 if (upY <= 0) break;
+            }
+        }
+
+        // Pass 4: Secondary checkpoint sweep if still under target
+        if (pageNewProducts.length < targetForThisPage) {
+            const checkPoints = [0.25, 0.5, 0.75, 1.0];
+            const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            for (const pct of checkPoints) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+                window.scrollTo({ top: Math.round(maxH * pct), behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll'));
+                await new Promise(r => setTimeout(r, 300));
+                await harvestBatch();
+                if (pageNewProducts.length >= targetForThisPage) break;
             }
         }
 
