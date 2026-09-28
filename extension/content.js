@@ -681,7 +681,7 @@
                     }
                 }
 
-                // 4. Rating (1.0 to 5.0) - Exact Mathematical & Direct Star Resolution
+                // 4. Rating (1.0 to 5.0) - Exact Mathematical & API Resolution
                 let rating = 0;
 
                 if (reviews > 0) {
@@ -712,7 +712,7 @@
                     if (rating === 0) {
                         const starsEl = item.querySelector('rz-stars-rating-progress, rz-tile-rating, rz-rating, app-rating, .stars_rating, .goods-tile__stars, [class*="stars"], [class*="rating"]');
                         if (starsEl) {
-                            const aria = starsEl.getAttribute('aria-label') || starsEl.querySelector('[aria-label]')?.getAttribute('aria-label') || starsEl.getAttribute('title') || '';
+                            const aria = starsEl.getAttribute('aria-label') || starsEl.querySelector('[aria-label]')?.getAttribute('aria-label') || '';
                             const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
                             if (ariaMatch) {
                                 const rVal = parseFloat(ariaMatch[1].replace(',', '.'));
@@ -734,47 +734,7 @@
                         }
                     }
 
-                    // Priority 3: Direct counting of active/filled star SVG/use elements in the product tile
-                    if (rating === 0) {
-                        const activeStarSelectors = [
-                            'svg[class*="active"]', 'svg[class*="filled"]', 'svg[class*="yellow"]', 'svg[class*="amber"]', 'svg[class*="orange"]',
-                            'use[href*="star-active"]', 'use[href*="star-filled"]', 'use[href*="star_active"]', 'use[href*="star_filled"]', 'use[href*="star-full"]',
-                            'use[*|href*="star-active"]', 'use[*|href*="star-filled"]', 'use[*|href*="star_active"]', 'use[*|href*="star_filled"]',
-                            '[rzIconName*="star-active"]', '[rzIconName*="star-filled"]', '[rzIconName*="star_active"]', '[rzIconName*="star_filled"]',
-                            '[class*="star-active"]', '[class*="star--active"]', '[class*="star-filled"]', '[class*="star--filled"]',
-                            '[class*="stars__item--active"]', '[class*="stars__item_active"]', '[class*="stars-item--active"]', '[class*="stars-item_active"]'
-                        ];
-                        const activeStarNodes = item.querySelectorAll(activeStarSelectors.join(', '));
-                        if (activeStarNodes.length > 0 && activeStarNodes.length <= 5) {
-                            rating = activeStarNodes.length;
-                        }
-                    }
-
-                    // Priority 4: Scan 5-star SVG set inside rating container for colored vs grey fill
-                    if (rating === 0) {
-                        const ratingContainer = item.querySelector('rz-tile-rating, [class*="rating"], [class*="stars"], .goods-tile__stars');
-                        if (ratingContainer) {
-                            const svgs = Array.from(ratingContainer.querySelectorAll('svg'));
-                            if (svgs.length === 5) {
-                                let activeCount = 0;
-                                for (const s of svgs) {
-                                    const fillAttr = (s.getAttribute('fill') || '').toLowerCase();
-                                    const cls = (s.getAttribute('class') || '').toLowerCase();
-                                    const html = (s.innerHTML || '').toLowerCase();
-                                    const isGrey = fillAttr.includes('e9e9e9') || fillAttr.includes('cbd5') || fillAttr.includes('none') || fillAttr.includes('gray') || fillAttr.includes('grey') || cls.includes('empty') || cls.includes('inactive') || html.includes('empty') || html.includes('inactive');
-                                    const isColored = fillAttr.includes('ffa') || fillAttr.includes('ff9') || fillAttr.includes('f59') || fillAttr.includes('fbb') || fillAttr.includes('orange') || fillAttr.includes('yellow') || cls.includes('active') || cls.includes('filled') || html.includes('active') || html.includes('filled');
-                                    if (isColored && !isGrey) {
-                                        activeCount++;
-                                    }
-                                }
-                                if (activeCount > 0 && activeCount <= 5) {
-                                    rating = activeCount;
-                                }
-                            }
-                        }
-                    }
-
-                    // Priority 5: Official Rozetka API Backend Details (Product-specific ONLY, never seller rating)
+                    // Priority 3: Official Rozetka API Backend Details
                     if (rating === 0 && apiDetails) {
                         if (apiDetails.stars_rating) {
                             const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
@@ -784,6 +744,10 @@
                             const apiVal = parseFloat(String(apiDetails.stars).replace(',', '.'));
                             if (apiVal > 5 && apiVal <= 100) rating = parseFloat((apiVal / 20).toFixed(1));
                             else if (apiVal > 0 && apiVal <= 5) rating = apiVal;
+                        }
+                        if (rating === 0 && apiDetails.rating) {
+                            const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
+                            if (apiVal > 0 && apiVal <= 5) rating = apiVal;
                         }
                     }
                 }
