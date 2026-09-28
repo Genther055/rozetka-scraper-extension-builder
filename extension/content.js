@@ -183,10 +183,10 @@
         
         // 1. Strictly exclude non-catalog containers (rz-section-slider, recently viewed, recommendations, sidebars, footers)
         const unwantedContainer = item.closest(`
-            rz-section-slider, rz-goods-section-slider, rz-viewed-goods, [class*="viewed"], .recently-viewed, .goods-viewed, rz-recent-goods,
+            rz-section-slider, rz-goods-section-slider, rz-viewed-goods, .recently-viewed, .goods-viewed, rz-recent-goods, [data-testid="viewed-goods"],
             aside, .sidebar, rz-sidebar, 
             rz-goods-carousel, rz-carousel, rz-goods-slider, rz-slider, app-goods-carousel, app-slider, .goods-carousel,
-            rz-similar-goods, rz-recommended-goods, rz-accessories, .recommendations,
+            rz-similar-goods, rz-recommended-goods, rz-accessories,
             footer, header
         `);
         if (unwantedContainer) return true;
@@ -877,40 +877,57 @@
         // Step 1: Harvest top elements immediately
         await harvestBatch();
 
-        // Step 2: Progressive smooth downward scroll with harvesting at each step
+        // Step 2: Progressive smooth downward scroll through full page height
         let currentY = 0;
-        for (let s = 0; s < 18; s++) {
+        let plateauStreak = 0;
+        let prevScannedCount = 0;
+
+        for (let s = 0; s < 30; s++) {
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-            const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
-            currentY = Math.min(maxH, currentY + 550);
+
+            currentY += 550;
             window.scrollTo({ top: currentY, behavior: 'auto' });
             window.dispatchEvent(new Event('scroll'));
-            await new Promise(r => setTimeout(r, 140));
+            
+            // Allow Rozetka DOM render & change detection
+            await new Promise(r => setTimeout(r, 160));
             await harvestBatch();
 
-            if (pageNewProducts.length >= targetForThisPage) break;
-            if (currentY >= maxH) break;
+            if (pageNewProducts.length >= targetForThisPage) {
+                break;
+            }
+
+            const docMax = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            if (currentY > docMax + 1000) {
+                if (pageNewProducts.length === prevScannedCount) {
+                    plateauStreak++;
+                    if (plateauStreak >= 3) break;
+                } else {
+                    plateauStreak = 0;
+                }
+            }
+            prevScannedCount = pageNewProducts.length;
         }
 
-        // Reach bottom
-        window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight), behavior: 'auto' });
+        // Final scroll to absolute bottom to trigger any remaining bottom cards & pagination
+        window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 10000), behavior: 'auto' });
         window.dispatchEvent(new Event('scroll'));
-        await new Promise(r => setTimeout(r, 250));
+        await new Promise(r => setTimeout(r, 300));
         await harvestBatch();
 
-        // Step 3: Upward scroll back to top if still under target (captures any unmounted top items)
+        // Step 3: Upward scroll back to top if still under target (captures any recycled top items)
         if (pageNewProducts.length < targetForThisPage) {
-            currentY = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-            for (let s = 0; s < 10; s++) {
+            let upY = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            for (let s = 0; s < 15; s++) {
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                currentY = Math.max(0, currentY - 700);
-                window.scrollTo({ top: currentY, behavior: 'auto' });
+                upY = Math.max(0, upY - 600);
+                window.scrollTo({ top: upY, behavior: 'auto' });
                 window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 130));
+                await new Promise(r => setTimeout(r, 140));
                 await harvestBatch();
 
                 if (pageNewProducts.length >= targetForThisPage) break;
-                if (currentY <= 0) break;
+                if (upY <= 0) break;
             }
         }
 
