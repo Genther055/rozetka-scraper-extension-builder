@@ -643,35 +643,64 @@
                     }
                 }
 
-                // 4. Rating (1.0 to 5.0)
+                // 4. Rating (1.0 to 5.0) - Exact Mathematical Calculation
                 let rating = 0;
-                const starsEl = item.querySelector('rz-stars-rating-progress, rz-rating, app-rating, .stars_rating, [data-testid="stars-rating"], .goods-tile__stars, [class*="stars"], [class*="rating"]');
-                if (starsEl) {
-                    const aria = starsEl.getAttribute('aria-label') || starsEl.querySelector('[aria-label]')?.getAttribute('aria-label') || '';
-                    const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i) || aria.match(/([\d.,]+)/);
-                    if (ariaMatch) {
-                        const rVal = parseFloat(ariaMatch[1].replace(',', '.'));
-                        if (rVal > 0 && rVal <= 5) rating = rVal;
+
+                // Priority 1: Target data-testid="stars-rating" directly anywhere inside item
+                const starsFillEl = item.querySelector('[data-testid="stars-rating"], [class*="stars-rating__filler"], [class*="stars_rating__filler"]');
+                if (starsFillEl) {
+                    const style = starsFillEl.getAttribute('style') || '';
+                    const match = style.match(/([\d.]+)%/);
+                    if (match && match[1]) {
+                        const pct = parseFloat(match[1]);
+                        if (pct > 0 && pct <= 100) {
+                            rating = parseFloat((pct / 20).toFixed(1));
+                        }
                     }
-                    if (rating === 0) {
-                        const fillEl = starsEl.querySelector('[style*="calc"], [style*="width"], [class*="fill"]') || (starsEl.hasAttribute('style') ? starsEl : null);
-                        if (fillEl) {
-                            const style = fillEl.getAttribute('style') || '';
-                            const match = style.match(/(?:calc\()?([\d.]+)%/);
-                            if (match) {
-                                const pct = parseFloat(match[1]);
-                                if (pct > 0 && pct <= 100) {
-                                    rating = parseFloat((pct / 20).toFixed(1));
+                }
+
+                // Priority 2: Generic rating container (aria-label or inner element style)
+                if (rating === 0) {
+                    const starsEl = item.querySelector('rz-stars-rating-progress, rz-tile-rating, rz-rating, app-rating, .stars_rating, .goods-tile__stars, [class*="stars"], [class*="rating"]');
+                    if (starsEl) {
+                        const aria = starsEl.getAttribute('aria-label') || starsEl.querySelector('[aria-label]')?.getAttribute('aria-label') || '';
+                        const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i) || aria.match(/([\d.,]+)/);
+                        if (ariaMatch) {
+                            const rVal = parseFloat(ariaMatch[1].replace(',', '.'));
+                            if (rVal > 0 && rVal <= 5) rating = rVal;
+                        }
+                        if (rating === 0) {
+                            const fill = starsEl.querySelector('[style*="%"], [class*="fill"]');
+                            if (fill) {
+                                const style = fill.getAttribute('style') || '';
+                                const match = style.match(/([\d.]+)%/);
+                                if (match && match[1]) {
+                                    const pct = parseFloat(match[1]);
+                                    if (pct > 0 && pct <= 100) {
+                                        rating = parseFloat((pct / 20).toFixed(1));
+                                    }
                                 }
                             }
                         }
                     }
                 }
+
+                // Priority 3: Official Rozetka API Backend Details
                 if (rating === 0 && apiDetails && apiDetails.stars_rating) {
-                    rating = parseFloat(String(apiDetails.stars_rating).replace(',', '.')) || 0;
+                    const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
+                    if (apiVal > 0 && apiVal <= 5) rating = apiVal;
                 }
-                if (rating === 0) {
-                    rating = reviews > 0 ? 4.8 : 5.0;
+
+                // If no reviews exist, rating is 0 (displayed as '—')
+                if (reviews === 0) {
+                    rating = 0;
+                } else if (rating === 0) {
+                    rating = 5.0;
+                }
+
+                let questions = 0;
+                if (apiDetails && apiDetails.questions_amount) {
+                    questions = parseInt(String(apiDetails.questions_amount), 10) || 0;
                 }
 
                 const itemText = item.innerText || '';
@@ -731,6 +760,7 @@
                     discount,
                     rating,
                     reviews,
+                    questions,
                     inStock,
                     category: meta.category,
                     sessionTitle: meta.title,

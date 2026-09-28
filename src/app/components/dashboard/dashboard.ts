@@ -199,6 +199,7 @@ interface Product {
   discount?: number;
   rating: number;
   reviews: number;
+  questions?: number;
   link: string;
   scrapedAt: string;
   aiStatus: 'pending' | 'ok' | 'warning' | 'suspicious';

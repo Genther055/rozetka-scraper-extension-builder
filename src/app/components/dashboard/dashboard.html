@@ -3758,7 +3758,8 @@
                       —
                     </div>
                     <div class="text-xs text-slate-400 font-mono mt-0.5">
-                      {{ (item.reviews && item.reviews > 0) ? (item.reviews + ' відгуків') : '0 відгуків' }}
+                      <span>{{ (item.reviews && item.reviews > 0) ? (item.reviews + ' відгуків') : '0 відгуків' }}</span>
+                      <span *ngIf="item.questions && item.questions > 0" class="text-slate-500 text-[10px] ml-1">({{ item.questions }} пит.)</span>
                     </div>
                   </td>
 
