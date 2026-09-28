@@ -5889,7 +5889,7 @@
   </main>
 
   <!-- SLEEK GLASSMORPHISM MODAL FOR FULL SPECS OVERLAY -->
-  <div *ngIf="activeModalProduct" class="fixed inset-0 z-[100] bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fadeIn">
+  <div *ngIf="activeModalProduct" class="fixed inset-0 z-[200] bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fadeIn">
     <div class="bg-gradient-to-br from-[#141c2e] via-[#101728] to-[#0e1424] border border-slate-700/60 rounded-3xl p-5 sm:p-7 max-w-3xl w-full shadow-2xl shadow-black/80 space-y-5 relative max-h-[90vh] flex flex-col">
       
       <!-- Modal Header -->
@@ -6155,7 +6155,7 @@
   </div>
 
   <!-- CUSTOM CONFIRMATION MODAL -->
-  <div *ngIf="showConfirmModal" class="fixed inset-0 z-[105] bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+  <div *ngIf="showConfirmModal" class="fixed inset-0 z-[210] bg-[#0b0f19]/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
     <div class="bg-gradient-to-br from-[#141c2e] to-[#0e1424] border border-slate-700/70 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl shadow-black/70 space-y-5 relative">
       
       <!-- Icon & Header -->
@@ -7312,19 +7312,20 @@
             </div>
 
             <!-- Action Buttons -->
-            <div *ngIf="activeCumulativePoint.product" class="flex items-center gap-2 shrink-0">
+            <div *ngIf="activeCumulativePoint.product || activeCumulativePoint.price" class="flex items-center gap-2 shrink-0">
               <button 
-                (click)="openSpecsModal(activeCumulativePoint.product)"
+                (click)="openSpecsModal(activeCumulativePoint.product || activeCumulativePoint); $event.stopPropagation()"
                 class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
               >
                 <span class="material-icons text-sm">tune</span>
                 <span>Характеристики</span>
               </button>
               <a 
-                *ngIf="activeCumulativePoint.product.link" 
-                [href]="activeCumulativePoint.product.link" 
+                *ngIf="activeCumulativePoint.product?.link || activeCumulativePoint.link" 
+                [href]="activeCumulativePoint.product?.link || activeCumulativePoint.link" 
                 target="_blank" 
                 rel="noopener noreferrer"
+                (click)="$event.stopPropagation()"
                 class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700 cursor-pointer"
               >
                 <span class="material-icons text-sm">open_in_new</span>
@@ -7404,18 +7405,19 @@
 
             <div class="flex items-center gap-2 shrink-0">
               <button 
-                *ngIf="activeOverviewPoint.product"
-                (click)="openSpecsModal(activeOverviewPoint.product)"
+                *ngIf="activeOverviewPoint.product || activeOverviewPoint.name"
+                (click)="openSpecsModal(activeOverviewPoint.product || activeOverviewPoint); $event.stopPropagation()"
                 class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
               >
                 <span class="material-icons text-sm">tune</span>
                 <span>Характеристики</span>
               </button>
               <a 
-                *ngIf="activeOverviewPoint.link" 
-                [href]="activeOverviewPoint.link" 
+                *ngIf="activeOverviewPoint.link || activeOverviewPoint.product?.link" 
+                [href]="activeOverviewPoint.link || activeOverviewPoint.product?.link" 
                 target="_blank" 
                 rel="noopener noreferrer"
+                (click)="$event.stopPropagation()"
                 class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700 cursor-pointer"
               >
                 <span class="material-icons text-sm">open_in_new</span>

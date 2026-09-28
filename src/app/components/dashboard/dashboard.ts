@@ -683,8 +683,22 @@ export class DashboardComponent implements OnInit {
   expandedSpecsMap: Record<string, boolean> = {};
   activeModalProduct: Product | null = null;
 
-  openSpecsModal(product: Product) {
-    this.activeModalProduct = product;
+  openSpecsModal(product: Product | any) {
+    if (!product) return;
+    let targetProduct: Product | null = null;
+    if (product.product) {
+      targetProduct = product.product;
+    } else if (product.link || product.name) {
+      if (this.products && this.products.length > 0) {
+        const found = this.products.find(p => (product.link && p.link === product.link) || (product.name && p.name === product.name));
+        targetProduct = found || product;
+      } else {
+        targetProduct = product;
+      }
+    } else {
+      targetProduct = product;
+    }
+    this.activeModalProduct = targetProduct;
     this.cdr.markForCheck();
   }
 
