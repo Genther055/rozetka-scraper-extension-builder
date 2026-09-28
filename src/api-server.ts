@@ -92,30 +92,6 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
               updated = true;
             }
           }
-          if (!currentProducts[index].rating || currentProducts[index].rating === 0) {
-            if (apiItem.stars_rating) {
-              const numRating = parseFloat(String(apiItem.stars_rating).replace(',', '.'));
-              if (numRating > 0 && numRating <= 5) {
-                currentProducts[index].rating = numRating;
-                updated = true;
-              }
-            } else if (apiItem.stars) {
-              const numRating = parseFloat(String(apiItem.stars).replace(',', '.'));
-              if (numRating > 5 && numRating <= 100) {
-                currentProducts[index].rating = parseFloat((numRating / 20).toFixed(1));
-                updated = true;
-              } else if (numRating > 0 && numRating <= 5) {
-                currentProducts[index].rating = numRating;
-                updated = true;
-              }
-            } else if (apiItem.rating) {
-              const numRating = parseFloat(String(apiItem.rating).replace(',', '.'));
-              if (numRating > 0 && numRating <= 5) {
-                currentProducts[index].rating = numRating;
-                updated = true;
-              }
-            }
-          }
           if (updated) {
             await saveCurrentProducts(currentProducts);
             console.log(`[Backend Enriched] Successfully updated product details for ${normalizedLink}`);

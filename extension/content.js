@@ -568,36 +568,28 @@
                 const hasZeroReviewsBadge = tileRawText.includes('Залишити відгук') || tileRawText.includes('Оставить отзыв');
 
                 if (!hasZeroReviewsBadge) {
-                    // Priority 1: Check elements with data-testid or review/comment classes or links
-                    const reviewSelectors = [
-                        '[data-testid="reviews-link"]',
-                        '[data-testid*="review"]',
-                        '[data-testid*="comment"]',
-                        'rz-tile-rating span',
-                        'rz-rating-reviews',
-                        'a.goods-tile__reviews-link',
-                        '.goods-tile__reviews-link',
-                        '.goods-tile__reviews-count',
-                        'a[href*="comments"]',
-                        'a[href*="#comments"]',
-                        'a[href*="reviews"]',
-                        '[class*="reviews-link"]',
-                        '[class*="reviews-count"]',
-                        '[class*="comments-count"]',
-                        '[class*="reviews"]',
-                        '[class*="comments"]'
-                    ];
+                    // Try rz-tile-rating specifically first
+                    const rzRatingEl = item.querySelector('rz-tile-rating');
+                    if (rzRatingEl) {
+                        const rzRevSpan = rzRatingEl.querySelector('span');
+                        if (rzRevSpan) {
+                            const revVal = parseInt((rzRevSpan.textContent || '').replace(/\D/g, ''), 10);
+                            if (revVal > 0 && revVal < 50000) {
+                                reviews = revVal;
+                            }
+                        }
+                    }
 
-                    for (const sel of reviewSelectors) {
-                        const el = item.querySelector(sel);
-                        if (el) {
+                    // Try direct selectors if not found
+                    if (reviews === 0) {
+                        const reviewElements = item.querySelectorAll('a[href*="#comments"], a[href*="comments"], button, [class*="rating"], [class*="reviews"], [class*="comments"]');
+                        for (const el of reviewElements) {
                             if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price')) continue;
                             const t = (el.innerText || el.textContent || '').trim();
-                            // Check text like "1 відгук", "26 відгуків", "12"
-                            const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
-                            if (countMatch && countMatch[1]) {
-                                const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
-                                if (num > 0 && num < 100000) {
+                            const digits = t.replace(/\D/g, '');
+                            if (digits.length > 0 && digits.length <= 5) {
+                                const num = parseInt(digits, 10);
+                                if (num > 0 && num < 50000) {
                                     reviews = num;
                                     break;
                                 }
@@ -605,18 +597,7 @@
                         }
                     }
 
-                    // Priority 2: RegEx search across tile text for review phrases
-                    if (reviews === 0) {
-                        const revTextMatch = tileRawText.match(/(\d[\d\s\u00A0]*)\s*(?:відгук|відгуки|відгуків|отзыв|отзыва|отзывов|коментар|коментарі|коментарів|коммент|комментари|комментариев|оцін|голос|голосів)/i);
-                        if (revTextMatch && revTextMatch[1]) {
-                            const num = parseInt(revTextMatch[1].replace(/\D/g, ''), 10);
-                            if (num > 0 && num < 100000) {
-                                reviews = num;
-                            }
-                        }
-                    }
-
-                    // Priority 3: Fallback line parsing (standalone number preceding price)
+                    // Fallback: parse lines in tile text (standalone number before price)
                     if (reviews === 0) {
                         const lines = tileRawText.split('\n').map(l => l.trim()).filter(Boolean);
                         for (let i = 0; i < lines.length; i++) {
@@ -633,7 +614,7 @@
                         }
                     }
 
-                    // Priority 4: Fallback to official API
+                    // Fallback to official API
                     if (reviews === 0 && apiDetails && apiDetails.comments_amount) {
                         reviews = parseInt(String(apiDetails.comments_amount), 10) || 0;
                     }
