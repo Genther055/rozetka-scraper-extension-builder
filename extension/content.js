@@ -7,7 +7,7 @@
     console.log('TradeScout Content Script v3.5 Pro loaded on:', window.location.href);
 
     const SESSION_STORAGE_KEY = '__tradeScout_active_session';
-    const TILE_SELECTORS = 'rz-catalog-tile, .goods-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default, article.goods-tile, div.goods-tile';
+    const TILE_SELECTORS = 'rz-product-tile, rz-catalog-tile, .goods-tile, li.catalog-grid__cell, [data-goods-id], app-goods-tile-default, article.goods-tile, div.goods-tile, article.content, rz-product-tile article';
 
     let isTabScrapingActive = false;
     window.__tradeScoutIsScrapingActive = false;
@@ -172,7 +172,18 @@
         `);
         if (unwantedContainer) return true;
         
-        // 2. Check explicitly for sponsored & advertising badges/labels (avoids false positives in regular text)
+        // 2. Check explicitly for sponsored & advertising markers in new & classic Rozetka layouts
+        const isRelSponsored = !!item.querySelector('a[rel*="sponsored"]');
+        if (isRelSponsored) return true;
+
+        const tileInfoEl = item.querySelector('rz-tile-info, .tile-info, [class*="tile-info"]');
+        if (tileInfoEl && (tileInfoEl.innerText || '').match(/реклама|спонсор|promoted/i)) {
+            return true;
+        }
+
+        const primacyLink = item.querySelector('a[href*="primacyToken"], a[href*="primacySource"]');
+        if (primacyLink) return true;
+
         const badgeElements = item.querySelectorAll('rz-promo-label, .promo-label, [class*="promo-label"], .goods-tile__badge, [class*="badge"], .goods-tile__label, [class*="label"], [class*="badge-text"], [data-testid*="badge"], [data-testid*="label"]');
         for (const b of badgeElements) {
             const bText = (b.innerText || b.textContent || '').toLowerCase();
@@ -203,7 +214,7 @@
         }
 
         // 4. Must have a valid product link
-        const hasProductLink = !!item.querySelector('a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
+        const hasProductLink = !!item.querySelector('a[href*="/p/"], a[href*="/p-"], a[href*="/p"], a.tile-title, a[rztiletitle]');
         if (!hasProductLink) return true;
 
         return false;
@@ -213,12 +224,13 @@
     function extractTitle(item) {
         if (!item || !(item instanceof Element)) return '';
         
-        // 1. Direct heading selectors
+        // 1. Direct heading selectors (New Angular & Classic)
         const headingSelectors = [
-            'a.goods-tile__heading',
             'a.tile-title',
-            '.goods-tile__heading',
+            'a[rztiletitle]',
             '.tile-title',
+            'a.goods-tile__heading',
+            '.goods-tile__heading',
             'span.goods-tile__title',
             '.goods-tile__title',
             '[data-testid*="title"]',
@@ -232,12 +244,25 @@
         ];
         for (const sel of headingSelectors) {
             const el = item.querySelector(sel);
-            if (el && el.innerText && el.innerText.trim().length >= 3) {
-                return el.innerText.trim();
+            if (el) {
+                const txt = (el.innerText || el.getAttribute('title') || '').trim();
+                if (txt.length >= 3) return txt;
             }
         }
 
-        // 2. Any product link with text content
+        // 2. Title from image host link
+        const imgHost = item.querySelector('a.tile-image-host, [data-testid="catalog-tile-image-host"]');
+        if (imgHost && imgHost.getAttribute('title') && imgHost.getAttribute('title').trim().length >= 3) {
+            return imgHost.getAttribute('title').trim();
+        }
+
+        // 3. Image alt attribute
+        const img = item.querySelector('img.tile-image, img[alt]');
+        if (img && img.alt && img.alt.trim().length >= 3) {
+            return img.alt.trim();
+        }
+
+        // 4. Any product link with text content
         const allLinks = item.querySelectorAll('a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
         for (const a of allLinks) {
             const txt = (a.innerText || a.getAttribute('title') || '').trim();
@@ -246,19 +271,13 @@
             }
         }
 
-        // 3. Image alt attribute
-        const img = item.querySelector('img[alt]');
-        if (img && img.alt && img.alt.trim().length >= 3) {
-            return img.alt.trim();
-        }
-
         return '';
     }
 
     // Extract product link
     function extractLink(item) {
         if (!item || !(item instanceof Element)) return '';
-        const allLinks = item.querySelectorAll('a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
+        const allLinks = item.querySelectorAll('a.tile-title, a[rztiletitle], a.tile-image-host, a[data-testid="catalog-tile-image-host"], a[href*="/p/"], a[href*="/p-"], a[href*="/p"]');
         for (const a of allLinks) {
             const href = a.getAttribute('href');
             if (href && href.length > 2 && !href.startsWith('javascript:')) {
@@ -266,7 +285,7 @@
                 if (!link.startsWith('http')) {
                     link = link.startsWith('/') ? `https://rozetka.com.ua${link}` : `https://rozetka.com.ua/${link}`;
                 }
-                return link;
+                if (link.includes('/p')) return link;
             }
         }
         return '';
@@ -472,12 +491,14 @@
 
                 // Layer 1: Dedicated DOM Selectors
                 const priceSelectors = [
+                    'rz-tile-price .price',
+                    '.price.color-red',
                     '.goods-tile__price-value',
                     '.goods-tile__price.price_color_red',
                     '.goods-tile__price',
                     'rz-price',
                     'app-price',
-                    '.price',
+                    '.price:not(.old-price):not([class*="old"])',
                     '[class*="price-value"]',
                     '[class*="price__value"]',
                     '[class*="price__current"]',
@@ -487,7 +508,7 @@
                 for (const sel of priceSelectors) {
                     const el = item.querySelector(sel);
                     if (el && el.innerText) {
-                        if (el.closest('.goods-tile__price--old, [class*="old"], del, s, strike')) continue;
+                        if (el.closest('.goods-tile__price--old, .old-price, [class*="old"], del, s, strike')) continue;
                         const val = parseInt(el.innerText.replace(/\D/g, ''), 10) || 0;
                         if (val > 0) {
                             price = val;
@@ -530,6 +551,8 @@
                 }
 
                 const oldPriceSelectors = [
+                    'rz-tile-price .old-price',
+                    '.old-price',
                     '.goods-tile__price--old',
                     '.goods-tile__price.type_old',
                     '.goods-tile__price_type_old',
@@ -568,15 +591,31 @@
                 const hasZeroReviewsBadge = tileRawText.includes('Залишити відгук') || tileRawText.includes('Оставить отзыв');
 
                 if (!hasZeroReviewsBadge) {
-                    // Try direct selectors
-                    const reviewElements = item.querySelectorAll('a[href*="#comments"], a[href*="comments"], button, [class*="rating"], [class*="reviews"], [class*="comments"], span, p, a');
-                    for (const el of reviewElements) {
-                        const t = (el.innerText || '').trim();
-                        if (/^\d+$/.test(t)) {
-                            const num = parseInt(t, 10);
-                            if (num > 0 && num < 50000 && !el.closest('[class*="price"], del, s, strike, rz-promo-label')) {
-                                reviews = num;
-                                break;
+                    // Try rz-tile-rating specifically first
+                    const rzRatingEl = item.querySelector('rz-tile-rating');
+                    if (rzRatingEl) {
+                        const rzRevSpan = rzRatingEl.querySelector('span');
+                        if (rzRevSpan) {
+                            const revVal = parseInt((rzRevSpan.textContent || '').replace(/\D/g, ''), 10);
+                            if (revVal > 0 && revVal < 50000) {
+                                reviews = revVal;
+                            }
+                        }
+                    }
+
+                    // Try direct selectors if not found
+                    if (reviews === 0) {
+                        const reviewElements = item.querySelectorAll('a[href*="#comments"], a[href*="comments"], button, [class*="rating"], [class*="reviews"], [class*="comments"]');
+                        for (const el of reviewElements) {
+                            if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price')) continue;
+                            const t = (el.innerText || el.textContent || '').trim();
+                            const digits = t.replace(/\D/g, '');
+                            if (digits.length > 0 && digits.length <= 5) {
+                                const num = parseInt(digits, 10);
+                                if (num > 0 && num < 50000) {
+                                    reviews = num;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -606,7 +645,7 @@
 
                 // 4. Rating (1.0 to 5.0)
                 let rating = 0;
-                const starsEl = item.querySelector('rz-rating, app-rating, .stars_rating, [data-testid="stars-rating"], .goods-tile__stars, [class*="stars"], [class*="rating"]');
+                const starsEl = item.querySelector('rz-stars-rating-progress, rz-rating, app-rating, .stars_rating, [data-testid="stars-rating"], .goods-tile__stars, [class*="stars"], [class*="rating"]');
                 if (starsEl) {
                     const aria = starsEl.getAttribute('aria-label') || starsEl.querySelector('[aria-label]')?.getAttribute('aria-label') || '';
                     const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i) || aria.match(/([\d.,]+)/);
@@ -615,7 +654,7 @@
                         if (rVal > 0 && rVal <= 5) rating = rVal;
                     }
                     if (rating === 0) {
-                        const fillEl = starsEl.querySelector('[style*="calc"], [style*="width"], [class*="fill"]');
+                        const fillEl = starsEl.querySelector('[style*="calc"], [style*="width"], [class*="fill"]') || (starsEl.hasAttribute('style') ? starsEl : null);
                         if (fillEl) {
                             const style = fillEl.getAttribute('style') || '';
                             const match = style.match(/(?:calc\()?([\d.]+)%/);
