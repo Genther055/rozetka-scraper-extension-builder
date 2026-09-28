@@ -303,6 +303,17 @@ export class DashboardComponent implements OnInit {
     return pr;
   }
 
+  formatReviewsCount(count: any): string {
+    const n = Number(count) || 0;
+    if (n <= 0) return '0 відгуків';
+    const lastDigit = n % 10;
+    const lastTwoDigits = n % 100;
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 19) return `${n} відгуків`;
+    if (lastDigit === 1) return `${n} відгук`;
+    if (lastDigit >= 2 && lastDigit <= 4) return `${n} відгуки`;
+    return `${n} відгуків`;
+  }
+
   hasAnyDiscountsInDataset(): boolean {
     const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
     return list.some(p => this.getDiscountPercent(p) > 0);

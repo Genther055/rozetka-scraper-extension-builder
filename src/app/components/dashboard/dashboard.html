@@ -3748,17 +3748,17 @@
                     </div>
                   </td>
                   
-                  <!-- Rating & Reviews (Shows dash if 0 reviews) -->
+                  <!-- Rating & Reviews -->
                   <td class="py-4 px-4 whitespace-nowrap min-w-[120px]">
-                    <div class="flex items-center gap-1.5" *ngIf="item.reviews && item.reviews > 0 && item.rating && item.rating > 0">
+                    <div class="flex items-center gap-1.5" *ngIf="item.rating && item.rating > 0">
                       <span class="material-icons text-amber-400 text-base">star</span>
                       <span class="text-sm font-bold text-slate-200">{{ item.rating }}</span>
                     </div>
-                    <div class="text-sm font-bold text-slate-500" *ngIf="!item.reviews || item.reviews === 0 || !item.rating || item.rating === 0">
+                    <div class="text-sm font-bold text-slate-500" *ngIf="!item.rating || item.rating === 0">
                       —
                     </div>
                     <div class="text-xs text-slate-400 font-mono mt-0.5">
-                      <span>{{ (item.reviews && item.reviews > 0) ? (item.reviews + ' відгуків') : '0 відгуків' }}</span>
+                      <span>{{ formatReviewsCount(item.reviews) }}</span>
                       <span *ngIf="item.questions && item.questions > 0" class="text-slate-500 text-[10px] ml-1">({{ item.questions }} пит.)</span>
                     </div>
                   </td>
