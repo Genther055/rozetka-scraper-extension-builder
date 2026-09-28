@@ -894,6 +894,41 @@
             }
         }
 
+        // Pass 5: Dedicated Chunk-3 & 'Show More' Resolver if still under target (ensures full 60 items)
+        if (pageNewProducts.length < targetForThisPage) {
+            for (let retry = 0; retry < 12; retry++) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+                if (pageNewProducts.length >= targetForThisPage) break;
+
+                // 1. Click 'Показати ще' button if Rozetka presents it
+                const showMoreBtn = Array.from(document.querySelectorAll('button, a, .show-more, [class*="show-more"]')).find(b => {
+                    const t = (b.innerText || b.textContent || '').trim().toLowerCase();
+                    return t.includes('показати ще') || t.includes('показать еще') || t.includes('показати більше');
+                });
+                if (showMoreBtn) {
+                    try { showMoreBtn.click(); } catch (_) {}
+                }
+
+                // 2. Scroll the last tile or paginator into view
+                const tiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
+                if (tiles.length > 0) {
+                    try { tiles[tiles.length - 1].scrollIntoView({ block: 'center', behavior: 'auto' }); } catch (_) {}
+                }
+                const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"]');
+                if (paginator) {
+                    try { paginator.scrollIntoView({ block: 'nearest', behavior: 'auto' }); } catch (_) {}
+                }
+
+                window.scrollBy(0, (retry % 2 === 0 ? 200 : -200));
+                window.dispatchEvent(new Event('scroll'));
+                window.dispatchEvent(new Event('resize'));
+                document.dispatchEvent(new Event('scroll'));
+
+                await new Promise(r => setTimeout(r, 450));
+                await harvestBatch();
+            }
+        }
+
         // Back to top
         window.scrollTo({ top: 0, behavior: 'auto' });
         await new Promise(r => setTimeout(r, 100));
