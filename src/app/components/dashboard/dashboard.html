@@ -4842,7 +4842,7 @@
                   <span class="w-2 h-2 rounded-full bg-slate-500"></span>
                   <span>Архів / Немає ціни</span>
                 </div>
-                <p class="text-xs text-amber-400 mt-1" *ngIf="p.reviews && p.reviews > 0 && p.rating && p.rating > 0">★ {{ p.rating }} ({{ p.reviews }} відгуків)</p>
+                <p class="text-xs text-amber-400 mt-1" *ngIf="p.reviews && p.reviews > 0 && p.rating && p.rating > 0">★ {{ p.rating }} ({{ formatReviewsCount(p.reviews) }})</p>
                 <p class="text-xs text-slate-500 mt-1" *ngIf="!p.reviews || p.reviews === 0 || !p.rating || p.rating === 0">— (0 відгуків)</p>
               </div>
             </div>
@@ -6608,7 +6608,7 @@
               <td class="py-3 px-3 whitespace-nowrap text-center font-mono">
                 <div class="flex items-center justify-center gap-1" *ngIf="(p.reviews || 0) > 0 || (p.rating || 0) > 0">
                   <span class="text-amber-400 text-xs font-bold" *ngIf="(p.rating || 0) > 0">★ {{ p.rating }}</span>
-                  <span class="text-xs text-slate-400" *ngIf="(p.reviews || 0) > 0">({{ p.reviews }} відг.)</span>
+                  <span class="text-xs text-slate-400" *ngIf="(p.reviews || 0) > 0">({{ formatReviewsCount(p.reviews) }})</span>
                 </div>
                 <span *ngIf="(!p.reviews || p.reviews === 0) && (!p.rating || p.rating === 0)" class="text-xs text-slate-500 font-mono">—</span>
               </td>
