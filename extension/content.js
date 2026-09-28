@@ -528,14 +528,13 @@
                 }
 
                 // Layer 3: Official Rozetka API Backend Details
-                if (price <= 0 && apiDetails && apiDetails.price) {
-                    price = parseInt(String(apiDetails.price).replace(/\D/g, ''), 10) || 0;
-                }
-
-                // CRITICAL: Truly skip product ONLY if all 3 layers confirm price is 0 or unavailable
-                if (price <= 0) {
-                    console.warn(`[TradeScout] Item confirmed with price 0 (archived / out of stock): ${name} (${link})`);
-                    continue;
+                if (price <= 0 && apiDetails) {
+                    if (apiDetails.price) {
+                        price = parseInt(String(apiDetails.price).replace(/\D/g, ''), 10) || 0;
+                    }
+                    if (price <= 0 && apiDetails.old_price) {
+                        price = parseInt(String(apiDetails.old_price).replace(/\D/g, ''), 10) || 0;
+                    }
                 }
 
                 // 2. Discount & Old Price
