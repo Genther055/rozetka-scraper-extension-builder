@@ -211,6 +211,8 @@ interface Product {
   specs?: string;
   description?: string;
   seller?: string;
+  sellerRating?: number;
+  sellerReviews?: number;
   sellersCount?: number;
   priceChange?: number;
   reviewsGrowth?: number;
@@ -4862,7 +4864,11 @@ export class DashboardComponent implements OnInit {
         rowData[`spec_${idx}`] = specsMap[k] || '—';
       });
 
-      rowData['description'] = (p.description && p.description.trim().length > 10) ? p.description.trim() : (this.getProductDescription(p) || '');
+      const generatedDesc = this.getProductDescription(p);
+      const finalDesc = (p.description && typeof p.description === 'string' && p.description.trim().length > 10)
+        ? p.description.trim()
+        : (generatedDesc || `${p.name || 'Товар'}. Продавець: ${p.seller || 'Rozetka'}. Ціна: ${p.price || 0} грн.`);
+      rowData['description'] = finalDesc;
       rowData['link'] = p.link ? { text: 'Відкрити 🔗', hyperlink: p.link } : '';
 
       const row = worksheet.addRow(rowData);
@@ -4912,6 +4918,9 @@ export class DashboardComponent implements OnInit {
         } else if (colNumber === 8) { // Продавець
           cell.alignment = { vertical: 'middle', horizontal: 'left' };
           cell.font = { name: 'Segoe UI', size: 10, bold: (p.seller === 'Rozetka'), color: { argb: 'FF1E293B' } };
+        } else if (colNumber === columns.length - 1) { // Опис товару
+          cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+          cell.font = { name: 'Segoe UI', size: 9.5, color: { argb: 'FF334155' } };
         } else if (colNumber === columns.length) { // Посилання
           cell.alignment = { vertical: 'middle', horizontal: 'center' };
           cell.font = { name: 'Segoe UI', size: 10, underline: true, color: { argb: 'FF2563EB' } };

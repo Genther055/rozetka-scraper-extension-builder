@@ -714,8 +714,12 @@
                 const specs = Object.entries(detailedSpecsMap).map(([k, v]) => `${k}: ${v}`).join('; ') || (capacityMatch ? `${capacityMatch[1]} mAh` : 'Стандартні');
 
                 let seller = 'Rozetka';
+                let sellerRating = 0;
+                let sellerReviews = 0;
                 if (apiDetails && apiDetails.seller) {
                     seller = (apiDetails.seller.title || apiDetails.seller.name || '').trim() || 'Rozetka';
+                    if (apiDetails.seller.rating) sellerRating = parseFloat(String(apiDetails.seller.rating)) || 0;
+                    if (apiDetails.seller.feedbacks) sellerReviews = parseInt(String(apiDetails.seller.feedbacks), 10) || 0;
                 } else {
                     seller = extractSeller(item) || 'Rozetka';
                 }
@@ -735,6 +739,8 @@
                     detailedSpecsMap,
                     description: '',
                     seller,
+                    sellerRating,
+                    sellerReviews,
                     sellersCount: 1,
                     priceChange: 0,
                     reviewsGrowth: 0,
