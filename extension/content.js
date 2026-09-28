@@ -568,51 +568,44 @@
                 const hasZeroReviewsBadge = tileRawText.includes('Залишити відгук') || tileRawText.includes('Оставить отзыв');
 
                 if (!hasZeroReviewsBadge) {
-                    // Priority 1: Direct Rozetka tile rating reviews container
-                    const rzRating = item.querySelector('rz-tile-rating');
-                    if (rzRating) {
-                        const revSpan = rzRating.querySelector('span, a, [data-testid*="review"], [class*="review"]');
-                        if (revSpan) {
-                            const num = parseInt((revSpan.textContent || '').replace(/\D/g, ''), 10);
-                            if (num > 0 && num < 100000) {
-                                reviews = num;
-                            }
-                        }
-                        if (reviews === 0) {
-                            const raw = (rzRating.innerText || rzRating.textContent || '').trim();
-                            const num = parseInt(raw.replace(/\D/g, ''), 10);
-                            if (num > 0 && num < 100000) {
-                                reviews = num;
+                    // Try rz-tile-rating specifically first
+                    const rzRatingEl = item.querySelector('rz-tile-rating');
+                    if (rzRatingEl) {
+                        const rzRevSpan = rzRatingEl.querySelector('span');
+                        if (rzRevSpan) {
+                            const revVal = parseInt((rzRevSpan.textContent || '').replace(/\D/g, ''), 10);
+                            if (revVal > 0 && revVal < 50000) {
+                                reviews = revVal;
                             }
                         }
                     }
 
-                    // Priority 2: Check standard links and testids
+                    // Try direct selectors if not found
                     if (reviews === 0) {
-                        const reviewSelectors = [
-                            '[data-testid="reviews-link"]',
-                            '[data-testid*="review"]',
-                            '[data-testid*="comment"]',
-                            'a.goods-tile__reviews-link',
-                            '.goods-tile__reviews-link',
-                            '.goods-tile__reviews-count',
-                            'a[href*="comments"]',
-                            'a[href*="#comments"]',
-                            'a[href*="reviews"]',
-                            '[class*="reviews-link"]',
-                            '[class*="reviews-count"]',
-                            '[class*="comments-count"]'
-                        ];
+                        const reviewElements = item.querySelectorAll('a[href*="#comments"], a[href*="comments"], button, [class*="rating"], [class*="reviews"], [class*="comments"]');
+                        for (const el of reviewElements) {
+                            if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price')) continue;
+                            const t = (el.innerText || el.textContent || '').trim();
+                            const digits = t.replace(/\D/g, '');
+                            if (digits.length > 0 && digits.length <= 5) {
+                                const num = parseInt(digits, 10);
+                                if (num > 0 && num < 50000) {
+                                    reviews = num;
+                                    break;
+                                }
+                            }
+                        }
+                    }
 
-                        for (const sel of reviewSelectors) {
-                            const el = item.querySelector(sel);
-                            if (el) {
-                                if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price')) continue;
-                                const t = (el.innerText || el.textContent || '').trim();
-                                const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
-                                if (countMatch && countMatch[1]) {
-                                    const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
-                                    if (num > 0 && num < 100000) {
+                    // Fallback: parse lines in tile text (standalone number before price)
+                    if (reviews === 0) {
+                        const lines = tileRawText.split('\n').map(l => l.trim()).filter(Boolean);
+                        for (let i = 0; i < lines.length; i++) {
+                            const line = lines[i];
+                            if (/^\d+$/.test(line)) {
+                                const num = parseInt(line, 10);
+                                if (num > 0 && num < 50000 && !line.includes('₴') && !line.includes('%')) {
+                                    if (i + 1 < lines.length && lines[i + 1].includes('₴')) {
                                         reviews = num;
                                         break;
                                     }
@@ -621,18 +614,7 @@
                         }
                     }
 
-                    // Priority 3: RegEx search across tile text for review phrases
-                    if (reviews === 0) {
-                        const revTextMatch = tileRawText.match(/(\d[\d\s\u00A0]*)\s*(?:відгук|відгуки|відгуків|отзыв|отзыва|отзывов|коментар|коментарі|коментарів|коммент|комментари|комментариев|оцін|голос|голосів)/i);
-                        if (revTextMatch && revTextMatch[1]) {
-                            const num = parseInt(revTextMatch[1].replace(/\D/g, ''), 10);
-                            if (num > 0 && num < 100000) {
-                                reviews = num;
-                            }
-                        }
-                    }
-
-                    // Priority 4: Fallback to official API
+                    // Fallback to official API
                     if (reviews === 0 && apiDetails && apiDetails.comments_amount) {
                         reviews = parseInt(String(apiDetails.comments_amount), 10) || 0;
                     }
@@ -641,9 +623,9 @@
                 // 4. Rating (1.0 to 5.0) - Exact Mathematical & API Resolution
                 let rating = 0;
 
-                // Priority 1: Target filler width on data-testid="stars-rating" directly (e.g. style="width: calc(92% - 2px)" -> 4.6, 60% -> 3.0)
-                const fillerElements = item.querySelectorAll('[data-testid="stars-rating"], [class*="stars-rating__filler"], [class*="stars_rating__filler"], [class*="stars-rating-progress"] [style*="%"], rz-stars-rating-progress [style*="%"], [data-testid="stars-rating"][style*="%"]');
-                for (const el of fillerElements) {
+                // Priority 1: Target data-testid="stars-rating" or any filler width directly
+                const starElements = item.querySelectorAll('[data-testid="stars-rating"], [class*="stars-rating__filler"], [class*="stars_rating__filler"], [class*="stars-rating-progress"], rz-stars-rating-progress, rz-tile-rating');
+                for (const el of starElements) {
                     const style = el.getAttribute('style') || '';
                     const match = style.match(/([\d.]+)%/);
                     if (match && match[1]) {
@@ -653,19 +635,38 @@
                             break;
                         }
                     }
+                    const aria = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+                    const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i) || aria.match(/([\d.,]+)/);
+                    if (ariaMatch && ariaMatch[1]) {
+                        const val = parseFloat(ariaMatch[1].replace(',', '.'));
+                        if (val > 0 && val <= 5) {
+                            rating = val;
+                            break;
+                        }
+                    }
                 }
 
-                // Priority 2: aria-label with exact "/ 5" or "з 5" pattern (e.g. aria-label="3.0 з 5" or "3 з 5")
+                // Priority 2: Generic rating container (aria-label or inner element style)
                 if (rating === 0) {
-                    const starAriaElements = item.querySelectorAll('[data-testid="stars-rating"], rz-tile-rating, rz-stars-rating-progress, .goods-tile__stars, [class*="stars"], [class*="rating"]');
-                    for (const el of starAriaElements) {
-                        const aria = el.getAttribute('aria-label') || el.getAttribute('title') || '';
-                        const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
-                        if (ariaMatch && ariaMatch[1]) {
-                            const val = parseFloat(ariaMatch[1].replace(',', '.'));
-                            if (val > 0 && val <= 5) {
-                                rating = val;
-                                break;
+                    const starsEl = item.querySelector('rz-stars-rating-progress, rz-tile-rating, rz-rating, app-rating, .stars_rating, .goods-tile__stars, [class*="stars"], [class*="rating"]');
+                    if (starsEl) {
+                        const aria = starsEl.getAttribute('aria-label') || starsEl.querySelector('[aria-label]')?.getAttribute('aria-label') || '';
+                        const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i) || aria.match(/([\d.,]+)/);
+                        if (ariaMatch) {
+                            const rVal = parseFloat(ariaMatch[1].replace(',', '.'));
+                            if (rVal > 0 && rVal <= 5) rating = rVal;
+                        }
+                        if (rating === 0) {
+                            const fill = starsEl.querySelector('[style*="%"], [class*="fill"]');
+                            if (fill) {
+                                const style = fill.getAttribute('style') || '';
+                                const match = style.match(/([\d.]+)%/);
+                                if (match && match[1]) {
+                                    const pct = parseFloat(match[1]);
+                                    if (pct > 0 && pct <= 100) {
+                                        rating = parseFloat((pct / 20).toFixed(1));
+                                    }
+                                }
                             }
                         }
                     }
@@ -688,7 +689,47 @@
                     }
                 }
 
-                // If product has 0 reviews, it has no rating on Rozetka (always 0)
+                // Priority 4: Direct counting of active/filled star SVG/use elements
+                if (rating === 0) {
+                    const activeStarSelectors = [
+                        'svg[class*="active"]', 'svg[class*="filled"]', 'svg[class*="yellow"]', 'svg[class*="amber"]', 'svg[class*="orange"]',
+                        'use[href*="star-active"]', 'use[href*="star-filled"]', 'use[href*="star_active"]', 'use[href*="star_filled"]', 'use[href*="star-full"]',
+                        'use[*|href*="star-active"]', 'use[*|href*="star-filled"]', 'use[*|href*="star_active"]', 'use[*|href*="star_filled"]',
+                        '[rzIconName*="star-active"]', '[rzIconName*="star-filled"]', '[rzIconName*="star_active"]', '[rzIconName*="star_filled"]',
+                        '[class*="star-active"]', '[class*="star--active"]', '[class*="star-filled"]', '[class*="star--filled"]',
+                        '[class*="stars__item--active"]', '[class*="stars__item_active"]', '[class*="stars-item--active"]', '[class*="stars-item_active"]'
+                    ];
+                    const activeStarNodes = item.querySelectorAll(activeStarSelectors.join(', '));
+                    if (activeStarNodes.length > 0 && activeStarNodes.length <= 5) {
+                        rating = activeStarNodes.length;
+                    }
+                }
+
+                // Priority 5: Scan any 5-star SVG set inside rating container for colored vs grey fill
+                if (rating === 0) {
+                    const ratingContainer = item.querySelector('rz-tile-rating, [class*="rating"], [class*="stars"]');
+                    if (ratingContainer) {
+                        const svgs = Array.from(ratingContainer.querySelectorAll('svg'));
+                        if (svgs.length === 5) {
+                            let activeCount = 0;
+                            for (const s of svgs) {
+                                const fillAttr = (s.getAttribute('fill') || '').toLowerCase();
+                                const cls = (s.getAttribute('class') || '').toLowerCase();
+                                const html = (s.innerHTML || '').toLowerCase();
+                                const isGrey = fillAttr.includes('e9e9e9') || fillAttr.includes('cbd5') || fillAttr.includes('none') || fillAttr.includes('gray') || fillAttr.includes('grey') || cls.includes('empty') || cls.includes('inactive') || html.includes('empty') || html.includes('inactive');
+                                const isColored = fillAttr.includes('ffa') || fillAttr.includes('ff9') || fillAttr.includes('f59') || fillAttr.includes('fbb') || fillAttr.includes('orange') || fillAttr.includes('yellow') || cls.includes('active') || cls.includes('filled') || html.includes('active') || html.includes('filled');
+                                if (isColored && !isGrey) {
+                                    activeCount++;
+                                }
+                            }
+                            if (activeCount > 0 && activeCount <= 5) {
+                                rating = activeCount;
+                            }
+                        }
+                    }
+                }
+
+                // If no reviews exist, rating is 0 (displayed as '—')
                 if (reviews === 0) {
                     rating = 0;
                 }
