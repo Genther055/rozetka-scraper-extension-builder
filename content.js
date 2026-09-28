@@ -678,27 +678,131 @@
         return { seller, sellerRating, sellerReviews };
     }
 
-    async function scrapeCurrentDomItems(meta, pageIndex) {
-        let rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
+    // --- PHASE 1: PURE TILE HARVESTER (Zero Column Cross-Interference) ---
 
-        const distinctTiles = [];
-        const seenElements = new Set();
-
+    function scanDomForNewTiles(seenMap) {
+        const rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
         for (const item of rawTiles) {
             if (isUnwantedTile(item)) continue;
-            
+
             const link = extractLink(item);
-            if (!link) continue;
+            if (!link || sentLinks.has(link) || seenMap.has(link)) continue;
 
             const name = extractTitle(item, link);
             if (!name || name.length < 2) continue;
 
-            if (sentLinks.has(link) || seenElements.has(link)) continue;
-            seenElements.add(link);
-            distinctTiles.push({ item, link, name });
+            seenMap.set(link, { item, link, name });
+        }
+    }
+
+    async function harvestPageTiles(targetCount) {
+        const pageTilesMap = new Map();
+
+        // 1. Setup reactive MutationObserver on catalog grid
+        const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, .catalog-grid, rz-catalog, [class*="catalog-grid"], main') || document.body;
+        const observer = new MutationObserver(() => {
+            scanDomForNewTiles(pageTilesMap);
+        });
+
+        try {
+            observer.observe(catalogContainer, { childList: true, subtree: true });
+        } catch (_) {}
+
+        // Pass 1: Harvest top elements immediately
+        scanDomForNewTiles(pageTilesMap);
+
+        // Pass 2: Progressive smooth downward scroll through full page height (45 steps * 450px)
+        let currentY = 0;
+        for (let s = 0; s < 45; s++) {
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+            if (pageTilesMap.size >= targetCount) break;
+
+            currentY += 450;
+            window.scrollTo({ top: currentY, behavior: 'auto' });
+            window.dispatchEvent(new Event('scroll'));
+            try {
+                window.dispatchEvent(new WheelEvent('wheel', { deltaY: 450 }));
+            } catch (_) {}
+
+            await new Promise(r => setTimeout(r, 160));
+            scanDomForNewTiles(pageTilesMap);
         }
 
-        if (distinctTiles.length === 0) return [];
+        // Pass 3: Final scroll to absolute bottom to trigger bottom chunk & pagination
+        const docBottom = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 12000);
+        window.scrollTo({ top: docBottom, behavior: 'auto' });
+        window.dispatchEvent(new Event('scroll'));
+        window.dispatchEvent(new Event('resize'));
+        await new Promise(r => setTimeout(r, 350));
+        scanDomForNewTiles(pageTilesMap);
+
+        // Pass 4: Reactive Chunk-3 & 'Show More' Resolver (patiently waits at bottom if under target)
+        if (pageTilesMap.size < targetCount) {
+            for (let retry = 0; retry < 15; retry++) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+                if (pageTilesMap.size >= targetCount) break;
+
+                // 1. Click 'Показати ще' button if Rozetka presents it
+                const showMoreBtn = Array.from(document.querySelectorAll('button, a, .show-more, [class*="show-more"]')).find(b => {
+                    const t = (b.innerText || b.textContent || '').trim().toLowerCase();
+                    return t.includes('показати ще') || t.includes('показать еще') || t.includes('показати більше');
+                });
+                if (showMoreBtn) {
+                    try { showMoreBtn.click(); } catch (_) {}
+                }
+
+                // 2. Scroll the last tile or paginator into view
+                const tiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
+                if (tiles.length > 0) {
+                    try { tiles[tiles.length - 1].scrollIntoView({ block: 'center', behavior: 'auto' }); } catch (_) {}
+                }
+                const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"]');
+                if (paginator) {
+                    try { paginator.scrollIntoView({ block: 'nearest', behavior: 'auto' }); } catch (_) {}
+                }
+
+                window.scrollBy(0, (retry % 2 === 0 ? 180 : -180));
+                window.dispatchEvent(new Event('scroll'));
+                window.dispatchEvent(new Event('resize'));
+                document.dispatchEvent(new Event('scroll'));
+
+                await new Promise(r => setTimeout(r, 400));
+                scanDomForNewTiles(pageTilesMap);
+            }
+        }
+
+        // Pass 5: Upward scroll back to top if still under target (captures any unmounted middle items)
+        if (pageTilesMap.size < targetCount) {
+            let upY = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            for (let s = 0; s < 25; s++) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) break;
+                if (pageTilesMap.size >= targetCount) break;
+
+                upY = Math.max(0, upY - 450);
+                window.scrollTo({ top: upY, behavior: 'auto' });
+                window.dispatchEvent(new Event('scroll'));
+                await new Promise(r => setTimeout(r, 150));
+                scanDomForNewTiles(pageTilesMap);
+                if (upY <= 0) break;
+            }
+        }
+
+        // Back to top
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        await new Promise(r => setTimeout(r, 100));
+        scanDomForNewTiles(pageTilesMap);
+
+        try {
+            observer.disconnect();
+        } catch (_) {}
+
+        return Array.from(pageTilesMap.values());
+    }
+
+    // --- PHASE 2: DECOUPLED COLUMN ENRICHER (Enriches Harvested Tiles) ---
+
+    async function enrichTilesToProducts(distinctTiles, meta) {
+        if (!distinctTiles || distinctTiles.length === 0) return [];
 
         // Batch fetch official Rozetka product details
         const apiProductMap = new Map();
@@ -779,7 +883,7 @@
         return newItems;
     }
 
-    // Main scraping runner
+    // Main scraping runner (Two-Phase Pipeline Orchestrator)
     async function runTabScraper(initialPage) {
         const meta = getPageMetadata();
         currentPage = initialPage || 1;
@@ -822,117 +926,11 @@
             }
         }
 
-        // Continuous incremental step-by-step downward & upward harvesting
-        const pageNewProducts = [];
-        const pageLinksSeen = new Set();
+        // --- PHASE 1: Pure Harvest of Tiles ---
+        const harvestedTiles = await harvestPageTiles(targetForThisPage);
 
-        const harvestBatch = async () => {
-            const batch = await scrapeCurrentDomItems(meta, currentPage);
-            for (const item of batch) {
-                if (item.link && !pageLinksSeen.has(item.link)) {
-                    pageLinksSeen.add(item.link);
-                    pageNewProducts.push(item);
-                }
-            }
-        };
-
-        // Pass 1: Harvest top elements immediately
-        await harvestBatch();
-
-        // Pass 2: Progressive smooth downward scroll through full page height (45 steps * 450px)
-        let currentY = 0;
-        for (let s = 0; s < 45; s++) {
-            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-
-            currentY += 450;
-            window.scrollTo({ top: currentY, behavior: 'auto' });
-            window.dispatchEvent(new Event('scroll'));
-            
-            // Allow Rozetka DOM render & change detection
-            await new Promise(r => setTimeout(r, 200));
-            await harvestBatch();
-
-            if (pageNewProducts.length >= targetForThisPage) {
-                break;
-            }
-        }
-
-        // Final scroll to absolute bottom to trigger any bottom cards and pagination
-        const docBottom = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 12000);
-        window.scrollTo({ top: docBottom, behavior: 'auto' });
-        window.dispatchEvent(new Event('scroll'));
-        await new Promise(r => setTimeout(r, 400));
-        await harvestBatch();
-
-        // Pass 3: Upward scroll back to top if still under target (captures any unmounted top/middle items)
-        if (pageNewProducts.length < targetForThisPage) {
-            let upY = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-            for (let s = 0; s < 25; s++) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                upY = Math.max(0, upY - 450);
-                window.scrollTo({ top: upY, behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 180));
-                await harvestBatch();
-
-                if (pageNewProducts.length >= targetForThisPage) break;
-                if (upY <= 0) break;
-            }
-        }
-
-        // Pass 4: Secondary checkpoint sweep if still under target
-        if (pageNewProducts.length < targetForThisPage) {
-            const checkPoints = [0.25, 0.5, 0.75, 1.0];
-            const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-            for (const pct of checkPoints) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                window.scrollTo({ top: Math.round(maxH * pct), behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 300));
-                await harvestBatch();
-                if (pageNewProducts.length >= targetForThisPage) break;
-            }
-        }
-
-        // Pass 5: Dedicated Chunk-3 & 'Show More' Resolver if still under target (ensures full 60 items)
-        if (pageNewProducts.length < targetForThisPage) {
-            for (let retry = 0; retry < 12; retry++) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                if (pageNewProducts.length >= targetForThisPage) break;
-
-                // 1. Click 'Показати ще' button if Rozetka presents it
-                const showMoreBtn = Array.from(document.querySelectorAll('button, a, .show-more, [class*="show-more"]')).find(b => {
-                    const t = (b.innerText || b.textContent || '').trim().toLowerCase();
-                    return t.includes('показати ще') || t.includes('показать еще') || t.includes('показати більше');
-                });
-                if (showMoreBtn) {
-                    try { showMoreBtn.click(); } catch (_) {}
-                }
-
-                // 2. Scroll the last tile or paginator into view
-                const tiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
-                if (tiles.length > 0) {
-                    try { tiles[tiles.length - 1].scrollIntoView({ block: 'center', behavior: 'auto' }); } catch (_) {}
-                }
-                const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"]');
-                if (paginator) {
-                    try { paginator.scrollIntoView({ block: 'nearest', behavior: 'auto' }); } catch (_) {}
-                }
-
-                window.scrollBy(0, (retry % 2 === 0 ? 200 : -200));
-                window.dispatchEvent(new Event('scroll'));
-                window.dispatchEvent(new Event('resize'));
-                document.dispatchEvent(new Event('scroll'));
-
-                await new Promise(r => setTimeout(r, 450));
-                await harvestBatch();
-            }
-        }
-
-        // Back to top
-        window.scrollTo({ top: 0, behavior: 'auto' });
-        await new Promise(r => setTimeout(r, 100));
-        await harvestBatch();
+        // --- PHASE 2: Enrich Harvested Tiles into Full Products ---
+        const pageNewProducts = await enrichTilesToProducts(harvestedTiles, meta);
 
         // Update total estimate if catalog counter rendered during scroll
         const postEst = getEstimatedTotalFromPage();
