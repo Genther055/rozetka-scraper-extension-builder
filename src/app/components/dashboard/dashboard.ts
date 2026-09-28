@@ -838,7 +838,10 @@ export class DashboardComponent implements OnInit {
     xVal: number;
     yVal: number;
   }> {
-    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const baseList = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    if (!baseList || baseList.length === 0) return [];
+    const inStockList = baseList.filter(p => p && Number(p.price) > 0 && p.inStock !== false);
+    const list = inStockList.length > 0 ? inStockList : baseList.filter(p => p && Number(p.price) > 0);
     if (!list || list.length === 0) return [];
 
     const SVG_W = this.overviewChartSvgWidth;
@@ -1271,7 +1274,12 @@ export class DashboardComponent implements OnInit {
   }
 
   getScatterPlotData() {
-    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const baseList = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    if (!baseList || baseList.length === 0) {
+      return { points: [], bands: [], xTicks: [], yTicks: [], minP: 0, maxP: 0, maxReviews: 0 };
+    }
+    const inStockList = baseList.filter(p => p && Number(p.price) > 0 && p.inStock !== false);
+    const list = inStockList.length > 0 ? inStockList : baseList.filter(p => p && Number(p.price) > 0);
     if (!list || list.length === 0) {
       return { points: [], bands: [], xTicks: [], yTicks: [], minP: 0, maxP: 0, maxReviews: 0 };
     }
@@ -1495,7 +1503,8 @@ export class DashboardComponent implements OnInit {
       });
     }
 
-    return list;
+    const inStockList = list.filter(p => p && Number(p.price) > 0 && p.inStock !== false);
+    return inStockList.length > 0 ? inStockList : list.filter(p => p && Number(p.price) > 0);
   }
 
   getAvailablePriceCategoriesList(): Array<{ name: string; count: number; share: number }> {
