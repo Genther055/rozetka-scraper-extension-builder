@@ -3750,11 +3750,11 @@
                   
                   <!-- Rating & Reviews -->
                   <td class="py-4 px-4 whitespace-nowrap min-w-[120px]">
-                    <div class="flex items-center gap-1.5" *ngIf="item.rating && item.rating > 0">
+                    <div class="flex items-center gap-1.5" *ngIf="item.rating && item.rating > 0 && item.reviews && item.reviews > 0">
                       <span class="material-icons text-amber-400 text-base">star</span>
                       <span class="text-sm font-bold text-slate-200">{{ item.rating }}</span>
                     </div>
-                    <div class="text-sm font-bold text-slate-500" *ngIf="!item.rating || item.rating === 0">
+                    <div class="text-sm font-bold text-slate-500" *ngIf="!item.rating || item.rating === 0 || !item.reviews || item.reviews === 0">
                       —
                     </div>
                     <div class="text-xs text-slate-400 font-mono mt-0.5">
