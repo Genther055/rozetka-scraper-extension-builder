@@ -4862,7 +4862,7 @@ export class DashboardComponent implements OnInit {
         rowData[`spec_${idx}`] = specsMap[k] || '—';
       });
 
-      rowData['description'] = p.description || '';
+      rowData['description'] = (p.description && p.description.trim().length > 10) ? p.description.trim() : (this.getProductDescription(p) || '');
       rowData['link'] = p.link ? { text: 'Відкрити 🔗', hyperlink: p.link } : '';
 
       const row = worksheet.addRow(rowData);

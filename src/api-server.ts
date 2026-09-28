@@ -51,27 +51,56 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Asynchronous background seller resolver for Rozetka products
+// Asynchronous background seller and price resolver for Rozetka products
 async function resolveSellerInServerBackground(productId: string, normalizedLink: string) {
   try {
     const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`;
     const response = await fetch(apiUrl);
     if (response.ok) {
       const apiData: any = await response.json();
-      const sellerTitle = apiData.data?.[0]?.seller?.title;
-      if (sellerTitle) {
-        const cleanedSeller = sellerTitle.trim();
+      const apiItem = apiData.data?.[0];
+      if (apiItem) {
         const currentProducts = await getCurrentProducts();
         const index = currentProducts.findIndex((p: any) => p && p.link === normalizedLink);
         if (index !== -1) {
-          currentProducts[index].seller = cleanedSeller;
-          await saveCurrentProducts(currentProducts);
-          console.log(`[Backend Enriched] Successfully updated seller for ${normalizedLink} -> ${cleanedSeller}`);
+          let updated = false;
+          if (apiItem.seller?.title) {
+            const cleanedSeller = apiItem.seller.title.trim();
+            if (cleanedSeller && currentProducts[index].seller !== cleanedSeller) {
+              currentProducts[index].seller = cleanedSeller;
+              updated = true;
+            }
+          }
+          if ((!currentProducts[index].price || currentProducts[index].price <= 0) && apiItem.price) {
+            const numPrice = parseInt(String(apiItem.price).replace(/\D/g, ''), 10) || 0;
+            if (numPrice > 0) {
+              currentProducts[index].price = numPrice;
+              updated = true;
+            }
+          }
+          if ((!currentProducts[index].oldPrice || currentProducts[index].oldPrice <= 0) && apiItem.old_price) {
+            const numOld = parseInt(String(apiItem.old_price).replace(/\D/g, ''), 10) || 0;
+            if (numOld > 0) {
+              currentProducts[index].oldPrice = numOld;
+              updated = true;
+            }
+          }
+          if (apiItem.comments_amount !== undefined && (!currentProducts[index].reviews || currentProducts[index].reviews === 0)) {
+            const numReviews = parseInt(String(apiItem.comments_amount), 10) || 0;
+            if (numReviews > 0) {
+              currentProducts[index].reviews = numReviews;
+              updated = true;
+            }
+          }
+          if (updated) {
+            await saveCurrentProducts(currentProducts);
+            console.log(`[Backend Enriched] Successfully updated product details for ${normalizedLink}`);
+          }
         }
       }
     }
   } catch (error: any) {
-    console.error(`[Backend Enrichment Error] Failed to resolve seller for ${productId}:`, error.message);
+    console.error(`[Backend Enrichment Error] Failed to resolve details for ${productId}:`, error.message);
   }
 }
 

@@ -426,8 +426,8 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // Batch fetch official Rozetka product details (seller title, exact pricing, stock)
-        const apiSellerMap = new Map();
+        // Batch fetch official Rozetka product details (seller title, exact pricing, stock, reviews)
+        const apiProductMap = new Map();
         try {
             const productIds = [];
             for (const { link } of distinctTiles) {
@@ -447,11 +447,8 @@
                         const json = await res.json().catch(() => null);
                         if (json && Array.isArray(json.data)) {
                             for (const apiProd of json.data) {
-                                if (apiProd && apiProd.id && apiProd.seller) {
-                                    const sTitle = (apiProd.seller.title || apiProd.seller.name || '').trim();
-                                    if (sTitle) {
-                                        apiSellerMap.set(String(apiProd.id), sTitle);
-                                    }
+                                if (apiProd && apiProd.id) {
+                                    apiProductMap.set(String(apiProd.id), apiProd);
                                 }
                             }
                         }
@@ -464,13 +461,57 @@
 
         for (const { item, link, name } of distinctTiles) {
             try {
-                // 1. Current Price
-                const priceEl = item.querySelector('.goods-tile__price-value, .price, [class*="price-value"], [class*="price__current"], [class*="price_type_current"]');
-                const priceText = priceEl && priceEl.innerText ? priceEl.innerText : '';
-                const price = priceText ? parseInt(priceText.replace(/\D/g, ''), 10) || 0 : 0;
+                const idMatch = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
+                const prodId = idMatch ? String(idMatch[1]) : '';
+                const apiDetails = prodId ? apiProductMap.get(prodId) : null;
 
-                // CRITICAL: Skip products with price 0 (archived / out of stock without pricing)
+                // 1. Current Price (Triple-layer Bulletproof Resolution)
+                let price = 0;
+
+                // Layer 1: Dedicated DOM Selectors
+                const priceSelectors = [
+                    '.goods-tile__price-value',
+                    '.goods-tile__price.price_color_red',
+                    '.goods-tile__price',
+                    'rz-price',
+                    'app-price',
+                    '.price',
+                    '[class*="price-value"]',
+                    '[class*="price__value"]',
+                    '[class*="price__current"]',
+                    '[class*="price_type_current"]',
+                    '[data-testid*="price"]'
+                ];
+                for (const sel of priceSelectors) {
+                    const el = item.querySelector(sel);
+                    if (el && el.innerText) {
+                        if (el.closest('.goods-tile__price--old, [class*="old"], del, s, strike')) continue;
+                        const val = parseInt(el.innerText.replace(/\D/g, ''), 10) || 0;
+                        if (val > 0) {
+                            price = val;
+                            break;
+                        }
+                    }
+                }
+
+                // Layer 2: Text RegEx with currency symbol ₴ or грн
                 if (price <= 0) {
+                    const tileText = (item.innerText || item.textContent || '');
+                    const mPrice = tileText.match(/(\d[\d\s\u00A0\u202F.,]*)\s*(?:₴|грн|uah)/i);
+                    if (mPrice && mPrice[1]) {
+                        const val = parseInt(mPrice[1].replace(/\D/g, ''), 10) || 0;
+                        if (val > 0) price = val;
+                    }
+                }
+
+                // Layer 3: Official Rozetka API Backend Details
+                if (price <= 0 && apiDetails && apiDetails.price) {
+                    price = parseInt(String(apiDetails.price).replace(/\D/g, ''), 10) || 0;
+                }
+
+                // CRITICAL: Truly skip product ONLY if all 3 layers confirm price is 0 or unavailable
+                if (price <= 0) {
+                    console.warn(`[TradeScout] Item confirmed with price 0 (archived / out of stock): ${name} (${link})`);
                     continue;
                 }
 
@@ -506,6 +547,11 @@
                             break;
                         }
                     }
+                }
+
+                if (!oldPrice && apiDetails && apiDetails.old_price) {
+                    const apiOld = parseInt(String(apiDetails.old_price).replace(/\D/g, ''), 10) || 0;
+                    if (apiOld > price) oldPrice = apiOld;
                 }
 
                 if (oldPrice > price && discount === 0) {
@@ -549,6 +595,11 @@
                             }
                         }
                     }
+
+                    // Fallback to official API
+                    if (reviews === 0 && apiDetails && apiDetails.comments_amount) {
+                        reviews = parseInt(String(apiDetails.comments_amount), 10) || 0;
+                    }
                 }
 
                 // 4. Rating (1.0 to 5.0)
@@ -575,12 +626,18 @@
                         }
                     }
                 }
+                if (rating === 0 && apiDetails && apiDetails.stars_rating) {
+                    rating = parseFloat(String(apiDetails.stars_rating).replace(',', '.')) || 0;
+                }
                 if (rating === 0) {
                     rating = reviews > 0 ? 4.8 : 5.0;
                 }
 
                 const itemText = item.innerText || '';
-                const inStock = !(item.classList.contains('tile-disabled') || itemText.includes('Немає в наявності') || itemText.includes('Нет в наличии'));
+                let inStock = !(item.classList.contains('tile-disabled') || itemText.includes('Немає в наявності') || itemText.includes('Нет в наличии'));
+                if (apiDetails && apiDetails.sell_status) {
+                    inStock = (apiDetails.sell_status !== 'unavailable');
+                }
 
                 // Extract all available DOM params and chips
                 const detailedSpecsMap = {};
@@ -615,10 +672,12 @@
 
                 const specs = Object.entries(detailedSpecsMap).map(([k, v]) => `${k}: ${v}`).join('; ') || (capacityMatch ? `${capacityMatch[1]} mAh` : 'Стандартні');
 
-                const idMatch = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
-                const prodId = idMatch ? String(idMatch[1]) : '';
-                const apiSeller = prodId ? apiSellerMap.get(prodId) : null;
-                const seller = apiSeller || extractSeller(item) || 'Rozetka';
+                let seller = 'Rozetka';
+                if (apiDetails && apiDetails.seller) {
+                    seller = (apiDetails.seller.title || apiDetails.seller.name || '').trim() || 'Rozetka';
+                } else {
+                    seller = extractSeller(item) || 'Rozetka';
+                }
 
                 newItems.push({
                     name,
