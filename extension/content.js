@@ -292,6 +292,54 @@
         } catch (_) {}
     }
 
+    // Trigger Rozetka's "Показати ще" button if present to mount remaining products on the current page
+    function clickShowMoreIfPresent() {
+        try {
+            const showMoreSelectors = [
+                'button.show-more',
+                'a.show-more',
+                'rz-button-show-more button',
+                'rz-button-show-more a',
+                'rz-button-show-more',
+                '[data-testid="show-more-goods"]',
+                '[data-testid*="show-more"]',
+                '[class*="show-more"]',
+                '[class*="catalog-selection__btn"]',
+                '[class*="catalog-grid__more"]',
+                '.show-more-button',
+                'button[class*="more"]',
+                'a[class*="more"]'
+            ];
+            
+            for (const sel of showMoreSelectors) {
+                const btns = document.querySelectorAll(sel);
+                for (const b of btns) {
+                    if (b.closest('rz-paginator, .pagination, [class*="paginator"], header, footer, aside, rz-filter-stack')) continue;
+                    const txt = (b.textContent || b.innerText || '').toLowerCase();
+                    if (txt.includes('ще') || txt.includes('еще') || txt.includes('показати') || txt.includes('показать') || txt.includes('more') || b.hasAttribute('data-testid')) {
+                        if (b.offsetParent !== null || b.getBoundingClientRect().height > 0) {
+                            b.scrollIntoView({ behavior: 'auto', block: 'center' });
+                            b.click();
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            const allButtons = document.querySelectorAll('button, a.button, div[role="button"]');
+            for (const b of allButtons) {
+                if (b.closest('rz-paginator, .pagination, [class*="paginator"], header, footer, aside, rz-filter-stack')) continue;
+                const txt = (b.textContent || b.innerText || '').toLowerCase();
+                if (txt.includes('показати ще') || txt.includes('показать еще') || txt.includes('показати більше') || txt.includes('показать больше')) {
+                    b.scrollIntoView({ behavior: 'auto', block: 'center' });
+                    b.click();
+                    return true;
+                }
+            }
+        } catch (_) {}
+        return false;
+    }
+
     // Generate Rozetka-compliant Next Page URL
     function getRozetkaNextPageUrl(currentUrl, nextPg) {
         try {
@@ -858,6 +906,15 @@
             await new Promise(r => setTimeout(r, 200));
             await harvestBatch();
 
+            // When approaching item 35-42, trigger "Show more" button if Rozetka halted lazy load
+            if (pageNewProducts.length >= 35 && pageNewProducts.length < targetForThisPage) {
+                const clicked = clickShowMoreIfPresent();
+                if (clicked) {
+                    await new Promise(r => setTimeout(r, 350));
+                    await harvestBatch();
+                }
+            }
+
             if (pageNewProducts.length >= targetForThisPage) {
                 break;
             }
@@ -867,6 +924,9 @@
         const docBottom = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 12000);
         window.scrollTo({ top: docBottom, behavior: 'auto' });
         window.dispatchEvent(new Event('scroll'));
+        if (pageNewProducts.length < targetForThisPage) {
+            clickShowMoreIfPresent();
+        }
         await new Promise(r => setTimeout(r, 400));
         await harvestBatch();
 
@@ -888,6 +948,7 @@
 
         // Pass 4: Secondary checkpoint sweep if still under target
         if (pageNewProducts.length < targetForThisPage) {
+            clickShowMoreIfPresent();
             const checkPoints = [0.25, 0.5, 0.75, 1.0];
             const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
             for (const pct of checkPoints) {
@@ -1035,6 +1096,15 @@
         currentEstimatedTotal = getEstimatedTotalFromPage();
         currentPercent = 1;
         currentStatusMsg = `Запуск скрейпінгу: ${meta.title}...`;
+
+        // If the URL has pagination available and does not currently have 'page=' in it,
+        // normalize to page=1 so Rozetka immediately renders in full 60-item catalog mode
+        const page1Url = getRozetkaNextPageUrl(window.location.href, 1);
+        if (page1Url && page1Url !== window.location.href && !window.location.href.includes('page=')) {
+            persistSessionState(1);
+            window.location.href = page1Url;
+            return;
+        }
 
         persistSessionState(1);
 
