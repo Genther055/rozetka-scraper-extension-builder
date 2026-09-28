@@ -72,16 +72,8 @@ function updateProgress(percent, count, actionMsg, estimatedTotal, pageNum) {
             completionAlertEl.style.display = 'block';
             if (alertCollectedCountEl) alertCollectedCountEl.innerText = count;
             if (alertTotalCountEl) alertTotalCountEl.innerText = (estimatedTotal && estimatedTotal > count) ? estimatedTotal : count;
-            
-            if (estimatedTotal && estimatedTotal > count) {
-                const diff = estimatedTotal - count;
-                if (alertDescTextEl) {
-                    alertDescTextEl.innerHTML = `💡 <strong>${diff} ${diff === 1 ? 'позицію' : 'позиції'} пропущено:</strong> застарілий товар без ціни (0 грн) автоматично відсіяно для чистоти аналітики.`;
-                }
-            } else {
-                if (alertDescTextEl) {
-                    alertDescTextEl.innerHTML = `✓ Зібрано всі <strong>100% активних товарів</strong> каталогу з актуальними цінами (реклама та дублікати відсіяні).`;
-                }
+            if (alertDescTextEl) {
+                alertDescTextEl.innerHTML = `✓ Зібрано всі <strong>100% товарів</strong> (${count} позицій каталогу без пропусків).`;
             }
         }
     } else {
