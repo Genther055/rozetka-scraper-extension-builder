@@ -742,6 +742,8 @@
                 // If no reviews exist, rating is strictly 0 (displayed as '—')
                 if (reviews === 0) {
                     rating = 0;
+                } else {
+                    console.log(`[TradeScout Scraper] Tile "${name.slice(0, 30)}": reviews=${reviews}, rating=${rating}`);
                 }
 
                 let questions = 0;
