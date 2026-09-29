@@ -891,23 +891,23 @@
         let consecutiveNoNewRounds = 0;
         let lastItemCount = pageNewProducts.length;
 
-        for (let round = 0; round < 20 && pageNewProducts.length < targetForThisPage; round++) {
+        for (let round = 0; round < 30 && pageNewProducts.length < targetForThisPage; round++) {
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
 
             // 1. Scroll directly to the bottom-most product tile in the current catalog
             const currentTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
             if (currentTiles.length > 0) {
                 const lastTile = currentTiles[currentTiles.length - 1];
-                lastTile.scrollIntoView({ behavior: 'auto', block: 'end' });
+                lastTile.scrollIntoView({ behavior: 'smooth', block: 'end' });
             } else {
-                const scrollY = Math.min(document.body.scrollHeight, (round + 1) * 900);
-                window.scrollTo({ top: scrollY, behavior: 'auto' });
+                const scrollY = Math.min(document.body.scrollHeight, (round + 1) * 750);
+                window.scrollTo({ top: scrollY, behavior: 'smooth' });
             }
             window.dispatchEvent(new Event('scroll'));
             document.dispatchEvent(new Event('scroll'));
 
             // Allow DOM render
-            await new Promise(r => setTimeout(r, 250));
+            await new Promise(r => setTimeout(r, 350));
             await harvestBatch();
 
             if (pageNewProducts.length >= targetForThisPage) break;
@@ -915,9 +915,9 @@
             // 2. Proactively trigger "Show More" / "Показати ще" button if available
             const clicked = await triggerShowMoreAndWait();
             if (clicked) {
-                // When clicked, sample every 250ms for up to 1.2s for Rozetka AJAX chunks to attach
+                // When clicked, sample every 300ms for up to 1.5s for Rozetka AJAX chunks to attach
                 for (let w = 0; w < 5; w++) {
-                    await new Promise(r => setTimeout(r, 250));
+                    await new Promise(r => setTimeout(r, 300));
                     await harvestBatch();
                     if (pageNewProducts.length >= targetForThisPage) break;
                 }
@@ -925,10 +925,10 @@
                 // Also scroll past paginator area to trigger IntersectionObserver
                 const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"], [class*="catalog-grid__more"]');
                 if (paginator) {
-                    paginator.scrollIntoView({ behavior: 'auto', block: 'center' });
+                    paginator.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     window.dispatchEvent(new Event('scroll'));
                     document.dispatchEvent(new Event('scroll'));
-                    await new Promise(r => setTimeout(r, 300));
+                    await new Promise(r => setTimeout(r, 400));
                     await harvestBatch();
                 }
             }
@@ -938,8 +938,8 @@
                 lastItemCount = pageNewProducts.length;
             } else {
                 consecutiveNoNewRounds++;
-                // If 4 full attempts produced no new items and we are past round 5, catalog on page is exhausted
-                if (consecutiveNoNewRounds >= 4 && round >= 5) {
+                // If 5 full attempts produced no new items and we are past round 8, catalog on page is exhausted
+                if (consecutiveNoNewRounds >= 5 && round >= 8) {
                     break;
                 }
             }
