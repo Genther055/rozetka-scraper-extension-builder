@@ -629,47 +629,34 @@
                     // Try rz-tile-rating specifically first
                     const rzRatingEl = item.querySelector('rz-tile-rating');
                     if (rzRatingEl) {
-                        const rzRevSpan = rzRatingEl.querySelector('span, a, [data-testid*="review"], [class*="review"]');
-                        if (rzRevSpan) {
-                            const countMatch = (rzRevSpan.textContent || '').match(/(\d[\d\s\u00A0]*)/);
-                            if (countMatch && countMatch[1]) {
-                                const revVal = parseInt(countMatch[1].replace(/\D/g, ''), 10);
-                                if (revVal > 0 && revVal < 500000) {
-                                    reviews = revVal;
+                        const rzRevLink = rzRatingEl.querySelector('a.goods-tile__reviews-link, a[href*="comments"], [data-testid*="reviews"], [class*="reviews-link"], [class*="reviews-count"]');
+                        if (rzRevLink) {
+                            const linkText = (rzRevLink.textContent || '').trim();
+                            if (!linkText.includes('Залишити') && !linkText.includes('Оставить')) {
+                                const countMatch = linkText.match(/(\d[\d\s\u00A0]*)/);
+                                if (countMatch && countMatch[1]) {
+                                    const revVal = parseInt(countMatch[1].replace(/\D/g, ''), 10);
+                                    if (revVal > 0 && revVal < 500000) {
+                                        reviews = revVal;
+                                    }
                                 }
                             }
                         }
                     }
 
-                    // Try direct selectors if not found
+                    // Try direct review link selectors if not found
                     if (reviews === 0) {
-                        const reviewElements = item.querySelectorAll('a[href*="#comments"], a[href*="comments"], [class*="rating"], [class*="reviews"], [class*="comments"]');
+                        const reviewElements = item.querySelectorAll('a.goods-tile__reviews-link, a[href*="#comments"], a[href*="comments"], [class*="reviews-link"], [class*="reviews-count"]');
                         for (const el of reviewElements) {
-                            if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price')) continue;
+                            if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price, rz-stars-rating-progress, [class*="stars-rating"]')) continue;
                             const t = (el.innerText || el.textContent || '').trim();
+                            if (t.includes('Залишити') || t.includes('Оставить')) continue;
                             const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
                             if (countMatch && countMatch[1]) {
                                 const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
                                 if (num > 0 && num < 500000) {
                                     reviews = num;
                                     break;
-                                }
-                            }
-                        }
-                    }
-
-                    // Fallback: parse lines in tile text (standalone number before price)
-                    if (reviews === 0) {
-                        const lines = tileRawText.split('\n').map(l => l.trim()).filter(Boolean);
-                        for (let i = 0; i < lines.length; i++) {
-                            const line = lines[i];
-                            if (/^\d+$/.test(line)) {
-                                const num = parseInt(line, 10);
-                                if (num > 0 && num < 500000 && !line.includes('₴') && !line.includes('%')) {
-                                    if (i + 1 < lines.length && lines[i + 1].includes('₴')) {
-                                        reviews = num;
-                                        break;
-                                    }
                                 }
                             }
                         }
