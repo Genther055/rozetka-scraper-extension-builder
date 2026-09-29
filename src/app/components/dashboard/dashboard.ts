@@ -1090,8 +1090,11 @@ export class DashboardComponent implements OnInit {
     xVal: number;
     yVal: number;
   }> {
-    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
-    if (!list || list.length === 0) return [];
+    const rawList = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    if (!rawList || rawList.length === 0) return [];
+    const inStockList = rawList.filter(p => p && p.inStock !== false && Number(p.price) > 0);
+    const list = inStockList.length > 0 ? inStockList : rawList.filter(p => p && Number(p.price) > 0);
+    if (list.length === 0) return [];
 
     const SVG_W = this.overviewChartSvgWidth;
     const SVG_H = 220;
@@ -1787,7 +1790,9 @@ export class DashboardComponent implements OnInit {
   }
 
   getPriceChartFilteredProducts(): Product[] {
-    let list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    let raw = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const inStockOnly = raw.filter(p => p && p.inStock !== false && Number(p.price) > 0);
+    let list = inStockOnly.length > 0 ? inStockOnly : raw.filter(p => p && Number(p.price) > 0);
 
     // 1. Filter by category / session if selected
     if (this.selectedPriceCategoryFilter && this.selectedPriceCategoryFilter !== 'all') {
