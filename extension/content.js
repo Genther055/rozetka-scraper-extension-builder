@@ -629,9 +629,9 @@
                     // Try rz-tile-rating specifically first
                     const rzRatingEl = item.querySelector('rz-tile-rating');
                     if (rzRatingEl) {
-                        const rzRevLink = rzRatingEl.querySelector('a.goods-tile__reviews-link, a[href*="comments"], [data-testid*="reviews"], [class*="reviews-link"], [class*="reviews-count"]');
-                        if (rzRevLink) {
-                            const linkText = (rzRevLink.textContent || '').trim();
+                        const rzRevLink = rzRatingEl.querySelector('a.goods-tile__reviews-link, a[href*="comments"], [data-testid*="reviews"], [class*="reviews-link"], [class*="reviews-count"], button.reset-btn > span, button > span.text-sm, span.text-sm');
+                        if (rzRevLink && !rzRevLink.closest('rz-stars-rating-progress')) {
+                            const linkText = (rzRevLink.textContent || rzRevLink.innerText || '').trim();
                             if (!linkText.includes('Залишити') && !linkText.includes('Оставить')) {
                                 const countMatch = linkText.match(/(\d[\d\s\u00A0]*)/);
                                 if (countMatch && countMatch[1]) {
