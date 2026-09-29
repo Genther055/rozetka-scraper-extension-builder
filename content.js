@@ -672,58 +672,65 @@
                 let rating = 0;
 
                 if (reviews > 0) {
-                    // Priority 1: Direct target [data-testid="stars-rating"] width percentage
-                    const starTestIdEl = item.querySelector('[data-testid="stars-rating"], rz-stars-rating-progress .bg-yellow, rz-stars-rating-progress [style*="%"]');
-                    if (starTestIdEl) {
-                        const style = starTestIdEl.getAttribute('style') || '';
-                        const match = style.match(/([\d.]+)%/);
-                        if (match && match[1]) {
-                            const pct = parseFloat(match[1]);
-                            if (pct > 0 && pct <= 100) {
-                                rating = parseFloat((pct / 20).toFixed(1));
+                    // Priority 1: Official Rozetka API Backend Details (Direct Source of Truth)
+                    if (apiDetails) {
+                        if (apiDetails.stars_rating) {
+                            const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
+                            if (apiVal > 0 && apiVal <= 5) rating = parseFloat(apiVal.toFixed(1));
+                        }
+                        if (rating === 0 && apiDetails.rating) {
+                            const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
+                            if (apiVal > 0 && apiVal <= 5) rating = parseFloat(apiVal.toFixed(1));
+                        }
+                        if (rating === 0 && apiDetails.stars) {
+                            const apiVal = parseFloat(String(apiDetails.stars).replace(',', '.'));
+                            if (apiVal > 5 && apiVal <= 100) rating = parseFloat((apiVal / 20).toFixed(1));
+                            else if (apiVal > 0 && apiVal <= 5) rating = parseFloat(apiVal.toFixed(1));
+                        }
+                    }
+
+                    // Priority 2: Dedicated Product Comment Rating Element (e.g. <rz-product-comment-rating> <span class="font-bold">4.2</span>)
+                    if (rating === 0) {
+                        const commentRatingEl = item.querySelector('rz-product-comment-rating, .product-comment-rating, [class*="comment-rating"]');
+                        if (commentRatingEl) {
+                            const boldSpan = commentRatingEl.querySelector('.font-bold, b, strong, [class*="bold"]') || commentRatingEl;
+                            const t = (boldSpan.textContent || boldSpan.innerText || '').trim();
+                            const m = t.match(/([1-5](?:[.,]\d+)?)/);
+                            if (m && m[1]) {
+                                const val = parseFloat(m[1].replace(',', '.'));
+                                if (val > 0 && val <= 5) rating = parseFloat(val.toFixed(1));
                             }
                         }
                     }
 
-                    // Priority 2: Star rating container or text/aria labels
+                    // Priority 3: Star rating container or text/aria labels (e.g. "4.2 з 5", "4.2 / 5")
                     if (rating === 0) {
-                        const starElements = item.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, [class*="stars-rating__filler"], [class*="stars_rating__filler"]');
-                        for (const el of starElements) {
-                            const style = el.getAttribute('style') || '';
+                        const ratingContainers = item.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"]');
+                        for (const el of ratingContainers) {
+                            const aria = el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '';
+                            const ariaMatch = aria.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i);
+                            if (ariaMatch && ariaMatch[1]) {
+                                const val = parseFloat(ariaMatch[1].replace(',', '.'));
+                                if (val > 0 && val <= 5) {
+                                    rating = parseFloat(val.toFixed(1));
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Priority 4: Dynamic Star Progress Percentage Width ([data-testid="stars-rating"])
+                    if (rating === 0) {
+                        const starTestIdEl = item.querySelector('[data-testid="stars-rating"], rz-stars-rating-progress .bg-yellow, rz-stars-rating-progress [style*="%"]');
+                        if (starTestIdEl) {
+                            const style = starTestIdEl.getAttribute('style') || '';
                             const match = style.match(/([\d.]+)%/);
                             if (match && match[1]) {
                                 const pct = parseFloat(match[1]);
                                 if (pct > 0 && pct <= 100) {
                                     rating = parseFloat((pct / 20).toFixed(1));
-                                    break;
                                 }
                             }
-                            const aria = el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '';
-                            const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
-                            if (ariaMatch && ariaMatch[1]) {
-                                const val = parseFloat(ariaMatch[1].replace(',', '.'));
-                                if (val > 0 && val <= 5) {
-                                    rating = val;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    // Priority 3: Official Rozetka API Backend Details
-                    if (rating === 0 && apiDetails) {
-                        if (apiDetails.stars_rating) {
-                            const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
-                            if (apiVal > 0 && apiVal <= 5) rating = apiVal;
-                        }
-                        if (rating === 0 && apiDetails.stars) {
-                            const apiVal = parseFloat(String(apiDetails.stars).replace(',', '.'));
-                            if (apiVal > 5 && apiVal <= 100) rating = parseFloat((apiVal / 20).toFixed(1));
-                            else if (apiVal > 0 && apiVal <= 5) rating = apiVal;
-                        }
-                        if (rating === 0 && apiDetails.rating) {
-                            const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
-                            if (apiVal > 0 && apiVal <= 5) rating = apiVal;
                         }
                     }
                 }
