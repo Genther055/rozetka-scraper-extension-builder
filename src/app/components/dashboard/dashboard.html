@@ -3324,21 +3324,25 @@
                   </div>
                 </div>
 
-                <!-- Footer: Demand-Supply Ratio -->
-                <div class="pt-2 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-400 relative group/specratio">
-                  <div class="flex items-center gap-1">
-                    <span>Віддача на 1 SKU:</span>
-                    <span class="w-3.5 h-3.5 rounded-full bg-slate-900 hover:bg-indigo-600 text-slate-400 hover:text-white text-[9px] font-bold flex items-center justify-center cursor-help border border-slate-700 transition-colors">?</span>
+                <!-- Footer: Demand-Supply Ratio & View Products Action -->
+                <div class="pt-2.5 border-t border-slate-900/90 flex items-center justify-between text-[11px] text-slate-400">
+                  <div class="flex items-center gap-1 relative group/specratio">
+                    <span>Віддача:</span>
+                    <span class="font-mono font-bold text-indigo-300 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                      {{ valStat.demandSupplyRatio }} відг/SKU
+                    </span>
+                    <!-- Popover -->
+                    <div class="absolute left-0 bottom-full mb-1.5 w-60 p-2.5 bg-[#0f172a] border border-indigo-500/40 rounded-xl shadow-xl shadow-black text-[11px] text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/specratio:opacity-100 group-hover/specratio:pointer-events-auto transition-all duration-150 backdrop-blur-md">
+                      <p class="text-[10px] text-slate-300 leading-tight">
+                        <b>Віддача (відг/SKU):</b> Скільки відгуків генерує кожна картка товару з цією характеристикою.
+                      </p>
+                    </div>
                   </div>
-                  <span class="font-mono font-bold text-indigo-300 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800">
-                    {{ valStat.demandSupplyRatio }} відг/SKU
+
+                  <span class="text-[11px] font-bold text-purple-400 group-hover:text-purple-300 flex items-center gap-0.5 transition-colors">
+                    <span>Товари ({{ valStat.productsCount }})</span>
+                    <span class="material-icons text-xs group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
                   </span>
-                  <!-- Popover -->
-                  <div class="absolute right-0 bottom-full mb-1.5 w-64 p-2.5 bg-[#0f172a] border border-indigo-500/40 rounded-xl shadow-xl shadow-black text-[11px] text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/specratio:opacity-100 group-hover/specratio:pointer-events-auto transition-all duration-150 backdrop-blur-md">
-                    <p class="text-[10px] text-slate-300 leading-tight">
-                      <b>Віддача (відг/SKU):</b> Скільки відгуків (ринкового попиту) генерує кожна окрема картка товару з цією характеристикою.
-                    </p>
-                  </div>
                 </div>
               </div>
             </div>
@@ -6480,6 +6484,26 @@
                   <a [href]="p.link" target="_blank" class="font-bold text-slate-100 hover:text-indigo-300 transition-colors line-clamp-2 text-xs leading-snug">
                     {{ p.name }}
                   </a>
+                  
+                  <!-- Badges of Extracted Specs -->
+                  <div class="flex flex-wrap items-center gap-1.5 mt-1.5" *ngIf="getBadgeSpecs(p).length > 0 || getSpecsArray(p).length > 0">
+                    <span 
+                      *ngFor="let badge of getBadgeSpecs(p)" 
+                      class="px-2 py-0.5 rounded-md text-[10px] font-bold border" 
+                      [class]="badge.style"
+                    >
+                      {{ badge.text }}
+                    </span>
+                    <button 
+                      (click)="openSpecsModal(p); $event.stopPropagation()"
+                      class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 hover:text-white border border-indigo-700/60 transition-colors cursor-pointer flex items-center gap-1"
+                      title="Відкрити паспорт характеристик"
+                    >
+                      <span class="material-icons text-[10px]">tune</span>
+                      <span>Характеристики ({{ getSpecsArray(p).length }})</span>
+                    </button>
+                  </div>
+
                   <div class="flex items-center gap-2 mt-1">
                     <span class="text-[10px] text-slate-400 font-mono">Продавець: 
                       <button 
@@ -6542,9 +6566,18 @@
               </td>
 
               <td class="py-3 px-3 text-center whitespace-nowrap">
-                <a [href]="p.link" target="_blank" class="p-1.5 text-indigo-400 hover:text-white bg-indigo-950/60 hover:bg-indigo-600 border border-indigo-500/30 rounded-lg inline-flex items-center justify-center transition-all" title="Відкрити картку товару на Rozetka">
-                  <span class="material-icons text-sm">open_in_new</span>
-                </a>
+                <div class="flex items-center justify-center gap-1.5">
+                  <button 
+                    (click)="openSpecsModal(p); $event.stopPropagation()"
+                    class="p-1.5 text-indigo-300 hover:text-white bg-indigo-950/60 hover:bg-indigo-600 border border-indigo-500/30 rounded-lg inline-flex items-center justify-center transition-all cursor-pointer"
+                    title="Переглянути повні характеристики товару"
+                  >
+                    <span class="material-icons text-sm">tune</span>
+                  </button>
+                  <a [href]="p.link" target="_blank" class="p-1.5 text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700/60 rounded-lg inline-flex items-center justify-center transition-all" title="Відкрити картку товару на Rozetka">
+                    <span class="material-icons text-sm">open_in_new</span>
+                  </a>
+                </div>
               </td>
             </tr>
 
