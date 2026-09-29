@@ -459,6 +459,57 @@
         return 'Rozetka';
     }
 
+    // Extract raw Rozetka goods state from Angular SSR TransferState & JSON-LD
+    function extractPageGoodsState() {
+        const goodsMap = new Map();
+        try {
+            // 1. Angular Universal TransferState script <script id="serverApp-state">
+            const serverStateEl = document.getElementById('serverApp-state');
+            if (serverStateEl && serverStateEl.textContent) {
+                let raw = serverStateEl.textContent;
+                raw = raw.replace(/&q;/g, '"').replace(/&a;/g, '&').replace(/&s;/g, "'").replace(/&l;/g, '<').replace(/&g;/g, '>');
+                try {
+                    const stateObj = JSON.parse(raw);
+                    const traverse = (obj) => {
+                        if (!obj || typeof obj !== 'object') return;
+                        if (Array.isArray(obj)) {
+                            for (const item of obj) {
+                                if (item && item.id && (item.title || item.name || item.price !== undefined || item.stars_rating !== undefined || item.comments_amount !== undefined)) {
+                                    goodsMap.set(String(item.id), item);
+                                }
+                                traverse(item);
+                            }
+                        } else {
+                            for (const key of Object.keys(obj)) {
+                                traverse(obj[key]);
+                            }
+                        }
+                    };
+                    traverse(stateObj);
+                } catch (_) {}
+            }
+
+            // 2. JSON-LD scripts
+            const ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
+            for (const script of ldScripts) {
+                try {
+                    const ld = JSON.parse(script.textContent || '{}');
+                    if (ld && ld.aggregateRating) {
+                        const m = (ld.url || script.textContent).match(/\/p(\d+)/i) || (ld.url || script.textContent).match(/p(\d+)/i);
+                        if (m && m[1]) {
+                            const val = parseFloat(ld.aggregateRating.ratingValue);
+                            if (val > 0 && val <= 5) {
+                                const prev = goodsMap.get(m[1]) || {};
+                                goodsMap.set(m[1], { ...prev, id: m[1], stars_rating: val, comments_amount: ld.aggregateRating.reviewCount || ld.aggregateRating.ratingCount });
+                            }
+                        }
+                    }
+                } catch (_) {}
+            }
+        } catch (_) {}
+        return goodsMap;
+    }
+
     async function scrapeCurrentDomItems(meta, pageIndex) {
         // Query tiles across entire main content area (filtering non-catalog via isUnwantedTile)
         let rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
@@ -483,7 +534,10 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // Batch fetch official Rozetka product details & exact ratings
+        // 1. Extract embedded goods state from page
+        const pageGoodsMap = extractPageGoodsState();
+
+        // 2. Batch fetch official Rozetka product details & exact ratings
         const apiProductMap = new Map();
         const exactRatingMap = new Map();
         try {
@@ -493,7 +547,7 @@
                 if (m && m[1]) productIds.push(m[1]);
             }
             if (productIds.length > 0) {
-                // 1. Batch fetch general product details (seller, price, stock)
+                // Batch fetch general product details (seller, price, stock)
                 const chunkSize = 60;
                 for (let i = 0; i < productIds.length; i += chunkSize) {
                     const chunk = productIds.slice(i, i + chunkSize);
@@ -514,25 +568,26 @@
                     }
                 }
 
-                // 2. Parallel fetch exact ratings & marks from Rozetka Comments API
+                // Parallel fetch exact ratings via Rozetka Comments Stats API & Goods API for products
                 const ratingChunkSize = 20;
                 for (let i = 0; i < productIds.length; i += ratingChunkSize) {
                     const chunk = productIds.slice(i, i + ratingChunkSize);
                     await Promise.all(chunk.map(async (prodId) => {
                         try {
-                            const res = await fetch(`/api/goods-comments/v2/stats?goods_id=${prodId}`).catch(() => null);
-                            if (res && res.ok) {
-                                const json = await res.json().catch(() => null);
-                                if (json && json.data) {
-                                    if (typeof json.data.rating === 'number' && json.data.rating > 0) {
-                                        exactRatingMap.set(String(prodId), parseFloat(json.data.rating.toFixed(1)));
+                            // 1. Fetch exact customer marks breakdown from Rozetka Comments Stats API
+                            const commentRes = await fetch(`https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${prodId}`).catch(() => null);
+                            if (commentRes && commentRes.ok) {
+                                const cJson = await commentRes.json().catch(() => null);
+                                if (cJson && cJson.data) {
+                                    if (typeof cJson.data.rating === 'number' && cJson.data.rating > 0) {
+                                        exactRatingMap.set(String(prodId), parseFloat(cJson.data.rating.toFixed(1)));
                                         return;
                                     }
-                                    if (json.data.marks && typeof json.data.marks === 'object') {
+                                    if (cJson.data.marks && typeof cJson.data.marks === 'object') {
                                         let totalMarks = 0;
                                         let weightedSum = 0;
                                         for (let m = 1; m <= 5; m++) {
-                                            const count = Number(json.data.marks[String(m)]) || 0;
+                                            const count = Number(cJson.data.marks[String(m)]) || 0;
                                             totalMarks += count;
                                             weightedSum += count * m;
                                         }
@@ -540,6 +595,25 @@
                                             exactRatingMap.set(String(prodId), parseFloat((weightedSum / totalMarks).toFixed(1)));
                                             return;
                                         }
+                                    }
+                                }
+                            }
+
+                            // 2. Secondary fallback: Goods Main API
+                            const res = await fetch(`https://rozetka.com.ua/api/product-api/v4/goods/get-main?country=UA&lang=ua&goodsId=${prodId}`).catch(() => null);
+                            if (res && res.ok) {
+                                const json = await res.json().catch(() => null);
+                                if (json && json.data) {
+                                    if (json.data.stars_rating) {
+                                        const r = parseFloat(String(json.data.stars_rating).replace(',', '.'));
+                                        if (r > 0 && r <= 5) exactRatingMap.set(String(prodId), r);
+                                    } else if (json.data.rating) {
+                                        const r = parseFloat(String(json.data.rating).replace(',', '.'));
+                                        if (r > 0 && r <= 5) exactRatingMap.set(String(prodId), r);
+                                    }
+                                    if (json.data.seller && json.data.seller.title) {
+                                        const existing = apiProductMap.get(String(prodId)) || {};
+                                        apiProductMap.set(String(prodId), { ...existing, seller: json.data.seller });
                                     }
                                 }
                             }

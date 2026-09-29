@@ -647,27 +647,9 @@ export class DashboardComponent implements OnInit {
         };
       }
 
-      // If product has reviews but rating was default 4.8 or 0 or missing, calculate realistic exact score
-      if (rating === 4.8 || rating <= 0 || rating > 5) {
-        if (reviews === 1) {
-          const charCode = (p.name || p.link || '').charCodeAt(0) || 0;
-          rating = (charCode % 7 === 0) ? 4.0 : 5.0;
-        } else if (reviews === 2) {
-          const charCode = (p.name || p.link || '').charCodeAt(1) || 0;
-          rating = (charCode % 4 === 0) ? 4.5 : 5.0;
-        } else if (reviews <= 5) {
-          const hash = ((p.name || '').length * 19 + reviews * 11) % 7;
-          const map = [4.6, 4.8, 5.0, 4.4, 4.7, 4.5, 4.9];
-          rating = map[hash];
-        } else {
-          // Products with many reviews: derive realistic decimal rating from 4.1 to 4.9
-          let hash = 0;
-          const str = (p.name || '') + (p.link || '');
-          for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) & 0xffffffff;
-          const decimals = [4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9];
-          const idx = Math.abs(hash) % decimals.length;
-          rating = decimals[idx];
-        }
+      // If product has reviews, preserve exact real rating from Rozetka (valid range 1.0 to 5.0)
+      if (rating < 0 || rating > 5) {
+        rating = 0;
       }
 
       return {
