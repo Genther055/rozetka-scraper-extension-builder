@@ -3463,6 +3463,14 @@
                     </div>
                   </th>
 
+                  <th (click)="sortSellerAnalyticsBy('avgRating')" class="py-3 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap text-center">
+                    <div class="flex items-center justify-center gap-1">
+                      <span>Рейтинг ★</span>
+                      <span class="material-icons text-sm text-indigo-400" *ngIf="sellerAnalyticsSortColumn === 'avgRating'">{{ sellerAnalyticsSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                      <span class="material-icons text-sm text-slate-600" *ngIf="sellerAnalyticsSortColumn !== 'avgRating'">unfold_more</span>
+                    </div>
+                  </th>
+
                   <th class="py-3 px-3 whitespace-nowrap text-center">Лідер ніші</th>
                 </tr>
               </thead>
@@ -3527,6 +3535,14 @@
                     >
                       {{ s.inStockRate }}%
                     </span>
+                  </td>
+
+                  <td class="py-3.5 px-3 whitespace-nowrap text-center font-mono">
+                    <span *ngIf="(s.avgRating || 0) > 0" class="text-amber-300 font-bold text-xs bg-amber-950/40 px-2 py-0.5 rounded-lg border border-amber-500/30 inline-flex items-center gap-0.5">
+                      <span class="text-amber-400 text-[10px]">★</span>
+                      <span>{{ s.avgRating }}</span>
+                    </span>
+                    <span *ngIf="!s.avgRating || s.avgRating === 0" class="text-slate-600 text-xs">—</span>
                   </td>
 
                   <td class="py-3.5 px-3 whitespace-nowrap text-center">
@@ -4222,9 +4238,59 @@
                       </button>
                     </div>
 
-                    <div class="flex items-center gap-2 mt-1.5" *ngIf="p.seller">
-                      <span class="text-[10px] text-slate-400 font-mono">
-                        Продавець: <span class="text-slate-300 font-bold">{{ p.seller }}</span>
+                    <!-- Rich Seller Info, 1P/3P Status, Leader Badge & Rating -->
+                    <div class="flex flex-wrap items-center gap-2 mt-2" *ngIf="getSellerBadgeInfo(p.seller) as sInfo">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] text-slate-400 font-mono">Продавець:</span>
+                        <button 
+                          (click)="drilldownSellerFilter = (p.seller || 'Rozetka'); cdr.markForCheck(); $event.stopPropagation()"
+                          class="text-[11px] font-bold text-white hover:text-indigo-300 underline decoration-indigo-500/30 hover:decoration-indigo-300 cursor-pointer transition-colors"
+                          [title]="'Фільтрувати товари за продавцем ' + sInfo.name"
+                        >
+                          {{ sInfo.name }}
+                        </button>
+                      </div>
+
+                      <!-- 1P vs 3P Badge -->
+                      <span 
+                        class="px-1.5 py-0.5 rounded text-[9.5px] font-extrabold border uppercase tracking-wider"
+                        [class.bg-emerald-950]="sInfo.isRozetka"
+                        [class.text-emerald-300]="sInfo.isRozetka"
+                        [class.border-emerald-500/40]="sInfo.isRozetka"
+                        [class.bg-slate-900]="!sInfo.isRozetka"
+                        [class.text-indigo-300]="!sInfo.isRozetka"
+                        [class.border-indigo-500/30]="!sInfo.isRozetka"
+                      >
+                        {{ sInfo.isRozetka ? '1P (Rozetka)' : '3P Селер' }}
+                      </span>
+
+                      <!-- Seller Rank / Leader Badge -->
+                      <span 
+                        *ngIf="sInfo.rankLabel"
+                        class="px-2 py-0.5 rounded-md text-[10px] font-extrabold border flex items-center gap-1 shadow-sm"
+                        [class]="sInfo.badgeClass"
+                        [title]="'Статус продавця в ніші: ' + sInfo.rankLabel + ' (' + sInfo.reviewsShare + '% попиту, ' + sInfo.productsCount + ' SKU)'"
+                      >
+                        <span>{{ sInfo.rankLabel }}</span>
+                      </span>
+
+                      <!-- Seller Avg Rating -->
+                      <span 
+                        *ngIf="sInfo.avgRating > 0" 
+                        class="text-[10px] font-bold font-mono text-amber-300 flex items-center gap-0.5 bg-amber-950/50 px-1.5 py-0.5 rounded-md border border-amber-500/40 shadow-sm"
+                        [title]="'Середній рейтинг товарів продавця ' + sInfo.name + ': ★ ' + sInfo.avgRating"
+                      >
+                        <span class="text-amber-400 text-[10px]">★</span>
+                        <span>{{ sInfo.avgRating }}</span>
+                      </span>
+
+                      <!-- Seller Share Details -->
+                      <span 
+                        *ngIf="sInfo.reviewsShare > 0 || sInfo.marketShare > 0"
+                        class="text-[10px] text-slate-400 font-mono hidden md:inline"
+                        [title]="'Частка попиту: ' + sInfo.reviewsShare + '%, асортимент: ' + sInfo.productsCount + ' SKU (' + sInfo.marketShare + '%)'"
+                      >
+                        ({{ sInfo.reviewsShare > 0 ? sInfo.reviewsShare + '% попиту' : sInfo.marketShare + '% SKU' }})
                       </span>
                     </div>
                   </td>
@@ -5124,8 +5190,15 @@
                   {{ p.name }}
                   <span class="material-icons text-sm">open_in_new</span>
                 </a>
-                <div class="flex items-center gap-4 mt-2 text-xs text-slate-400">
-                  <span class="px-2.5 py-1 bg-slate-900/60 border border-[rgba(139,92,246,0.08)] rounded-full text-slate-350 text-[10px]">Продавець: <strong>{{ p.seller || 'Rozetka' }}</strong></span>
+                <div class="flex flex-wrap items-center gap-3 mt-2 text-xs text-slate-400" *ngIf="getSellerBadgeInfo(p.seller) as sInfo">
+                  <span class="px-2.5 py-1 bg-slate-900/60 border border-[rgba(139,92,246,0.08)] rounded-full text-slate-350 text-[10px] flex items-center gap-1.5">
+                    <span>Продавець: <strong>{{ sInfo.name }}</strong></span>
+                    <span class="px-1 py-0.2 rounded text-[9px] font-bold uppercase" [class.bg-emerald-950]="sInfo.isRozetka" [class.text-emerald-300]="sInfo.isRozetka" [class.bg-slate-800]="!sInfo.isRozetka" [class.text-indigo-300]="!sInfo.isRozetka">
+                      {{ sInfo.isRozetka ? '1P' : '3P' }}
+                    </span>
+                    <span *ngIf="sInfo.rankLabel" class="px-1.5 py-0.2 rounded text-[9px] font-bold border" [class]="sInfo.badgeClass">{{ sInfo.rankLabel }}</span>
+                    <span *ngIf="sInfo.avgRating > 0" class="text-amber-300 font-mono font-bold flex items-center gap-0.5">★ {{ sInfo.avgRating }}</span>
+                  </span>
                   <span class="px-2.5 py-1 bg-slate-900/60 border border-[rgba(139,92,246,0.08)] rounded-full text-slate-350 text-[10px]">Категорія: {{ p.category || 'Повербанки' }}</span>
                   <span *ngIf="p.inStock !== false" class="text-emerald-400 font-semibold">● В наявності</span>
                   <span *ngIf="p.inStock === false" class="text-rose-400 font-semibold">● Немає в наявності</span>
@@ -6796,15 +6869,32 @@
                     </button>
                   </div>
 
-                  <div class="flex items-center gap-2 mt-1">
+                  <div class="flex flex-wrap items-center gap-2 mt-1.5" *ngIf="getSellerBadgeInfo(p.seller) as sInfo">
                     <span class="text-[10px] text-slate-400 font-mono">Продавець: 
                       <button 
-                        (click)="drilldownSellerFilter = (p.seller || 'Rozetka')"
-                        class="text-slate-300 hover:text-indigo-300 font-bold underline cursor-pointer"
-                        title="Фільтрувати за цим продавцем"
+                        (click)="drilldownSellerFilter = (p.seller || 'Rozetka'); cdr.markForCheck(); $event.stopPropagation()"
+                        class="text-slate-200 hover:text-indigo-300 font-bold underline decoration-indigo-500/30 hover:decoration-indigo-300 cursor-pointer transition-colors"
+                        [title]="'Фільтрувати за цим продавцем: ' + sInfo.name"
                       >
-                        {{ p.seller || 'Rozetka' }}
+                        {{ sInfo.name }}
                       </button>
+                    </span>
+                    <span 
+                      class="px-1.5 py-0.2 rounded text-[9.5px] font-extrabold border uppercase tracking-wider"
+                      [class.bg-emerald-950]="sInfo.isRozetka"
+                      [class.text-emerald-300]="sInfo.isRozetka"
+                      [class.border-emerald-500/40]="sInfo.isRozetka"
+                      [class.bg-slate-900]="!sInfo.isRozetka"
+                      [class.text-indigo-300]="!sInfo.isRozetka"
+                      [class.border-indigo-500/30]="!sInfo.isRozetka"
+                    >
+                      {{ sInfo.isRozetka ? '1P' : '3P' }}
+                    </span>
+                    <span *ngIf="sInfo.rankLabel" class="px-1.5 py-0.2 rounded text-[9.5px] font-bold border" [class]="sInfo.badgeClass">
+                      {{ sInfo.rankLabel }}
+                    </span>
+                    <span *ngIf="sInfo.avgRating > 0" class="text-[10px] font-bold font-mono text-amber-300 flex items-center gap-0.5 bg-amber-950/40 px-1.5 py-0.2 rounded border border-amber-500/30">
+                      ★ {{ sInfo.avgRating }}
                     </span>
                   </div>
                 </div>

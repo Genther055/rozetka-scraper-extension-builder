@@ -40,6 +40,23 @@ export interface SellerStat {
   color: string;
 }
 
+export interface SellerBadgeInfo {
+  name: string;
+  isRozetka: boolean;
+  rankByDemand: number;
+  rankByAssortment: number;
+  rankLabel: string;
+  badgeClass: string;
+  isLeader: boolean;
+  isTop3: boolean;
+  isTop10: boolean;
+  marketShare: number;
+  reviewsShare: number;
+  totalReviews: number;
+  productsCount: number;
+  avgRating: number;
+}
+
 export interface SellerPieSegment {
   name: string;
   productCount: number;
@@ -184,6 +201,7 @@ export interface AnalyticalSummary {
     minPrice?: number;
     maxPrice?: number;
     inStockRate: number;
+    avgRating?: number;
     color: string;
     rank: number;
     isTop3: boolean;
@@ -864,7 +882,7 @@ export class DashboardComponent implements OnInit {
   // Deterministic Analytics Engine State
   analyticsSummary: AnalyticalSummary | null = null;
   sellerQuickFilter: 'all' | '3p' | 'inStock' | 'noReviews' | 'top20' = 'all';
-  sellerAnalyticsSortColumn: 'productsCount' | 'reviewsSum' | 'avgReviewsPerProduct' | 'medianPrice' | 'inStockRate' | 'marketShare' = 'productsCount';
+  sellerAnalyticsSortColumn: 'productsCount' | 'reviewsSum' | 'avgReviewsPerProduct' | 'medianPrice' | 'inStockRate' | 'marketShare' | 'avgRating' = 'productsCount';
   sellerAnalyticsSortDirection: 'asc' | 'desc' = 'desc';
 
   // Seller Analytics State
@@ -1673,6 +1691,92 @@ export class DashboardComponent implements OnInit {
     if (!seller) return true;
     const s = seller.trim().toLowerCase();
     return s === 'rozetka' || s.includes('rozetka');
+  }
+
+  getSellerBadgeInfo(seller?: string): SellerBadgeInfo {
+    const normName = (seller && String(seller).trim()) ? String(seller).trim() : 'Rozetka';
+    const isRozetka = this.isRozetkaSeller(normName);
+
+    const sellersTable = this.analyticsSummary?.sellersTable || [];
+    const totalReviewsAll = sellersTable.reduce((acc, s) => acc + (s.reviewsSum || 0), 0);
+    const totalProductsAll = sellersTable.reduce((acc, s) => acc + (s.productsCount || 0), 0);
+
+    const sortedByReviews = [...sellersTable].sort((a, b) => (b.reviewsSum || 0) - (a.reviewsSum || 0));
+    const demandIdx = sortedByReviews.findIndex(s => s.sellerName.toLowerCase() === normName.toLowerCase());
+    const rankByDemand = demandIdx >= 0 ? demandIdx + 1 : 999;
+
+    const assortmentIdx = sellersTable.findIndex(s => s.sellerName.toLowerCase() === normName.toLowerCase());
+    const rankByAssortment = assortmentIdx >= 0 ? assortmentIdx + 1 : 999;
+
+    const tableEntry = sellersTable.find(s => s.sellerName.toLowerCase() === normName.toLowerCase());
+    const statEntry = this.sellerStats?.find(s => s.name.toLowerCase() === normName.toLowerCase());
+
+    const totalReviews = tableEntry?.reviewsSum ?? (statEntry?.totalReviews || 0);
+    const productsCount = tableEntry?.productsCount ?? (statEntry?.productCount || 0);
+    const marketShare = tableEntry?.marketShare ?? (statEntry?.marketSharePct || (totalProductsAll > 0 ? Number(((productsCount / totalProductsAll) * 100).toFixed(1)) : 0));
+    const reviewsShare = tableEntry?.reviewsShare ?? (totalReviewsAll > 0 ? Number(((totalReviews / totalReviewsAll) * 100).toFixed(1)) : 0);
+
+    // Average rating: check tableEntry, statEntry, or scan active products
+    let avgRating = tableEntry?.avgRating || statEntry?.avgRating || 0;
+    if (avgRating === 0) {
+      const prods = (this.filteredProducts?.length ? this.filteredProducts : this.products) || [];
+      const ratedProds = prods.filter(p => {
+        const pSeller = (p.seller && String(p.seller).trim()) ? String(p.seller).trim() : 'Rozetka';
+        return pSeller.toLowerCase() === normName.toLowerCase() && p.rating && p.rating > 0;
+      });
+      if (ratedProds.length > 0) {
+        avgRating = +(ratedProds.reduce((acc, p) => acc + (p.rating || 0), 0) / ratedProds.length).toFixed(1);
+      }
+    }
+
+    let rankLabel = '';
+    let badgeClass = 'bg-slate-900/80 text-slate-400 border-slate-750';
+    let isLeader = false;
+    let isTop3 = false;
+    let isTop10 = false;
+
+    if (rankByDemand === 1 && totalReviews > 0) {
+      rankLabel = `👑 #1 Лідер попиту (${reviewsShare}% попиту)`;
+      badgeClass = 'bg-amber-950/90 text-amber-300 border-amber-500/60 shadow-sm';
+      isLeader = true;
+    } else if (rankByAssortment === 1) {
+      rankLabel = `👑 #1 За асортиментом (${marketShare}% SKU)`;
+      badgeClass = 'bg-amber-950/90 text-amber-300 border-amber-500/60 shadow-sm';
+      isLeader = true;
+    } else if (rankByDemand === 2 || rankByAssortment === 2) {
+      rankLabel = `🥈 Топ-2 продавець`;
+      badgeClass = 'bg-indigo-950/90 text-indigo-200 border-indigo-500/50 shadow-sm';
+      isTop3 = true;
+    } else if (rankByDemand === 3 || rankByAssortment === 3) {
+      rankLabel = `🥉 Топ-3 продавець`;
+      badgeClass = 'bg-indigo-950/90 text-indigo-300 border-indigo-500/40 shadow-sm';
+      isTop3 = true;
+    } else if (Math.min(rankByDemand, rankByAssortment) <= 10) {
+      const bestRank = Math.min(rankByDemand, rankByAssortment);
+      rankLabel = `⭐ Топ-10 (#${bestRank})`;
+      badgeClass = 'bg-slate-900 text-slate-300 border-slate-700';
+      isTop10 = true;
+    } else {
+      rankLabel = isRozetka ? '1P Продавець' : '3P Продавець';
+      badgeClass = isRozetka ? 'bg-emerald-950/60 text-emerald-400 border-emerald-700/40' : 'bg-slate-950/80 text-slate-400 border-slate-800';
+    }
+
+    return {
+      name: normName,
+      isRozetka,
+      rankByDemand,
+      rankByAssortment,
+      rankLabel,
+      badgeClass,
+      isLeader,
+      isTop3,
+      isTop10,
+      marketShare,
+      reviewsShare,
+      totalReviews,
+      productsCount,
+      avgRating
+    };
   }
 
   getPriceChartFilteredProducts(): Product[] {
@@ -4503,7 +4607,7 @@ export class DashboardComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
-  sortSellerAnalyticsBy(column: 'productsCount' | 'reviewsSum' | 'avgReviewsPerProduct' | 'medianPrice' | 'inStockRate' | 'marketShare') {
+  sortSellerAnalyticsBy(column: 'productsCount' | 'reviewsSum' | 'avgReviewsPerProduct' | 'medianPrice' | 'inStockRate' | 'marketShare' | 'avgRating') {
     if (this.sellerAnalyticsSortColumn === column) {
       this.sellerAnalyticsSortDirection = this.sellerAnalyticsSortDirection === 'asc' ? 'desc' : 'asc';
     } else {
@@ -4537,8 +4641,9 @@ export class DashboardComponent implements OnInit {
 
     // Sorting
     list.sort((a, b) => {
-      let valA = a[this.sellerAnalyticsSortColumn];
-      let valB = b[this.sellerAnalyticsSortColumn];
+      const col = this.sellerAnalyticsSortColumn;
+      const valA = a[col] ?? 0;
+      const valB = b[col] ?? 0;
       if (valA === valB) return 0;
       if (this.sellerAnalyticsSortDirection === 'asc') {
         return valA > valB ? 1 : -1;
@@ -6656,6 +6761,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
     productsCount: number;
     reviewsSum: number;
     prices: number[];
+    ratings: number[];
     inStockCount: number;
     isRozetka: boolean;
   }>();
@@ -6667,11 +6773,15 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       productsCount: 0,
       reviewsSum: 0,
       prices: [],
+      ratings: [],
       inStockCount: 0,
       isRozetka
     };
     entry.productsCount++;
     entry.reviewsSum += (p.reviews && p.reviews > 0) ? Number(p.reviews) : 0;
+    if (p.rating && Number(p.rating) > 0) {
+      entry.ratings.push(Number(p.rating));
+    }
     if (Number(p.price) > 0 && p.inStock !== false) {
       entry.prices.push(Number(p.price));
     }
@@ -6692,6 +6802,9 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
     const maxP = sortedSellerPrices.length > 0 ? sortedSellerPrices[sortedSellerPrices.length - 1] : 0;
     const avgP = rawPrices.length > 0 ? Math.round(rawPrices.reduce((a, b) => a + b, 0) / rawPrices.length) : 0;
     const reviewsShare = totalAllReviews > 0 ? Number(((stats.reviewsSum / totalAllReviews) * 100).toFixed(1)) : 0;
+    const avgRating = stats.ratings && stats.ratings.length > 0
+      ? +(stats.ratings.reduce((a, b) => a + b, 0) / stats.ratings.length).toFixed(1)
+      : 0;
 
     return {
       sellerName,
@@ -6706,6 +6819,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
       minPrice: minP,
       maxPrice: maxP,
       inStockRate: Number(((stats.inStockCount / stats.productsCount) * 100).toFixed(1)),
+      avgRating,
       color: '#64748b',
       rank: 0,
       isTop3: false,
