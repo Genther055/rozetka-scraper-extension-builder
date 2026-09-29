@@ -879,14 +879,14 @@
 
         // Target for this page: if there's a next page or total > 60, target is 60 items. Otherwise remaining category items.
         let targetForThisPage = 60;
-        if (currentEstimatedTotal > 0) {
+        if (currentEstimatedTotal > 0 && !hasNextPageInDom) {
             const remaining = currentEstimatedTotal - sentLinks.size;
             if (remaining > 0 && remaining < 60) {
                 targetForThisPage = remaining;
             }
         }
 
-        // Continuous incremental step-by-step downward & upward harvesting
+        // Continuous adaptive incremental harvesting across lazy chunks
         const pageNewProducts = [];
         const pageLinksSeen = new Set();
 
@@ -900,93 +900,75 @@
             }
         };
 
-        // Pass 1: Harvest top elements immediately
+        // Round 0: Initial harvest of immediately mounted tiles
         await harvestBatch();
 
-        // Pass 2: Progressive smooth downward scroll through full page height (45 steps * 450px)
-        let currentY = 0;
-        for (let s = 0; s < 45; s++) {
+        // Progressive harvesting cycles (scroll down, trigger lazy-load & show-more until target reached)
+        let consecutiveNoNewRounds = 0;
+        let lastItemCount = pageNewProducts.length;
+
+        for (let round = 0; round < 20 && pageNewProducts.length < targetForThisPage; round++) {
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
 
-            currentY += 450;
-            window.scrollTo({ top: currentY, behavior: 'auto' });
+            // 1. Scroll directly to the bottom-most product tile in the current catalog
+            const currentTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
+            if (currentTiles.length > 0) {
+                const lastTile = currentTiles[currentTiles.length - 1];
+                lastTile.scrollIntoView({ behavior: 'auto', block: 'end' });
+            } else {
+                const scrollY = Math.min(document.body.scrollHeight, (round + 1) * 900);
+                window.scrollTo({ top: scrollY, behavior: 'auto' });
+            }
             window.dispatchEvent(new Event('scroll'));
-            
-            // Allow Rozetka DOM render & change detection
-            await new Promise(r => setTimeout(r, 200));
+            document.dispatchEvent(new Event('scroll'));
+
+            // Allow DOM render
+            await new Promise(r => setTimeout(r, 250));
             await harvestBatch();
 
-            // When approaching item 35-42, trigger "Show more" button if Rozetka halted lazy load
-            if (pageNewProducts.length >= 35 && pageNewProducts.length < targetForThisPage) {
-                const clicked = await triggerShowMoreAndWait();
-                if (clicked) {
+            if (pageNewProducts.length >= targetForThisPage) break;
+
+            // 2. Proactively trigger "Show More" / "Показати ще" button if available
+            const clicked = await triggerShowMoreAndWait();
+            if (clicked) {
+                // When clicked, sample every 250ms for up to 1.2s for Rozetka AJAX chunks to attach
+                for (let w = 0; w < 5; w++) {
+                    await new Promise(r => setTimeout(r, 250));
+                    await harvestBatch();
+                    if (pageNewProducts.length >= targetForThisPage) break;
+                }
+            } else {
+                // Also scroll past paginator area to trigger IntersectionObserver
+                const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"], [class*="catalog-grid__more"]');
+                if (paginator) {
+                    paginator.scrollIntoView({ behavior: 'auto', block: 'center' });
+                    window.dispatchEvent(new Event('scroll'));
+                    document.dispatchEvent(new Event('scroll'));
+                    await new Promise(r => setTimeout(r, 300));
                     await harvestBatch();
                 }
             }
 
-            if (pageNewProducts.length >= targetForThisPage) {
-                break;
-            }
-        }
-
-        // Dedicated bottom pass with show-more trigger
-        if (pageNewProducts.length < targetForThisPage) {
-            const docBottom = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 12000);
-            window.scrollTo({ top: docBottom, behavior: 'auto' });
-            window.dispatchEvent(new Event('scroll'));
-            await triggerShowMoreAndWait();
-            await harvestBatch();
-        }
-
-        // Pass 3: Upward scroll back to top if still under target (captures any unmounted top/middle items)
-        if (pageNewProducts.length < targetForThisPage) {
-            let upY = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-            for (let s = 0; s < 25; s++) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                upY = Math.max(0, upY - 450);
-                window.scrollTo({ top: upY, behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 180));
-                await harvestBatch();
-
-                if (pageNewProducts.length >= targetForThisPage) break;
-                if (upY <= 0) break;
-            }
-        }
-
-        // Pass 4: Secondary checkpoint sweep if still under target
-        if (pageNewProducts.length < targetForThisPage) {
-            await triggerShowMoreAndWait();
-            const checkPoints = [0.25, 0.5, 0.75, 1.0];
-            const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-            for (const pct of checkPoints) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                window.scrollTo({ top: Math.round(maxH * pct), behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 300));
-                await harvestBatch();
-                if (pageNewProducts.length >= targetForThisPage) break;
-            }
-        }
-
-        // Patient bottom check if still under target
-        if (pageNewProducts.length < targetForThisPage) {
-            const bottomElem = document.querySelector('rz-paginator, .pagination, [class*="paginator"], [class*="catalog-grid__more"], footer');
-            if (bottomElem) {
-                bottomElem.scrollIntoView({ behavior: 'auto', block: 'center' });
-                window.dispatchEvent(new Event('scroll'));
+            if (pageNewProducts.length > lastItemCount) {
+                consecutiveNoNewRounds = 0;
+                lastItemCount = pageNewProducts.length;
             } else {
-                window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight), behavior: 'auto' });
-                window.dispatchEvent(new Event('scroll'));
+                consecutiveNoNewRounds++;
+                // If 4 full attempts produced no new items and we are past round 5, catalog on page is exhausted
+                if (consecutiveNoNewRounds >= 4 && round >= 5) {
+                    break;
+                }
             }
-            await triggerShowMoreAndWait();
-            await harvestBatch();
         }
 
-        // Back to top
-        window.scrollTo({ top: 0, behavior: 'auto' });
-        await new Promise(r => setTimeout(r, 100));
-        await harvestBatch();
+        // Upward sweep back to top to catch any unmounted items
+        if (pageNewProducts.length < targetForThisPage) {
+            window.scrollTo({ top: 0, behavior: 'auto' });
+            window.dispatchEvent(new Event('scroll'));
+            document.dispatchEvent(new Event('scroll'));
+            await new Promise(r => setTimeout(r, 250));
+            await harvestBatch();
+        }
 
         // Update total estimate if catalog counter rendered during scroll
         const postEst = getEstimatedTotalFromPage();
