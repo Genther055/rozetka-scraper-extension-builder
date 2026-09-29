@@ -4560,7 +4560,11 @@ export class DashboardComponent implements OnInit {
     const filtered = this.products.filter(p => {
       // 1. Search Query
       if (this.demandSearchQuery) {
-        const matchesSearch = p.name.toLowerCase().includes(this.demandSearchQuery.toLowerCase());
+        const q = this.demandSearchQuery.toLowerCase().trim();
+        const specsText = p.specs || '';
+        const matchesSearch = p.name.toLowerCase().includes(q) || 
+                              specsText.toLowerCase().includes(q) ||
+                              (p.seller && p.seller.toLowerCase().includes(q));
         if (!matchesSearch) return false;
       }
       
