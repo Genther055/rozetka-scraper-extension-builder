@@ -672,50 +672,39 @@
                 let rating = 0;
 
                 if (reviews > 0) {
-                    // Priority 1: Target data-testid="stars-rating" style="width: calc(X% - 2px)" or yellow filler width directly
-                    const starElements = item.querySelectorAll('[data-testid="stars-rating"], .bg-yellow[style*="%"], rz-stars-rating-progress [style*="%"], [class*="stars-rating__filler"], [class*="stars_rating__filler"]');
-                    for (const el of starElements) {
-                        const style = el.getAttribute('style') || '';
+                    // Priority 1: Direct target [data-testid="stars-rating"] width percentage
+                    const starTestIdEl = item.querySelector('[data-testid="stars-rating"], rz-stars-rating-progress .bg-yellow, rz-stars-rating-progress [style*="%"]');
+                    if (starTestIdEl) {
+                        const style = starTestIdEl.getAttribute('style') || '';
                         const match = style.match(/([\d.]+)%/);
                         if (match && match[1]) {
                             const pct = parseFloat(match[1]);
                             if (pct > 0 && pct <= 100) {
                                 rating = parseFloat((pct / 20).toFixed(1));
-                                break;
-                            }
-                        }
-                        const aria = el.getAttribute('aria-label') || el.getAttribute('title') || '';
-                        const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
-                        if (ariaMatch && ariaMatch[1]) {
-                            const val = parseFloat(ariaMatch[1].replace(',', '.'));
-                            if (val > 0 && val <= 5) {
-                                rating = val;
-                                break;
                             }
                         }
                     }
 
-                    // Priority 2: Generic rating container (aria-label or inner element style)
+                    // Priority 2: Star rating container or text/aria labels
                     if (rating === 0) {
-                        const starsEl = item.querySelector('rz-stars-rating-progress, rz-tile-rating, rz-rating, app-rating, .stars_rating, .goods-tile__stars, [class*="stars"], [class*="rating"]');
-                        if (starsEl) {
-                            const aria = starsEl.getAttribute('aria-label') || starsEl.querySelector('[aria-label]')?.getAttribute('aria-label') || '';
-                            const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
-                            if (ariaMatch) {
-                                const rVal = parseFloat(ariaMatch[1].replace(',', '.'));
-                                if (rVal > 0 && rVal <= 5) rating = rVal;
+                        const starElements = item.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, [class*="stars-rating__filler"], [class*="stars_rating__filler"]');
+                        for (const el of starElements) {
+                            const style = el.getAttribute('style') || '';
+                            const match = style.match(/([\d.]+)%/);
+                            if (match && match[1]) {
+                                const pct = parseFloat(match[1]);
+                                if (pct > 0 && pct <= 100) {
+                                    rating = parseFloat((pct / 20).toFixed(1));
+                                    break;
+                                }
                             }
-                            if (rating === 0) {
-                                const fill = starsEl.querySelector('[style*="%"], [class*="fill"]');
-                                if (fill) {
-                                    const style = fill.getAttribute('style') || '';
-                                    const match = style.match(/([\d.]+)%/);
-                                    if (match && match[1]) {
-                                        const pct = parseFloat(match[1]);
-                                        if (pct > 0 && pct <= 100) {
-                                            rating = parseFloat((pct / 20).toFixed(1));
-                                        }
-                                    }
+                            const aria = el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '';
+                            const ariaMatch = aria.match(/([\d.,]+)\s*(?:з|из|\/)\s*5/i);
+                            if (ariaMatch && ariaMatch[1]) {
+                                const val = parseFloat(ariaMatch[1].replace(',', '.'));
+                                if (val > 0 && val <= 5) {
+                                    rating = val;
+                                    break;
                                 }
                             }
                         }
