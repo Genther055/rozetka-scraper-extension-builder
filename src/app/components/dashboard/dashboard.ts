@@ -613,14 +613,38 @@ export class DashboardComponent implements OnInit {
     return pages;
   }
 
+  sanitizeProducts(prods: Product[]): Product[] {
+    if (!Array.isArray(prods)) return [];
+    return prods.map(p => {
+      if (!p) return p;
+      const reviews = Number(p.reviews) || 0;
+      const rating = Number(p.rating) || 0;
+      // If no reviews exist, rating is strictly 0 and must not display stars
+      if (reviews <= 0 || rating <= 0) {
+        return {
+          ...p,
+          reviews: reviews > 0 ? reviews : 0,
+          rating: 0
+        };
+      }
+      return {
+        ...p,
+        reviews,
+        rating
+      };
+    });
+  }
+
   getActiveSessionProducts(): Product[] {
     if (!this.products || this.products.length === 0) return [];
-    if (this.selectedSessionTitle === 'all') return this.products;
-    return this.products.filter(p => {
-      const raw = (p.sessionTitle || p.category || 'Загальна').trim();
-      const clean = this.normalizeSessionTitle(raw);
-      return clean === this.selectedSessionTitle || raw === this.selectedSessionTitle;
-    });
+    const list = this.selectedSessionTitle === 'all' 
+      ? this.products 
+      : this.products.filter(p => {
+          const raw = (p.sessionTitle || p.category || 'Загальна').trim();
+          const clean = this.normalizeSessionTitle(raw);
+          return clean === this.selectedSessionTitle || raw === this.selectedSessionTitle;
+        });
+    return this.sanitizeProducts(list);
   }
 
   // History & Folders State
@@ -716,9 +740,9 @@ export class DashboardComponent implements OnInit {
 
     // 4. Rating Filter
     if (this.drilldownRatingFilter === '4.5') {
-      list = list.filter(p => (p.rating || 0) >= 4.5);
+      list = list.filter(p => (p.reviews || 0) > 0 && (p.rating || 0) >= 4.5);
     } else if (this.drilldownRatingFilter === '4.0') {
-      list = list.filter(p => (p.rating || 0) >= 4.0);
+      list = list.filter(p => (p.reviews || 0) > 0 && (p.rating || 0) >= 4.0);
     }
 
     // 5. Discount Filter
@@ -760,8 +784,8 @@ export class DashboardComponent implements OnInit {
         valA = Number(a.reviews) || 0;
         valB = Number(b.reviews) || 0;
       } else if (this.drilldownSortColumn === 'rating') {
-        valA = Number(a.rating) || 0;
-        valB = Number(b.rating) || 0;
+        valA = ((a.reviews || 0) > 0 && (a.rating || 0) > 0) ? Number(a.rating) : 0;
+        valB = ((b.reviews || 0) > 0 && (b.rating || 0) > 0) ? Number(b.rating) : 0;
       } else if (this.drilldownSortColumn === 'inStock') {
         valA = a.inStock !== false ? 1 : 0;
         valB = b.inStock !== false ? 1 : 0;
@@ -3591,9 +3615,9 @@ export class DashboardComponent implements OnInit {
 
     // 5. Rating Filter
     if (this.drilldownRatingFilter === '4.5') {
-      list = list.filter(p => (p.rating || 0) >= 4.5);
+      list = list.filter(p => (p.reviews || 0) > 0 && (p.rating || 0) >= 4.5);
     } else if (this.drilldownRatingFilter === '4.0') {
-      list = list.filter(p => (p.rating || 0) >= 4.0);
+      list = list.filter(p => (p.reviews || 0) > 0 && (p.rating || 0) >= 4.0);
     }
 
     // 6. Discount / Promo Filter
@@ -3638,8 +3662,8 @@ export class DashboardComponent implements OnInit {
         valA = Number(a.reviews) || 0;
         valB = Number(b.reviews) || 0;
       } else if (this.drilldownSortColumn === 'rating') {
-        valA = Number(a.rating) || 0;
-        valB = Number(b.rating) || 0;
+        valA = ((a.reviews || 0) > 0 && (a.rating || 0) > 0) ? Number(a.rating) : 0;
+        valB = ((b.reviews || 0) > 0 && (b.rating || 0) > 0) ? Number(b.rating) : 0;
       } else if (this.drilldownSortColumn === 'inStock') {
         valA = a.inStock !== false ? 1 : 0;
         valB = b.inStock !== false ? 1 : 0;
@@ -4551,7 +4575,7 @@ export class DashboardComponent implements OnInit {
     this.filteredProducts = baseProducts.filter((p, index) => {
       const matchesSearch = p.name.toLowerCase().includes(this.searchQuery.toLowerCase());
       const matchesPrice = p.price >= (this.minPrice || 0) && (this.maxPrice === null || this.maxPrice === undefined || p.price <= this.maxPrice);
-      const matchesRating = p.rating >= this.minRating;
+      const matchesRating = this.minRating > 0 ? ((p.reviews || 0) > 0 && (p.rating || 0) >= this.minRating) : true;
       const matchesStatus = this.statusFilter === 'all' || p.aiStatus === this.statusFilter;
       
       let matchesStock = true;
@@ -6267,8 +6291,10 @@ export function extractProductSpecsMap(p: any): Record<string, string> {
   if (!map['Рейтинг та відгуки']) {
     const rating = Number(p.rating) || 0;
     const reviews = Number(p.reviews) || 0;
-    if (rating > 0 || reviews > 0) {
+    if (reviews > 0) {
       map['Рейтинг та відгуки'] = rating > 0 ? `★ ${rating.toFixed(1)} (${reviews} відгуків)` : `${reviews} відгуків`;
+    } else {
+      map['Рейтинг та відгуки'] = '— (0 відгуків)';
     }
   }
 

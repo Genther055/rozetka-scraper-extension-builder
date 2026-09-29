@@ -184,7 +184,7 @@ app.post('/api/products', async (req, res) => {
         
         const itemPrice = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
         const itemReviews = typeof item.reviews === 'number' ? item.reviews : parseInt(item.reviews) || 0;
-        const itemRating = typeof item.rating === 'number' ? item.rating : (item.rating ? parseFloat(item.rating) : 0);
+        const itemRating = itemReviews > 0 ? (typeof item.rating === 'number' ? item.rating : (item.rating ? parseFloat(item.rating) : 0)) : 0;
         let itemOldPrice = typeof item.oldPrice === 'number' ? item.oldPrice : (parseFloat(item.oldPrice) || itemPrice);
         let itemDiscount = typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0);
 
