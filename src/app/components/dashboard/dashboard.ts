@@ -55,7 +55,6 @@ export interface SellerBadgeInfo {
   totalReviews: number;
   productsCount: number;
   avgRating: number;
-  inStockRatedCount?: number;
 }
 
 export interface SellerPieSegment {
@@ -1724,19 +1723,17 @@ export class DashboardComponent implements OnInit {
     const marketShare = tableEntry?.marketShare ?? (statEntry?.marketSharePct || (totalProductsAll > 0 ? Number(((productsCount / totalProductsAll) * 100).toFixed(1)) : 0));
     const reviewsShare = tableEntry?.reviewsShare ?? (totalReviewsAll > 0 ? Number(((totalReviews / totalReviewsAll) * 100).toFixed(1)) : 0);
 
-    // Calculate average rating strictly based on this seller's IN-STOCK scraped products that have ratings
-    const prods = (this.filteredProducts?.length ? this.filteredProducts : this.products) || [];
-    const inStockRatedProds = prods.filter(p => {
-      const pSeller = (p.seller && String(p.seller).trim()) ? String(p.seller).trim() : 'Rozetka';
-      return pSeller.toLowerCase() === normName.toLowerCase() && p.inStock !== false && p.rating && p.rating > 0 && p.reviews && p.reviews > 0;
-    });
-
-    let avgRating = 0;
-    let inStockRatedCount = inStockRatedProds.length;
-    if (inStockRatedCount > 0) {
-      avgRating = +(inStockRatedProds.reduce((acc, p) => acc + (p.rating || 0), 0) / inStockRatedCount).toFixed(1);
-    } else if (tableEntry && (tableEntry.avgRating || 0) > 0) {
-      avgRating = tableEntry.avgRating || 0;
+    // Average rating: check tableEntry, statEntry, or scan active products
+    let avgRating = tableEntry?.avgRating || statEntry?.avgRating || 0;
+    if (avgRating === 0) {
+      const prods = (this.filteredProducts?.length ? this.filteredProducts : this.products) || [];
+      const ratedProds = prods.filter(p => {
+        const pSeller = (p.seller && String(p.seller).trim()) ? String(p.seller).trim() : 'Rozetka';
+        return pSeller.toLowerCase() === normName.toLowerCase() && p.rating && p.rating > 0;
+      });
+      if (ratedProds.length > 0) {
+        avgRating = +(ratedProds.reduce((acc, p) => acc + (p.rating || 0), 0) / ratedProds.length).toFixed(1);
+      }
     }
 
     let rankLabel = '';
@@ -4325,7 +4322,7 @@ export class DashboardComponent implements OnInit {
       const data = sellerMap.get(seller)!;
       data.count++;
       if (p.price && p.price > 0) data.prices.push(p.price);
-      if (p.inStock !== false && p.reviews && p.reviews > 0 && p.rating && p.rating > 0) data.ratings.push(p.rating);
+      if (p.reviews && p.reviews > 0 && p.rating && p.rating > 0) data.ratings.push(p.rating);
       if (p.reviews && p.reviews > 0) data.reviews += p.reviews;
       if (p.inStock !== false) data.inStockCount++;
     }
@@ -6789,7 +6786,7 @@ export function computeMarketplaceAnalytics(products: any[]): AnalyticalSummary 
     };
     entry.productsCount++;
     entry.reviewsSum += (p.reviews && p.reviews > 0) ? Number(p.reviews) : 0;
-    if (p.inStock !== false && p.rating && Number(p.rating) > 0 && p.reviews && Number(p.reviews) > 0) {
+    if (p.rating && Number(p.rating) > 0) {
       entry.ratings.push(Number(p.rating));
     }
     if (Number(p.price) > 0 && p.inStock !== false) {
