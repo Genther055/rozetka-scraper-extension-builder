@@ -93,27 +93,48 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
             }
           }
           if ((currentProducts[index].reviews || 0) > 0 && (!currentProducts[index].rating || currentProducts[index].rating === 0)) {
-            if (apiItem.stars_rating) {
+            let foundRating = 0;
+            // 1. Try Comments Stats API
+            try {
+              const commentsRes = await fetch(`https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${productId}`).catch(() => null);
+              if (commentsRes && commentsRes.ok) {
+                const commentsJson: any = await commentsRes.json().catch(() => null);
+                if (commentsJson && commentsJson.data) {
+                  if (typeof commentsJson.data.rating === 'number' && commentsJson.data.rating > 0) {
+                    foundRating = parseFloat(commentsJson.data.rating.toFixed(1));
+                  } else if (commentsJson.data.marks && typeof commentsJson.data.marks === 'object') {
+                    let totalMarks = 0;
+                    let weightedSum = 0;
+                    for (let m = 1; m <= 5; m++) {
+                      const count = Number(commentsJson.data.marks[String(m)]) || 0;
+                      totalMarks += count;
+                      weightedSum += count * m;
+                    }
+                    if (totalMarks > 0) {
+                      foundRating = parseFloat((weightedSum / totalMarks).toFixed(1));
+                    }
+                  }
+                }
+              }
+            } catch (_) {}
+
+            // 2. Try apiItem stars_rating or rating
+            if (foundRating === 0 && apiItem.stars_rating) {
               const numRating = parseFloat(String(apiItem.stars_rating).replace(',', '.'));
               if (numRating > 0 && numRating <= 5) {
-                currentProducts[index].rating = numRating;
-                updated = true;
+                foundRating = numRating;
               }
-            } else if (apiItem.stars) {
-              const numRating = parseFloat(String(apiItem.stars).replace(',', '.'));
-              if (numRating > 5 && numRating <= 100) {
-                currentProducts[index].rating = parseFloat((numRating / 20).toFixed(1));
-                updated = true;
-              } else if (numRating > 0 && numRating <= 5) {
-                currentProducts[index].rating = numRating;
-                updated = true;
-              }
-            } else if (apiItem.rating) {
+            }
+            if (foundRating === 0 && apiItem.rating) {
               const numRating = parseFloat(String(apiItem.rating).replace(',', '.'));
               if (numRating > 0 && numRating <= 5) {
-                currentProducts[index].rating = numRating;
-                updated = true;
+                foundRating = numRating;
               }
+            }
+
+            if (foundRating > 0) {
+              currentProducts[index].rating = foundRating;
+              updated = true;
             }
           } else if (!currentProducts[index].reviews || currentProducts[index].reviews === 0) {
             if (currentProducts[index].rating !== 0) {

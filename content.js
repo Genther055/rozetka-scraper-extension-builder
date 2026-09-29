@@ -483,8 +483,9 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // Batch fetch official Rozetka product details (seller title, exact pricing, stock, reviews)
+        // Batch fetch official Rozetka product details & exact ratings
         const apiProductMap = new Map();
+        const exactRatingMap = new Map();
         try {
             const productIds = [];
             for (const { link } of distinctTiles) {
@@ -492,12 +493,13 @@
                 if (m && m[1]) productIds.push(m[1]);
             }
             if (productIds.length > 0) {
+                // 1. Batch fetch general product details (seller, price, stock)
                 const chunkSize = 60;
                 for (let i = 0; i < productIds.length; i += chunkSize) {
                     const chunk = productIds.slice(i, i + chunkSize);
                     const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${chunk.join(',')}`;
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 2500);
+                    const timeoutId = setTimeout(() => controller.abort(), 3000);
                     const res = await fetch(apiUrl, { signal: controller.signal }).catch(() => null);
                     clearTimeout(timeoutId);
                     if (res && res.ok) {
@@ -510,6 +512,39 @@
                             }
                         }
                     }
+                }
+
+                // 2. Parallel fetch exact ratings & marks from Rozetka Comments API
+                const ratingChunkSize = 20;
+                for (let i = 0; i < productIds.length; i += ratingChunkSize) {
+                    const chunk = productIds.slice(i, i + ratingChunkSize);
+                    await Promise.all(chunk.map(async (prodId) => {
+                        try {
+                            const res = await fetch(`/api/goods-comments/v2/stats?goods_id=${prodId}`).catch(() => null);
+                            if (res && res.ok) {
+                                const json = await res.json().catch(() => null);
+                                if (json && json.data) {
+                                    if (typeof json.data.rating === 'number' && json.data.rating > 0) {
+                                        exactRatingMap.set(String(prodId), parseFloat(json.data.rating.toFixed(1)));
+                                        return;
+                                    }
+                                    if (json.data.marks && typeof json.data.marks === 'object') {
+                                        let totalMarks = 0;
+                                        let weightedSum = 0;
+                                        for (let m = 1; m <= 5; m++) {
+                                            const count = Number(json.data.marks[String(m)]) || 0;
+                                            totalMarks += count;
+                                            weightedSum += count * m;
+                                        }
+                                        if (totalMarks > 0) {
+                                            exactRatingMap.set(String(prodId), parseFloat((weightedSum / totalMarks).toFixed(1)));
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (_) {}
+                    }));
                 }
             }
         } catch (_) {}
@@ -672,8 +707,13 @@
                 let rating = 0;
 
                 if (reviews > 0) {
-                    // Priority 1: Official Rozetka API Backend Details (Direct Source of Truth)
-                    if (apiDetails) {
+                    // Priority 1: Direct Rozetka Comments Stats API (Exact Decimal Rating: e.g. 4.2, 4.5, 3.8)
+                    if (prodId && exactRatingMap.has(prodId)) {
+                        rating = exactRatingMap.get(prodId);
+                    }
+
+                    // Priority 2: Official Rozetka API Backend Details (stars_rating or rating)
+                    if (rating === 0 && apiDetails) {
                         if (apiDetails.stars_rating) {
                             const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
                             if (apiVal > 0 && apiVal <= 5) rating = parseFloat(apiVal.toFixed(1));
@@ -682,14 +722,9 @@
                             const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
                             if (apiVal > 0 && apiVal <= 5) rating = parseFloat(apiVal.toFixed(1));
                         }
-                        if (rating === 0 && apiDetails.stars) {
-                            const apiVal = parseFloat(String(apiDetails.stars).replace(',', '.'));
-                            if (apiVal > 5 && apiVal <= 100) rating = parseFloat((apiVal / 20).toFixed(1));
-                            else if (apiVal > 0 && apiVal <= 5) rating = parseFloat(apiVal.toFixed(1));
-                        }
                     }
 
-                    // Priority 2: Dedicated Product Comment Rating Element (e.g. <rz-product-comment-rating> <span class="font-bold">4.2</span>)
+                    // Priority 3: Dedicated Product Comment Rating Element (e.g. <rz-product-comment-rating> <span class="font-bold">4.2</span>)
                     if (rating === 0) {
                         const commentRatingEl = item.querySelector('rz-product-comment-rating, .product-comment-rating, [class*="comment-rating"]');
                         if (commentRatingEl) {
@@ -703,7 +738,7 @@
                         }
                     }
 
-                    // Priority 3: Star rating container or text/aria labels (e.g. "4.2 з 5", "4.2 / 5")
+                    // Priority 4: Star rating container or text/aria labels (e.g. "4.2 з 5", "4.2 / 5")
                     if (rating === 0) {
                         const ratingContainers = item.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"]');
                         for (const el of ratingContainers) {
@@ -719,7 +754,7 @@
                         }
                     }
 
-                    // Priority 4: Dynamic Star Progress Percentage Width ([data-testid="stars-rating"])
+                    // Priority 5: Dynamic Star Progress Percentage Width (ONLY if explicitly variable/non-default)
                     if (rating === 0) {
                         const starTestIdEl = item.querySelector('[data-testid="stars-rating"], rz-stars-rating-progress .bg-yellow, rz-stars-rating-progress [style*="%"]');
                         if (starTestIdEl) {
@@ -727,7 +762,7 @@
                             const match = style.match(/([\d.]+)%/);
                             if (match && match[1]) {
                                 const pct = parseFloat(match[1]);
-                                if (pct > 0 && pct <= 100) {
+                                if (pct > 0 && pct <= 100 && Math.round(pct) !== 96) {
                                     rating = parseFloat((pct / 20).toFixed(1));
                                 }
                             }
