@@ -3463,9 +3463,9 @@
                     </div>
                   </th>
 
-                  <th (click)="sortSellerAnalyticsBy('avgRating')" class="py-3 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap text-center">
+                  <th (click)="sortSellerAnalyticsBy('avgRating')" class="py-3 px-3 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap text-center" title="Середній рейтинг товарів цього продавця у цій ніші">
                     <div class="flex items-center justify-center gap-1">
-                      <span>Рейтинг ★</span>
+                      <span>Сер. оцінка товарів ★</span>
                       <span class="material-icons text-sm text-indigo-400" *ngIf="sellerAnalyticsSortColumn === 'avgRating'">{{ sellerAnalyticsSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
                       <span class="material-icons text-sm text-slate-600" *ngIf="sellerAnalyticsSortColumn !== 'avgRating'">unfold_more</span>
                     </div>
@@ -3673,9 +3673,9 @@
                     </div>
                   </th>
                   
-                  <th (click)="sortBy('rating')" class="py-4 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap min-w-[120px]">
+                  <th (click)="sortBy('rating')" class="py-4 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors whitespace-nowrap min-w-[130px]" title="Рейтинг самого товару за відгуками покупців">
                     <div class="flex items-center gap-1.5">
-                      <span>Рейтинг & Відгуки</span>
+                      <span>Оцінка товару ★ & Відгуки</span>
                       <span class="material-icons text-sm text-indigo-400" *ngIf="sortColumn === 'rating' || sortColumn === 'reviews'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
                       <span class="material-icons text-sm text-slate-600" *ngIf="sortColumn !== 'rating' && sortColumn !== 'reviews'">unfold_more</span>
                     </div>
