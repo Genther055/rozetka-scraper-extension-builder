@@ -3820,37 +3820,31 @@
 
 
 
-      <!-- TAB 3: DEMAND ESTIMATOR -->
+      <!-- TAB 3: DEMAND & SPECIFICATIONS ANALYTICS (FULL PAGE) -->
       <div *ngIf="activeTab === 'demand' && products.length > 0" class="space-y-6 animate-fadeIn">
-        <div class="p-6 premium-card">
-          <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Як розраховується попит?</h3>
-          <p class="text-sm text-slate-350 leading-relaxed max-w-3xl font-medium">
-            Оскільки відкриті дані маркетплейсів не показують пряму кількість продажів, TradeScout використовує 
-            <b>Demand Estimator модель</b>: на основі коефіцієнта задоволеності та кількості відгуків вираховується 
-            орієнтовний обсяг місячних продажів (приблизно 1 відгук відповідає 12 реальним покупкам).
-          </p>
-        </div>
-
-        <!-- Spec & Variations Demand Breakdown (Аналітика характеристик & Порівняння схожих товарів) -->
+        
+        <!-- Header & Category Switcher Card -->
         <div *ngIf="analyticsSummary && analyticsSummary.specAnalytics && analyticsSummary.specAnalytics.length > 0" class="p-6 premium-card space-y-5">
           <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
             <div class="flex items-center gap-2">
-              <span class="material-icons text-purple-400 text-lg">tune</span>
+              <span class="material-icons text-purple-400 text-xl">tune</span>
               <div>
-                <h3 class="text-sm font-bold text-white uppercase tracking-wider">Аналітика характеристик & Порівняння схожих товарів</h3>
-                <p class="text-xs text-slate-400">Автоматичне групування товарів за технічними параметрами, розрахунок часток пропозиції, реального попиту та середніх цін</p>
+                <h3 class="text-base font-bold text-white uppercase tracking-wider">Аналітика характеристик & Порівняння схожих товарів</h3>
+                <p class="text-xs text-slate-400">Автоматичне сегментування товарів за параметрами ніші, розрахунок часток пропозиції, реального попиту та середніх цін</p>
               </div>
             </div>
 
             <!-- Spec Category Selector Tabs -->
-            <div class="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <div class="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
               <button 
                 *ngFor="let specCat of analyticsSummary.specAnalytics; let idx = index"
-                (click)="selectedSpecCategoryIndex = idx"
+                (click)="selectSpecCategoryTab(idx)"
                 [class.bg-purple-600]="selectedSpecCategoryIndex === idx"
                 [class.text-white]="selectedSpecCategoryIndex === idx"
+                [class.shadow-lg]="selectedSpecCategoryIndex === idx"
+                [class.shadow-purple-600/30]="selectedSpecCategoryIndex === idx"
                 [class.text-slate-400]="selectedSpecCategoryIndex !== idx"
-                class="px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer hover:text-white flex items-center gap-1.5"
+                class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer hover:text-white flex items-center gap-1.5"
               >
                 <span>{{ specCat.specKey }}</span>
                 <span class="text-[10px] px-1.5 py-0.2 rounded-md bg-black/40 text-slate-300 font-mono">{{ specCat.coveragePct }}%</span>
@@ -3858,12 +3852,17 @@
             </div>
           </div>
 
-          <!-- Active Spec Category Content -->
-          <div *ngIf="analyticsSummary.specAnalytics[selectedSpecCategoryIndex] as activeSpec" class="space-y-3">
+          <!-- Active Spec Category Cards Grid -->
+          <div *ngIf="getActiveSpecCategory() as activeSpec" class="space-y-3">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
               <div 
-                *ngFor="let valStat of activeSpec.values"
-                (click)="openSpecValueProductsModal(activeSpec.specKey, valStat)"
+                *ngFor="let valStat of activeSpec.values; let valIdx = index"
+                (click)="selectSpecValueCard(valIdx)"
+                [class.ring-2]="selectedSpecValueIndex === valIdx"
+                [class.ring-purple-500]="selectedSpecValueIndex === valIdx"
+                [class.bg-slate-900]="selectedSpecValueIndex === valIdx"
+                [class.border-purple-500]="selectedSpecValueIndex === valIdx"
+                [class.shadow-purple-950/40]="selectedSpecValueIndex === valIdx"
                 class="p-4 rounded-2xl bg-slate-950/80 hover:bg-slate-900/90 border border-slate-800/90 hover:border-purple-500/50 transition-all cursor-pointer group space-y-3 relative overflow-hidden shadow-md"
               >
                 <!-- Top: Value Name & Badges -->
@@ -3874,6 +3873,7 @@
                     </span>
                     <p class="text-[11px] text-slate-400 font-mono">
                       Сер. ціна: <span class="font-bold text-emerald-400">{{ valStat.avgPrice | number }} ₴</span>
+                      <span *ngIf="valStat.medianPrice" class="text-slate-500 ml-1">(мед. {{ valStat.medianPrice | number }} ₴)</span>
                     </p>
                   </div>
 
@@ -3914,7 +3914,7 @@
                   </div>
                 </div>
 
-                <!-- Footer: Demand-Supply Ratio & View Products Action -->
+                <!-- Footer: Demand-Supply Ratio & Select Status -->
                 <div class="pt-2.5 border-t border-slate-900/90 flex items-center justify-between text-[11px] text-slate-400">
                   <div class="flex items-center gap-1 relative group/specratio">
                     <span>Віддача:</span>
@@ -3929,9 +3929,19 @@
                     </div>
                   </div>
 
-                  <span class="text-[11px] font-bold text-purple-400 group-hover:text-purple-300 flex items-center gap-0.5 transition-colors">
-                    <span>Товари ({{ valStat.productsCount }})</span>
-                    <span class="material-icons text-xs group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
+                  <span 
+                    [class.text-purple-300]="selectedSpecValueIndex === valIdx"
+                    [class.text-slate-400]="selectedSpecValueIndex !== valIdx"
+                    class="text-[11px] font-bold flex items-center gap-1 transition-colors"
+                  >
+                    <span *ngIf="selectedSpecValueIndex === valIdx" class="text-emerald-400 flex items-center gap-0.5">
+                      <span class="material-icons text-xs">check_circle</span>
+                      <span>Обрано</span>
+                    </span>
+                    <span *ngIf="selectedSpecValueIndex !== valIdx" class="group-hover:text-purple-300 flex items-center gap-0.5">
+                      <span>Товари ({{ valStat.productsCount }})</span>
+                      <span class="material-icons text-xs group-hover:translate-y-0.5 transition-transform">arrow_downward</span>
+                    </span>
                   </span>
                 </div>
               </div>
@@ -3939,219 +3949,348 @@
           </div>
         </div>
 
-        <!-- Filters panel for Demand Estimator -->
-        <div class="p-6 premium-card space-y-4">
-          <div class="flex justify-between items-center pb-2 border-b border-slate-800/80">
-            <h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider">Фільтрація оцінки попиту</h4>
+        <!-- Integrated Full-Page Products Table for Active Specification -->
+        <div *ngIf="getActiveSpecCategory() as activeSpec" class="p-6 premium-card space-y-4">
+          
+          <!-- Table Header: Title, Active Meta & Export -->
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="material-icons text-indigo-400 text-lg">format_list_bulleted</span>
+                <h4 class="text-sm font-extrabold text-white uppercase tracking-wider">
+                  <span *ngIf="getActiveSpecValue() as val">Товари в модифікації: "{{ activeSpec.specKey }}: {{ val.specValue }}"</span>
+                  <span *ngIf="!getActiveSpecValue()">Всі товари категорії: "{{ activeSpec.specKey }}"</span>
+                </h4>
+              </div>
+
+              <p class="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
+                <span class="font-bold text-white font-mono">{{ getFilteredActiveSpecProducts().length }} SKU</span>
+                <span *ngIf="getActiveSpecValue() as val" class="text-slate-500">•</span>
+                <span *ngIf="getActiveSpecValue() as val" class="text-indigo-300 font-mono">{{ val.productsShare }}% ринку</span>
+                <span *ngIf="getActiveSpecValue() as val" class="text-slate-500">•</span>
+                <span *ngIf="getActiveSpecValue() as val" class="text-purple-300 font-mono">{{ val.reviewsSum | number }} відгуків ({{ val.reviewsShare }}% попиту)</span>
+                <span *ngIf="getActiveSpecValue() as val" class="text-slate-500">•</span>
+                <span *ngIf="getActiveSpecValue() as val" class="text-emerald-400 font-mono">Сер. ціна: {{ val.avgPrice | number }} ₴</span>
+              </p>
+            </div>
+
+            <!-- Action Toolbar (Export & Category View Toggle) -->
+            <div class="flex items-center gap-2 shrink-0">
+              <button 
+                (click)="selectedSpecValueIndex = (selectedSpecValueIndex === -1 ? 0 : -1)"
+                [class.bg-purple-950]="selectedSpecValueIndex === -1"
+                [class.text-purple-300]="selectedSpecValueIndex === -1"
+                [class.border-purple-500]="selectedSpecValueIndex === -1"
+                [class.bg-slate-900]="selectedSpecValueIndex !== -1"
+                [class.text-slate-300]="selectedSpecValueIndex !== -1"
+                class="px-3 py-1.5 rounded-xl border border-slate-750 hover:border-purple-500/50 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                title="Показати всі товари цієї категорії характеристик"
+              >
+                <span class="material-icons text-xs">all_inclusive</span>
+                <span>{{ selectedSpecValueIndex === -1 ? 'Показати окрему групу' : 'Всі значення категорії' }}</span>
+              </button>
+
+              <button 
+                (click)="exportActiveSpecGroupToExcel()"
+                class="px-3 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/60 text-emerald-300 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                title="Експорт поточної вибірки в Excel"
+              >
+                <span class="material-icons text-xs">download</span>
+                <span>Експорт в Excel</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Filter Chips -->
+          <div class="flex items-center gap-1.5 select-none shrink-0 text-xs overflow-x-auto no-scrollbar pb-1 flex-nowrap">
+            <span class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mr-1 shrink-0">Швидкі фільтри:</span>
+            
             <button 
-              (click)="resetDemandFilters()" 
-              class="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-wider cursor-pointer"
+              (click)="toggleQuickFilter('inStock')"
+              [class.bg-emerald-950]="drilldownStockFilter === 'inStock'"
+              [class.text-emerald-300]="drilldownStockFilter === 'inStock'"
+              [class.border-emerald-500]="drilldownStockFilter === 'inStock'"
+              [class.bg-slate-900]="drilldownStockFilter !== 'inStock'"
+              [class.text-slate-400]="drilldownStockFilter !== 'inStock'"
+              [class.border-slate-800]="drilldownStockFilter !== 'inStock'"
+              class="px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1 shrink-0"
             >
-              Скинути фільтри
+              <span>⚡ В наявності</span>
+            </button>
+
+            <button 
+              (click)="toggleQuickFilter('topReviews')"
+              [class.bg-amber-950]="drilldownReviewsFilter === 'topReviews'"
+              [class.text-amber-300]="drilldownReviewsFilter === 'topReviews'"
+              [class.border-amber-500]="drilldownReviewsFilter === 'topReviews'"
+              [class.bg-slate-900]="drilldownReviewsFilter !== 'topReviews'"
+              [class.text-slate-400]="drilldownReviewsFilter !== 'topReviews'"
+              [class.border-slate-800]="drilldownReviewsFilter !== 'topReviews'"
+              class="px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1 shrink-0"
+            >
+              <span>🔥 Топ попит (10+ відг.)</span>
+            </button>
+
+            <button 
+              (click)="toggleQuickFilter('discount')"
+              [class.bg-rose-950]="drilldownDiscountFilter === 'discountOnly'"
+              [class.text-rose-300]="drilldownDiscountFilter === 'discountOnly'"
+              [class.border-rose-500]="drilldownDiscountFilter === 'discountOnly'"
+              [class.bg-slate-900]="drilldownDiscountFilter !== 'discountOnly'"
+              [class.text-slate-400]="drilldownDiscountFilter !== 'discountOnly'"
+              [class.border-slate-800]="drilldownDiscountFilter !== 'discountOnly'"
+              class="px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1 shrink-0"
+            >
+              <span>🏷️ Зі знижкою</span>
+            </button>
+
+            <button 
+              (click)="toggleQuickFilter('rating45')"
+              [class.bg-amber-950]="drilldownRatingFilter === '4.5'"
+              [class.text-amber-300]="drilldownRatingFilter === '4.5'"
+              [class.border-amber-500]="drilldownRatingFilter === '4.5'"
+              [class.bg-slate-900]="drilldownRatingFilter !== '4.5'"
+              [class.text-slate-400]="drilldownRatingFilter !== '4.5'"
+              [class.border-slate-800]="drilldownRatingFilter !== '4.5'"
+              class="px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1 shrink-0"
+            >
+              <span>⭐ Рейтинг 4.5+</span>
+            </button>
+
+            <button 
+              (click)="toggleQuickFilter('rozetka')"
+              [class.bg-indigo-950]="drilldownSellerFilter === 'rozetka'"
+              [class.text-indigo-300]="drilldownSellerFilter === 'rozetka'"
+              [class.border-indigo-500]="drilldownSellerFilter === 'rozetka'"
+              [class.bg-slate-900]="drilldownSellerFilter !== 'rozetka'"
+              [class.text-slate-400]="drilldownSellerFilter !== 'rozetka'"
+              [class.border-slate-800]="drilldownSellerFilter !== 'rozetka'"
+              class="px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1 shrink-0"
+            >
+              <span>🏢 Rozetka (1P)</span>
+            </button>
+
+            <button 
+              (click)="toggleQuickFilter('3p')"
+              [class.bg-purple-950]="drilldownSellerFilter === '3p'"
+              [class.text-purple-300]="drilldownSellerFilter === '3p'"
+              [class.border-purple-500]="drilldownSellerFilter === '3p'"
+              [class.bg-slate-900]="drilldownSellerFilter !== '3p'"
+              [class.text-slate-400]="drilldownSellerFilter !== '3p'"
+              [class.border-slate-800]="drilldownSellerFilter !== '3p'"
+              class="px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer hover:text-white flex items-center gap-1 shrink-0"
+            >
+              <span>👥 Сторонні (3P)</span>
+            </button>
+
+            <button 
+              *ngIf="hasActiveDrilldownFilters()"
+              (click)="resetDrilldownFilters()"
+              class="px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/40 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ml-auto"
+            >
+              <span class="material-icons text-xs">clear</span>
+              <span>Скинути</span>
             </button>
           </div>
-          
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <!-- 1. Назва товару -->
-            <div class="space-y-1.5">
-              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Пошук за назвою або параметром:</label>
+
+          <!-- Secondary Toolbar: Search, Seller Select, Price Range -->
+          <div class="flex items-center justify-between gap-3 bg-slate-950/80 p-2.5 rounded-2xl border border-slate-800/80 text-xs overflow-x-auto no-scrollbar">
+            <!-- Search Input -->
+            <div class="flex items-center gap-2 flex-1 min-w-[200px]">
+              <span class="material-icons text-slate-500 text-sm">search</span>
               <input 
                 type="text" 
-                [(ngModel)]="demandSearchQuery"
+                [(ngModel)]="drilldownSearchQuery"
                 (ngModelChange)="cdr.markForCheck()"
-                placeholder="Введіть назву, бренд або параметр..." 
-                class="w-full px-3.5 py-2 bg-slate-950/80 border border-slate-850 focus:border-indigo-500 rounded-xl text-white text-xs placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-medium"
+                placeholder="Пошук за назвою або параметром..." 
+                class="w-full bg-transparent text-white text-xs placeholder-slate-600 focus:outline-none font-medium"
               />
             </div>
-            
-            <!-- 2. Ціна -->
-            <div class="space-y-1.5">
-              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Діапазон цін (₴):</label>
-              <div class="flex items-center gap-2">
-                <input 
-                  type="number" 
-                  [(ngModel)]="demandMinPrice"
+
+            <div class="flex items-center gap-3 shrink-0">
+              <!-- Seller Select -->
+              <div class="flex items-center gap-1 shrink-0">
+                <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                  <span class="material-icons text-xs text-indigo-400">store</span>
+                  <span>Продавець:</span>
+                </span>
+                <select 
+                  [(ngModel)]="drilldownSellerFilter"
                   (ngModelChange)="cdr.markForCheck()"
-                  placeholder="Мін" 
-                  class="w-1/2 px-3 py-2 bg-slate-950/80 border border-slate-850 focus:border-indigo-500 rounded-xl text-white text-xs placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-medium font-mono"
-                />
-                <span class="text-slate-600 text-xs">—</span>
-                <input 
-                  type="number" 
-                  [(ngModel)]="demandMaxPrice"
-                  (ngModelChange)="cdr.markForCheck()"
-                  placeholder="Макс" 
-                  class="w-1/2 px-3 py-2 bg-slate-950/80 border border-slate-850 focus:border-indigo-500 rounded-xl text-white text-xs placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-medium font-mono"
-                />
+                  class="bg-slate-900 border border-slate-750 focus:border-indigo-500 text-[11px] text-white rounded-xl px-2 py-1 outline-none cursor-pointer max-w-[130px] truncate"
+                >
+                  <option value="all">Всі продавці</option>
+                  <option value="rozetka">Rozetka (1P)</option>
+                  <option value="3p">Сторонні (3P)</option>
+                  <option *ngFor="let s of getActiveSpecAvailableSellers()" [value]="s.name">{{ s.name }} ({{ s.count }})</option>
+                </select>
+              </div>
+
+              <!-- Price Range Inputs -->
+              <div class="flex items-center gap-1 shrink-0">
+                <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                  <span class="material-icons text-xs text-emerald-400">payments</span>
+                  <span>Ціна:</span>
+                </span>
+                <div class="flex items-center gap-1">
+                  <input 
+                    type="number" 
+                    [(ngModel)]="drilldownMinPrice"
+                    (ngModelChange)="cdr.markForCheck()"
+                    placeholder="Від ₴" 
+                    class="w-16 bg-slate-900 border border-slate-750 focus:border-indigo-500 text-[11px] text-white rounded-xl px-1.5 py-1 outline-none text-center placeholder-slate-600 font-mono"
+                  />
+                  <span class="text-slate-500">-</span>
+                  <input 
+                    type="number" 
+                    [(ngModel)]="drilldownMaxPrice"
+                    (ngModelChange)="cdr.markForCheck()"
+                    placeholder="До ₴" 
+                    class="w-16 bg-slate-900 border border-slate-750 focus:border-indigo-500 text-[11px] text-white rounded-xl px-1.5 py-1 outline-none text-center placeholder-slate-600 font-mono"
+                  />
+                </div>
               </div>
             </div>
-            
-            <!-- 3. Наявність -->
-            <div class="space-y-1.5">
-              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Наявність на складі:</label>
-              <select 
-                [(ngModel)]="demandStockFilter"
-                (ngModelChange)="cdr.markForCheck()"
-                class="w-full px-3 py-2 bg-slate-950/80 border border-slate-850 focus:border-indigo-500 rounded-xl text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-medium"
-              >
-                <option value="all">Всі товари</option>
-                <option value="inStock">Тільки в наявності</option>
-                <option value="outOfStock">Немає в наявності</option>
-              </select>
-            </div>
-            
-            <!-- 4. Рівень попиту -->
-            <div class="space-y-1.5">
-              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Рівень попиту:</label>
-              <select 
-                [(ngModel)]="demandLevelFilter"
-                (ngModelChange)="cdr.markForCheck()"
-                class="w-full px-3 py-2 bg-slate-950/80 border border-slate-850 focus:border-indigo-500 rounded-xl text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-medium"
-              >
-                <option value="all">Всі рівні</option>
-                <option value="high">Високий (> 200)</option>
-                <option value="moderate">Помірний (50-200)</option>
-                <option value="low">Низький (&lt; 50)</option>
-              </select>
-            </div>
           </div>
-        </div>
 
-        <div class="premium-card overflow-hidden">
-          <table class="w-full border-collapse text-left">
-            <thead>
-              <tr class="border-b border-[rgba(139,92,246,0.15)] bg-slate-950/40 text-[10px] text-indigo-300 font-extrabold uppercase tracking-wider">
-                <th class="py-4 px-3 text-center w-12">#</th>
-                <th (click)="sortDemandBy('name')" class="py-4 px-6 cursor-pointer select-none hover:text-indigo-400 transition-colors">
-                  Товар
-                  <span *ngIf="demandSortColumn === 'name'" class="text-[9px] ml-0.5">
-                    {{ demandSortDirection === 'asc' ? '▲' : '▼' }}
-                  </span>
-                </th>
-                <th (click)="sortDemandBy('price')" class="py-4 px-6 cursor-pointer select-none hover:text-indigo-400 transition-colors">
-                  Ціна
-                  <span *ngIf="demandSortColumn === 'price'" class="text-[9px] ml-0.5">
-                    {{ demandSortDirection === 'asc' ? '▲' : '▼' }}
-                  </span>
-                </th>
-                <th (click)="sortDemandBy('inStock')" class="py-4 px-6 cursor-pointer select-none hover:text-indigo-400 transition-colors">
-                  Наявність
-                  <span *ngIf="demandSortColumn === 'inStock'" class="text-[9px] ml-0.5">
-                    {{ demandSortDirection === 'asc' ? '▲' : '▼' }}
-                  </span>
-                </th>
-                <th (click)="sortDemandBy('reviews')" class="py-4 px-6 cursor-pointer select-none hover:text-indigo-400 transition-colors">
-                  Кількість відгуків
-                  <span *ngIf="demandSortColumn === 'reviews'" class="text-[9px] ml-0.5">
-                    {{ demandSortDirection === 'asc' ? '▲' : '▼' }}
-                  </span>
-                </th>
-                <th (click)="sortDemandBy('reviews')" class="py-4 px-6 cursor-pointer select-none hover:text-indigo-400 transition-colors">
-                  Орієнтовні продажі (іст.)
-                  <span *ngIf="demandSortColumn === 'reviews'" class="text-[9px] ml-0.5">
-                    {{ demandSortDirection === 'asc' ? '▲' : '▼' }}
-                  </span>
-                </th>
-                <th (click)="sortDemandBy('revenue')" class="py-4 px-6 cursor-pointer select-none hover:text-indigo-400 transition-colors">
-                  Орієнтовний оборот (іст.)
-                  <span *ngIf="demandSortColumn === 'revenue'" class="text-[9px] ml-0.5">
-                    {{ demandSortDirection === 'asc' ? '▲' : '▼' }}
-                  </span>
-                </th>
-                <th (click)="sortDemandBy('reviews')" class="py-4 px-6 cursor-pointer select-none hover:text-indigo-400 transition-colors">
-                  Рівень попиту
-                  <span *ngIf="demandSortColumn === 'reviews'" class="text-[9px] ml-0.5">
-                    {{ demandSortDirection === 'asc' ? '▲' : '▼' }}
-                  </span>
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800/60 text-sm text-slate-300">
-              <tr *ngFor="let item of getFilteredDemandProducts(); let i = index" class="hover:bg-slate-850/30 transition-all">
-                <td class="py-4 px-3 text-center font-mono text-xs text-slate-500">{{ i + 1 }}</td>
-                <td class="py-4 px-6 font-semibold text-white max-w-sm">
-                  <a [href]="item.link" target="_blank" class="hover:underline flex items-start gap-1.5 hover:text-indigo-400 line-clamp-2 text-xs leading-snug">
-                    {{ item.name }}
-                    <span class="material-icons text-[10px] mt-0.5 shrink-0 text-slate-400">open_in_new</span>
-                  </a>
-
-                  <!-- Badges of Extracted Specs & Passport Button -->
-                  <div class="flex flex-wrap items-center gap-1.5 mt-2" *ngIf="getBadgeSpecs(item).length > 0 || getSpecsArray(item).length > 0">
-                    <span 
-                      *ngFor="let badge of getBadgeSpecs(item)" 
-                      class="px-2 py-0.5 rounded-md text-[10px] font-bold border" 
-                      [class]="badge.style"
-                    >
-                      {{ badge.text }}
+          <!-- Products Table -->
+          <div class="overflow-x-auto rounded-2xl border border-slate-800/80 bg-slate-950/40">
+            <table class="w-full border-collapse text-left">
+              <thead>
+                <tr class="border-b border-[rgba(139,92,246,0.15)] bg-slate-950/60 text-[10px] text-indigo-300 font-extrabold uppercase tracking-wider">
+                  <th class="py-3 px-3 text-center w-12">#</th>
+                  
+                  <th (click)="sortDrilldownBy('name')" class="py-3 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                    Товар
+                    <span *ngIf="drilldownSortColumn === 'name'" class="text-[9px] ml-0.5">
+                      {{ drilldownSortDirection === 'asc' ? '▲' : '▼' }}
                     </span>
-                    <button 
-                      (click)="openSpecsModal(item); $event.stopPropagation()"
-                      class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 hover:text-white border border-indigo-700/60 transition-colors cursor-pointer flex items-center gap-1"
-                      title="Відкрити паспорт характеристик"
-                    >
-                      <span class="material-icons text-[10px]">tune</span>
-                      <span>Характеристики ({{ getSpecsArray(item).length }})</span>
-                    </button>
-                  </div>
+                  </th>
 
-                  <div class="flex items-center gap-2 mt-1.5" *ngIf="item.seller">
-                    <span class="text-[10px] text-slate-400 font-mono">
-                      Продавець: <span class="text-slate-300 font-bold">{{ item.seller }}</span>
+                  <th (click)="sortDrilldownBy('price')" class="py-3 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                    Ціна
+                    <span *ngIf="drilldownSortColumn === 'price'" class="text-[9px] ml-0.5">
+                      {{ drilldownSortDirection === 'asc' ? '▲' : '▼' }}
                     </span>
-                  </div>
-                </td>
-                <td class="py-4 px-6 font-mono whitespace-nowrap">
-                  <div class="flex flex-col">
-                    <span class="font-bold text-emerald-400">{{ item.price | number }} ₴</span>
-                    <div class="flex items-center gap-1.5 mt-0.5" *ngIf="getDiscountPercent(item) > 0">
-                      <span class="text-[10px] text-slate-500 line-through">
-                        {{ getEffectiveOldPrice(item) | number }} ₴
+                  </th>
+
+                  <th (click)="sortDrilldownBy('inStock')" class="py-3 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                    Наявність
+                    <span *ngIf="drilldownSortColumn === 'inStock'" class="text-[9px] ml-0.5">
+                      {{ drilldownSortDirection === 'asc' ? '▲' : '▼' }}
+                    </span>
+                  </th>
+
+                  <th (click)="sortDrilldownBy('reviews')" class="py-3 px-4 cursor-pointer select-none hover:text-indigo-400 transition-colors">
+                    Відгуки та рейтинг
+                    <span *ngIf="drilldownSortColumn === 'reviews'" class="text-[9px] ml-0.5">
+                      {{ drilldownSortDirection === 'asc' ? '▲' : '▼' }}
+                    </span>
+                  </th>
+
+                  <th class="py-3 px-3 text-center w-16">Лінк</th>
+                </tr>
+              </thead>
+
+              <tbody class="divide-y divide-slate-800/50 text-sm text-slate-300">
+                <tr *ngFor="let p of getFilteredActiveSpecProducts(); let i = index" class="hover:bg-slate-850/40 transition-all">
+                  <td class="py-3.5 px-3 text-center font-mono text-xs text-slate-500">{{ i + 1 }}</td>
+                  
+                  <td class="py-3.5 px-4 font-semibold text-white max-w-md">
+                    <a [href]="p.link" target="_blank" class="hover:underline flex items-start gap-1.5 hover:text-indigo-400 line-clamp-2 text-xs leading-snug">
+                      {{ p.name }}
+                      <span class="material-icons text-[10px] mt-0.5 shrink-0 text-slate-400">open_in_new</span>
+                    </a>
+
+                    <!-- Badges of Extracted Specs & Passport Button -->
+                    <div class="flex flex-wrap items-center gap-1.5 mt-2" *ngIf="getBadgeSpecs(p).length > 0 || getSpecsArray(p).length > 0">
+                      <span 
+                        *ngFor="let badge of getBadgeSpecs(p)" 
+                        class="px-2 py-0.5 rounded-md text-[10px] font-bold border" 
+                        [class]="badge.style"
+                      >
+                        {{ badge.text }}
                       </span>
-                      <span class="px-1 py-0.2 text-[9px] font-bold bg-rose-950 text-rose-300 rounded border border-rose-800/40">
-                        -{{ getDiscountPercent(item) }}%
+                      <button 
+                        (click)="openSpecsModal(p); $event.stopPropagation()"
+                        class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 hover:text-white border border-indigo-700/60 transition-colors cursor-pointer flex items-center gap-1"
+                        title="Відкрити паспорт характеристик"
+                      >
+                        <span class="material-icons text-[10px]">tune</span>
+                        <span>Характеристики ({{ getSpecsArray(p).length }})</span>
+                      </button>
+                    </div>
+
+                    <div class="flex items-center gap-2 mt-1.5" *ngIf="p.seller">
+                      <span class="text-[10px] text-slate-400 font-mono">
+                        Продавець: <span class="text-slate-300 font-bold">{{ p.seller }}</span>
                       </span>
                     </div>
-                  </div>
-                </td>
-                <td class="py-4 px-6 whitespace-nowrap">
-                  <span 
-                    [class.text-emerald-400]="item.inStock !== false"
-                    [class.bg-emerald-950/30]="item.inStock !== false"
-                    [class.text-slate-400]="item.inStock === false"
-                    [class.bg-slate-900]="item.inStock === false"
-                    class="px-2.5 py-1 text-xs font-semibold rounded-full uppercase tracking-wider whitespace-nowrap"
-                  >
-                    {{ item.inStock !== false ? 'в наявності' : 'немає' }}
-                  </span>
-                </td>
-                <td class="py-4 px-6 font-mono whitespace-nowrap">
-                  <div class="flex items-center gap-1.5">
-                    <span class="font-bold">{{ item.reviews }}</span>
-                    <span *ngIf="item.rating" class="text-amber-400 text-xs">★ {{ item.rating }}</span>
-                  </div>
-                </td>
-                <td class="py-4 px-6 text-indigo-400 font-bold font-mono whitespace-nowrap">{{ getEstimatedSales(item.reviews) | number }}</td>
-                <td class="py-4 px-6 text-emerald-400 font-bold font-mono whitespace-nowrap">
-                  {{ (getEstimatedSales(item.reviews) * item.price) | number }} ₴
-                </td>
-                <td class="py-4 px-6">
-                  <span 
-                    [class.text-emerald-400]="getEstimatedSales(item.reviews) > 200"
-                    [class.bg-emerald-950/30]="getEstimatedSales(item.reviews) > 200"
-                    [class.text-indigo-300]="getEstimatedSales(item.reviews) >= 50 && getEstimatedSales(item.reviews) <= 200"
-                    [class.bg-indigo-950/30]="getEstimatedSales(item.reviews) >= 50 && getEstimatedSales(item.reviews) <= 200"
-                    [class.text-slate-500]="getEstimatedSales(item.reviews) < 50"
-                    [class.bg-slate-900]="getEstimatedSales(item.reviews) < 50"
-                    class="px-2.5 py-1 text-xs font-semibold rounded-full uppercase tracking-wider whitespace-nowrap"
-                  >
-                    <span *ngIf="getEstimatedSales(item.reviews) > 200">Високий</span>
-                    <span *ngIf="getEstimatedSales(item.reviews) >= 50 && getEstimatedSales(item.reviews) <= 200">Помірний</span>
-                    <span *ngIf="getEstimatedSales(item.reviews) < 50">Низький</span>
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                  </td>
+
+                  <td class="py-3.5 px-4 font-mono whitespace-nowrap">
+                    <div class="flex flex-col">
+                      <span class="font-bold text-emerald-400 text-sm">{{ p.price | number }} ₴</span>
+                      <div class="flex items-center gap-1.5 mt-0.5" *ngIf="getDiscountPercent(p) > 0">
+                        <span class="text-[10px] text-slate-500 line-through">
+                          {{ getEffectiveOldPrice(p) | number }} ₴
+                        </span>
+                        <span class="px-1 py-0.2 text-[9px] font-bold bg-rose-950 text-rose-300 rounded border border-rose-800/40">
+                          -{{ getDiscountPercent(p) }}%
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+
+                  <td class="py-3.5 px-4 whitespace-nowrap">
+                    <span 
+                      [class.text-emerald-400]="p.inStock !== false"
+                      [class.bg-emerald-950/30]="p.inStock !== false"
+                      [class.text-slate-400]="p.inStock === false"
+                      [class.bg-slate-900]="p.inStock === false"
+                      class="px-2.5 py-1 text-xs font-semibold rounded-full uppercase tracking-wider whitespace-nowrap"
+                    >
+                      {{ p.inStock !== false ? 'в наявності' : 'немає' }}
+                    </span>
+                  </td>
+
+                  <td class="py-3.5 px-4 font-mono whitespace-nowrap">
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-indigo-300">{{ p.reviews || 0 }} відг.</span>
+                      <span *ngIf="p.rating" class="text-amber-400 text-xs font-bold">★ {{ p.rating }}</span>
+                    </div>
+                  </td>
+
+                  <td class="py-3.5 px-3 text-center whitespace-nowrap">
+                    <a 
+                      [href]="p.link" 
+                      target="_blank" 
+                      class="p-1.5 rounded-lg bg-slate-900 hover:bg-indigo-950 text-slate-400 hover:text-indigo-300 transition-colors inline-flex items-center justify-center border border-slate-800"
+                      title="Відкрити картку на Rozetka"
+                    >
+                      <span class="material-icons text-sm">open_in_new</span>
+                    </a>
+                  </td>
+                </tr>
+
+                <!-- Empty State -->
+                <tr *ngIf="getFilteredActiveSpecProducts().length === 0">
+                  <td colspan="6" class="py-12 text-center text-slate-500 text-sm">
+                    <div class="flex flex-col items-center justify-center gap-2">
+                      <span class="material-icons text-3xl text-slate-600">filter_alt_off</span>
+                      <span>За обраними фільтрами товарів у цій модифікації не знайдено</span>
+                      <button 
+                        (click)="resetDrilldownFilters()"
+                        class="mt-1 px-3 py-1 bg-indigo-950 text-indigo-300 hover:text-white rounded-xl border border-indigo-700/50 text-xs font-bold cursor-pointer transition-colors"
+                      >
+                        Скинути фільтри
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

@@ -635,6 +635,184 @@ export class DashboardComponent implements OnInit {
 
   // Spec Analytics State
   selectedSpecCategoryIndex = 0;
+  selectedSpecValueIndex = 0;
+
+  selectSpecCategoryTab(idx: number): void {
+    this.selectedSpecCategoryIndex = idx;
+    this.selectedSpecValueIndex = 0;
+    this.resetDrilldownFilters();
+    this.cdr.markForCheck();
+  }
+
+  selectSpecValueCard(valIdx: number): void {
+    this.selectedSpecValueIndex = valIdx;
+    this.resetDrilldownFilters();
+    this.cdr.markForCheck();
+  }
+
+  getActiveSpecCategory(): SpecCategoryAnalysis | null {
+    if (!this.analyticsSummary || !this.analyticsSummary.specAnalytics || this.analyticsSummary.specAnalytics.length === 0) return null;
+    const idx = Math.max(0, Math.min(this.selectedSpecCategoryIndex, this.analyticsSummary.specAnalytics.length - 1));
+    return this.analyticsSummary.specAnalytics[idx] || null;
+  }
+
+  getActiveSpecValue(): SpecValueStat | null {
+    const cat = this.getActiveSpecCategory();
+    if (!cat || !cat.values || cat.values.length === 0) return null;
+    if (this.selectedSpecValueIndex === -1) return null;
+    const vIdx = Math.max(0, Math.min(this.selectedSpecValueIndex, cat.values.length - 1));
+    return cat.values[vIdx] || null;
+  }
+
+  getFilteredActiveSpecProducts(): Product[] {
+    const cat = this.getActiveSpecCategory();
+    if (!cat) return [];
+    const val = this.getActiveSpecValue();
+    
+    let rawProducts: Product[] = [];
+    if (val && val.products && val.products.length > 0) {
+      rawProducts = val.products;
+    } else {
+      const set = new Set<string>();
+      cat.values.forEach(v => {
+        (v.products || []).forEach(p => {
+          const id = p.link || p.name;
+          if (!set.has(id)) {
+            set.add(id);
+            rawProducts.push(p);
+          }
+        });
+      });
+    }
+
+    let list = [...rawProducts];
+
+    // 1. Seller Filter
+    if (this.drilldownSellerFilter && this.drilldownSellerFilter !== 'all') {
+      if (this.drilldownSellerFilter === 'rozetka') {
+        list = list.filter(p => (p.seller || '').toLowerCase().includes('rozetka'));
+      } else if (this.drilldownSellerFilter === '3p') {
+        list = list.filter(p => !(p.seller || '').toLowerCase().includes('rozetka'));
+      } else {
+        list = list.filter(p => (p.seller || 'Rozetka').trim() === this.drilldownSellerFilter);
+      }
+    }
+
+    // 2. Stock Filter
+    if (this.drilldownStockFilter === 'inStock') {
+      list = list.filter(p => p.inStock !== false);
+    } else if (this.drilldownStockFilter === 'outOfStock') {
+      list = list.filter(p => p.inStock === false);
+    }
+
+    // 3. Reviews Filter
+    if (this.drilldownReviewsFilter === 'withReviews') {
+      list = list.filter(p => (p.reviews || 0) > 0);
+    } else if (this.drilldownReviewsFilter === 'topReviews') {
+      list = list.filter(p => (p.reviews || 0) >= 10);
+    } else if (this.drilldownReviewsFilter === 'noReviews') {
+      list = list.filter(p => !p.reviews || p.reviews === 0);
+    }
+
+    // 4. Rating Filter
+    if (this.drilldownRatingFilter === '4.5') {
+      list = list.filter(p => (p.rating || 0) >= 4.5);
+    } else if (this.drilldownRatingFilter === '4.0') {
+      list = list.filter(p => (p.rating || 0) >= 4.0);
+    }
+
+    // 5. Discount Filter
+    if (this.drilldownDiscountFilter === 'discountOnly') {
+      list = list.filter(p => this.getDiscountPercent(p) > 0);
+    }
+
+    // 6. Price min/max Filter
+    if (this.drilldownMinPrice !== null && this.drilldownMinPrice > 0) {
+      list = list.filter(p => (p.price || 0) >= this.drilldownMinPrice!);
+    }
+    if (this.drilldownMaxPrice !== null && this.drilldownMaxPrice > 0) {
+      list = list.filter(p => (p.price || 0) <= this.drilldownMaxPrice!);
+    }
+
+    // 7. Search query Filter
+    if (this.drilldownSearchQuery && this.drilldownSearchQuery.trim()) {
+      const q = this.drilldownSearchQuery.toLowerCase().trim();
+      list = list.filter(p =>
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.category && p.category.toLowerCase().includes(q)) ||
+        (p.seller && p.seller.toLowerCase().includes(q)) ||
+        (p.specs && p.specs.toLowerCase().includes(q))
+      );
+    }
+
+    // 8. Sorting
+    list.sort((a, b) => {
+      let valA: any;
+      let valB: any;
+
+      if (this.drilldownSortColumn === 'name') {
+        valA = (a.name || '').toLowerCase();
+        valB = (b.name || '').toLowerCase();
+      } else if (this.drilldownSortColumn === 'price') {
+        valA = Number(a.price) || 0;
+        valB = Number(b.price) || 0;
+      } else if (this.drilldownSortColumn === 'reviews') {
+        valA = Number(a.reviews) || 0;
+        valB = Number(b.reviews) || 0;
+      } else if (this.drilldownSortColumn === 'rating') {
+        valA = Number(a.rating) || 0;
+        valB = Number(b.rating) || 0;
+      } else if (this.drilldownSortColumn === 'inStock') {
+        valA = a.inStock !== false ? 1 : 0;
+        valB = b.inStock !== false ? 1 : 0;
+      } else {
+        valA = Number(a.reviews) || 0;
+        valB = Number(b.reviews) || 0;
+      }
+
+      if (valA === valB) return 0;
+      if (this.drilldownSortDirection === 'asc') {
+        return valA > valB ? 1 : -1;
+      } else {
+        return valA < valB ? 1 : -1;
+      }
+    });
+
+    return list;
+  }
+
+  getActiveSpecAvailableSellers(): Array<{ name: string, count: number }> {
+    const cat = this.getActiveSpecCategory();
+    if (!cat) return [];
+    const val = this.getActiveSpecValue();
+    let rawProds: Product[] = [];
+    if (val && val.products && val.products.length > 0) {
+      rawProds = val.products;
+    } else {
+      cat.values.forEach(v => {
+        if (v.products) rawProds.push(...v.products);
+      });
+    }
+    const map = new Map<string, number>();
+    for (const p of rawProds) {
+      const s = (p.seller && String(p.seller).trim()) ? String(p.seller).trim() : 'Rozetka';
+      map.set(s, (map.get(s) || 0) + 1);
+    }
+    const result: Array<{ name: string, count: number }> = [];
+    map.forEach((count, name) => {
+      result.push({ name, count });
+    });
+    return result.sort((a, b) => b.count - a.count);
+  }
+
+  async exportActiveSpecGroupToExcel() {
+    const list = this.getFilteredActiveSpecProducts();
+    if (!list || list.length === 0) return;
+    const tempFiltered = this.filteredProducts;
+    this.filteredProducts = list;
+    await this.exportToExcel();
+    this.filteredProducts = tempFiltered;
+  }
 
   // Comparison Module State
   selectedSnapshotIdsForComparison: string[] = [];
