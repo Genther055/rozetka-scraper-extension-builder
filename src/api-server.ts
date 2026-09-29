@@ -298,6 +298,8 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
             description: item.description || '',
             detailedSpecsMap: item.detailedSpecsMap || {},
             seller: item.seller || 'Rozetka',
+            sellerRating: typeof item.sellerRating === 'number' ? item.sellerRating : (parseFloat(item.sellerRating) || 0),
+            sellerReviews: typeof item.sellerReviews === 'number' ? item.sellerReviews : (parseInt(item.sellerReviews) || 0),
             sellersCount: item.sellersCount || 1,
             link: normalizedLink,
             scrapedAt: new Date().toISOString(),
@@ -334,6 +336,8 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
             if (item.description) products[index].description = item.description;
             if (item.detailedSpecsMap) products[index].detailedSpecsMap = item.detailedSpecsMap;
             if (item.seller) products[index].seller = item.seller;
+            if (item.sellerRating !== undefined) products[index].sellerRating = typeof item.sellerRating === 'number' ? item.sellerRating : (parseFloat(item.sellerRating) || 0);
+            if (item.sellerReviews !== undefined) products[index].sellerReviews = typeof item.sellerReviews === 'number' ? item.sellerReviews : (parseInt(item.sellerReviews) || 0);
             if (item.sellersCount) products[index].sellersCount = item.sellersCount;
 
             if (products[index].seller === 'Rozetka') {
