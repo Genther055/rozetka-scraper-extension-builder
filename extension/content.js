@@ -672,8 +672,8 @@
                 let rating = 0;
 
                 if (reviews > 0) {
-                    // Priority 1: Target data-testid="stars-rating" style="width: calc(X% - 2px)" or any filler width directly
-                    const starElements = item.querySelectorAll('[data-testid="stars-rating"], [class*="stars-rating__filler"], [class*="stars_rating__filler"], [class*="stars-rating-progress"] [style*="%"], rz-stars-rating-progress [style*="%"], rz-tile-rating [style*="%"]');
+                    // Priority 1: Target data-testid="stars-rating" style="width: calc(X% - 2px)" or yellow filler width directly
+                    const starElements = item.querySelectorAll('[data-testid="stars-rating"], .bg-yellow[style*="%"], rz-stars-rating-progress [style*="%"], [class*="stars-rating__filler"], [class*="stars_rating__filler"]');
                     for (const el of starElements) {
                         const style = el.getAttribute('style') || '';
                         const match = style.match(/([\d.]+)%/);
