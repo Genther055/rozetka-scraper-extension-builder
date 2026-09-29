@@ -768,9 +768,15 @@
                     }
                 });
 
-                const capacityMatch = name.match(/(\d+[\d\s]*)\s*(?:mah|мАг|мАч|мah)/i);
+                const capacityMatch = name.match(/(?:^|[^\d])(\d{1,3}(?:\s\d{3})+|\d{3,6})\s*(?:mah|мАг|мАч|мah)\b/i);
                 if (capacityMatch && !detailedSpecsMap['Ємність']) {
-                    const cNum = parseInt(capacityMatch[1].replace(/\s+/g, ''), 10);
+                    let cNum = parseInt(capacityMatch[1].replace(/\s+/g, ''), 10);
+                    if (cNum > 100000) {
+                        const s = String(cNum);
+                        if (/^[1-9](10000|20000|30000|40000|50000|60000|100000|26800|15000)$/.test(s)) {
+                            cNum = parseInt(s.slice(1), 10);
+                        }
+                    }
                     if (!isNaN(cNum)) detailedSpecsMap['Ємність'] = `${cNum.toLocaleString('uk-UA')} mAh`;
                 }
 

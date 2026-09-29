@@ -6151,9 +6151,16 @@ export function extractProductSpecsMap(p: any): Record<string, string> {
 
   // 5. Ємність акумулятора
   if (!map['Ємність акумулятора'] && !map['Ємність']) {
-    const capMatch = name.match(/(\d+[\d\s]*)\s*(?:mah|мАг|мАч|мah)/i) || (p.specs || '').match(/(\d+[\d\s]*)\s*(?:mah|мАг|мАч|мah)/i);
-    if (capMatch) {
-      const num = parseInt(capMatch[1].replace(/\s+/g, ''), 10);
+    const capMatch = name.match(/(?:^|[^\d])(\d{1,3}(?:\s\d{3})+|\d{3,6})\s*(?:mah|мАг|мАч|мah)\b/i) ||
+                     (p.specs || '').match(/(?:^|[^\d])(\d{1,3}(?:\s\d{3})+|\d{3,6})\s*(?:mah|мАг|мАч|мah)\b/i);
+    if (capMatch && capMatch[1]) {
+      let num = parseInt(capMatch[1].replace(/\s+/g, ''), 10);
+      if (num > 100000) {
+        const s = String(num);
+        if (/^[1-9](10000|20000|30000|40000|50000|60000|100000|26800|15000)$/.test(s)) {
+          num = parseInt(s.slice(1), 10);
+        }
+      }
       if (!isNaN(num) && num > 0) {
         map['Ємність акумулятора'] = `${num.toLocaleString('uk-UA')} mAh`;
       }
