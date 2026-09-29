@@ -3784,15 +3784,15 @@
                     </div>
                   </td>
 
-                  <!-- Seller (Clean name, redundant '1 продавців' removed) -->
+                  <!-- Seller (Clean name, calculated in-stock rating) -->
                   <td class="py-4 px-4 whitespace-nowrap min-w-[130px]">
                     <div class="text-sm text-slate-200 font-bold">
                       {{ item.seller || 'Rozetka' }}
                     </div>
-                    <div class="text-xs text-amber-400 font-mono mt-0.5 flex items-center gap-1" *ngIf="item.sellerRating && item.sellerRating > 0" title="Рейтинг та оцінки продавця">
+                    <div class="text-xs text-amber-400 font-mono mt-0.5 flex items-center gap-1" *ngIf="getSellerBadgeInfo(item.seller).avgRating > 0" title="Сер. оцінка товарів у наявності від цього продавця">
                       <span class="material-icons text-[11px] text-amber-400">star</span>
-                      <span>{{ item.sellerRating }}</span>
-                      <span class="text-slate-400 font-normal" *ngIf="item.sellerReviews">({{ item.sellerReviews }} оц.)</span>
+                      <span>{{ getSellerBadgeInfo(item.seller).avgRating }}</span>
+                      <span class="text-slate-400 font-normal text-[10px]" *ngIf="getSellerBadgeInfo(item.seller).inStockRatedCount">({{ getSellerBadgeInfo(item.seller).inStockRatedCount }} тов.)</span>
                     </div>
                     <div class="text-xs text-indigo-400/80 font-mono mt-0.5" *ngIf="item.sellersCount && item.sellersCount > 1">
                       ще {{ item.sellersCount - 1 }} прод.
