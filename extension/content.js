@@ -575,45 +575,60 @@
                     await Promise.all(chunk.map(async (prodId) => {
                         try {
                             // 1. Fetch exact customer marks breakdown from Rozetka Comments Stats API
-                            const commentRes = await fetch(`https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${prodId}`).catch(() => null);
-                            if (commentRes && commentRes.ok) {
-                                const cJson = await commentRes.json().catch(() => null);
-                                if (cJson && cJson.data) {
-                                    if (typeof cJson.data.rating === 'number' && cJson.data.rating > 0) {
-                                        exactRatingMap.set(String(prodId), parseFloat(cJson.data.rating.toFixed(1)));
-                                        return;
-                                    }
-                                    if (cJson.data.marks && typeof cJson.data.marks === 'object') {
-                                        let totalMarks = 0;
-                                        let weightedSum = 0;
-                                        for (let m = 1; m <= 5; m++) {
-                                            const count = Number(cJson.data.marks[String(m)]) || 0;
-                                            totalMarks += count;
-                                            weightedSum += count * m;
+                            const endpoints = [
+                                `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`,
+                                `https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${prodId}`,
+                                `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/marks`
+                            ];
+                            for (const ep of endpoints) {
+                                if (exactRatingMap.has(String(prodId))) break;
+                                const commentRes = await fetch(ep).catch(() => null);
+                                if (commentRes && commentRes.ok) {
+                                    const cJson = await commentRes.json().catch(() => null);
+                                    if (cJson && cJson.data) {
+                                        if (typeof cJson.data.rating === 'number' && cJson.data.rating > 0) {
+                                            exactRatingMap.set(String(prodId), parseFloat(cJson.data.rating.toFixed(1)));
+                                            break;
                                         }
-                                        if (totalMarks > 0) {
-                                            exactRatingMap.set(String(prodId), parseFloat((weightedSum / totalMarks).toFixed(1)));
-                                            return;
+                                        if (typeof cJson.data.average_rating === 'number' && cJson.data.average_rating > 0) {
+                                            exactRatingMap.set(String(prodId), parseFloat(cJson.data.average_rating.toFixed(1)));
+                                            break;
+                                        }
+                                        if (cJson.data.marks && typeof cJson.data.marks === 'object') {
+                                            let totalMarks = 0;
+                                            let weightedSum = 0;
+                                            for (let m = 1; m <= 5; m++) {
+                                                const count = Number(cJson.data.marks[String(m)]) || Number(cJson.data.marks[m]) || 0;
+                                                totalMarks += count;
+                                                weightedSum += count * m;
+                                            }
+                                            if (totalMarks > 0) {
+                                                const calculated = parseFloat((weightedSum / totalMarks).toFixed(1));
+                                                exactRatingMap.set(String(prodId), calculated);
+                                                break;
+                                            }
                                         }
                                     }
                                 }
                             }
 
                             // 2. Secondary fallback: Goods Main API
-                            const res = await fetch(`https://rozetka.com.ua/api/product-api/v4/goods/get-main?country=UA&lang=ua&goodsId=${prodId}`).catch(() => null);
-                            if (res && res.ok) {
-                                const json = await res.json().catch(() => null);
-                                if (json && json.data) {
-                                    if (json.data.stars_rating) {
-                                        const r = parseFloat(String(json.data.stars_rating).replace(',', '.'));
-                                        if (r > 0 && r <= 5) exactRatingMap.set(String(prodId), r);
-                                    } else if (json.data.rating) {
-                                        const r = parseFloat(String(json.data.rating).replace(',', '.'));
-                                        if (r > 0 && r <= 5) exactRatingMap.set(String(prodId), r);
-                                    }
-                                    if (json.data.seller && json.data.seller.title) {
-                                        const existing = apiProductMap.get(String(prodId)) || {};
-                                        apiProductMap.set(String(prodId), { ...existing, seller: json.data.seller });
+                            if (!exactRatingMap.has(String(prodId))) {
+                                const res = await fetch(`https://rozetka.com.ua/api/product-api/v4/goods/get-main?country=UA&lang=ua&goodsId=${prodId}`).catch(() => null);
+                                if (res && res.ok) {
+                                    const json = await res.json().catch(() => null);
+                                    if (json && json.data) {
+                                        if (json.data.stars_rating) {
+                                            const r = parseFloat(String(json.data.stars_rating).replace(',', '.'));
+                                            if (r > 0 && r <= 5) exactRatingMap.set(String(prodId), r);
+                                        } else if (json.data.rating) {
+                                            const r = parseFloat(String(json.data.rating).replace(',', '.'));
+                                            if (r > 0 && r <= 5) exactRatingMap.set(String(prodId), r);
+                                        }
+                                        if (json.data.seller && json.data.seller.title) {
+                                            const existing = apiProductMap.get(String(prodId)) || {};
+                                            apiProductMap.set(String(prodId), { ...existing, seller: json.data.seller });
+                                        }
                                     }
                                 }
                             }
