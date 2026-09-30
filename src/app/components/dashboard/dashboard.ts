@@ -3202,7 +3202,7 @@ export class DashboardComponent implements OnInit {
             }
           });
 
-          this.products = Array.from(productMap.values());
+          this.products = this.sanitizeProducts(Array.from(productMap.values()));
           this.applyFilters();
           this.calculateMetrics();
           this.cdr.markForCheck();
@@ -3237,7 +3237,7 @@ export class DashboardComponent implements OnInit {
           try {
             const parsed = JSON.parse(e.newValue);
             if (Array.isArray(parsed)) {
-              this.products = parsed;
+              this.products = this.sanitizeProducts(parsed);
               this.applyFilters();
               this.calculateMetrics();
               this.cdr.markForCheck();
@@ -3337,7 +3337,7 @@ export class DashboardComponent implements OnInit {
           next: (res) => {
             if (res.success) {
               const newProds = res.products || [];
-              this.products = newProds;
+              this.products = this.sanitizeProducts(newProds);
               this.applyFilters();
               this.calculateMetrics();
             }
