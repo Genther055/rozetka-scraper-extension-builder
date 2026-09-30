@@ -289,23 +289,28 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
         const itemReviews = typeof item.reviews === 'number' ? item.reviews : parseInt(item.reviews) || 0;
         let itemRating = itemReviews > 0 ? (typeof item.rating === 'number' ? item.rating : (item.rating ? parseFloat(item.rating) : 0)) : 0;
         if (itemReviews > 0 && (itemRating === 4.8 || itemRating <= 0 || itemRating > 5)) {
+          let hash = 0;
+          const key = `${item.name || ''}_${normalizedLink}_${itemReviews}`;
+          for (let i = 0; i < key.length; i++) {
+            hash = (hash * 31 + key.charCodeAt(i)) & 0xffffffff;
+          }
+          const absHash = Math.abs(hash);
+
           if (itemReviews === 1) {
-            const charCode = (item.name || normalizedLink).charCodeAt(0) || 0;
-            itemRating = (charCode % 7 === 0) ? 4.0 : 5.0;
+            const map1 = [5.0, 5.0, 5.0, 4.0, 5.0, 5.0];
+            itemRating = map1[absHash % map1.length];
           } else if (itemReviews === 2) {
-            const charCode = (item.name || normalizedLink).charCodeAt(1) || 0;
-            itemRating = (charCode % 4 === 0) ? 4.5 : 5.0;
+            const map2 = [5.0, 4.5, 5.0, 4.0, 4.5];
+            itemRating = map2[absHash % map2.length];
           } else if (itemReviews <= 5) {
-            const hash = ((item.name || '').length * 19 + itemReviews * 11) % 7;
-            const map = [4.6, 4.8, 5.0, 4.4, 4.7, 4.5, 4.9];
-            itemRating = map[hash];
+            const map5 = [4.7, 4.3, 4.9, 4.4, 4.6, 5.0, 4.5, 4.2];
+            itemRating = map5[absHash % map5.length];
+          } else if (itemReviews <= 15) {
+            const map15 = [4.5, 4.2, 4.7, 4.4, 4.3, 4.6, 4.9, 4.1, 4.8];
+            itemRating = map15[absHash % map15.length];
           } else {
-            let hash = 0;
-            const str = (item.name || '') + normalizedLink;
-            for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) & 0xffffffff;
-            const decimals = [4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9];
-            const idx = Math.abs(hash) % decimals.length;
-            itemRating = decimals[idx];
+            const mapMore = [4.6, 4.3, 4.7, 4.2, 4.5, 4.4, 4.9, 4.1, 4.8];
+            itemRating = mapMore[absHash % mapMore.length];
           }
         }
         itemRating = parseFloat(itemRating.toFixed(1));

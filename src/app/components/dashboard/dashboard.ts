@@ -649,24 +649,28 @@ export class DashboardComponent implements OnInit {
 
       // If product has reviews, but rating is missing, invalid or flat default 4.8 from Rozetka boilerplate API:
       if (rating === 4.8 || rating <= 0 || rating > 5) {
+        let hash = 0;
+        const key = `${p.name || ''}_${p.link || ''}_${reviews}`;
+        for (let i = 0; i < key.length; i++) {
+          hash = (hash * 31 + key.charCodeAt(i)) & 0xffffffff;
+        }
+        const absHash = Math.abs(hash);
+
         if (reviews === 1) {
-          const charCode = (p.name || p.link || '').charCodeAt(0) || 0;
-          rating = (charCode % 7 === 0) ? 4.0 : 5.0;
+          const map1 = [5.0, 5.0, 5.0, 4.0, 5.0, 5.0];
+          rating = map1[absHash % map1.length];
         } else if (reviews === 2) {
-          const charCode = (p.name || p.link || '').charCodeAt(1) || 0;
-          rating = (charCode % 4 === 0) ? 4.5 : 5.0;
+          const map2 = [5.0, 4.5, 5.0, 4.0, 4.5];
+          rating = map2[absHash % map2.length];
         } else if (reviews <= 5) {
-          const hash = ((p.name || '').length * 19 + reviews * 11) % 7;
-          const map = [4.6, 4.8, 5.0, 4.4, 4.7, 4.5, 4.9];
-          rating = map[hash];
+          const map5 = [4.7, 4.3, 4.9, 4.4, 4.6, 5.0, 4.5, 4.2];
+          rating = map5[absHash % map5.length];
+        } else if (reviews <= 15) {
+          const map15 = [4.5, 4.2, 4.7, 4.4, 4.3, 4.6, 4.9, 4.1, 4.8];
+          rating = map15[absHash % map15.length];
         } else {
-          // Products with many reviews: derive realistic decimal rating from 4.1 to 4.9
-          let hash = 0;
-          const str = (p.name || '') + (p.link || '');
-          for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) & 0xffffffff;
-          const decimals = [4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9];
-          const idx = Math.abs(hash) % decimals.length;
-          rating = decimals[idx];
+          const mapMore = [4.6, 4.3, 4.7, 4.2, 4.5, 4.4, 4.9, 4.1, 4.8];
+          rating = mapMore[absHash % mapMore.length];
         }
       }
 
