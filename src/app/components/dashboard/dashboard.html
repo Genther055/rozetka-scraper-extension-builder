@@ -3784,15 +3784,23 @@
                     </div>
                   </td>
 
-                  <!-- Seller (Clean name, redundant '1 продавців' removed) -->
+                  <!-- Seller -->
                   <td class="py-4 px-4 whitespace-nowrap min-w-[130px]">
-                    <div class="text-sm text-slate-200 font-bold">
+                    <div 
+                      (click)="openSellerProductsModal(item.seller || 'Rozetka')"
+                      class="text-sm text-slate-200 font-bold hover:text-indigo-300 cursor-pointer transition-colors"
+                      [title]="'Переглянути всі товари продавця ' + (item.seller || 'Rozetka')"
+                    >
                       {{ item.seller || 'Rozetka' }}
                     </div>
-                    <div class="text-xs text-amber-400 font-mono mt-0.5 flex items-center gap-1" *ngIf="item.sellerRating && item.sellerRating > 0" title="Рейтинг та оцінки продавця">
-                      <span class="material-icons text-[11px] text-amber-400">star</span>
-                      <span>{{ item.sellerRating }}</span>
-                      <span class="text-slate-400 font-normal" *ngIf="item.sellerReviews">({{ item.sellerReviews }} оц.)</span>
+                    <div 
+                      class="text-xs text-amber-400 font-mono mt-0.5 flex items-center gap-1" 
+                      *ngIf="getSellerRating(item.seller) > 0" 
+                      [title]="'Оцінка магазину за асортиментом у наявності: ' + getSellerRating(item.seller)"
+                    >
+                      <span class="material-icons text-[11px] text-amber-400">storefront</span>
+                      <span>{{ getSellerRating(item.seller) }}</span>
+                      <span class="text-slate-400 text-[10px] font-sans font-normal">(магазин)</span>
                     </div>
                     <div class="text-xs text-indigo-400/80 font-mono mt-0.5" *ngIf="item.sellersCount && item.sellersCount > 1">
                       ще {{ item.sellersCount - 1 }} прод.
