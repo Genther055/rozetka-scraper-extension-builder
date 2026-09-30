@@ -647,33 +647,10 @@ export class DashboardComponent implements OnInit {
         };
       }
 
-      // If product has reviews, but rating is missing, invalid or flat default 4.8 from Rozetka boilerplate API:
-      if (rating === 4.8 || rating <= 0 || rating > 5) {
-        let hash = 0;
-        const seedStr = (p.name || '') + (p.link || '') + (p.price || '') + reviews;
-        for (let i = 0; i < seedStr.length; i++) {
-          hash = (hash * 31 + seedStr.charCodeAt(i)) & 0xffffffff;
-        }
-        const absHash = Math.abs(hash);
-
-        if (reviews === 1) {
-          rating = (absHash % 5 === 0) ? 4.0 : 5.0;
-        } else if (reviews === 2) {
-          const rPool = [4.5, 5.0, 4.0, 5.0];
-          rating = rPool[absHash % rPool.length];
-        } else if (reviews <= 5) {
-          const rPool = [4.3, 4.7, 5.0, 4.5, 4.8, 4.6, 4.9];
-          rating = rPool[absHash % rPool.length];
-        } else {
-          const rPool = [4.2, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 5.0, 4.3];
-          rating = rPool[absHash % rPool.length];
-        }
-      }
-
       return {
         ...p,
         reviews,
-        rating: +(rating.toFixed(1))
+        rating: (rating > 0 && rating <= 5) ? +(rating.toFixed(1)) : 0
       };
     });
   }

@@ -474,12 +474,15 @@
                         if (!obj || typeof obj !== 'object') return;
                         if (Array.isArray(obj)) {
                             for (const item of obj) {
-                                if (item && item.id && (item.title || item.name || item.price !== undefined || item.stars_rating !== undefined || item.comments_amount !== undefined)) {
+                                if (item && item.id && (item.title || item.name || item.price !== undefined || item.stars_rating !== undefined || item.comments_amount !== undefined || item.rating !== undefined || item.marks !== undefined)) {
                                     goodsMap.set(String(item.id), item);
                                 }
                                 traverse(item);
                             }
                         } else {
+                            if (obj.id && (obj.title || obj.name || obj.price !== undefined || obj.stars_rating !== undefined || obj.comments_amount !== undefined || obj.rating !== undefined || obj.marks !== undefined)) {
+                                goodsMap.set(String(obj.id), obj);
+                            }
                             for (const key of Object.keys(obj)) {
                                 traverse(obj[key]);
                             }
@@ -494,16 +497,33 @@
             for (const script of ldScripts) {
                 try {
                     const ld = JSON.parse(script.textContent || '{}');
-                    if (ld && ld.aggregateRating) {
-                        const m = (ld.url || script.textContent).match(/\/p(\d+)/i) || (ld.url || script.textContent).match(/p(\d+)/i);
-                        if (m && m[1]) {
-                            const val = parseFloat(ld.aggregateRating.ratingValue);
-                            if (val > 0 && val <= 5) {
+                    const processLd = (node) => {
+                        if (!node || typeof node !== 'object') return;
+                        if (Array.isArray(node)) {
+                            for (const n of node) processLd(n);
+                            return;
+                        }
+                        if (node['@graph']) processLd(node['@graph']);
+                        if (node.itemListElement) processLd(node.itemListElement);
+                        if (node.item) processLd(node.item);
+                        
+                        if (node.aggregateRating) {
+                            const m = (node.url || node.name || script.textContent).match(/\/p(\d+)/i) || (node.url || node.name || script.textContent).match(/p(\d+)/i);
+                            const ratingVal = parseFloat(String(node.aggregateRating.ratingValue || '').replace(',', '.'));
+                            const revCount = parseInt(String(node.aggregateRating.reviewCount || node.aggregateRating.ratingCount || 0), 10);
+                            if (m && m[1] && ratingVal > 0 && ratingVal <= 5) {
                                 const prev = goodsMap.get(m[1]) || {};
-                                goodsMap.set(m[1], { ...prev, id: m[1], stars_rating: val, comments_amount: ld.aggregateRating.reviewCount || ld.aggregateRating.ratingCount });
+                                goodsMap.set(m[1], {
+                                    ...prev,
+                                    id: m[1],
+                                    stars_rating: ratingVal,
+                                    rating: ratingVal,
+                                    comments_amount: revCount || prev.comments_amount
+                                });
                             }
                         }
-                    }
+                    };
+                    processLd(ld);
                 } catch (_) {}
             }
         } catch (_) {}
@@ -540,6 +560,34 @@
         // 2. Batch fetch official Rozetka product details & exact ratings
         const apiProductMap = new Map();
         const exactRatingMap = new Map();
+
+        // Check if pageGoodsMap already has ratings/marks for tiles
+        for (const { link } of distinctTiles) {
+            const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
+            if (m && m[1]) {
+                const prodId = m[1];
+                const pg = pageGoodsMap.get(prodId);
+                if (pg) {
+                    if (typeof pg.stars_rating === 'number' && pg.stars_rating > 0 && pg.stars_rating <= 5) {
+                        exactRatingMap.set(prodId, parseFloat(pg.stars_rating.toFixed(1)));
+                    } else if (typeof pg.rating === 'number' && pg.rating > 0 && pg.rating <= 5) {
+                        exactRatingMap.set(prodId, parseFloat(pg.rating.toFixed(1)));
+                    } else if (pg.marks && typeof pg.marks === 'object') {
+                        let totalMarks = 0;
+                        let weightedSum = 0;
+                        for (let star = 1; star <= 5; star++) {
+                            const count = Number(pg.marks[String(star)]) || Number(pg.marks[star]) || 0;
+                            totalMarks += count;
+                            weightedSum += count * star;
+                        }
+                        if (totalMarks > 0) {
+                            exactRatingMap.set(prodId, parseFloat((weightedSum / totalMarks).toFixed(1)));
+                        }
+                    }
+                }
+            }
+        }
+
         try {
             const productIds = [];
             for (const { link } of distinctTiles) {
@@ -574,11 +622,14 @@
                     const chunk = productIds.slice(i, i + ratingChunkSize);
                     await Promise.all(chunk.map(async (prodId) => {
                         try {
+                            if (exactRatingMap.has(String(prodId))) return;
+
                             // 1. Fetch exact customer marks breakdown from Rozetka Comments Stats API
                             const endpoints = [
                                 `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`,
                                 `https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${prodId}`,
-                                `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/marks`
+                                `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/marks`,
+                                `https://goods.rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`
                             ];
                             for (const ep of endpoints) {
                                 if (exactRatingMap.has(String(prodId))) break;
@@ -586,21 +637,36 @@
                                 if (commentRes && commentRes.ok) {
                                     const cJson = await commentRes.json().catch(() => null);
                                     if (cJson && cJson.data) {
-                                        if (typeof cJson.data.rating === 'number' && cJson.data.rating > 0) {
+                                        if (typeof cJson.data.rating === 'number' && cJson.data.rating > 0 && cJson.data.rating <= 5) {
                                             exactRatingMap.set(String(prodId), parseFloat(cJson.data.rating.toFixed(1)));
                                             break;
                                         }
-                                        if (typeof cJson.data.average_rating === 'number' && cJson.data.average_rating > 0) {
+                                        if (typeof cJson.data.average_rating === 'number' && cJson.data.average_rating > 0 && cJson.data.average_rating <= 5) {
                                             exactRatingMap.set(String(prodId), parseFloat(cJson.data.average_rating.toFixed(1)));
+                                            break;
+                                        }
+                                        if (typeof cJson.data.stars_rating === 'number' && cJson.data.stars_rating > 0 && cJson.data.stars_rating <= 5) {
+                                            exactRatingMap.set(String(prodId), parseFloat(cJson.data.stars_rating.toFixed(1)));
                                             break;
                                         }
                                         if (cJson.data.marks && typeof cJson.data.marks === 'object') {
                                             let totalMarks = 0;
                                             let weightedSum = 0;
-                                            for (let m = 1; m <= 5; m++) {
-                                                const count = Number(cJson.data.marks[String(m)]) || Number(cJson.data.marks[m]) || 0;
-                                                totalMarks += count;
-                                                weightedSum += count * m;
+                                            if (Array.isArray(cJson.data.marks)) {
+                                                for (const mItem of cJson.data.marks) {
+                                                    const m = Number(mItem.mark || mItem.star) || 0;
+                                                    const c = Number(mItem.count || mItem.amount) || 0;
+                                                    if (m >= 1 && m <= 5 && c > 0) {
+                                                        totalMarks += c;
+                                                        weightedSum += count * m;
+                                                    }
+                                                }
+                                            } else {
+                                                for (let m = 1; m <= 5; m++) {
+                                                    const count = Number(cJson.data.marks[String(m)]) || Number(cJson.data.marks[m]) || 0;
+                                                    totalMarks += count;
+                                                    weightedSum += count * m;
+                                                }
                                             }
                                             if (totalMarks > 0) {
                                                 const calculated = parseFloat((weightedSum / totalMarks).toFixed(1));
@@ -633,6 +699,10 @@
                                 }
                             }
                         } catch (_) {}
+                    }));
+                }
+            }
+        } catch (_) {}
                     }));
                 }
             }
@@ -792,7 +862,7 @@
                     }
                 }
 
-                // 4. Rating (1.0 to 5.0) - Exact Mathematical & API Resolution
+                // 4. Rating (1.0 to 5.0) - Exact Mathematical & Multi-Source Resolution
                 let rating = 0;
 
                 if (reviews > 0) {
@@ -801,7 +871,17 @@
                         rating = exactRatingMap.get(prodId);
                     }
 
-                    // Priority 2: Dedicated Product Comment Rating Element (e.g. <rz-product-comment-rating> <span class="font-bold">4.2</span>)
+                    // Priority 2: Page Goods State from Angular SSR TransferState & JSON-LD
+                    if (rating === 0 && prodId && pageGoodsMap.has(prodId)) {
+                        const pg = pageGoodsMap.get(prodId);
+                        if (typeof pg.stars_rating === 'number' && pg.stars_rating > 0 && pg.stars_rating <= 5) {
+                            rating = parseFloat(pg.stars_rating.toFixed(1));
+                        } else if (typeof pg.rating === 'number' && pg.rating > 0 && pg.rating <= 5) {
+                            rating = parseFloat(pg.rating.toFixed(1));
+                        }
+                    }
+
+                    // Priority 3: Dedicated Product Comment Rating Element (e.g. <rz-product-comment-rating> <span class="font-bold">4.2</span>)
                     if (rating === 0) {
                         const commentRatingEl = item.querySelector('rz-product-comment-rating, .product-comment-rating, [class*="comment-rating"]');
                         if (commentRatingEl) {
@@ -815,9 +895,9 @@
                         }
                     }
 
-                    // Priority 3: Star rating container or text/aria labels (e.g. "4.2 з 5", "4.2 / 5")
+                    // Priority 4: Star rating container or text/aria labels (e.g. "4.2 з 5", "4.2 / 5")
                     if (rating === 0) {
-                        const ratingContainers = item.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"]');
+                        const ratingContainers = item.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"], [class*="stars"]');
                         for (const el of ratingContainers) {
                             const aria = el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '';
                             const ariaMatch = aria.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i);
@@ -831,61 +911,40 @@
                         }
                     }
 
-                    // Priority 4: Dynamic Star Progress Percentage Width (ONLY if explicitly variable/non-default)
+                    // Priority 5: Dynamic Star Progress Percentage Width
                     if (rating === 0) {
-                        const starTestIdEl = item.querySelector('[data-testid="stars-rating"], rz-stars-rating-progress .bg-yellow, rz-stars-rating-progress [style*="%"]');
-                        if (starTestIdEl) {
-                            const style = starTestIdEl.getAttribute('style') || '';
-                            const match = style.match(/([\d.]+)%/);
+                        const starProgressElements = item.querySelectorAll('rz-stars-rating-progress [style*="width"], .stars-rating-progress[style*="width"], [data-testid*="stars"][style*="width"], [class*="stars"][style*="width"], [class*="rating"][style*="width"]');
+                        for (const starEl of starProgressElements) {
+                            const style = starEl.getAttribute('style') || '';
+                            const match = style.match(/width:\s*([\d.]+)%/i) || style.match(/([\d.]+)%/);
                             if (match && match[1]) {
                                 const pct = parseFloat(match[1]);
-                                if (pct > 0 && pct <= 100 && Math.round(pct) !== 96) {
+                                if (pct > 0 && pct <= 100) {
                                     rating = parseFloat((pct / 20).toFixed(1));
+                                    break;
                                 }
                             }
                         }
                     }
 
-                    // Priority 5: Official Rozetka API Backend Details (if not boilerplate default 4.8)
+                    // Priority 6: Official Rozetka API Backend Details (if valid number)
                     if (rating === 0 && apiDetails) {
                         if (apiDetails.stars_rating) {
                             const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
-                            if (apiVal > 0 && apiVal <= 5 && apiVal !== 4.8) rating = parseFloat(apiVal.toFixed(1));
+                            if (apiVal > 0 && apiVal <= 5) rating = parseFloat(apiVal.toFixed(1));
                         }
                         if (rating === 0 && apiDetails.rating) {
                             const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
-                            if (apiVal > 0 && apiVal <= 5 && apiVal !== 4.8) rating = parseFloat(apiVal.toFixed(1));
-                        }
-                    }
-
-                    // Priority 6: Deterministic realistic rating calculation for products with reviews if still missing or flat 4.8
-                    if (rating === 0 || rating === 4.8) {
-                        let hash = 0;
-                        const seedStr = name + link + String(prodId) + reviews;
-                        for (let i = 0; i < seedStr.length; i++) {
-                            hash = (hash * 31 + seedStr.charCodeAt(i)) & 0xffffffff;
-                        }
-                        const absHash = Math.abs(hash);
-
-                        if (reviews === 1) {
-                            rating = (absHash % 5 === 0) ? 4.0 : 5.0;
-                        } else if (reviews === 2) {
-                            const rPool = [4.5, 5.0, 4.0, 5.0];
-                            rating = rPool[absHash % rPool.length];
-                        } else if (reviews <= 5) {
-                            const rPool = [4.3, 4.7, 5.0, 4.5, 4.8, 4.6, 4.9];
-                            rating = rPool[absHash % rPool.length];
-                        } else {
-                            const rPool = [4.2, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 5.0, 4.3];
-                            rating = rPool[absHash % rPool.length];
+                            if (apiVal > 0 && apiVal <= 5) rating = parseFloat(apiVal.toFixed(1));
                         }
                     }
                 }
 
-                // If no reviews exist, rating is strictly 0 (displayed as '—')
-                if (reviews === 0) {
+                // If no reviews exist or invalid, rating is strictly 0
+                if (reviews === 0 || rating < 0 || rating > 5) {
                     rating = 0;
                 } else {
+                    rating = parseFloat(rating.toFixed(1));
                     console.log(`[TradeScout Scraper] Tile "${name.slice(0, 30)}": reviews=${reviews}, rating=${rating}`);
                 }
 

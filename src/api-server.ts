@@ -132,26 +132,6 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
               }
             }
 
-            if ((foundRating === 0 || foundRating === 4.8) && (currentProducts[index].reviews || 0) > 0) {
-              const rev = currentProducts[index].reviews || 1;
-              let hash = 0;
-              const seed = (currentProducts[index].name || '') + normalizedLink + rev;
-              for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) & 0xffffffff;
-              const absHash = Math.abs(hash);
-              if (rev === 1) {
-                foundRating = (absHash % 5 === 0) ? 4.0 : 5.0;
-              } else if (rev === 2) {
-                const rPool = [4.5, 5.0, 4.0, 5.0];
-                foundRating = rPool[absHash % rPool.length];
-              } else if (rev <= 5) {
-                const rPool = [4.3, 4.7, 5.0, 4.5, 4.8, 4.6, 4.9];
-                foundRating = rPool[absHash % rPool.length];
-              } else {
-                const rPool = [4.2, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 5.0, 4.3];
-                foundRating = rPool[absHash % rPool.length];
-              }
-            }
-
             if (foundRating > 0) {
               currentProducts[index].rating = parseFloat(foundRating.toFixed(1));
               updated = true;
@@ -284,25 +264,7 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
         let itemRating = itemReviews > 0 ? (typeof item.rating === 'number' ? item.rating : (item.rating ? parseFloat(item.rating) : 0)) : 0;
         if (itemRating < 0 || itemRating > 5) itemRating = 0;
 
-        if (itemReviews > 0 && (itemRating === 0 || itemRating === 4.8)) {
-          let hash = 0;
-          const seed = (item.name || '') + normalizedLink + itemReviews;
-          for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) & 0xffffffff;
-          const absHash = Math.abs(hash);
-          if (itemReviews === 1) {
-            itemRating = (absHash % 5 === 0) ? 4.0 : 5.0;
-          } else if (itemReviews === 2) {
-            const rPool = [4.5, 5.0, 4.0, 5.0];
-            itemRating = rPool[absHash % rPool.length];
-          } else if (itemReviews <= 5) {
-            const rPool = [4.3, 4.7, 5.0, 4.5, 4.8, 4.6, 4.9];
-            itemRating = rPool[absHash % rPool.length];
-          } else {
-            const rPool = [4.2, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 5.0, 4.3];
-            itemRating = rPool[absHash % rPool.length];
-          }
-        }
-        itemRating = parseFloat(itemRating.toFixed(1));
+        itemRating = (itemReviews > 0 && itemRating > 0 && itemRating <= 5) ? parseFloat(itemRating.toFixed(1)) : 0;
 
         let itemOldPrice = typeof item.oldPrice === 'number' ? item.oldPrice : (parseFloat(item.oldPrice) || itemPrice);
         let itemDiscount = typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0);
