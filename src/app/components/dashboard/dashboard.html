@@ -6901,8 +6901,9 @@
                     <span *ngIf="sInfo.rankLabel" class="px-1.5 py-0.2 rounded text-[9.5px] font-bold border" [class]="sInfo.badgeClass">
                       {{ sInfo.rankLabel }}
                     </span>
-                    <span *ngIf="sInfo.avgRating > 0" class="text-[10px] font-bold font-mono text-amber-300 flex items-center gap-0.5 bg-amber-950/40 px-1.5 py-0.2 rounded border border-amber-500/30">
-                      ★ {{ sInfo.avgRating }}
+                    <span *ngIf="sInfo.avgRating > 0" class="text-[10px] font-bold font-mono text-amber-300 flex items-center gap-1 bg-amber-950/40 px-1.5 py-0.2 rounded border border-amber-500/30" [title]="'Рейтинг продавця ' + sInfo.name + ' (за товарами в наявності): ★ ' + sInfo.avgRating">
+                      <span class="material-icons text-[11px] text-amber-400">storefront</span>
+                      <span>★ {{ sInfo.avgRating }}</span>
                     </span>
                   </div>
                 </div>
