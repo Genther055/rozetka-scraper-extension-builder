@@ -874,9 +874,19 @@
                     // Priority 2: Page Goods State from Angular SSR TransferState & JSON-LD
                     if (rating === 0 && prodId && pageGoodsMap.has(prodId)) {
                         const pg = pageGoodsMap.get(prodId);
-                        if (typeof pg.stars_rating === 'number' && pg.stars_rating > 0 && pg.stars_rating <= 5) {
+                        if (pg.marks && typeof pg.marks === 'object') {
+                            let total = 0;
+                            let sum = 0;
+                            for (let star = 1; star <= 5; star++) {
+                                const count = Number(pg.marks[String(star)]) || Number(pg.marks[star]) || 0;
+                                total += count;
+                                sum += count * star;
+                            }
+                            if (total > 0) rating = parseFloat((sum / total).toFixed(1));
+                        }
+                        if (rating === 0 && typeof pg.stars_rating === 'number' && pg.stars_rating > 0 && pg.stars_rating <= 5 && pg.stars_rating !== 4.8) {
                             rating = parseFloat(pg.stars_rating.toFixed(1));
-                        } else if (typeof pg.rating === 'number' && pg.rating > 0 && pg.rating <= 5) {
+                        } else if (rating === 0 && typeof pg.rating === 'number' && pg.rating > 0 && pg.rating <= 5 && pg.rating !== 4.8) {
                             rating = parseFloat(pg.rating.toFixed(1));
                         }
                     }
@@ -911,15 +921,16 @@
                         }
                     }
 
-                    // Priority 5: Dynamic Star Progress Percentage Width
+                    // Priority 5: Dynamic Star Progress Percentage Width (from rz-stars-rating-progress style="width: 84.8%")
                     if (rating === 0) {
-                        const starProgressElements = item.querySelectorAll('rz-stars-rating-progress [style*="width"], .stars-rating-progress[style*="width"], [data-testid*="stars"][style*="width"], [class*="stars"][style*="width"], [class*="rating"][style*="width"]');
+                        const ratingParent = item.querySelector('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"], [class*="stars"]') || item;
+                        const starProgressElements = ratingParent.querySelectorAll('[style*="width"], [style*="%"], rz-stars-rating-progress, div, span, svg');
                         for (const starEl of starProgressElements) {
                             const style = starEl.getAttribute('style') || '';
                             const match = style.match(/width:\s*([\d.]+)%/i) || style.match(/([\d.]+)%/);
                             if (match && match[1]) {
                                 const pct = parseFloat(match[1]);
-                                if (pct > 0 && pct <= 100) {
+                                if (pct >= 5 && pct <= 100) {
                                     rating = parseFloat((pct / 20).toFixed(1));
                                     break;
                                 }
@@ -927,15 +938,15 @@
                         }
                     }
 
-                    // Priority 6: Official Rozetka API Backend Details (if valid number)
+                    // Priority 6: Official Rozetka API Backend Details (ONLY if not flat boilerplate 4.8)
                     if (rating === 0 && apiDetails) {
                         if (apiDetails.stars_rating) {
                             const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
-                            if (apiVal > 0 && apiVal <= 5) rating = parseFloat(apiVal.toFixed(1));
+                            if (apiVal > 0 && apiVal <= 5 && apiVal !== 4.8) rating = parseFloat(apiVal.toFixed(1));
                         }
                         if (rating === 0 && apiDetails.rating) {
                             const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
-                            if (apiVal > 0 && apiVal <= 5) rating = parseFloat(apiVal.toFixed(1));
+                            if (apiVal > 0 && apiVal <= 5 && apiVal !== 4.8) rating = parseFloat(apiVal.toFixed(1));
                         }
                     }
                 }
