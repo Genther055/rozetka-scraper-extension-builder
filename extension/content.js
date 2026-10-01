@@ -508,14 +508,18 @@
                         if (node.item) processLd(node.item);
                         
                         if (node.aggregateRating) {
-                            const m = (node.url || node.name || script.textContent).match(/\/p(\d+)/i) || (node.url || node.name || script.textContent).match(/p(\d+)/i);
-                            const ratingVal = parseFloat(String(node.aggregateRating.ratingValue || '').replace(',', '.'));
+                            const rawId = node.sku || node.productID || node.mpn || node.identifier || '';
+                            const m = String(rawId).match(/^(\d{5,})$/) || (node.url || node.name || script.textContent).match(/\/p(\d+)/i) || (node.url || '').match(/\/(\d{5,})\//) || window.location.href.match(/\/p(\d+)/i) || window.location.href.match(/\/(\d{5,})\//);
+                            const ratingVal = typeof node.aggregateRating.ratingValue === 'number' 
+                                ? node.aggregateRating.ratingValue 
+                                : parseFloat(String(node.aggregateRating.ratingValue || '').replace(',', '.'));
                             const revCount = parseInt(String(node.aggregateRating.reviewCount || node.aggregateRating.ratingCount || 0), 10);
-                            if (m && m[1] && ratingVal > 0 && ratingVal <= 5) {
-                                const prev = goodsMap.get(m[1]) || {};
-                                goodsMap.set(m[1], {
+                            const pId = m ? String(m[1]) : (rawId ? String(rawId) : '');
+                            if (pId && ratingVal > 0 && ratingVal <= 5) {
+                                const prev = goodsMap.get(pId) || {};
+                                goodsMap.set(pId, {
                                     ...prev,
-                                    id: m[1],
+                                    id: pId,
                                     stars_rating: ratingVal,
                                     rating: ratingVal,
                                     comments_amount: revCount || prev.comments_amount
@@ -526,6 +530,34 @@
                     processLd(ld);
                 } catch (_) {}
             }
+
+            // 3. Direct DOM User Comments Marks & Rating on Product Page (e.g. "Оцінка користувачів 4.6/5 ★")
+            try {
+                const pageIdMatch = window.location.href.match(/\/p(\d+)/i) || window.location.href.match(/\/(\d{5,})\//);
+                if (pageIdMatch && pageIdMatch[1]) {
+                    const pageProdId = pageIdMatch[1];
+                    const prev = goodsMap.get(pageProdId) || {};
+
+                    // Look for exact "Оцінка користувачів X.X/5" element
+                    const userRatingNodes = document.querySelectorAll('rz-product-comments-stats, .product-comments__rating, .comments-stats, .product-comments-marks, [class*="comments-stats"], [class*="comments-marks"], [class*="product-comments"], [class*="rating-score"]');
+                    for (const uNode of userRatingNodes) {
+                        const txt = (uNode.innerText || uNode.textContent || '').trim();
+                        const m = txt.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || txt.match(/([1-5](?:[.,]\d+)?)\s*(?:\/|з)\s*5/i);
+                        if (m && m[1]) {
+                            const val = parseFloat(m[1].replace(',', '.'));
+                            if (val > 0 && val <= 5) {
+                                goodsMap.set(pageProdId, {
+                                    ...prev,
+                                    id: pageProdId,
+                                    stars_rating: val,
+                                    rating: val
+                                });
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (_) {}
         } catch (_) {}
         return goodsMap;
     }
@@ -550,6 +582,20 @@
             if (sentLinks.has(link) || seenElements.has(link)) continue;
             seenElements.add(link);
             distinctTiles.push({ item, link, name });
+        }
+
+        // Product page fallback (when user triggers scraper on a single product page e.g. /p470077279/)
+        if (distinctTiles.length === 0) {
+            const isProductPage = !!document.querySelector('rz-product, .product-about, [class*="product-main"], [class*="product-header"]') || /\/p\d+/i.test(window.location.href);
+            if (isProductPage) {
+                const productMain = document.querySelector('rz-product, .product-about, main, body') || document.body;
+                const link = window.location.href.split('?')[0].split('#')[0];
+                const h1 = document.querySelector('h1');
+                const name = extractTitle(productMain, link) || (h1 ? h1.innerText.trim() : '');
+                if (name && !sentLinks.has(link)) {
+                    distinctTiles.push({ item: productMain, link, name });
+                }
+            }
         }
 
         if (distinctTiles.length === 0) return [];
@@ -801,26 +847,29 @@
                         }
                     }
 
-                    // Priority 3: Dedicated Product Comment Rating Element (e.g. <rz-product-comment-rating> <span class="font-bold">4.2</span>)
+                    // Priority 3: Dedicated Product Comment Rating Element (e.g. <rz-product-comment-rating> <span class="font-bold">4.6</span> or "Оцінка користувачів 4.6/5 ★")
                     if (rating === 0) {
-                        const commentRatingEl = item.querySelector('rz-product-comment-rating, .product-comment-rating, [class*="comment-rating"]');
-                        if (commentRatingEl) {
+                        const commentRatingEls = item.querySelectorAll('rz-product-comment-rating, .product-comment-rating, [class*="comment-rating"], [class*="comments-stats"], [class*="comments__rating"], .product-comments__rating, rz-product-comments-stats, rz-product-rating, [class*="rating-score"]');
+                        for (const commentRatingEl of commentRatingEls) {
                             const boldSpan = commentRatingEl.querySelector('.font-bold, b, strong, [class*="bold"]') || commentRatingEl;
                             const t = (boldSpan.textContent || boldSpan.innerText || '').trim();
-                            const m = t.match(/([1-5](?:[.,]\d+)?)/);
+                            const m = t.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || t.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i) || t.match(/([1-5](?:[.,]\d+)?)/);
                             if (m && m[1]) {
                                 const val = parseFloat(m[1].replace(',', '.'));
-                                if (val > 0 && val <= 5) rating = parseFloat(val.toFixed(1));
+                                if (val > 0 && val <= 5) {
+                                    rating = parseFloat(val.toFixed(1));
+                                    break;
+                                }
                             }
                         }
                     }
 
-                    // Priority 4: Star rating container or text/aria labels (e.g. "4.2 з 5", "4.2 / 5")
+                    // Priority 4: Star rating container or text/aria labels (e.g. "4.6 з 5", "4.6 / 5")
                     if (rating === 0) {
                         const ratingContainers = item.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"], [class*="stars"]');
                         for (const el of ratingContainers) {
                             const aria = el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '';
-                            const ariaMatch = aria.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i);
+                            const ariaMatch = aria.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || aria.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i);
                             if (ariaMatch && ariaMatch[1]) {
                                 const val = parseFloat(ariaMatch[1].replace(',', '.'));
                                 if (val > 0 && val <= 5) {
