@@ -4237,7 +4237,7 @@
                       </button>
                     </div>
 
-                    <!-- Rich Seller Info, 1P/3P Status, Leader Badge & Rating -->
+                    <!-- Seller Info & 1P/3P Status -->
                     <div class="flex flex-wrap items-center gap-2 mt-2" *ngIf="getSellerBadgeInfo(p.seller) as sInfo">
                       <div class="flex items-center gap-1.5">
                         <span class="text-[10px] text-slate-400 font-mono">Продавець:</span>
@@ -4261,25 +4261,6 @@
                         [class.border-indigo-500/30]="!sInfo.isRozetka"
                       >
                         {{ sInfo.isRozetka ? '1P (Rozetka)' : '3P Селер' }}
-                      </span>
-
-                      <!-- Seller Rank / Leader Badge -->
-                      <span 
-                        *ngIf="sInfo.rankLabel"
-                        class="px-2 py-0.5 rounded-md text-[10px] font-extrabold border flex items-center gap-1 shadow-sm"
-                        [class]="sInfo.badgeClass"
-                        [title]="'Статус продавця в ніші: ' + sInfo.rankLabel + ' (' + sInfo.reviewsShare + '% попиту, ' + sInfo.productsCount + ' SKU)'"
-                      >
-                        <span>{{ sInfo.rankLabel }}</span>
-                      </span>
-
-                      <!-- Seller Share Details -->
-                      <span 
-                        *ngIf="sInfo.reviewsShare > 0 || sInfo.marketShare > 0"
-                        class="text-[10px] text-slate-400 font-mono hidden md:inline"
-                        [title]="'Частка попиту: ' + sInfo.reviewsShare + '%, асортимент: ' + sInfo.productsCount + ' SKU (' + sInfo.marketShare + '%)'"
-                      >
-                        ({{ sInfo.reviewsShare > 0 ? sInfo.reviewsShare + '% попиту' : sInfo.marketShare + '% SKU' }})
                       </span>
                     </div>
                   </td>
@@ -5185,7 +5166,6 @@
                     <span class="px-1 py-0.2 rounded text-[9px] font-bold uppercase" [class.bg-emerald-950]="sInfo.isRozetka" [class.text-emerald-300]="sInfo.isRozetka" [class.bg-slate-800]="!sInfo.isRozetka" [class.text-indigo-300]="!sInfo.isRozetka">
                       {{ sInfo.isRozetka ? '1P' : '3P' }}
                     </span>
-                    <span *ngIf="sInfo.rankLabel" class="px-1.5 py-0.2 rounded text-[9px] font-bold border" [class]="sInfo.badgeClass">{{ sInfo.rankLabel }}</span>
                   </span>
                   <span class="px-2.5 py-1 bg-slate-900/60 border border-[rgba(139,92,246,0.08)] rounded-full text-slate-350 text-[10px]">Категорія: {{ p.category || 'Повербанки' }}</span>
                   <span *ngIf="p.inStock !== false" class="text-emerald-400 font-semibold">● В наявності</span>
@@ -6855,32 +6835,6 @@
                       <span class="material-icons text-[10px]">tune</span>
                       <span>Характеристики ({{ getSpecsArray(p).length }})</span>
                     </button>
-                  </div>
-
-                  <div class="flex flex-wrap items-center gap-2 mt-1.5" *ngIf="getSellerBadgeInfo(p.seller) as sInfo">
-                    <span class="text-[10px] text-slate-400 font-mono">Продавець: 
-                      <button 
-                        (click)="drilldownSellerFilter = (p.seller || 'Rozetka'); cdr.markForCheck(); $event.stopPropagation()"
-                        class="text-slate-200 hover:text-indigo-300 font-bold underline decoration-indigo-500/30 hover:decoration-indigo-300 cursor-pointer transition-colors"
-                        [title]="'Фільтрувати за цим продавцем: ' + sInfo.name"
-                      >
-                        {{ sInfo.name }}
-                      </button>
-                    </span>
-                    <span 
-                      class="px-1.5 py-0.2 rounded text-[9.5px] font-extrabold border uppercase tracking-wider"
-                      [class.bg-emerald-950]="sInfo.isRozetka"
-                      [class.text-emerald-300]="sInfo.isRozetka"
-                      [class.border-emerald-500/40]="sInfo.isRozetka"
-                      [class.bg-slate-900]="!sInfo.isRozetka"
-                      [class.text-indigo-300]="!sInfo.isRozetka"
-                      [class.border-indigo-500/30]="!sInfo.isRozetka"
-                    >
-                      {{ sInfo.isRozetka ? '1P' : '3P' }}
-                    </span>
-                    <span *ngIf="sInfo.rankLabel" class="px-1.5 py-0.2 rounded text-[9.5px] font-bold border" [class]="sInfo.badgeClass">
-                      {{ sInfo.rankLabel }}
-                    </span>
                   </div>
                 </div>
               </td>
