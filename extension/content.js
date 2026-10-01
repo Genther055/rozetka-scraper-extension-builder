@@ -1086,24 +1086,7 @@
                         }
                     }
 
-                    // Priority 5: Dynamic Star Progress Percentage Width (from rz-stars-rating-progress style="width: 91.2%")
-                    if (rating === 0) {
-                        const ratingParent = item.querySelector('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"], [class*="stars"]') || item;
-                        const starProgressElements = ratingParent.querySelectorAll('[style*="width"], [style*="%"], rz-stars-rating-progress, div, span, svg');
-                        for (const starEl of starProgressElements) {
-                            const style = starEl.getAttribute('style') || '';
-                            const match = style.match(/width:\s*([\d.]+)%/i) || style.match(/([\d.]+)%/);
-                            if (match && match[1]) {
-                                const pct = parseFloat(match[1]);
-                                if (pct >= 5 && pct <= 100) {
-                                    rating = parseFloat((pct / 20).toFixed(1));
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    // Priority 6: Official Rozetka API Backend Details
+                    // Priority 5: Official Rozetka API Backend Details
                     if (rating === 0 && apiDetails) {
                         if (apiDetails.stars_rating) {
                             const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
