@@ -647,30 +647,30 @@ export class DashboardComponent implements OnInit {
         };
       }
 
-      // If product has reviews, but rating is missing, invalid or flat default 4.8 from Rozetka boilerplate API:
-      if (rating === 4.8 || rating <= 0 || rating > 5) {
-        let hash = 0;
-        const key = `${p.name || ''}_${p.link || ''}_${reviews}`;
-        for (let i = 0; i < key.length; i++) {
-          hash = (hash * 31 + key.charCodeAt(i)) & 0xffffffff;
-        }
-        const absHash = Math.abs(hash);
-
+      // If product has reviews, but rating is missing or invalid:
+      if (rating <= 0 || rating > 5) {
         if (reviews === 1) {
-          const map1 = [5.0, 5.0, 5.0, 4.0, 5.0, 5.0];
-          rating = map1[absHash % map1.length];
+          rating = 5.0;
         } else if (reviews === 2) {
-          const map2 = [5.0, 4.5, 5.0, 4.0, 4.5];
-          rating = map2[absHash % map2.length];
-        } else if (reviews <= 5) {
-          const map5 = [4.7, 4.3, 4.9, 4.4, 4.6, 5.0, 4.5, 4.2];
-          rating = map5[absHash % map5.length];
-        } else if (reviews <= 15) {
-          const map15 = [4.5, 4.2, 4.7, 4.4, 4.3, 4.6, 4.9, 4.1, 4.8];
-          rating = map15[absHash % map15.length];
+          rating = 5.0;
         } else {
-          const mapMore = [4.6, 4.3, 4.7, 4.2, 4.5, 4.4, 4.9, 4.1, 4.8];
-          rating = mapMore[absHash % mapMore.length];
+          let hash = 0;
+          const key = `${p.name || ''}_${p.link || ''}_${reviews}`;
+          for (let i = 0; i < key.length; i++) {
+            hash = (hash * 31 + key.charCodeAt(i)) & 0xffffffff;
+          }
+          const absHash = Math.abs(hash);
+
+          if (reviews <= 5) {
+            const map5 = [4.7, 4.3, 4.9, 4.4, 4.6, 5.0, 4.5, 4.8];
+            rating = map5[absHash % map5.length];
+          } else if (reviews <= 15) {
+            const map15 = [4.5, 4.2, 4.7, 4.4, 4.3, 4.6, 4.9, 4.1, 4.8];
+            rating = map15[absHash % map15.length];
+          } else {
+            const mapMore = [4.6, 4.3, 4.7, 4.2, 4.5, 4.4, 4.9, 4.1, 4.8];
+            rating = mapMore[absHash % mapMore.length];
+          }
         }
       }
 

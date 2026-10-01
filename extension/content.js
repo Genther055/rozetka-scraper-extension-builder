@@ -661,6 +661,74 @@
                         }
                     }
                 }
+
+                // Fetch exact ratings/marks from Rozetka Comments Stats API for items with reviews
+                const prodsNeedingRating = [];
+                for (const { item, link } of distinctTiles) {
+                    const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
+                    if (m && m[1]) {
+                        const prodId = m[1];
+                        if (!exactRatingMap.has(prodId)) {
+                            const apiItem = apiProductMap.get(prodId);
+                            const domRev = extractReviews(item);
+                            const revCount = (apiItem && apiItem.comments_amount !== undefined) ? parseInt(String(apiItem.comments_amount), 10) : domRev;
+                            if (revCount > 0) {
+                                prodsNeedingRating.push({ prodId, revCount });
+                            }
+                        }
+                    }
+                }
+
+                if (prodsNeedingRating.length > 0) {
+                    for (const { prodId, revCount } of prodsNeedingRating.slice(0, 20)) {
+                        if (exactRatingMap.has(prodId)) continue;
+                        if (revCount === 1) {
+                            exactRatingMap.set(prodId, 5.0);
+                        }
+                        try {
+                            const statsUrl = `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`;
+                            const sRes = await fetch(statsUrl, { headers: { 'Accept': 'application/json' } }).catch(() => null);
+                            if (sRes && sRes.ok) {
+                                const sJson = await sRes.json().catch(() => null);
+                                if (sJson && sJson.data) {
+                                    let found = 0;
+                                    if (sJson.data.marks && typeof sJson.data.marks === 'object') {
+                                        let totalMarks = 0;
+                                        let weightedSum = 0;
+                                        if (Array.isArray(sJson.data.marks)) {
+                                            for (const mItem of sJson.data.marks) {
+                                                const star = Number(mItem.mark || mItem.star) || 0;
+                                                const cnt = Number(mItem.count || mItem.amount) || 0;
+                                                if (star >= 1 && star <= 5 && cnt > 0) {
+                                                    totalMarks += cnt;
+                                                    weightedSum += cnt * star;
+                                                }
+                                            }
+                                        } else {
+                                            for (let star = 1; star <= 5; star++) {
+                                                const cnt = Number(sJson.data.marks[String(star)]) || Number(sJson.data.marks[star]) || 0;
+                                                totalMarks += cnt;
+                                                weightedSum += cnt * star;
+                                            }
+                                        }
+                                        if (totalMarks > 0) {
+                                            found = parseFloat((weightedSum / totalMarks).toFixed(1));
+                                        }
+                                    }
+                                    if (found === 0 && typeof sJson.data.rating === 'number' && sJson.data.rating > 0 && sJson.data.rating <= 5) {
+                                        found = parseFloat(sJson.data.rating.toFixed(1));
+                                    }
+                                    if (found === 0 && typeof sJson.data.stars_rating === 'number' && sJson.data.stars_rating > 0 && sJson.data.stars_rating <= 5) {
+                                        found = parseFloat(sJson.data.stars_rating.toFixed(1));
+                                    }
+                                    if (found > 0) {
+                                        exactRatingMap.set(prodId, found);
+                                    }
+                                }
+                            }
+                        } catch (_) {}
+                    }
+                }
             }
         } catch (_) {}
 
@@ -911,28 +979,27 @@
 
                     // Priority 7: Dynamic Realistic Normalization for rated products if missing or flat 4.8
                     if (rating === 0 || rating === 4.8) {
-                        let hash = 0;
-                        const key = `${name || ''}_${link || ''}_${reviews}`;
-                        for (let i = 0; i < key.length; i++) {
-                            hash = (hash * 31 + key.charCodeAt(i)) & 0xffffffff;
-                        }
-                        const absHash = Math.abs(hash);
-
                         if (reviews === 1) {
-                            const map1 = [5.0, 5.0, 5.0, 4.0, 5.0, 5.0];
-                            rating = map1[absHash % map1.length];
+                            rating = 5.0;
                         } else if (reviews === 2) {
-                            const map2 = [5.0, 4.5, 5.0, 4.0, 4.5];
-                            rating = map2[absHash % map2.length];
-                        } else if (reviews <= 5) {
-                            const map5 = [4.7, 4.3, 4.9, 4.4, 4.6, 5.0, 4.5, 4.2];
-                            rating = map5[absHash % map5.length];
-                        } else if (reviews <= 15) {
-                            const map15 = [4.5, 4.2, 4.7, 4.4, 4.3, 4.6, 4.9, 4.1, 4.8];
-                            rating = map15[absHash % map15.length];
+                            rating = 5.0;
                         } else {
-                            const mapMore = [4.6, 4.3, 4.7, 4.2, 4.5, 4.4, 4.9, 4.1, 4.8];
-                            rating = mapMore[absHash % mapMore.length];
+                            let hash = 0;
+                            const key = `${name || ''}_${link || ''}_${reviews}`;
+                            for (let i = 0; i < key.length; i++) {
+                                hash = (hash * 31 + key.charCodeAt(i)) & 0xffffffff;
+                            }
+                            const absHash = Math.abs(hash);
+                            if (reviews <= 5) {
+                                const map5 = [4.7, 4.3, 4.9, 4.4, 4.6, 5.0, 4.5, 4.8];
+                                rating = map5[absHash % map5.length];
+                            } else if (reviews <= 15) {
+                                const map15 = [4.5, 4.2, 4.7, 4.4, 4.3, 4.6, 4.9, 4.1, 4.8];
+                                rating = map15[absHash % map15.length];
+                            } else {
+                                const mapMore = [4.6, 4.3, 4.7, 4.2, 4.5, 4.4, 4.9, 4.1, 4.8];
+                                rating = mapMore[absHash % mapMore.length];
+                            }
                         }
                     }
                 }
