@@ -538,23 +538,37 @@
                     const pageProdId = pageIdMatch[1];
                     const prev = goodsMap.get(pageProdId) || {};
 
-                    // Look for exact "Оцінка користувачів X.X/5" element
-                    const userRatingNodes = document.querySelectorAll('rz-product-comments-stats, .product-comments__rating, .comments-stats, .product-comments-marks, [class*="comments-stats"], [class*="comments-marks"], [class*="product-comments"], [class*="rating-score"]');
+                    // Look for exact "Оцінка користувачів X.X/5" element or full body text
+                    const userRatingNodes = document.querySelectorAll('rz-product-comments-stats, .product-comments__rating, .comments-stats, .product-comments-marks, [class*="comments-stats"], [class*="comments-marks"], [class*="product-comments"], [class*="rating-score"], [class*="comments"]');
+                    let foundDomRating = 0;
                     for (const uNode of userRatingNodes) {
                         const txt = (uNode.innerText || uNode.textContent || '').trim();
                         const m = txt.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || txt.match(/([1-5](?:[.,]\d+)?)\s*(?:\/|з)\s*5/i);
                         if (m && m[1]) {
                             const val = parseFloat(m[1].replace(',', '.'));
                             if (val > 0 && val <= 5) {
-                                goodsMap.set(pageProdId, {
-                                    ...prev,
-                                    id: pageProdId,
-                                    stars_rating: val,
-                                    rating: val
-                                });
+                                foundDomRating = val;
                                 break;
                             }
                         }
+                    }
+                    if (foundDomRating === 0 && document.body) {
+                        const bodyText = (document.body.innerText || document.body.textContent || '').slice(0, 15000);
+                        const m = bodyText.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || bodyText.match(/([1-5](?:[.,]\d+)?)\s*(?:\/|з)\s*5\s*★?/i);
+                        if (m && m[1]) {
+                            const val = parseFloat(m[1].replace(',', '.'));
+                            if (val > 0 && val <= 5) {
+                                foundDomRating = val;
+                            }
+                        }
+                    }
+                    if (foundDomRating > 0) {
+                        goodsMap.set(pageProdId, {
+                            ...prev,
+                            id: pageProdId,
+                            stars_rating: foundDomRating,
+                            rating: foundDomRating
+                        });
                     }
                 }
             } catch (_) {}
@@ -614,11 +628,7 @@
                 const prodId = m[1];
                 const pg = pageGoodsMap.get(prodId);
                 if (pg) {
-                    if (typeof pg.stars_rating === 'number' && pg.stars_rating > 0 && pg.stars_rating <= 5) {
-                        exactRatingMap.set(prodId, parseFloat(pg.stars_rating.toFixed(1)));
-                    } else if (typeof pg.rating === 'number' && pg.rating > 0 && pg.rating <= 5) {
-                        exactRatingMap.set(prodId, parseFloat(pg.rating.toFixed(1)));
-                    } else if (pg.marks && typeof pg.marks === 'object') {
+                    if (pg.marks && typeof pg.marks === 'object') {
                         let totalMarks = 0;
                         let weightedSum = 0;
                         for (let star = 1; star <= 5; star++) {
@@ -628,6 +638,13 @@
                         }
                         if (totalMarks > 0) {
                             exactRatingMap.set(prodId, parseFloat((weightedSum / totalMarks).toFixed(1)));
+                        }
+                    }
+                    if (!exactRatingMap.has(prodId)) {
+                        if (typeof pg.stars_rating === 'number' && pg.stars_rating > 0 && pg.stars_rating <= 5 && pg.stars_rating !== 4.8) {
+                            exactRatingMap.set(prodId, parseFloat(pg.stars_rating.toFixed(1)));
+                        } else if (typeof pg.rating === 'number' && pg.rating > 0 && pg.rating <= 5 && pg.rating !== 4.8) {
+                            exactRatingMap.set(prodId, parseFloat(pg.rating.toFixed(1)));
                         }
                     }
                 }
@@ -680,53 +697,60 @@
                 }
 
                 if (prodsNeedingRating.length > 0) {
-                    for (const { prodId, revCount } of prodsNeedingRating.slice(0, 20)) {
-                        if (exactRatingMap.has(prodId)) continue;
-                        if (revCount === 1) {
-                            exactRatingMap.set(prodId, 5.0);
-                        }
-                        try {
-                            const statsUrl = `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`;
-                            const sRes = await fetch(statsUrl, { headers: { 'Accept': 'application/json' } }).catch(() => null);
-                            if (sRes && sRes.ok) {
-                                const sJson = await sRes.json().catch(() => null);
-                                if (sJson && sJson.data) {
-                                    let found = 0;
-                                    if (sJson.data.marks && typeof sJson.data.marks === 'object') {
-                                        let totalMarks = 0;
-                                        let weightedSum = 0;
-                                        if (Array.isArray(sJson.data.marks)) {
-                                            for (const mItem of sJson.data.marks) {
-                                                const star = Number(mItem.mark || mItem.star) || 0;
-                                                const cnt = Number(mItem.count || mItem.amount) || 0;
-                                                if (star >= 1 && star <= 5 && cnt > 0) {
+                    const fetchChunks = [];
+                    for (let i = 0; i < prodsNeedingRating.length; i += 12) {
+                        fetchChunks.push(prodsNeedingRating.slice(i, i + 12));
+                    }
+                    for (const chunk of fetchChunks) {
+                        await Promise.allSettled(chunk.map(async ({ prodId, revCount }) => {
+                            if (exactRatingMap.has(prodId)) return;
+                            if (revCount === 1) {
+                                exactRatingMap.set(prodId, 5.0);
+                                return;
+                            }
+                            try {
+                                const statsUrl = `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`;
+                                const sRes = await fetch(statsUrl, { headers: { 'Accept': 'application/json' } }).catch(() => null);
+                                if (sRes && sRes.ok) {
+                                    const sJson = await sRes.json().catch(() => null);
+                                    if (sJson && sJson.data) {
+                                        let found = 0;
+                                        if (sJson.data.marks && typeof sJson.data.marks === 'object') {
+                                            let totalMarks = 0;
+                                            let weightedSum = 0;
+                                            if (Array.isArray(sJson.data.marks)) {
+                                                for (const mItem of sJson.data.marks) {
+                                                    const star = Number(mItem.mark || mItem.star) || 0;
+                                                    const cnt = Number(mItem.count || mItem.amount) || 0;
+                                                    if (star >= 1 && star <= 5 && cnt > 0) {
+                                                        totalMarks += cnt;
+                                                        weightedSum += cnt * star;
+                                                    }
+                                                }
+                                            } else {
+                                                for (let star = 1; star <= 5; star++) {
+                                                    const cnt = Number(sJson.data.marks[String(star)]) || Number(sJson.data.marks[star]) || 0;
                                                     totalMarks += cnt;
                                                     weightedSum += cnt * star;
                                                 }
                                             }
-                                        } else {
-                                            for (let star = 1; star <= 5; star++) {
-                                                const cnt = Number(sJson.data.marks[String(star)]) || Number(sJson.data.marks[star]) || 0;
-                                                totalMarks += cnt;
-                                                weightedSum += cnt * star;
+                                            if (totalMarks > 0) {
+                                                found = parseFloat((weightedSum / totalMarks).toFixed(1));
                                             }
                                         }
-                                        if (totalMarks > 0) {
-                                            found = parseFloat((weightedSum / totalMarks).toFixed(1));
+                                        if (found === 0 && typeof sJson.data.rating === 'number' && sJson.data.rating > 0 && sJson.data.rating <= 5 && sJson.data.rating !== 4.8) {
+                                            found = parseFloat(sJson.data.rating.toFixed(1));
+                                        }
+                                        if (found === 0 && typeof sJson.data.average_rating === 'number' && sJson.data.average_rating > 0 && sJson.data.average_rating <= 5) {
+                                            found = parseFloat(sJson.data.average_rating.toFixed(1));
+                                        }
+                                        if (found > 0) {
+                                            exactRatingMap.set(prodId, found);
                                         }
                                     }
-                                    if (found === 0 && typeof sJson.data.rating === 'number' && sJson.data.rating > 0 && sJson.data.rating <= 5) {
-                                        found = parseFloat(sJson.data.rating.toFixed(1));
-                                    }
-                                    if (found === 0 && typeof sJson.data.stars_rating === 'number' && sJson.data.stars_rating > 0 && sJson.data.stars_rating <= 5) {
-                                        found = parseFloat(sJson.data.stars_rating.toFixed(1));
-                                    }
-                                    if (found > 0) {
-                                        exactRatingMap.set(prodId, found);
-                                    }
                                 }
-                            }
-                        } catch (_) {}
+                            } catch (_) {}
+                        }));
                     }
                 }
             }

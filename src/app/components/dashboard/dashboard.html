@@ -3791,6 +3791,7 @@
                       class="text-sm text-slate-200 font-bold hover:text-indigo-300 cursor-pointer transition-colors"
                       [title]="'Переглянути всі товари продавця ' + (item.seller || 'Rozetka')"
                     >
+                      <span>{{ item.seller || 'Rozetka' }}</span>
                     </div>
                     <div class="text-xs text-indigo-400/80 font-mono mt-0.5" *ngIf="item.sellersCount && item.sellersCount > 1">
                       ще {{ item.sellersCount - 1 }} прод.
