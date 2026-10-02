@@ -448,6 +448,110 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    // 5.5 Fetch Schema.org Microdata & Marks API from background worker
+    if (message.action === 'FETCH_SCHEMA_RATING') {
+        const { url, prodId } = message;
+        (async () => {
+            let foundRating = 0;
+            const targetUrl = url || (prodId ? `https://rozetka.com.ua/p${prodId}/` : '');
+
+            // 1. Try fetching Product HTML for Schema.org JSON-LD
+            if (targetUrl) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 4000);
+                    const res = await fetch(targetUrl, {
+                        signal: controller.signal,
+                        headers: {
+                            'Accept': 'text/html,application/xhtml+xml',
+                            'Cache-Control': 'no-cache'
+                        }
+                    });
+                    clearTimeout(timeoutId);
+                    if (res.ok) {
+                        const html = await res.text();
+                        // Search aggregateRating ratingValue
+                        const m = html.match(/aggregateRating["'\s]*:\s*\{[^}]*["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i) ||
+                                  html.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i) ||
+                                  html.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i);
+                        if (m && m[1]) {
+                            const val = parseFloat(m[1].replace(',', '.'));
+                            if (val > 0 && val <= 5) {
+                                foundRating = parseFloat(val.toFixed(1));
+                            }
+                        }
+
+                        if (foundRating === 0) {
+                            const uMatch = html.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) ||
+                                           html.match(/([1-5](?:[.,]\d+)?)\s*(?:\/|з)\s*5\s*★?/i);
+                            if (uMatch && uMatch[1]) {
+                                const val = parseFloat(uMatch[1].replace(',', '.'));
+                                if (val > 0 && val <= 5) {
+                                    foundRating = parseFloat(val.toFixed(1));
+                                }
+                            }
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            // 2. Try Marks API
+            if (foundRating === 0 && prodId) {
+                const endpoints = [
+                    `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/marks`,
+                    `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`,
+                    `https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${prodId}`
+                ];
+                for (const ep of endpoints) {
+                    if (foundRating > 0) break;
+                    try {
+                        const res = await fetch(ep, { headers: { 'Accept': 'application/json' } });
+                        if (res.ok) {
+                            const json = await res.json();
+                            const data = json?.data || json;
+                            if (data) {
+                                const marks = data.marks || (Array.isArray(data) ? data : null);
+                                if (marks) {
+                                    let totalMarks = 0, weightedSum = 0;
+                                    if (Array.isArray(marks)) {
+                                        for (const item of marks) {
+                                            const star = Number(item.mark || item.star || item.rating) || 0;
+                                            const cnt = Number(item.count || item.amount) || 0;
+                                            if (star >= 1 && star <= 5 && cnt > 0) {
+                                                totalMarks += cnt;
+                                                weightedSum += cnt * star;
+                                            }
+                                        }
+                                    } else if (typeof marks === 'object') {
+                                        for (let star = 1; star <= 5; star++) {
+                                            const cnt = Number(marks[String(star)] ?? marks[star] ?? 0) || 0;
+                                            if (cnt > 0) {
+                                                totalMarks += cnt;
+                                                weightedSum += cnt * star;
+                                            }
+                                        }
+                                    }
+                                    if (totalMarks > 0) {
+                                        foundRating = parseFloat((weightedSum / totalMarks).toFixed(1));
+                                    }
+                                }
+                                if (foundRating === 0 && typeof data.average_rating === 'number' && data.average_rating > 0 && data.average_rating <= 5) {
+                                    foundRating = parseFloat(data.average_rating.toFixed(1));
+                                }
+                                if (foundRating === 0 && typeof data.rating === 'number' && data.rating > 0 && data.rating <= 5) {
+                                    foundRating = parseFloat(data.rating.toFixed(1));
+                                }
+                            }
+                        }
+                    } catch (_) {}
+                }
+            }
+
+            sendResponse({ rating: foundRating });
+        })();
+        return true;
+    }
+
     // 6. Query all open Rozetka tabs
     if (message.action === 'GET_ALL_ROZETKA_TABS') {
         getAllRozetkaTabs().then(tabs => {

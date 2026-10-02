@@ -509,81 +509,44 @@
     // Helper to resolve genuine rating from Schema.org JSON-LD microdata on the product page
     async function fetchProductSchemaRating(productUrl, prodId) {
         if (!productUrl && !prodId) return 0;
-        const targetUrl = productUrl || `https://rozetka.com.ua/p${prodId}/`;
-
+        
+        // 1. Request from background service worker (which has full extension privileges)
         try {
+            const bgResponse = await new Promise(resolve => {
+                chrome.runtime.sendMessage({
+                    action: 'FETCH_SCHEMA_RATING',
+                    url: productUrl,
+                    prodId: prodId
+                }, res => {
+                    if (chrome.runtime.lastError || !res) resolve(null);
+                    else resolve(res);
+                });
+            });
+            if (bgResponse && bgResponse.rating > 0 && bgResponse.rating <= 5) {
+                return bgResponse.rating;
+            }
+        } catch (_) {}
+
+        // 2. Direct fetch fallback inside content script
+        try {
+            const targetUrl = productUrl || `https://rozetka.com.ua/p${prodId}/`;
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4500);
-            const res = await fetch(targetUrl, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'text/html,application/xhtml+xml',
-                    'Cache-Control': 'no-cache'
-                },
-                signal: controller.signal
-            }).catch(() => null);
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const res = await fetch(targetUrl, { signal: controller.signal }).catch(() => null);
             clearTimeout(timeoutId);
-
             if (res && res.ok) {
-                const htmlText = await res.text().catch(() => '');
-                if (htmlText) {
-                    // 1. Check Schema.org JSON-LD aggregateRating (e.g. "ratingValue": 4.2 or "ratingValue": "4.2")
-                    const ratingMatch = htmlText.match(/aggregateRating["'\s]*:\s*\{[^}]*["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i) ||
-                                       htmlText.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i) ||
-                                       htmlText.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i);
-                    if (ratingMatch && ratingMatch[1]) {
-                        const val = parseFloat(ratingMatch[1].replace(',', '.'));
-                        if (val > 0 && val <= 5) {
-                            return parseFloat(val.toFixed(1));
-                        }
-                    }
-
-                    // 2. Check direct DOM user rating on page (e.g. "Оцінка користувачів 4.2/5")
-                    const userRatingMatch = htmlText.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) ||
-                                            htmlText.match(/([1-5](?:[.,]\d+)?)\s*(?:\/|з)\s*5\s*★?/i);
-                    if (userRatingMatch && userRatingMatch[1]) {
-                        const val = parseFloat(userRatingMatch[1].replace(',', '.'));
-                        if (val > 0 && val <= 5) {
-                            return parseFloat(val.toFixed(1));
-                        }
-                    }
-
-                    // 3. Check JSON-LD script blocks
-                    const ldMatches = htmlText.match(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
-                    if (ldMatches) {
-                        for (const scriptTag of ldMatches) {
-                            try {
-                                const jsonContent = scriptTag.replace(/<script\b[^>]*>|<\/script>/gi, '').trim();
-                                const ld = JSON.parse(jsonContent);
-                                const findRating = (node) => {
-                                    if (!node || typeof node !== 'object') return 0;
-                                    if (Array.isArray(node)) {
-                                        for (const n of node) {
-                                            const r = findRating(n);
-                                            if (r > 0) return r;
-                                        }
-                                        return 0;
-                                    }
-                                    if (node.aggregateRating && node.aggregateRating.ratingValue !== undefined) {
-                                        const rVal = parseFloat(String(node.aggregateRating.ratingValue).replace(',', '.'));
-                                        if (rVal > 0 && rVal <= 5) return parseFloat(rVal.toFixed(1));
-                                    }
-                                    for (const k of Object.keys(node)) {
-                                        const r = findRating(node[k]);
-                                        if (r > 0) return r;
-                                    }
-                                    return 0;
-                                };
-                                const found = findRating(ld);
-                                if (found > 0) return found;
-                            } catch (_) {}
-                        }
-                    }
+                const text = await res.text().catch(() => '');
+                const m = text.match(/aggregateRating["'\s]*:\s*\{[^}]*["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i) ||
+                          text.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i) ||
+                          text.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i);
+                if (m && m[1]) {
+                    const val = parseFloat(m[1].replace(',', '.'));
+                    if (val > 0 && val <= 5) return parseFloat(val.toFixed(1));
                 }
             }
         } catch (_) {}
 
-        // Fallback: Comments API marks
+        // 3. Marks API fallback
         if (prodId) {
             return await fetchExactProductRating(prodId);
         }
@@ -651,39 +614,55 @@
         return 0;
     }
 
-    // Directly extracts visual rating from discrete star elements or text attributes
-    function extractStarsFromDomTile(tileEl) {
+    // Directly extracts visual rating from discrete star elements, fill width or text attributes
+    function extractStarsFromDomTile(tileEl, reviewsCount = 0) {
         if (!tileEl) return 0;
 
         try {
-            // Priority 1: Check discrete filled star icons / SVGs (4 yellow + 1 gray = 4.0)
-            const filledStars = tileEl.querySelectorAll('svg[class*="active"], svg[class*="fill-yellow"], svg.text-yellow-400, svg.fill-yellow, [class*="star-active"], [class*="star-filled"], svg use[href*="star-filled"], svg use[href*="star-yellow"]');
-            if (filledStars.length > 0 && filledStars.length <= 5) {
-                return filledStars.length;
-            }
-
-            // Priority 2: Check direct rating containers for numeric attributes / aria / title
-            const ratingContainers = tileEl.querySelectorAll('rz-tile-rating, app-rating, .goods-tile__stars, [class*="rating"], [class*="stars"], rz-product-seller, .product-seller');
+            // 1. Check explicit text rating or aria-label attributes
+            const ratingContainers = tileEl.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, rz-rating, app-rating, .goods-tile__rating, .goods-tile__stars, [class*="tile-rating"], [class*="stars-rating"], rz-product-comments-stats, .product-comments__rating, .comments-stats, rz-product-seller, .product-seller');
             for (const container of ratingContainers) {
-                for (const attr of ['data-rating', 'data-score', 'data-value', 'ng-reflect-value', 'ng-reflect-rating', 'ng-reflect-score', 'aria-valuenow']) {
-                    const valStr = container.getAttribute(attr);
-                    if (valStr) {
-                        const num = parseFloat(valStr.replace(',', '.'));
-                        if (!isNaN(num) && num > 0 && num <= 5) {
+                const labelText = container.getAttribute('aria-label') || container.getAttribute('title') || container.innerText || '';
+                if (labelText) {
+                    const m = labelText.match(/(?:оцінка(?:\s+користувачів)?|рейтинг|rating|score)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || 
+                              labelText.match(/\b([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5\b/i) ||
+                              labelText.match(/^([1-5]\.\d)$/);
+                    if (m && m[1]) {
+                        const num = parseFloat(m[1].replace(',', '.'));
+                        if (!isNaN(num) && num >= 1.0 && num <= 5.0) {
                             return parseFloat(num.toFixed(1));
                         }
                     }
                 }
+            }
 
-                const labelText = container.getAttribute('aria-label') || container.getAttribute('title') || '';
-                if (labelText) {
-                    const m = labelText.match(/([1-5](?:[.,]\d+)?)\s*(?:зір|star|з\s*5|\/\s*5|из\s*5)/i) || labelText.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)/i);
-                    if (m && m[1]) {
-                        const num = parseFloat(m[1].replace(',', '.'));
-                        if (!isNaN(num) && num > 0 && num <= 5) {
-                            return parseFloat(num.toFixed(1));
+            // 2. Check CSS width of the filled stars progress bar (e.g. style="width: calc(84% - 2px)" -> 4.2)
+            const fillElements = tileEl.querySelectorAll('.stars-rating__fill, [class*="stars-rating__fill"], [class*="rating-progress__fill"], [class*="stars__fill"], [style*="calc("], [style*="width:"]');
+            for (const fillEl of fillElements) {
+                const style = fillEl.getAttribute('style') || '';
+                const match = style.match(/(?:calc\()?\s*([\d.]+)\s*%/);
+                if (match && match[1]) {
+                    const pct = parseFloat(match[1]);
+                    if (pct > 0 && pct <= 100) {
+                        // Rozetka SSR template inserts 96% (4.8) as a default placeholder when not loaded
+                        if (Math.abs(pct - 96) < 0.6 && reviewsCount > 0 && reviewsCount < 5) {
+                            continue; // Skip fake SSR placeholder for items with 1-4 reviews
+                        }
+                        const calculated = parseFloat((pct / 20).toFixed(1));
+                        if (calculated >= 1.0 && calculated <= 5.0) {
+                            return calculated;
                         }
                     }
+                }
+            }
+
+            // 3. Check discrete star elements (filled vs empty count)
+            const starBlock = tileEl.querySelector('rz-stars-rating-progress, rz-tile-rating, [class*="stars-rating"], [class*="rating-block"], app-rating');
+            if (starBlock) {
+                const filledStars = starBlock.querySelectorAll('.star--filled, .star-filled, [class*="star-filled"], [class*="star_filled"], [class*="fill-yellow"], svg.text-yellow-400');
+                const emptyStars = starBlock.querySelectorAll('.star--empty, .star-empty, [class*="star-empty"], [class*="star_empty"], [class*="fill-gray"], svg.text-gray-300, svg.text-gray-400');
+                if (filledStars.length > 0 && emptyStars.length > 0 && (filledStars.length + emptyStars.length <= 6)) {
+                    return filledStars.length;
                 }
             }
         } catch (_) {}
@@ -1114,9 +1093,9 @@
                         }
                     }
 
-                    // Priority 3: Direct DOM discrete filled stars on the tile
+                    // Priority 3: Direct DOM discrete filled stars or width on the tile
                     if (rating === 0) {
-                        const domStars = extractStarsFromDomTile(item);
+                        const domStars = extractStarsFromDomTile(item, reviews);
                         if (domStars > 0 && domStars <= 5) {
                             rating = domStars;
                         }

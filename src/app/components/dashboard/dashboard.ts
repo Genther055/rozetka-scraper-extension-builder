@@ -647,17 +647,8 @@ export class DashboardComponent implements OnInit {
         };
       }
 
-      // If 1 review, Rozetka customer rating is strictly 5.0
-      if (reviews === 1) {
-        return {
-          ...p,
-          reviews: 1,
-          rating: 5.0
-        };
-      }
-
-      // If reviews > 1, preserve real numeric rating if valid (> 0 and <= 5), otherwise default to 5.0
-      let validRating = rating > 0 && rating <= 5 ? +(rating.toFixed(1)) : 5.0;
+      // Preserve genuine numeric rating if valid (> 0 and <= 5), otherwise keep 0
+      let validRating = (rating > 0 && rating <= 5) ? +(rating.toFixed(1)) : 0;
 
       return {
         ...p,
