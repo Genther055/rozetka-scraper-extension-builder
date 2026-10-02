@@ -145,22 +145,6 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
               } catch (_) {}
             }
 
-            // 2. Fallback to apiItem stars_rating or rating if comments stats didn't return rating
-            if (foundRating === 0 && apiItem) {
-              if (apiItem.stars_rating) {
-                const numRating = parseFloat(String(apiItem.stars_rating).replace(',', '.'));
-                if (numRating > 0 && numRating <= 5 && numRating !== 4.8) {
-                  foundRating = numRating;
-                }
-              }
-              if (foundRating === 0 && apiItem.rating) {
-                const numRating = parseFloat(String(apiItem.rating).replace(',', '.'));
-                if (numRating > 0 && numRating <= 5 && numRating !== 4.8) {
-                  foundRating = numRating;
-                }
-              }
-            }
-
             if (foundRating > 0 && currentProducts[index].rating !== parseFloat(foundRating.toFixed(1))) {
               currentProducts[index].rating = parseFloat(foundRating.toFixed(1));
               updated = true;

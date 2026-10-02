@@ -617,27 +617,11 @@
                                                 weightedSum += count * star;
                                             }
                                         }
-                                        if (totalMarks > 0) itemRating = parseFloat((weightedSum / totalMarks).toFixed(1));
-                                    }
-                                    if (itemRating === 0) {
-                                        const rawVal = item.stars_rating !== undefined ? item.stars_rating : (item.rating !== undefined ? item.rating : (item.star !== undefined ? item.star : item.stars));
-                                        if (rawVal !== undefined && rawVal !== null) {
-                                            const num = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal).replace(',', '.'));
-                                            if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) itemRating = parseFloat(num.toFixed(1));
-                                        }
-                                    }
-                                    if (itemRating === 0 && typeof item.stars_title === 'string') {
-                                        const sm = item.stars_title.match(/([1-5](?:[.,]\d+)?)/);
-                                        if (sm && sm[1]) {
-                                            const num = parseFloat(sm[1].replace(',', '.'));
-                                            if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) itemRating = parseFloat(num.toFixed(1));
-                                        }
-                                    }
                                     goodsMap.set(String(item.id), {
                                         ...prev,
                                         ...item,
-                                        rating: itemRating > 0 ? itemRating : (prev.rating && prev.rating !== 4.8 ? prev.rating : undefined),
-                                        stars_rating: itemRating > 0 ? itemRating : (prev.stars_rating && prev.stars_rating !== 4.8 ? prev.stars_rating : undefined)
+                                        rating: itemRating > 0 ? itemRating : prev.rating,
+                                        stars_rating: itemRating > 0 ? itemRating : prev.stars_rating
                                     });
                                 }
                                 traverse(item);
@@ -666,25 +650,11 @@
                                     }
                                     if (totalMarks > 0) itemRating = parseFloat((weightedSum / totalMarks).toFixed(1));
                                 }
-                                if (itemRating === 0) {
-                                    const rawVal = obj.stars_rating !== undefined ? obj.stars_rating : (obj.rating !== undefined ? obj.rating : (obj.star !== undefined ? obj.star : obj.stars));
-                                    if (rawVal !== undefined && rawVal !== null) {
-                                        const num = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal).replace(',', '.'));
-                                        if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) itemRating = parseFloat(num.toFixed(1));
-                                    }
-                                }
-                                if (itemRating === 0 && typeof obj.stars_title === 'string') {
-                                    const sm = obj.stars_title.match(/([1-5](?:[.,]\d+)?)/);
-                                    if (sm && sm[1]) {
-                                        const num = parseFloat(sm[1].replace(',', '.'));
-                                        if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) itemRating = parseFloat(num.toFixed(1));
-                                    }
-                                }
                                 goodsMap.set(String(obj.id), {
                                     ...prev,
                                     ...obj,
-                                    rating: itemRating > 0 ? itemRating : (prev.rating && prev.rating !== 4.8 ? prev.rating : undefined),
-                                    stars_rating: itemRating > 0 ? itemRating : (prev.stars_rating && prev.stars_rating !== 4.8 ? prev.stars_rating : undefined)
+                                    rating: itemRating > 0 ? itemRating : prev.rating,
+                                    stars_rating: itemRating > 0 ? itemRating : prev.stars_rating
                                 });
                             }
                             for (const key of Object.keys(obj)) {
@@ -854,16 +824,7 @@
                         if (totalMarks > 0) {
                             exactRatingMap.set(prodId, parseFloat((weightedSum / totalMarks).toFixed(1)));
                         }
-                    }
-                    if (!exactRatingMap.has(prodId)) {
-                        let rawRating = pg.stars_rating !== undefined ? pg.stars_rating : (pg.rating !== undefined ? pg.rating : (pg.star !== undefined ? pg.star : pg.stars));
-                        if (rawRating !== undefined && rawRating !== null) {
-                            const numVal = typeof rawRating === 'number' ? rawRating : parseFloat(String(rawRating).replace(',', '.'));
-                            if (!isNaN(numVal) && numVal > 0 && numVal <= 5) {
-                                exactRatingMap.set(prodId, parseFloat(numVal.toFixed(1)));
-                            }
-                        }
-                    }
+                    // Only marks-based calculations are kept from page state
                 }
 
                 // Also check DOM active stars for the tile!
