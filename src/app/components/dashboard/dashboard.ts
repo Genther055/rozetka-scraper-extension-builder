@@ -3201,6 +3201,17 @@ export class DashboardComponent implements OnInit {
           } else {
             this.activeScrapes = [...this.activeScrapes, task];
           }
+          // Auto-purge old cached products when a fresh scrape session starts on page 1
+          if (task.status === 'scraping' && task.pageIndex === 1 && (task.currentCount === 0 || this.products.length > 0)) {
+            const isDifferentSession = this.products.length > 0 && this.products[0]?.sessionId && this.products[0].sessionId !== key;
+            if (isDifferentSession || task.currentCount === 0) {
+              this.products = [];
+              try { localStorage.removeItem(this.STORAGE_PRODUCTS_KEY); } catch (_) {}
+              this.applyFilters();
+              this.calculateMetrics();
+            }
+          }
+
           this.isAnyScrapeActive = this.activeScrapes.some(t => t.status === 'scraping' && (t.percent < 100));
           if (this.isAnyScrapeActive) {
             this.startLiveStopwatch();
@@ -3338,6 +3349,35 @@ export class DashboardComponent implements OnInit {
     };
 
     tryFetch(`${this.apiUrl}/api/products`);
+  }
+
+  clearAllCachedData() {
+    try {
+      localStorage.removeItem(this.STORAGE_PRODUCTS_KEY);
+      localStorage.removeItem('tradescout_cached_products');
+    } catch (_) {}
+    this.products = [];
+    this.applyFilters();
+    this.calculateMetrics();
+    this.http.post(`${this.apiUrl}/api/products/clear`, {}).subscribe({
+      next: () => {
+        this.historySuccessMsg = 'Кеш та збережені товари успішно очищено!';
+        setTimeout(() => { this.historySuccessMsg = ''; this.cdr.markForCheck(); }, 3500);
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.http.post('/api/products/clear', {}).subscribe({
+          next: () => {
+            this.historySuccessMsg = 'Кеш та збережені товари успішно очищено!';
+            setTimeout(() => { this.historySuccessMsg = ''; this.cdr.markForCheck(); }, 3500);
+            this.cdr.markForCheck();
+          },
+          error: () => {
+            this.cdr.markForCheck();
+          }
+        });
+      }
+    });
   }
 
   getLastScrapedDate(): Date | null {

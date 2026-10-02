@@ -1365,6 +1365,7 @@
             await sendWebhookPayload({
                 products: pageNewProducts,
                 page: currentPage,
+                isNewSession: currentPage === 1,
                 sessionId: currentSessionId,
                 sessionTitle: meta.title,
                 category: meta.category,

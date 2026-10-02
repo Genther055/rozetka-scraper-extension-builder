@@ -263,8 +263,15 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
       return pName;
     };
 
-    const { sessionId, sessionTitle } = req.body || {};
-    let products = await getCurrentProducts();
+    const { sessionId, sessionTitle, clearBefore, reset, isNewSession, page, pageIndex } = req.body || {};
+    let products = (clearBefore || reset || isNewSession || page === 1 || pageIndex === 1) 
+      ? [] 
+      : await getCurrentProducts();
+    
+    // If the current products belong to a different scrape session, start clean
+    if (products.length > 0 && sessionId && products[0]?.sessionId && products[0].sessionId !== sessionId) {
+      products = [];
+    }
 
     newItems.forEach((item: any) => {
       if (!item || typeof item !== 'object') return;
