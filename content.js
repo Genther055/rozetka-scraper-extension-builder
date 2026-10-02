@@ -506,11 +506,47 @@
         return 0;
     }
 
-    // Helper to resolve genuine rating from Schema.org JSON-LD microdata on the product page
+    // Helper to resolve genuine rating from Rozetka Comments API and Schema.org
     async function fetchProductSchemaRating(productUrl, prodId) {
-        if (!productUrl && !prodId) return 0;
-        
-        // 1. Request from background service worker (which has full extension privileges)
+        if (!prodId && productUrl) {
+            const m = productUrl.match(/\/p(\d+)/i) || productUrl.match(/p(\d+)/i) || productUrl.match(/\/(\d{5,})\//);
+            if (m && m[1]) prodId = m[1];
+        }
+
+        // 1. Direct in-tab Comments API (Marks breakdown & stats e.g. 5★:5, 4★:1, 3★:1, 1★:1 -> 4.1)
+        if (prodId) {
+            const exactRating = await fetchExactProductRating(prodId);
+            if (exactRating > 0 && exactRating <= 5) {
+                return exactRating;
+            }
+        }
+
+        // 2. Direct fetch of product HTML inside tab session
+        if (productUrl || prodId) {
+            try {
+                const targetUrl = productUrl || `https://rozetka.com.ua/p${prodId}/`;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3500);
+                const res = await fetch(targetUrl, { 
+                    headers: { 'Accept': 'text/html,application/xhtml+xml' },
+                    credentials: 'include',
+                    signal: controller.signal 
+                }).catch(() => null);
+                clearTimeout(timeoutId);
+                if (res && res.ok) {
+                    const text = await res.text().catch(() => '');
+                    const m = text.match(/aggregateRating["'\s]*:\s*\{[^}]*["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i) ||
+                              text.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i) ||
+                              text.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i);
+                    if (m && m[1]) {
+                        const val = parseFloat(m[1].replace(',', '.'));
+                        if (val > 0 && val <= 5) return parseFloat(val.toFixed(1));
+                    }
+                }
+            } catch (_) {}
+        }
+
+        // 3. Request from background service worker
         try {
             const bgResponse = await new Promise(resolve => {
                 chrome.runtime.sendMessage({
@@ -526,30 +562,6 @@
                 return bgResponse.rating;
             }
         } catch (_) {}
-
-        // 2. Direct fetch fallback inside content script
-        try {
-            const targetUrl = productUrl || `https://rozetka.com.ua/p${prodId}/`;
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
-            const res = await fetch(targetUrl, { signal: controller.signal }).catch(() => null);
-            clearTimeout(timeoutId);
-            if (res && res.ok) {
-                const text = await res.text().catch(() => '');
-                const m = text.match(/aggregateRating["'\s]*:\s*\{[^}]*["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i) ||
-                          text.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i) ||
-                          text.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i);
-                if (m && m[1]) {
-                    const val = parseFloat(m[1].replace(',', '.'));
-                    if (val > 0 && val <= 5) return parseFloat(val.toFixed(1));
-                }
-            }
-        } catch (_) {}
-
-        // 3. Marks API fallback
-        if (prodId) {
-            return await fetchExactProductRating(prodId);
-        }
 
         return 0;
     }
