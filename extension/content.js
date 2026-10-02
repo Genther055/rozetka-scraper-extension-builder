@@ -506,54 +506,79 @@
         return 0;
     }
 
-    // Directly extracts visual rating from Rozetka's rz-stars-rating-progress or attributes during page scrolling
+    // Helper to fetch exact mathematical rating from Rozetka Comments API
+    async function fetchExactProductRating(prodId) {
+        if (!prodId) return 0;
+        const endpoints = [
+            `/api/goods-comments/v2/goods/${prodId}/marks`,
+            `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/marks`,
+            `/api/goods-comments/v2/goods/${prodId}/comments/stats`,
+            `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`,
+            `/api/goods-comments/v2/stats?goods_id=${prodId}`,
+            `https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${prodId}`
+        ];
+
+        for (const url of endpoints) {
+            try {
+                const res = await fetch(url, { headers: { 'Accept': 'application/json' } }).catch(() => null);
+                if (res && res.ok) {
+                    const json = await res.json().catch(() => null);
+                    if (json) {
+                        const data = json.data || json;
+                        const marks = data.marks || (Array.isArray(data) ? data : null);
+                        if (marks) {
+                            let totalMarks = 0;
+                            let weightedSum = 0;
+                            if (Array.isArray(marks)) {
+                                for (const item of marks) {
+                                    const star = Number(item.mark || item.star || item.rating || item.score) || 0;
+                                    const cnt = Number(item.count || item.amount || item.total) || 0;
+                                    if (star >= 1 && star <= 5 && cnt > 0) {
+                                        totalMarks += cnt;
+                                        weightedSum += cnt * star;
+                                    }
+                                }
+                            } else if (typeof marks === 'object') {
+                                for (let star = 1; star <= 5; star++) {
+                                    const cnt = Number(marks[String(star)] ?? marks[star] ?? 0) || 0;
+                                    if (cnt > 0) {
+                                        totalMarks += cnt;
+                                        weightedSum += cnt * star;
+                                    }
+                                }
+                            }
+                            if (totalMarks > 0) {
+                                return parseFloat((weightedSum / totalMarks).toFixed(1));
+                            }
+                        }
+
+                        if (typeof data.average_rating === 'number' && data.average_rating > 0 && data.average_rating <= 5) {
+                            return parseFloat(data.average_rating.toFixed(1));
+                        }
+
+                        if (typeof data.rating === 'number' && data.rating > 0 && data.rating <= 5) {
+                            return parseFloat(data.rating.toFixed(1));
+                        }
+                    }
+                }
+            } catch (_) {}
+        }
+        return 0;
+    }
+
+    // Directly extracts visual rating from discrete star elements or text attributes
     function extractStarsFromDomTile(tileEl) {
         if (!tileEl) return 0;
 
         try {
-            // Priority 1: Official Rozetka [data-testid="stars-rating"] progress bar (e.g. style="width: calc(80% - 2px);" -> 80 / 20 = 4.0)
-            const yellowBars = tileEl.querySelectorAll('[data-testid="stars-rating"], rz-stars-rating-progress div.bg-yellow, rz-stars-rating-progress div[class*="bg-yellow"], rz-stars-rating-progress div[class*="bg-orange"], [class*="stars-rating-progress"] div[class*="bg-"]');
-            for (const yBar of yellowBars) {
-                const style = (yBar.getAttribute('style') || yBar.style?.width || '').toLowerCase();
-                const m = style.match(/width\s*:\s*(?:calc\s*\(\s*)?(\d+(?:\.\d+)?)\s*%/i) || style.match(/(\d+(?:\.\d+)?)\s*%/i);
-                if (m && m[1]) {
-                    const pct = parseFloat(m[1]);
-                    if (pct > 0 && pct <= 100) {
-                        const calculatedRating = parseFloat((pct / 20).toFixed(1));
-                        if (calculatedRating > 0 && calculatedRating <= 5) {
-                            return calculatedRating;
-                        }
-                    }
-                }
-            }
-
-            // Priority 2: Any child div inside rz-stars-rating-progress with style width %
-            const progressEls = tileEl.querySelectorAll('rz-stars-rating-progress, [class*="stars-rating-progress"]');
-            for (const pEl of progressEls) {
-                const innerDivs = pEl.querySelectorAll('div');
-                for (const d of innerDivs) {
-                    const s = (d.getAttribute('style') || d.style?.width || '').toLowerCase();
-                    const m = s.match(/width\s*:\s*(?:calc\s*\(\s*)?(\d+(?:\.\d+)?)\s*%/i);
-                    if (m && m[1]) {
-                        const pct = parseFloat(m[1]);
-                        if (pct > 0 && pct <= 100) {
-                            const calculatedRating = parseFloat((pct / 20).toFixed(1));
-                            if (calculatedRating > 0 && calculatedRating <= 5) {
-                                return calculatedRating;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Priority 3: Check individual filled star icons / SVGs
-            const filledStars = tileEl.querySelectorAll('svg[class*="active"], svg[class*="fill"], svg.text-yellow-400, svg.fill-yellow, [class*="star-active"], [class*="star-filled"], svg use[href*="star-filled"], svg use[href*="star-yellow"]');
+            // Priority 1: Check discrete filled star icons / SVGs (4 yellow + 1 gray = 4.0)
+            const filledStars = tileEl.querySelectorAll('svg[class*="active"], svg[class*="fill-yellow"], svg.text-yellow-400, svg.fill-yellow, [class*="star-active"], [class*="star-filled"], svg use[href*="star-filled"], svg use[href*="star-yellow"]');
             if (filledStars.length > 0 && filledStars.length <= 5) {
                 return filledStars.length;
             }
 
-            // Priority 4: Check direct rating containers for numeric attributes / aria / title
-            const ratingContainers = tileEl.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"], [class*="stars"], rz-product-seller, .product-seller');
+            // Priority 2: Check direct rating containers for numeric attributes / aria / title
+            const ratingContainers = tileEl.querySelectorAll('rz-tile-rating, app-rating, .goods-tile__stars, [class*="rating"], [class*="stars"], rz-product-seller, .product-seller');
             for (const container of ratingContainers) {
                 for (const attr of ['data-rating', 'data-score', 'data-value', 'ng-reflect-value', 'ng-reflect-rating', 'ng-reflect-score', 'aria-valuenow']) {
                     const valStr = container.getAttribute(attr);
@@ -801,44 +826,14 @@
         const apiProductMap = new Map();
         const exactRatingMap = new Map();
 
-        // Check if pageGoodsMap or direct DOM active stars already has ratings/marks for tiles
-        for (const { item, link } of distinctTiles) {
+        // Check if pageGoodsMap already has exact ratings/marks
+        for (const { link } of distinctTiles) {
             const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
             if (m && m[1]) {
                 const prodId = m[1];
                 const pg = pageGoodsMap.get(prodId);
-                if (pg) {
-                    if (pg.marks && typeof pg.marks === 'object') {
-                        let totalMarks = 0;
-                        let weightedSum = 0;
-                        if (Array.isArray(pg.marks)) {
-                            for (const mItem of pg.marks) {
-                                const star = Number(mItem.mark || mItem.star) || 0;
-                                const cnt = Number(mItem.count || mItem.amount) || 0;
-                                if (star >= 1 && star <= 5 && cnt > 0) {
-                                    totalMarks += cnt;
-                                    weightedSum += cnt * star;
-                                }
-                            }
-                        } else {
-                            for (let star = 1; star <= 5; star++) {
-                                const count = Number(pg.marks[String(star)]) || Number(pg.marks[star]) || 0;
-                                totalMarks += count;
-                                weightedSum += count * star;
-                            }
-                        }
-                        if (totalMarks > 0) {
-                            exactRatingMap.set(prodId, parseFloat((weightedSum / totalMarks).toFixed(1)));
-                        }
-                    // Only marks-based calculations are kept from page state
-                }
-
-                // Also check DOM active stars for the tile!
-                if (!exactRatingMap.has(prodId)) {
-                    const domStars = extractStarsFromDomTile(item);
-                    if (domStars > 0 && domStars <= 5) {
-                        exactRatingMap.set(prodId, domStars);
-                    }
+                if (pg && pg.rating && pg.rating > 0) {
+                    exactRatingMap.set(prodId, pg.rating);
                 }
             }
         }
@@ -880,7 +875,7 @@
                         const apiItem = apiProductMap.get(prodId);
                         const domRev = extractReviewsFromDomTile(item);
                         const revCount = (apiItem && apiItem.comments_amount !== undefined) ? parseInt(String(apiItem.comments_amount), 10) : domRev;
-                        if (revCount > 0) {
+                        if (revCount > 0 && !exactRatingMap.has(prodId)) {
                             prodsNeedingRating.push({ prodId, revCount });
                         }
                     }
@@ -892,55 +887,10 @@
                         fetchChunks.push(prodsNeedingRating.slice(i, i + 12));
                     }
                     for (const chunk of fetchChunks) {
-                        await Promise.allSettled(chunk.map(async ({ prodId, revCount }) => {
-                            let found = 0;
-                            const endpoints = [
-                                `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`,
-                                `https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${prodId}`,
-                                `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/marks`
-                            ];
-                            for (const statsUrl of endpoints) {
-                                if (found > 0) break;
-                                try {
-                                    const sRes = await fetch(statsUrl, { headers: { 'Accept': 'application/json' } }).catch(() => null);
-                                    if (sRes && sRes.ok) {
-                                        const sJson = await sRes.json().catch(() => null);
-                                        if (sJson && sJson.data) {
-                                            if (sJson.data.marks && typeof sJson.data.marks === 'object') {
-                                                let totalMarks = 0;
-                                                let weightedSum = 0;
-                                                if (Array.isArray(sJson.data.marks)) {
-                                                    for (const mItem of sJson.data.marks) {
-                                                        const star = Number(mItem.mark || mItem.star) || 0;
-                                                        const cnt = Number(mItem.count || mItem.amount) || 0;
-                                                        if (star >= 1 && star <= 5 && cnt > 0) {
-                                                            totalMarks += cnt;
-                                                            weightedSum += cnt * star;
-                                                        }
-                                                    }
-                                                } else {
-                                                    for (let star = 1; star <= 5; star++) {
-                                                        const cnt = Number(sJson.data.marks[String(star)]) || Number(sJson.data.marks[star]) || 0;
-                                                        totalMarks += cnt;
-                                                        weightedSum += cnt * star;
-                                                    }
-                                                }
-                                                if (totalMarks > 0) {
-                                                    found = parseFloat((weightedSum / totalMarks).toFixed(1));
-                                                }
-                                            }
-                                            if (found === 0 && typeof sJson.data.rating === 'number' && sJson.data.rating > 0 && sJson.data.rating <= 5) {
-                                                found = parseFloat(sJson.data.rating.toFixed(1));
-                                            }
-                                            if (found === 0 && typeof sJson.data.average_rating === 'number' && sJson.data.average_rating > 0 && sJson.data.average_rating <= 5) {
-                                                found = parseFloat(sJson.data.average_rating.toFixed(1));
-                                            }
-                                        }
-                                    }
-                                } catch (_) {}
-                            }
-                            if (found > 0) {
-                                exactRatingMap.set(prodId, found);
+                        await Promise.allSettled(chunk.map(async ({ prodId }) => {
+                            const exact = await fetchExactProductRating(prodId);
+                            if (exact > 0) {
+                                exactRatingMap.set(prodId, exact);
                             }
                         }));
                     }
@@ -1060,46 +1010,30 @@
                     reviews = parseInt(String(apiDetails.comments_amount), 10) || 0;
                 }
 
-                // 4. Rating (1.0 to 5.0) - Direct DOM stars on page scrolling + Multi-Source Resolution
+                // 4. Rating (1.0 to 5.0) - Exact Math Marks / Comments Stats + DOM Active Stars
                 let rating = 0;
 
                 if (reviews === 0) {
                     rating = 0;
                 } else {
-                    // Priority 1: Direct DOM active yellow stars on the catalog tile (calculated from width % / visual stars during scroll)
-                    const domStars = extractStarsFromDomTile(item);
-                    if (domStars > 0 && domStars <= 5) {
-                        rating = domStars;
-                    }
-
-                    // Priority 2: Direct Rozetka Comments Stats API or Precomputed Exact Map
-                    if (rating === 0 && prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {
+                    // Priority 1: Direct Rozetka Comments Marks API or Precomputed Exact Map
+                    if (prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {
                         rating = exactRatingMap.get(prodId);
                     }
 
-                    // Priority 3: Page Goods State from Angular SSR TransferState & JSON-LD
+                    // Priority 2: Page Goods State from Angular SSR TransferState & JSON-LD
                     if (rating === 0 && prodId && pageGoodsMap.has(prodId)) {
                         const pg = pageGoodsMap.get(prodId);
-                        if (pg.marks && typeof pg.marks === 'object') {
-                            let total = 0;
-                            let sum = 0;
-                            if (Array.isArray(pg.marks)) {
-                                for (const mItem of pg.marks) {
-                                    const star = Number(mItem.mark || mItem.star) || 0;
-                                    const cnt = Number(mItem.count || mItem.amount) || 0;
-                                    if (star >= 1 && star <= 5 && cnt > 0) {
-                                        total += cnt;
-                                        sum += cnt * star;
-                                    }
-                                }
-                            } else {
-                                for (let star = 1; star <= 5; star++) {
-                                    const count = Number(pg.marks[String(star)]) || Number(pg.marks[star]) || 0;
-                                    total += count;
-                                    sum += count * star;
-                                }
-                            }
-                            if (total > 0) rating = parseFloat((sum / total).toFixed(1));
+                        if (pg && pg.rating && pg.rating > 0) {
+                            rating = pg.rating;
+                        }
+                    }
+
+                    // Priority 3: Direct DOM discrete filled stars on the tile
+                    if (rating === 0) {
+                        const domStars = extractStarsFromDomTile(item);
+                        if (domStars > 0 && domStars <= 5) {
+                            rating = domStars;
                         }
                     }
 
