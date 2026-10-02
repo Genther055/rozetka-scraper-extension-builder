@@ -521,29 +521,37 @@
             }
         }
 
-        // 2. Direct fetch of product HTML inside tab session
+        // 2. Direct fetch of product HTML or comments HTML inside tab session
         if (productUrl || prodId) {
-            try {
-                const targetUrl = productUrl || `https://rozetka.com.ua/p${prodId}/`;
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3500);
-                const res = await fetch(targetUrl, { 
-                    headers: { 'Accept': 'text/html,application/xhtml+xml' },
-                    credentials: 'include',
-                    signal: controller.signal 
-                }).catch(() => null);
-                clearTimeout(timeoutId);
-                if (res && res.ok) {
-                    const text = await res.text().catch(() => '');
-                    const m = text.match(/aggregateRating["'\s]*:\s*\{[^}]*["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i) ||
-                              text.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i) ||
-                              text.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i);
-                    if (m && m[1]) {
-                        const val = parseFloat(m[1].replace(',', '.'));
-                        if (val > 0 && val <= 5) return parseFloat(val.toFixed(1));
+            const candidateUrls = [
+                productUrl,
+                prodId ? `https://rozetka.com.ua/p${prodId}/` : '',
+                prodId ? `https://rozetka.com.ua/p${prodId}/comments/` : '',
+                prodId ? `https://rozetka.com.ua/ua/p${prodId}/comments/` : ''
+            ].filter(Boolean);
+
+            for (const targetUrl of candidateUrls) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3500);
+                    const res = await fetch(targetUrl, { 
+                        headers: { 'Accept': 'text/html,application/xhtml+xml' },
+                        credentials: 'include',
+                        signal: controller.signal 
+                    }).catch(() => null);
+                    clearTimeout(timeoutId);
+                    if (res && res.ok) {
+                        const text = await res.text().catch(() => '');
+                        const m = text.match(/aggregateRating["'\s]*:\s*\{[^}]*["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i) ||
+                                  text.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i) ||
+                                  text.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i);
+                        if (m && m[1]) {
+                            const val = parseFloat(m[1].replace(',', '.'));
+                            if (val > 0 && val <= 5) return parseFloat(val.toFixed(1));
+                        }
                     }
-                }
-            } catch (_) {}
+                } catch (_) {}
+            }
         }
 
         // 3. Request from background service worker
@@ -580,7 +588,10 @@
 
         for (const url of endpoints) {
             try {
-                const res = await fetch(url, { headers: { 'Accept': 'application/json' } }).catch(() => null);
+                const res = await fetch(url, { 
+                    headers: { 'Accept': 'application/json' },
+                    credentials: 'include'
+                }).catch(() => null);
                 if (res && res.ok) {
                     const json = await res.json().catch(() => null);
                     if (json) {
@@ -631,11 +642,12 @@
         if (!tileEl) return 0;
 
         try {
-            // 1. Check explicit text rating or aria-label attributes
-            const ratingContainers = tileEl.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, rz-rating, app-rating, .goods-tile__rating, .goods-tile__stars, [class*="tile-rating"], [class*="stars-rating"], rz-product-comments-stats, .product-comments__rating, .comments-stats, rz-product-seller, .product-seller');
+            // 1. Check explicit text rating or aria-label attributes (strictly excluding seller badge)
+            const ratingContainers = tileEl.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, rz-rating, app-rating, .goods-tile__rating, .goods-tile__stars, [class*="tile-rating"], [class*="stars-rating"], rz-product-comments-stats, .product-comments__rating, .comments-stats');
             for (const container of ratingContainers) {
+                if (container.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"], .seller-info')) continue;
                 const labelText = container.getAttribute('aria-label') || container.getAttribute('title') || container.innerText || '';
-                if (labelText) {
+                if (labelText && !/продавец|продавець|seller/i.test(labelText)) {
                     const m = labelText.match(/(?:оцінка(?:\s+користувачів)?|рейтинг|rating|score)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || 
                               labelText.match(/\b([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5\b/i) ||
                               labelText.match(/^([1-5]\.\d)$/);
@@ -650,7 +662,7 @@
 
             // 2. Check discrete star elements (filled vs empty count)
             const starBlock = tileEl.querySelector('rz-stars-rating-progress, rz-tile-rating, [class*="stars-rating"], [class*="rating-block"], app-rating');
-            if (starBlock) {
+            if (starBlock && !starBlock.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"]')) {
                 const filledStars = starBlock.querySelectorAll('.star--filled, .star-filled, [class*="star-filled"], [class*="star_filled"], [class*="fill-yellow"], svg.text-yellow-400');
                 const emptyStars = starBlock.querySelectorAll('.star--empty, .star-empty, [class*="star-empty"], [class*="star_empty"], [class*="fill-gray"], svg.text-gray-300, svg.text-gray-400');
                 if (filledStars.length > 0 && emptyStars.length > 0 && (filledStars.length + emptyStars.length <= 6)) {
@@ -800,10 +812,12 @@
                     const prev = goodsMap.get(pageProdId) || {};
 
                     // Look for exact "Оцінка користувачів X.X/5" element or full body text
-                    const userRatingNodes = document.querySelectorAll('rz-product-comments-stats, .product-comments__rating, .comments-stats, .product-comments-marks, [class*="comments-stats"], [class*="comments-marks"], [class*="product-comments"], [class*="rating-score"], [class*="comments"], rz-product-seller, .product-seller');
+                    const userRatingNodes = document.querySelectorAll('rz-product-comments-stats, .product-comments__rating, .comments-stats, .product-comments-marks, [class*="comments-stats"], [class*="comments-marks"], [class*="product-comments"], [class*="rating-score"]');
                     let foundDomRating = 0;
                     for (const uNode of userRatingNodes) {
+                        if (uNode.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"]')) continue;
                         const txt = (uNode.innerText || uNode.textContent || '').trim();
+                        if (/продавец|продавець|seller/i.test(txt)) continue;
                         const m = txt.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || txt.match(/([1-5](?:[.,]\d+)?)\s*(?:\/|з)\s*5/i) || txt.match(/([1-5](?:[.,]\d+)?)\s*★/);
                         if (m && m[1]) {
                             const val = parseFloat(m[1].replace(',', '.'));
@@ -1097,8 +1111,10 @@
                     if (rating === 0) {
                         const commentRatingEls = item.querySelectorAll('rz-product-comment-rating, .product-comment-rating, [class*="comment-rating"], [class*="comments-stats"], [class*="comments__rating"], .product-comments__rating, rz-product-comments-stats, rz-product-rating, [class*="rating-score"]');
                         for (const commentRatingEl of commentRatingEls) {
+                            if (commentRatingEl.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"]')) continue;
                             const boldSpan = commentRatingEl.querySelector('.font-bold, b, strong, [class*="bold"]') || commentRatingEl;
                             const t = (boldSpan.textContent || boldSpan.innerText || '').trim();
+                            if (/продавец|продавець|seller/i.test(t)) continue;
                             const m = t.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || t.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i) || t.match(/([1-5](?:[.,]\d+)?)\s*★/) || t.match(/^([1-5](?:[.,]\d+)?)$/);
                             if (m && m[1]) {
                                 const val = parseFloat(m[1].replace(',', '.'));
