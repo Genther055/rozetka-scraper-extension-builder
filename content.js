@@ -878,10 +878,6 @@
                     }
                     for (const chunk of fetchChunks) {
                         await Promise.allSettled(chunk.map(async ({ prodId, revCount }) => {
-                            if (revCount === 1) {
-                                if (!exactRatingMap.has(prodId)) exactRatingMap.set(prodId, 5.0);
-                                return;
-                            }
                             let found = 0;
                             const endpoints = [
                                 `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`,
@@ -1096,13 +1092,6 @@
 
                 if (reviews === 0) {
                     rating = 0;
-                } else if (reviews === 1) {
-                    if (prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {
-                        rating = exactRatingMap.get(prodId);
-                    } else {
-                        const domStars = extractStarsFromDomTile(item);
-                        rating = (domStars > 0 && domStars <= 5) ? domStars : 5.0;
-                    }
                 } else {
                     // Priority 1: Direct Rozetka Comments Stats API or Precomputed Exact Map
                     if (prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {

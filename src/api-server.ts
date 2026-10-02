@@ -94,69 +94,70 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
           }
           if ((currentProducts[index].reviews || 0) > 0) {
             let foundRating = 0;
-            // 1. Try apiItem stars_rating or rating
-            if (apiItem.stars_rating) {
-              const numRating = parseFloat(String(apiItem.stars_rating).replace(',', '.'));
-              if (numRating > 0 && numRating <= 5 && numRating !== 4.8) {
-                foundRating = numRating;
-              }
-            }
-            if (foundRating === 0 && apiItem.rating) {
-              const numRating = parseFloat(String(apiItem.rating).replace(',', '.'));
-              if (numRating > 0 && numRating <= 5 && numRating !== 4.8) {
-                foundRating = numRating;
-              }
-            }
 
-            // 2. Try Comments Stats API endpoints
-            if (foundRating === 0) {
-              const endpoints = [
-                `https://rozetka.com.ua/api/goods-comments/v2/goods/${productId}/comments/stats`,
-                `https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${productId}`,
-                `https://rozetka.com.ua/api/goods-comments/v2/goods/${productId}/marks`
-              ];
-              for (const ep of endpoints) {
-                if (foundRating > 0) break;
-                try {
-                  const commentsRes = await fetch(ep).catch(() => null);
-                  if (commentsRes && commentsRes.ok) {
-                    const commentsJson: any = await commentsRes.json().catch(() => null);
-                    if (commentsJson && commentsJson.data) {
-                      if (typeof commentsJson.data.rating === 'number' && commentsJson.data.rating > 0 && commentsJson.data.rating <= 5 && commentsJson.data.rating !== 4.8) {
-                        foundRating = parseFloat(commentsJson.data.rating.toFixed(1));
-                        break;
-                      }
-                      if (typeof commentsJson.data.average_rating === 'number' && commentsJson.data.average_rating > 0 && commentsJson.data.average_rating <= 5) {
-                        foundRating = parseFloat(commentsJson.data.average_rating.toFixed(1));
-                        break;
-                      }
-                      if (commentsJson.data.marks && typeof commentsJson.data.marks === 'object') {
-                        let totalMarks = 0;
-                        let weightedSum = 0;
-                        if (Array.isArray(commentsJson.data.marks)) {
-                          for (const mItem of commentsJson.data.marks) {
-                            const m = Number(mItem.mark || mItem.star) || 0;
-                            const c = Number(mItem.count || mItem.amount) || 0;
-                            if (m >= 1 && m <= 5 && c > 0) {
-                              totalMarks += c;
-                              weightedSum += c * m;
-                            }
-                          }
-                        } else {
-                          for (let m = 1; m <= 5; m++) {
-                            const count = Number(commentsJson.data.marks[String(m)]) || Number(commentsJson.data.marks[m]) || 0;
-                            totalMarks += count;
-                            weightedSum += count * m;
+            // 1. Try Comments Stats & Marks API endpoints first for exact mathematical ratings
+            const endpoints = [
+              `https://rozetka.com.ua/api/goods-comments/v2/goods/${productId}/comments/stats`,
+              `https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${productId}`,
+              `https://rozetka.com.ua/api/goods-comments/v2/goods/${productId}/marks`
+            ];
+            for (const ep of endpoints) {
+              if (foundRating > 0) break;
+              try {
+                const commentsRes = await fetch(ep).catch(() => null);
+                if (commentsRes && commentsRes.ok) {
+                  const commentsJson: any = await commentsRes.json().catch(() => null);
+                  if (commentsJson && commentsJson.data) {
+                    if (commentsJson.data.marks && typeof commentsJson.data.marks === 'object') {
+                      let totalMarks = 0;
+                      let weightedSum = 0;
+                      if (Array.isArray(commentsJson.data.marks)) {
+                        for (const mItem of commentsJson.data.marks) {
+                          const m = Number(mItem.mark || mItem.star) || 0;
+                          const c = Number(mItem.count || mItem.amount) || 0;
+                          if (m >= 1 && m <= 5 && c > 0) {
+                            totalMarks += c;
+                            weightedSum += c * m;
                           }
                         }
-                        if (totalMarks > 0) {
-                          foundRating = parseFloat((weightedSum / totalMarks).toFixed(1));
-                          break;
+                      } else {
+                        for (let m = 1; m <= 5; m++) {
+                          const count = Number(commentsJson.data.marks[String(m)]) || Number(commentsJson.data.marks[m]) || 0;
+                          totalMarks += count;
+                          weightedSum += count * m;
                         }
+                      }
+                      if (totalMarks > 0) {
+                        foundRating = parseFloat((weightedSum / totalMarks).toFixed(1));
+                        break;
                       }
                     }
+                    if (typeof commentsJson.data.average_rating === 'number' && commentsJson.data.average_rating > 0 && commentsJson.data.average_rating <= 5) {
+                      foundRating = parseFloat(commentsJson.data.average_rating.toFixed(1));
+                      break;
+                    }
+                    if (typeof commentsJson.data.rating === 'number' && commentsJson.data.rating > 0 && commentsJson.data.rating <= 5 && commentsJson.data.rating !== 4.8) {
+                      foundRating = parseFloat(commentsJson.data.rating.toFixed(1));
+                      break;
+                    }
                   }
-                } catch (_) {}
+                }
+              } catch (_) {}
+            }
+
+            // 2. Fallback to apiItem stars_rating or rating if comments stats didn't return rating
+            if (foundRating === 0 && apiItem) {
+              if (apiItem.stars_rating) {
+                const numRating = parseFloat(String(apiItem.stars_rating).replace(',', '.'));
+                if (numRating > 0 && numRating <= 5 && numRating !== 4.8) {
+                  foundRating = numRating;
+                }
+              }
+              if (foundRating === 0 && apiItem.rating) {
+                const numRating = parseFloat(String(apiItem.rating).replace(',', '.'));
+                if (numRating > 0 && numRating <= 5 && numRating !== 4.8) {
+                  foundRating = numRating;
+                }
               }
             }
 
@@ -289,15 +290,14 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
 
         const itemPrice = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
         const itemReviews = typeof item.reviews === 'number' ? item.reviews : parseInt(item.reviews) || 0;
-        let itemRating = itemReviews > 0 ? (typeof item.rating === 'number' ? item.rating : (item.rating ? parseFloat(item.rating) : 0)) : 0;
+        let itemRating = typeof item.rating === 'number' ? item.rating : (item.rating ? parseFloat(item.rating) : 0);
         if (itemReviews === 0) {
           itemRating = 0;
-        } else if (itemReviews === 1) {
-          itemRating = 5.0;
-        } else if (itemRating <= 0 || itemRating > 5) {
-          itemRating = 5.0;
+        } else if (itemRating > 0 && itemRating <= 5) {
+          itemRating = parseFloat(itemRating.toFixed(1));
+        } else {
+          itemRating = 0;
         }
-        itemRating = parseFloat(itemRating.toFixed(1));
 
         let itemOldPrice = typeof item.oldPrice === 'number' ? item.oldPrice : (parseFloat(item.oldPrice) || itemPrice);
         let itemDiscount = typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0);
