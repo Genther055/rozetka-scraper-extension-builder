@@ -542,12 +542,21 @@
                     clearTimeout(timeoutId);
                     if (res && res.ok) {
                         const text = await res.text().catch(() => '');
+                        // 1. Strict Schema.org aggregateRating JSON-LD
                         const m = text.match(/aggregateRating["'\s]*:\s*\{[^}]*["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i) ||
-                                  text.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i) ||
-                                  text.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i);
+                                  text.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i);
                         if (m && m[1]) {
                             const val = parseFloat(m[1].replace(',', '.'));
                             if (val > 0 && val <= 5) return parseFloat(val.toFixed(1));
+                        }
+                        // 2. CSS width calculation in HTML
+                        const wMatch = text.match(/<rz-stars-rating-progress[^>]*>[\s\S]*?style="[^"]*width:\s*(?:calc\(\s*)?([\d.]+)%[^"]*"[\s\S]*?<\/rz-stars-rating-progress>/i) ||
+                                       text.match(/stars-rating-progress[^>]*style="[^"]*width:\s*(?:calc\(\s*)?([\d.]+)%/i);
+                        if (wMatch && wMatch[1]) {
+                            const percent = parseFloat(wMatch[1]);
+                            if (percent > 0 && percent <= 100) {
+                                return parseFloat(((percent / 100) * 5).toFixed(1));
+                            }
                         }
                     }
                 } catch (_) {}
@@ -660,7 +669,24 @@
                 }
             }
 
-            // 2. Check discrete star elements (filled vs empty count)
+            // 2. Check CSS width percentage on rz-stars-rating-progress (e.g. style="width: calc(91.75% - 2px);" or style="width: 91.75%;")
+            const progressElements = tileEl.querySelectorAll('rz-stars-rating-progress, rz-stars-rating-progress *, [class*="stars-rating-progress"], [class*="stars-rating"] [style*="width"]');
+            for (const pEl of progressElements) {
+                if (pEl.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"]')) continue;
+                const styleAttr = pEl.getAttribute('style') || '';
+                const m = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
+                if (m && m[1]) {
+                    const percent = parseFloat(m[1]);
+                    if (percent > 0 && percent <= 100) {
+                        const calculatedRating = parseFloat(((percent / 100) * 5).toFixed(1));
+                        if (calculatedRating >= 1.0 && calculatedRating <= 5.0) {
+                            return calculatedRating;
+                        }
+                    }
+                }
+            }
+
+            // 3. Check discrete star elements (filled vs empty count)
             const starBlock = tileEl.querySelector('rz-stars-rating-progress, rz-tile-rating, [class*="stars-rating"], [class*="rating-block"], app-rating');
             if (starBlock && !starBlock.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"]')) {
                 const filledStars = starBlock.querySelectorAll('.star--filled, .star-filled, [class*="star-filled"], [class*="star_filled"], [class*="fill-yellow"], svg.text-yellow-400');
@@ -811,29 +837,34 @@
                     const pageProdId = pageIdMatch[1];
                     const prev = goodsMap.get(pageProdId) || {};
 
-                    // Look for exact "Оцінка користувачів X.X/5" element or full body text
+                    // Look for exact "Оцінка користувачів X.X/5" element ONLY inside product comments stats
                     const userRatingNodes = document.querySelectorAll('rz-product-comments-stats, .product-comments__rating, .comments-stats, .product-comments-marks, [class*="comments-stats"], [class*="comments-marks"], [class*="product-comments"], [class*="rating-score"]');
                     let foundDomRating = 0;
                     for (const uNode of userRatingNodes) {
                         if (uNode.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"]')) continue;
+                        
+                        // Check CSS width in stars progress inside comments
+                        const widthEls = uNode.querySelectorAll('[style*="width"]');
+                        for (const wEl of widthEls) {
+                            const mWidth = (wEl.getAttribute('style') || '').match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
+                            if (mWidth && mWidth[1]) {
+                                const percent = parseFloat(mWidth[1]);
+                                if (percent > 0 && percent <= 100) {
+                                    foundDomRating = parseFloat(((percent / 100) * 5).toFixed(1));
+                                    break;
+                                }
+                            }
+                        }
+                        if (foundDomRating > 0) break;
+
                         const txt = (uNode.innerText || uNode.textContent || '').trim();
                         if (/продавец|продавець|seller/i.test(txt)) continue;
-                        const m = txt.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || txt.match(/([1-5](?:[.,]\d+)?)\s*(?:\/|з)\s*5/i) || txt.match(/([1-5](?:[.,]\d+)?)\s*★/);
+                        const m = txt.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i);
                         if (m && m[1]) {
                             const val = parseFloat(m[1].replace(',', '.'));
                             if (val > 0 && val <= 5) {
                                 foundDomRating = val;
                                 break;
-                            }
-                        }
-                    }
-                    if (foundDomRating === 0 && document.body) {
-                        const bodyText = (document.body.innerText || document.body.textContent || '').slice(0, 20000);
-                        const m = bodyText.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || bodyText.match(/([1-5](?:[.,]\d+)?)\s*(?:\/|з)\s*5\s*★?/i) || bodyText.match(/([1-5](?:[.,]\d+)?)\s*\/5\s*★/);
-                        if (m && m[1]) {
-                            const val = parseFloat(m[1].replace(',', '.'));
-                            if (val > 0 && val <= 5) {
-                                foundDomRating = val;
                             }
                         }
                     }

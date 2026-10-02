@@ -470,10 +470,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     clearTimeout(timeoutId);
                     if (res.ok) {
                         const html = await res.text();
-                        // Search aggregateRating ratingValue
+                        // Search aggregateRating ratingValue strictly inside schema
                         const m = html.match(/aggregateRating["'\s]*:\s*\{[^}]*["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i) ||
-                                  html.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i) ||
-                                  html.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i);
+                                  html.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i);
                         if (m && m[1]) {
                             const val = parseFloat(m[1].replace(',', '.'));
                             if (val > 0 && val <= 5) {
@@ -481,13 +480,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             }
                         }
 
+                        // Also check CSS width on stars progress
                         if (foundRating === 0) {
-                            const uMatch = html.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) ||
-                                           html.match(/([1-5](?:[.,]\d+)?)\s*(?:\/|з)\s*5\s*★?/i);
-                            if (uMatch && uMatch[1]) {
-                                const val = parseFloat(uMatch[1].replace(',', '.'));
-                                if (val > 0 && val <= 5) {
-                                    foundRating = parseFloat(val.toFixed(1));
+                            const wMatch = html.match(/<rz-stars-rating-progress[^>]*>[\s\S]*?style="[^"]*width:\s*(?:calc\(\s*)?([\d.]+)%[^"]*"[\s\S]*?<\/rz-stars-rating-progress>/i) ||
+                                           html.match(/stars-rating-progress[^>]*style="[^"]*width:\s*(?:calc\(\s*)?([\d.]+)%/i);
+                            if (wMatch && wMatch[1]) {
+                                const percent = parseFloat(wMatch[1]);
+                                if (percent > 0 && percent <= 100) {
+                                    foundRating = parseFloat(((percent / 100) * 5).toFixed(1));
                                 }
                             }
                         }
