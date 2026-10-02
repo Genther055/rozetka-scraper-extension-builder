@@ -473,7 +473,8 @@
                     const pct = parseFloat(m[1]);
                     if (pct > 0 && pct <= 100) {
                         const calculatedRating = parseFloat((pct / 20).toFixed(1));
-                        if (calculatedRating > 0 && calculatedRating <= 5) {
+                        // Strictly reject 4.8 (96%) as it is Rozetka's SSR catalog placeholder
+                        if (calculatedRating > 0 && calculatedRating <= 5 && calculatedRating !== 4.8) {
                             return calculatedRating;
                         }
                     }
@@ -491,7 +492,8 @@
                         const pct = parseFloat(m[1]);
                         if (pct > 0 && pct <= 100) {
                             const calculatedRating = parseFloat((pct / 20).toFixed(1));
-                            if (calculatedRating > 0 && calculatedRating <= 5) {
+                            // Strictly reject 4.8 (96%) from catalog DOM
+                            if (calculatedRating > 0 && calculatedRating <= 5 && calculatedRating !== 4.8) {
                                 return calculatedRating;
                             }
                         }
@@ -880,48 +882,55 @@
                                 if (!exactRatingMap.has(prodId)) exactRatingMap.set(prodId, 5.0);
                                 return;
                             }
-                            try {
-                                const statsUrl = `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`;
-                                const sRes = await fetch(statsUrl, { headers: { 'Accept': 'application/json' } }).catch(() => null);
-                                if (sRes && sRes.ok) {
-                                    const sJson = await sRes.json().catch(() => null);
-                                    if (sJson && sJson.data) {
-                                        let found = 0;
-                                        if (sJson.data.marks && typeof sJson.data.marks === 'object') {
-                                            let totalMarks = 0;
-                                            let weightedSum = 0;
-                                            if (Array.isArray(sJson.data.marks)) {
-                                                for (const mItem of sJson.data.marks) {
-                                                    const star = Number(mItem.mark || mItem.star) || 0;
-                                                    const cnt = Number(mItem.count || mItem.amount) || 0;
-                                                    if (star >= 1 && star <= 5 && cnt > 0) {
+                            let found = 0;
+                            const endpoints = [
+                                `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`,
+                                `https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${prodId}`,
+                                `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/marks`
+                            ];
+                            for (const statsUrl of endpoints) {
+                                if (found > 0) break;
+                                try {
+                                    const sRes = await fetch(statsUrl, { headers: { 'Accept': 'application/json' } }).catch(() => null);
+                                    if (sRes && sRes.ok) {
+                                        const sJson = await sRes.json().catch(() => null);
+                                        if (sJson && sJson.data) {
+                                            if (sJson.data.marks && typeof sJson.data.marks === 'object') {
+                                                let totalMarks = 0;
+                                                let weightedSum = 0;
+                                                if (Array.isArray(sJson.data.marks)) {
+                                                    for (const mItem of sJson.data.marks) {
+                                                        const star = Number(mItem.mark || mItem.star) || 0;
+                                                        const cnt = Number(mItem.count || mItem.amount) || 0;
+                                                        if (star >= 1 && star <= 5 && cnt > 0) {
+                                                            totalMarks += cnt;
+                                                            weightedSum += cnt * star;
+                                                        }
+                                                    }
+                                                } else {
+                                                    for (let star = 1; star <= 5; star++) {
+                                                        const cnt = Number(sJson.data.marks[String(star)]) || Number(sJson.data.marks[star]) || 0;
                                                         totalMarks += cnt;
                                                         weightedSum += cnt * star;
                                                     }
                                                 }
-                                            } else {
-                                                for (let star = 1; star <= 5; star++) {
-                                                    const cnt = Number(sJson.data.marks[String(star)]) || Number(sJson.data.marks[star]) || 0;
-                                                    totalMarks += cnt;
-                                                    weightedSum += cnt * star;
+                                                if (totalMarks > 0) {
+                                                    found = parseFloat((weightedSum / totalMarks).toFixed(1));
                                                 }
                                             }
-                                            if (totalMarks > 0) {
-                                                found = parseFloat((weightedSum / totalMarks).toFixed(1));
+                                            if (found === 0 && typeof sJson.data.rating === 'number' && sJson.data.rating > 0 && sJson.data.rating <= 5) {
+                                                found = parseFloat(sJson.data.rating.toFixed(1));
+                                            }
+                                            if (found === 0 && typeof sJson.data.average_rating === 'number' && sJson.data.average_rating > 0 && sJson.data.average_rating <= 5) {
+                                                found = parseFloat(sJson.data.average_rating.toFixed(1));
                                             }
                                         }
-                                        if (found === 0 && typeof sJson.data.rating === 'number' && sJson.data.rating > 0 && sJson.data.rating <= 5 && sJson.data.rating !== 4.8) {
-                                            found = parseFloat(sJson.data.rating.toFixed(1));
-                                        }
-                                        if (found === 0 && typeof sJson.data.average_rating === 'number' && sJson.data.average_rating > 0 && sJson.data.average_rating <= 5) {
-                                            found = parseFloat(sJson.data.average_rating.toFixed(1));
-                                        }
-                                        if (found > 0) {
-                                            exactRatingMap.set(prodId, found);
-                                        }
                                     }
-                                }
-                            } catch (_) {}
+                                } catch (_) {}
+                            }
+                            if (found > 0) {
+                                exactRatingMap.set(prodId, found);
+                            }
                         }));
                     }
                 }
