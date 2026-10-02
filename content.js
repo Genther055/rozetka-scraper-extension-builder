@@ -614,8 +614,8 @@
         return 0;
     }
 
-    // Directly extracts visual rating from discrete star elements, fill width or text attributes
-    function extractStarsFromDomTile(tileEl, reviewsCount = 0) {
+    // Directly extracts visual rating from discrete star elements or text attributes
+    function extractStarsFromDomTile(tileEl) {
         if (!tileEl) return 0;
 
         try {
@@ -636,27 +636,7 @@
                 }
             }
 
-            // 2. Check CSS width of the filled stars progress bar (e.g. style="width: calc(84% - 2px)" -> 4.2)
-            const fillElements = tileEl.querySelectorAll('.stars-rating__fill, [class*="stars-rating__fill"], [class*="rating-progress__fill"], [class*="stars__fill"], [style*="calc("], [style*="width:"]');
-            for (const fillEl of fillElements) {
-                const style = fillEl.getAttribute('style') || '';
-                const match = style.match(/(?:calc\()?\s*([\d.]+)\s*%/);
-                if (match && match[1]) {
-                    const pct = parseFloat(match[1]);
-                    if (pct > 0 && pct <= 100) {
-                        // Rozetka SSR template inserts 96% (4.8) as a default placeholder when not loaded
-                        if (Math.abs(pct - 96) < 0.6 && reviewsCount > 0 && reviewsCount < 5) {
-                            continue; // Skip fake SSR placeholder for items with 1-4 reviews
-                        }
-                        const calculated = parseFloat((pct / 20).toFixed(1));
-                        if (calculated >= 1.0 && calculated <= 5.0) {
-                            return calculated;
-                        }
-                    }
-                }
-            }
-
-            // 3. Check discrete star elements (filled vs empty count)
+            // 2. Check discrete star elements (filled vs empty count)
             const starBlock = tileEl.querySelector('rz-stars-rating-progress, rz-tile-rating, [class*="stars-rating"], [class*="rating-block"], app-rating');
             if (starBlock) {
                 const filledStars = starBlock.querySelectorAll('.star--filled, .star-filled, [class*="star-filled"], [class*="star_filled"], [class*="fill-yellow"], svg.text-yellow-400');
