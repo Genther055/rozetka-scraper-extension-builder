@@ -520,7 +520,8 @@
                     const pct = parseFloat(m[1]);
                     if (pct > 0 && pct <= 100) {
                         const calculatedRating = parseFloat((pct / 20).toFixed(1));
-                        if (calculatedRating > 0 && calculatedRating <= 5) {
+                        // Strictly reject 4.8 (96%) as it is Rozetka's catalog SSR placeholder
+                        if (calculatedRating > 0 && calculatedRating <= 5 && calculatedRating !== 4.8) {
                             return calculatedRating;
                         }
                     }
@@ -538,7 +539,8 @@
                         const pct = parseFloat(m[1]);
                         if (pct > 0 && pct <= 100) {
                             const calculatedRating = parseFloat((pct / 20).toFixed(1));
-                            if (calculatedRating > 0 && calculatedRating <= 5) {
+                            // Strictly reject 4.8 (96%) from catalog DOM
+                            if (calculatedRating > 0 && calculatedRating <= 5 && calculatedRating !== 4.8) {
                                 return calculatedRating;
                             }
                         }
@@ -830,7 +832,7 @@
                 // Also check DOM active stars for the tile!
                 if (!exactRatingMap.has(prodId)) {
                     const domStars = extractStarsFromDomTile(item);
-                    if (domStars > 0 && domStars <= 5) {
+                    if (domStars > 0 && domStars <= 5 && domStars !== 4.8) {
                         exactRatingMap.set(prodId, domStars);
                     }
                 }
@@ -865,7 +867,7 @@
                     }
                 }
 
-                // Fetch exact ratings/marks from Rozetka Comments Stats API for items with reviews
+                // Fetch exact ratings/marks from Rozetka Comments Stats API for all items with reviews
                 const prodsNeedingRating = [];
                 for (const { item, link } of distinctTiles) {
                     const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
@@ -875,10 +877,7 @@
                         const domRev = extractReviewsFromDomTile(item);
                         const revCount = (apiItem && apiItem.comments_amount !== undefined) ? parseInt(String(apiItem.comments_amount), 10) : domRev;
                         if (revCount > 0) {
-                            // If we don't have an exact rating yet, fetch marks from API
-                            if (!exactRatingMap.has(prodId)) {
-                                prodsNeedingRating.push({ prodId, revCount });
-                            }
+                            prodsNeedingRating.push({ prodId, revCount });
                         }
                     }
                 }
