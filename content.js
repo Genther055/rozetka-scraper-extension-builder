@@ -1138,15 +1138,30 @@
                         }
                     }
 
-                    // Priority 4: Dedicated Product Comment Rating Element (e.g. <rz-product-comment-rating> <span class="font-bold">4.6</span>)
+                    // Priority 4: Dedicated Product Comment Rating Element (excluding any seller/merchant block)
                     if (rating === 0) {
-                        const commentRatingEls = item.querySelectorAll('rz-product-comment-rating, .product-comment-rating, [class*="comment-rating"], [class*="comments-stats"], [class*="comments__rating"], .product-comments__rating, rz-product-comments-stats, rz-product-rating, [class*="rating-score"]');
+                        const commentRatingEls = item.querySelectorAll('rz-product-comments-stats, .product-comments__rating, .comments-stats, rz-product-comment-rating');
                         for (const commentRatingEl of commentRatingEls) {
-                            if (commentRatingEl.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"]')) continue;
+                            if (commentRatingEl.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"], [class*="shop"], [class*="store"], .seller-info')) continue;
+                            
+                            // Check CSS width first
+                            const wEls = commentRatingEl.querySelectorAll('[style*="width"]');
+                            for (const wEl of wEls) {
+                                const mWidth = (wEl.getAttribute('style') || '').match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
+                                if (mWidth && mWidth[1]) {
+                                    const percent = parseFloat(mWidth[1]);
+                                    if (percent > 0 && percent <= 100) {
+                                        rating = parseFloat(((percent / 100) * 5).toFixed(1));
+                                        break;
+                                    }
+                                }
+                            }
+                            if (rating > 0) break;
+
                             const boldSpan = commentRatingEl.querySelector('.font-bold, b, strong, [class*="bold"]') || commentRatingEl;
                             const t = (boldSpan.textContent || boldSpan.innerText || '').trim();
-                            if (/продавец|продавець|seller/i.test(t)) continue;
-                            const m = t.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || t.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i) || t.match(/([1-5](?:[.,]\d+)?)\s*★/) || t.match(/^([1-5](?:[.,]\d+)?)$/);
+                            if (/продавец|продавець|seller|магазин/i.test(t)) continue;
+                            const m = t.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || t.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i);
                             if (m && m[1]) {
                                 const val = parseFloat(m[1].replace(',', '.'));
                                 if (val > 0 && val <= 5) {
