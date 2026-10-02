@@ -506,6 +506,91 @@
         return 0;
     }
 
+    // Helper to resolve genuine rating from Schema.org JSON-LD microdata on the product page
+    async function fetchProductSchemaRating(productUrl, prodId) {
+        if (!productUrl && !prodId) return 0;
+        const targetUrl = productUrl || `https://rozetka.com.ua/p${prodId}/`;
+
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4500);
+            const res = await fetch(targetUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'text/html,application/xhtml+xml',
+                    'Cache-Control': 'no-cache'
+                },
+                signal: controller.signal
+            }).catch(() => null);
+            clearTimeout(timeoutId);
+
+            if (res && res.ok) {
+                const htmlText = await res.text().catch(() => '');
+                if (htmlText) {
+                    // 1. Check Schema.org JSON-LD aggregateRating (e.g. "ratingValue": 4.2 or "ratingValue": "4.2")
+                    const ratingMatch = htmlText.match(/aggregateRating["'\s]*:\s*\{[^}]*["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i) ||
+                                       htmlText.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i) ||
+                                       htmlText.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i);
+                    if (ratingMatch && ratingMatch[1]) {
+                        const val = parseFloat(ratingMatch[1].replace(',', '.'));
+                        if (val > 0 && val <= 5) {
+                            return parseFloat(val.toFixed(1));
+                        }
+                    }
+
+                    // 2. Check direct DOM user rating on page (e.g. "Оцінка користувачів 4.2/5")
+                    const userRatingMatch = htmlText.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) ||
+                                            htmlText.match(/([1-5](?:[.,]\d+)?)\s*(?:\/|з)\s*5\s*★?/i);
+                    if (userRatingMatch && userRatingMatch[1]) {
+                        const val = parseFloat(userRatingMatch[1].replace(',', '.'));
+                        if (val > 0 && val <= 5) {
+                            return parseFloat(val.toFixed(1));
+                        }
+                    }
+
+                    // 3. Check JSON-LD script blocks
+                    const ldMatches = htmlText.match(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+                    if (ldMatches) {
+                        for (const scriptTag of ldMatches) {
+                            try {
+                                const jsonContent = scriptTag.replace(/<script\b[^>]*>|<\/script>/gi, '').trim();
+                                const ld = JSON.parse(jsonContent);
+                                const findRating = (node) => {
+                                    if (!node || typeof node !== 'object') return 0;
+                                    if (Array.isArray(node)) {
+                                        for (const n of node) {
+                                            const r = findRating(n);
+                                            if (r > 0) return r;
+                                        }
+                                        return 0;
+                                    }
+                                    if (node.aggregateRating && node.aggregateRating.ratingValue !== undefined) {
+                                        const rVal = parseFloat(String(node.aggregateRating.ratingValue).replace(',', '.'));
+                                        if (rVal > 0 && rVal <= 5) return parseFloat(rVal.toFixed(1));
+                                    }
+                                    for (const k of Object.keys(node)) {
+                                        const r = findRating(node[k]);
+                                        if (r > 0) return r;
+                                    }
+                                    return 0;
+                                };
+                                const found = findRating(ld);
+                                if (found > 0) return found;
+                            } catch (_) {}
+                        }
+                    }
+                }
+            }
+        } catch (_) {}
+
+        // Fallback: Comments API marks
+        if (prodId) {
+            return await fetchExactProductRating(prodId);
+        }
+
+        return 0;
+    }
+
     // Helper to fetch exact mathematical rating from Rozetka Comments API
     async function fetchExactProductRating(prodId) {
         if (!prodId) return 0;
@@ -866,7 +951,7 @@
                     }
                 }
 
-                // Fetch exact ratings/marks from Rozetka Comments Stats API for all items with reviews
+                // Fetch genuine ratings from Schema.org microdata & Comments API for all items with reviews
                 const prodsNeedingRating = [];
                 for (const { item, link } of distinctTiles) {
                     const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
@@ -876,19 +961,19 @@
                         const domRev = extractReviewsFromDomTile(item);
                         const revCount = (apiItem && apiItem.comments_amount !== undefined) ? parseInt(String(apiItem.comments_amount), 10) : domRev;
                         if (revCount > 0 && !exactRatingMap.has(prodId)) {
-                            prodsNeedingRating.push({ prodId, revCount });
+                            prodsNeedingRating.push({ link, prodId, revCount });
                         }
                     }
                 }
 
                 if (prodsNeedingRating.length > 0) {
                     const fetchChunks = [];
-                    for (let i = 0; i < prodsNeedingRating.length; i += 12) {
-                        fetchChunks.push(prodsNeedingRating.slice(i, i + 12));
+                    for (let i = 0; i < prodsNeedingRating.length; i += 8) {
+                        fetchChunks.push(prodsNeedingRating.slice(i, i + 8));
                     }
                     for (const chunk of fetchChunks) {
-                        await Promise.allSettled(chunk.map(async ({ prodId }) => {
-                            const exact = await fetchExactProductRating(prodId);
+                        await Promise.allSettled(chunk.map(async ({ link, prodId }) => {
+                            const exact = await fetchProductSchemaRating(link, prodId);
                             if (exact > 0) {
                                 exactRatingMap.set(prodId, exact);
                             }
