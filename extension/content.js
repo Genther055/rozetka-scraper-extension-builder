@@ -1137,18 +1137,9 @@
                             }
                             if (total > 0) rating = parseFloat((sum / total).toFixed(1));
                         }
-                        if (rating === 0) {
-                            let rawRating = pg.stars_rating !== undefined ? pg.stars_rating : (pg.rating !== undefined ? pg.rating : (pg.star !== undefined ? pg.star : pg.stars));
-                            if (rawRating !== undefined && rawRating !== null) {
-                                const numVal = typeof rawRating === 'number' ? rawRating : parseFloat(String(rawRating).replace(',', '.'));
-                                if (!isNaN(numVal) && numVal > 0 && numVal <= 5 && numVal !== 4.8) {
-                                    rating = parseFloat(numVal.toFixed(1));
-                                }
-                            }
-                        }
                     }
 
-                    // Priority 4: Dedicated Product Comment Rating Element (e.g. <rz-product-comment-rating> <span class="font-bold">4.6</span> or "Оцінка користувачів 4.6/5 ★")
+                    // Priority 4: Dedicated Product Comment Rating Element (e.g. <rz-product-comment-rating> <span class="font-bold">4.6</span>)
                     if (rating === 0) {
                         const commentRatingEls = item.querySelectorAll('rz-product-comment-rating, .product-comment-rating, [class*="comment-rating"], [class*="comments-stats"], [class*="comments__rating"], .product-comments__rating, rz-product-comments-stats, rz-product-rating, [class*="rating-score"]');
                         for (const commentRatingEl of commentRatingEls) {
@@ -1157,46 +1148,12 @@
                             const m = t.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || t.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i) || t.match(/([1-5](?:[.,]\d+)?)\s*★/) || t.match(/^([1-5](?:[.,]\d+)?)$/);
                             if (m && m[1]) {
                                 const val = parseFloat(m[1].replace(',', '.'));
-                                if (val > 0 && val <= 5 && val !== 4.8) {
+                                if (val > 0 && val <= 5) {
                                     rating = parseFloat(val.toFixed(1));
                                     break;
                                 }
                             }
                         }
-                    }
-
-                    // Priority 5: Star rating container or text/aria labels (e.g. "4.6 з 5", "4.6 / 5", "4.6/5 ★ 84 оцінок")
-                    if (rating === 0) {
-                        const ratingContainers = item.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"], [class*="stars"], rz-product-seller, .product-seller');
-                        for (const el of ratingContainers) {
-                            const aria = el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || el.innerText || '';
-                            const ariaMatch = aria.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || aria.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i) || aria.match(/([1-5](?:[.,]\d+)?)\s*★/);
-                            if (ariaMatch && ariaMatch[1]) {
-                                const val = parseFloat(ariaMatch[1].replace(',', '.'));
-                                if (val > 0 && val <= 5 && val !== 4.8) {
-                                    rating = parseFloat(val.toFixed(1));
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    // Priority 6: Official Rozetka API Backend Details
-                    if (rating === 0 && apiDetails) {
-                        if (apiDetails.stars_rating) {
-                            const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
-                            if (apiVal > 0 && apiVal <= 5 && apiVal !== 4.8) rating = parseFloat(apiVal.toFixed(1));
-                        }
-                        if (rating === 0 && apiDetails.rating) {
-                            const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
-                            if (apiVal > 0 && apiVal <= 5 && apiVal !== 4.8) rating = parseFloat(apiVal.toFixed(1));
-                        }
-                    }
-
-                    // Fallback for rated products without specific fractional stars: default to DOM stars or 5.0
-                    if (rating <= 0 || rating > 5) {
-                        const domStars = extractStarsFromDomTile(item);
-                        rating = (domStars > 0 && domStars <= 5) ? domStars : 5.0;
                     }
                 }
 
