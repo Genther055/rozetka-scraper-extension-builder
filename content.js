@@ -459,6 +459,90 @@
         return 'Rozetka';
     }
 
+    // Directly extracts visual or numeric rating from catalog tile DOM (counting active yellow stars vs total stars, or attributes)
+    function extractStarsFromDomTile(tileEl) {
+        if (!tileEl) return 0;
+
+        try {
+            // 1. Check direct rating containers for numeric attributes / aria / title
+            const ratingContainers = tileEl.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"], [class*="stars"], rz-product-seller, .product-seller');
+            for (const container of ratingContainers) {
+                for (const attr of ['data-rating', 'data-score', 'data-value', 'ng-reflect-value', 'ng-reflect-rating', 'ng-reflect-score', 'aria-valuenow']) {
+                    const valStr = container.getAttribute(attr);
+                    if (valStr) {
+                        const num = parseFloat(valStr.replace(',', '.'));
+                        if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) {
+                            return parseFloat(num.toFixed(1));
+                        }
+                    }
+                }
+
+                const labelText = container.getAttribute('aria-label') || container.getAttribute('title') || '';
+                if (labelText) {
+                    const m = labelText.match(/([1-5](?:[.,]\d+)?)\s*(?:зір|star|з\s*5|\/\s*5|из\s*5)/i) || labelText.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)/i);
+                    if (m && m[1]) {
+                        const num = parseFloat(m[1].replace(',', '.'));
+                        if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) {
+                            return parseFloat(num.toFixed(1));
+                        }
+                    }
+                }
+            }
+
+            // 2. Count active yellow/gold star SVGs/icons within the rating container
+            const starContainers = tileEl.querySelectorAll('rz-stars-rating-progress, rz-tile-rating, .goods-tile__stars, [class*="stars-rating"], [class*="stars"]');
+            for (const sCont of starContainers) {
+                const starItems = Array.from(sCont.querySelectorAll('svg, use, i, li, span.star, [class*="star-item"], [class*="star_item"]')).filter(el => {
+                    const tag = el.tagName.toLowerCase();
+                    const cls = ((el.className && typeof el.className === 'string') ? el.className : (el.getAttribute('class') || '')).toLowerCase();
+                    const href = (el.getAttribute('href') || el.getAttribute('xlink:href') || '').toLowerCase();
+                    return tag === 'svg' || tag === 'use' || tag === 'i' || cls.includes('star') || href.includes('star');
+                });
+
+                const distinctStars = starItems.filter(el => {
+                    if (el.tagName.toLowerCase() === 'use' && el.parentElement && el.parentElement.tagName.toLowerCase() === 'svg') {
+                        return false;
+                    }
+                    return true;
+                });
+
+                if (distinctStars.length >= 3 && distinctStars.length <= 10) {
+                    let activeCount = 0;
+                    for (const starEl of distinctStars) {
+                        const cls = ((starEl.className && typeof starEl.className === 'string') ? starEl.className : (starEl.getAttribute('class') || '')).toLowerCase();
+                        const style = (starEl.getAttribute('style') || '').toLowerCase();
+                        const fill = (starEl.getAttribute('fill') || '').toLowerCase();
+                        const useEl = starEl.querySelector('use');
+                        const href = (starEl.getAttribute('href') || starEl.getAttribute('xlink:href') || (useEl ? (useEl.getAttribute('href') || useEl.getAttribute('xlink:href') || '') : '')).toLowerCase();
+
+                        const isInactive = cls.includes('empty') || cls.includes('gray') || cls.includes('grey') || cls.includes('inactive') || cls.includes('star_color_gray') || cls.includes('star--empty') || cls.includes('star--inactive') || href.includes('empty') || href.includes('gray') || fill === '#e9e9e9' || fill === '#d2d2d2' || fill === '#e0e0e0';
+
+                        const isActive = !isInactive && (
+                            cls.includes('active') || cls.includes('filled') || cls.includes('yellow') || cls.includes('gold') || cls.includes('orange') || cls.includes('full') || cls.includes('star_color_yellow') || cls.includes('star--active') || cls.includes('star_active') || cls.includes('selected') ||
+                            href.includes('active') || href.includes('fill') || href.includes('gold') || href.includes('yellow') ||
+                            fill.includes('ffa900') || fill.includes('ffa800') || fill.includes('ffc107') || fill.includes('f5a623') ||
+                            style.includes('ffa900') || style.includes('ffa800') || style.includes('ffc107') || style.includes('f5a623') || style.includes('rgb(255, 169') || style.includes('rgb(255, 168')
+                        );
+
+                        if (isActive) {
+                            activeCount++;
+                        }
+                    }
+
+                    if (activeCount > 0 && activeCount <= 5 && distinctStars.length <= 5) {
+                        return parseFloat(activeCount.toFixed(1));
+                    }
+                    if (activeCount > 0 && distinctStars.length > 5) {
+                        const normalized = (activeCount / distinctStars.length) * 5;
+                        return parseFloat(normalized.toFixed(1));
+                    }
+                }
+            }
+        } catch (_) {}
+
+        return 0;
+    }
+
     // Extract raw Rozetka goods state from Angular SSR TransferState & JSON-LD
     function extractPageGoodsState() {
         const goodsMap = new Map();
@@ -501,21 +585,21 @@
                                         const rawVal = item.stars_rating !== undefined ? item.stars_rating : (item.rating !== undefined ? item.rating : (item.star !== undefined ? item.star : item.stars));
                                         if (rawVal !== undefined && rawVal !== null) {
                                             const num = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal).replace(',', '.'));
-                                            if (!isNaN(num) && num > 0 && num <= 5) itemRating = parseFloat(num.toFixed(1));
+                                            if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) itemRating = parseFloat(num.toFixed(1));
                                         }
                                     }
                                     if (itemRating === 0 && typeof item.stars_title === 'string') {
                                         const sm = item.stars_title.match(/([1-5](?:[.,]\d+)?)/);
                                         if (sm && sm[1]) {
                                             const num = parseFloat(sm[1].replace(',', '.'));
-                                            if (!isNaN(num) && num > 0 && num <= 5) itemRating = parseFloat(num.toFixed(1));
+                                            if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) itemRating = parseFloat(num.toFixed(1));
                                         }
                                     }
                                     goodsMap.set(String(item.id), {
                                         ...prev,
                                         ...item,
-                                        rating: itemRating || prev.rating || item.rating,
-                                        stars_rating: itemRating || prev.stars_rating || item.stars_rating
+                                        rating: itemRating > 0 ? itemRating : (prev.rating && prev.rating !== 4.8 ? prev.rating : undefined),
+                                        stars_rating: itemRating > 0 ? itemRating : (prev.stars_rating && prev.stars_rating !== 4.8 ? prev.stars_rating : undefined)
                                     });
                                 }
                                 traverse(item);
@@ -548,21 +632,21 @@
                                     const rawVal = obj.stars_rating !== undefined ? obj.stars_rating : (obj.rating !== undefined ? obj.rating : (obj.star !== undefined ? obj.star : obj.stars));
                                     if (rawVal !== undefined && rawVal !== null) {
                                         const num = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal).replace(',', '.'));
-                                        if (!isNaN(num) && num > 0 && num <= 5) itemRating = parseFloat(num.toFixed(1));
+                                        if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) itemRating = parseFloat(num.toFixed(1));
                                     }
                                 }
                                 if (itemRating === 0 && typeof obj.stars_title === 'string') {
                                     const sm = obj.stars_title.match(/([1-5](?:[.,]\d+)?)/);
                                     if (sm && sm[1]) {
                                         const num = parseFloat(sm[1].replace(',', '.'));
-                                        if (!isNaN(num) && num > 0 && num <= 5) itemRating = parseFloat(num.toFixed(1));
+                                        if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) itemRating = parseFloat(num.toFixed(1));
                                     }
                                 }
                                 goodsMap.set(String(obj.id), {
                                     ...prev,
                                     ...obj,
-                                    rating: itemRating || prev.rating || obj.rating,
-                                    stars_rating: itemRating || prev.stars_rating || obj.stars_rating
+                                    rating: itemRating > 0 ? itemRating : (prev.rating && prev.rating !== 4.8 ? prev.rating : undefined),
+                                    stars_rating: itemRating > 0 ? itemRating : (prev.stars_rating && prev.stars_rating !== 4.8 ? prev.stars_rating : undefined)
                                 });
                             }
                             for (const key of Object.keys(obj)) {
@@ -703,8 +787,8 @@
         const apiProductMap = new Map();
         const exactRatingMap = new Map();
 
-        // Check if pageGoodsMap already has ratings/marks for tiles
-        for (const { link } of distinctTiles) {
+        // Check if pageGoodsMap or direct DOM active stars already has ratings/marks for tiles
+        for (const { item, link } of distinctTiles) {
             const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
             if (m && m[1]) {
                 const prodId = m[1];
@@ -737,10 +821,18 @@
                         let rawRating = pg.stars_rating !== undefined ? pg.stars_rating : (pg.rating !== undefined ? pg.rating : (pg.star !== undefined ? pg.star : pg.stars));
                         if (rawRating !== undefined && rawRating !== null) {
                             const numVal = typeof rawRating === 'number' ? rawRating : parseFloat(String(rawRating).replace(',', '.'));
-                            if (!isNaN(numVal) && numVal > 0 && numVal <= 5) {
+                            if (!isNaN(numVal) && numVal > 0 && numVal <= 5 && numVal !== 4.8) {
                                 exactRatingMap.set(prodId, parseFloat(numVal.toFixed(1)));
                             }
                         }
+                    }
+                }
+
+                // Also check DOM active stars for the tile!
+                if (!exactRatingMap.has(prodId)) {
+                    const domStars = extractStarsFromDomTile(item);
+                    if (domStars > 0 && domStars <= 5 && domStars !== 4.8) {
+                        exactRatingMap.set(prodId, domStars);
                     }
                 }
             }
@@ -780,11 +872,12 @@
                     const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
                     if (m && m[1]) {
                         const prodId = m[1];
-                        if (!exactRatingMap.has(prodId)) {
-                            const apiItem = apiProductMap.get(prodId);
-                            const domRev = extractReviews(item);
-                            const revCount = (apiItem && apiItem.comments_amount !== undefined) ? parseInt(String(apiItem.comments_amount), 10) : domRev;
-                            if (revCount > 0) {
+                        const apiItem = apiProductMap.get(prodId);
+                        const domRev = extractReviews(item);
+                        const revCount = (apiItem && apiItem.comments_amount !== undefined) ? parseInt(String(apiItem.comments_amount), 10) : domRev;
+                        if (revCount > 0) {
+                            // If we don't have an exact rating yet, or need to verify marks from API
+                            if (!exactRatingMap.has(prodId) || exactRatingMap.get(prodId) === 4.8) {
                                 prodsNeedingRating.push({ prodId, revCount });
                             }
                         }
@@ -798,9 +891,8 @@
                     }
                     for (const chunk of fetchChunks) {
                         await Promise.allSettled(chunk.map(async ({ prodId, revCount }) => {
-                            if (exactRatingMap.has(prodId)) return;
                             if (revCount === 1) {
-                                exactRatingMap.set(prodId, 5.0);
+                                if (!exactRatingMap.has(prodId)) exactRatingMap.set(prodId, 5.0);
                                 return;
                             }
                             try {
@@ -1011,14 +1103,27 @@
                 if (reviews === 0) {
                     rating = 0;
                 } else if (reviews === 1) {
-                    rating = 5.0;
+                    if (prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {
+                        rating = exactRatingMap.get(prodId);
+                    } else {
+                        const domStars = extractStarsFromDomTile(item);
+                        rating = (domStars > 0 && domStars <= 5) ? domStars : 5.0;
+                    }
                 } else {
                     // Priority 1: Direct Rozetka Comments Stats API or Precomputed Exact Map
-                    if (prodId && exactRatingMap.has(prodId)) {
+                    if (prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {
                         rating = exactRatingMap.get(prodId);
                     }
 
-                    // Priority 2: Page Goods State from Angular SSR TransferState & JSON-LD
+                    // Priority 2: Direct DOM active yellow stars on the catalog tile
+                    if (rating === 0) {
+                        const domStars = extractStarsFromDomTile(item);
+                        if (domStars > 0 && domStars <= 5) {
+                            rating = domStars;
+                        }
+                    }
+
+                    // Priority 3: Page Goods State from Angular SSR TransferState & JSON-LD
                     if (rating === 0 && prodId && pageGoodsMap.has(prodId)) {
                         const pg = pageGoodsMap.get(prodId);
                         if (pg.marks && typeof pg.marks === 'object') {
@@ -1046,14 +1151,14 @@
                             let rawRating = pg.stars_rating !== undefined ? pg.stars_rating : (pg.rating !== undefined ? pg.rating : (pg.star !== undefined ? pg.star : pg.stars));
                             if (rawRating !== undefined && rawRating !== null) {
                                 const numVal = typeof rawRating === 'number' ? rawRating : parseFloat(String(rawRating).replace(',', '.'));
-                                if (!isNaN(numVal) && numVal > 0 && numVal <= 5) {
+                                if (!isNaN(numVal) && numVal > 0 && numVal <= 5 && numVal !== 4.8) {
                                     rating = parseFloat(numVal.toFixed(1));
                                 }
                             }
                         }
                     }
 
-                    // Priority 3: Dedicated Product Comment Rating Element (e.g. <rz-product-comment-rating> <span class="font-bold">4.6</span> or "Оцінка користувачів 4.6/5 ★")
+                    // Priority 4: Dedicated Product Comment Rating Element (e.g. <rz-product-comment-rating> <span class="font-bold">4.6</span> or "Оцінка користувачів 4.6/5 ★")
                     if (rating === 0) {
                         const commentRatingEls = item.querySelectorAll('rz-product-comment-rating, .product-comment-rating, [class*="comment-rating"], [class*="comments-stats"], [class*="comments__rating"], .product-comments__rating, rz-product-comments-stats, rz-product-rating, [class*="rating-score"]');
                         for (const commentRatingEl of commentRatingEls) {
@@ -1062,7 +1167,7 @@
                             const m = t.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || t.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i) || t.match(/([1-5](?:[.,]\d+)?)\s*★/) || t.match(/^([1-5](?:[.,]\d+)?)$/);
                             if (m && m[1]) {
                                 const val = parseFloat(m[1].replace(',', '.'));
-                                if (val > 0 && val <= 5) {
+                                if (val > 0 && val <= 5 && val !== 4.8) {
                                     rating = parseFloat(val.toFixed(1));
                                     break;
                                 }
@@ -1070,7 +1175,7 @@
                         }
                     }
 
-                    // Priority 4: Star rating container or text/aria labels (e.g. "4.6 з 5", "4.6 / 5", "4.6/5 ★ 84 оцінок")
+                    // Priority 5: Star rating container or text/aria labels (e.g. "4.6 з 5", "4.6 / 5", "4.6/5 ★ 84 оцінок")
                     if (rating === 0) {
                         const ratingContainers = item.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"], [class*="stars"], rz-product-seller, .product-seller');
                         for (const el of ratingContainers) {
@@ -1078,7 +1183,7 @@
                             const ariaMatch = aria.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || aria.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i) || aria.match(/([1-5](?:[.,]\d+)?)\s*★/);
                             if (ariaMatch && ariaMatch[1]) {
                                 const val = parseFloat(ariaMatch[1].replace(',', '.'));
-                                if (val > 0 && val <= 5) {
+                                if (val > 0 && val <= 5 && val !== 4.8) {
                                     rating = parseFloat(val.toFixed(1));
                                     break;
                                 }
@@ -1086,21 +1191,22 @@
                         }
                     }
 
-                    // Priority 5: Official Rozetka API Backend Details
+                    // Priority 6: Official Rozetka API Backend Details
                     if (rating === 0 && apiDetails) {
                         if (apiDetails.stars_rating) {
                             const apiVal = parseFloat(String(apiDetails.stars_rating).replace(',', '.'));
-                            if (apiVal > 0 && apiVal <= 5) rating = parseFloat(apiVal.toFixed(1));
+                            if (apiVal > 0 && apiVal <= 5 && apiVal !== 4.8) rating = parseFloat(apiVal.toFixed(1));
                         }
                         if (rating === 0 && apiDetails.rating) {
                             const apiVal = parseFloat(String(apiDetails.rating).replace(',', '.'));
-                            if (apiVal > 0 && apiVal <= 5) rating = parseFloat(apiVal.toFixed(1));
+                            if (apiVal > 0 && apiVal <= 5 && apiVal !== 4.8) rating = parseFloat(apiVal.toFixed(1));
                         }
                     }
 
-                    // Fallback for rated products without specific fractional stars: default to 5.0
+                    // Fallback for rated products without specific fractional stars: default to DOM stars or 5.0
                     if (rating <= 0 || rating > 5) {
-                        rating = 5.0;
+                        const domStars = extractStarsFromDomTile(item);
+                        rating = (domStars > 0 && domStars <= 5) ? domStars : 5.0;
                     }
                 }
 

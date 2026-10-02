@@ -97,13 +97,13 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
             // 1. Try apiItem stars_rating or rating
             if (apiItem.stars_rating) {
               const numRating = parseFloat(String(apiItem.stars_rating).replace(',', '.'));
-              if (numRating > 0 && numRating <= 5) {
+              if (numRating > 0 && numRating <= 5 && numRating !== 4.8) {
                 foundRating = numRating;
               }
             }
             if (foundRating === 0 && apiItem.rating) {
               const numRating = parseFloat(String(apiItem.rating).replace(',', '.'));
-              if (numRating > 0 && numRating <= 5) {
+              if (numRating > 0 && numRating <= 5 && numRating !== 4.8) {
                 foundRating = numRating;
               }
             }
@@ -122,7 +122,7 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
                   if (commentsRes && commentsRes.ok) {
                     const commentsJson: any = await commentsRes.json().catch(() => null);
                     if (commentsJson && commentsJson.data) {
-                      if (typeof commentsJson.data.rating === 'number' && commentsJson.data.rating > 0 && commentsJson.data.rating <= 5) {
+                      if (typeof commentsJson.data.rating === 'number' && commentsJson.data.rating > 0 && commentsJson.data.rating <= 5 && commentsJson.data.rating !== 4.8) {
                         foundRating = parseFloat(commentsJson.data.rating.toFixed(1));
                         break;
                       }
