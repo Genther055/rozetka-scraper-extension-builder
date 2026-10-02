@@ -511,7 +511,7 @@
         if (!tileEl) return 0;
 
         try {
-            // Priority 1: Official Rozetka [data-testid="stars-rating"] progress bar (e.g. style="width: calc(84% - 2px);" -> 84 / 20 = 4.2)
+            // Priority 1: Official Rozetka [data-testid="stars-rating"] progress bar (e.g. style="width: calc(80% - 2px);" -> 80 / 20 = 4.0)
             const yellowBars = tileEl.querySelectorAll('[data-testid="stars-rating"], rz-stars-rating-progress div.bg-yellow, rz-stars-rating-progress div[class*="bg-yellow"], rz-stars-rating-progress div[class*="bg-orange"], [class*="stars-rating-progress"] div[class*="bg-"]');
             for (const yBar of yellowBars) {
                 const style = (yBar.getAttribute('style') || yBar.style?.width || '').toLowerCase();
@@ -520,8 +520,7 @@
                     const pct = parseFloat(m[1]);
                     if (pct > 0 && pct <= 100) {
                         const calculatedRating = parseFloat((pct / 20).toFixed(1));
-                        // Strictly reject 4.8 (96%) as it is Rozetka's catalog SSR placeholder
-                        if (calculatedRating > 0 && calculatedRating <= 5 && calculatedRating !== 4.8) {
+                        if (calculatedRating > 0 && calculatedRating <= 5) {
                             return calculatedRating;
                         }
                     }
@@ -539,8 +538,7 @@
                         const pct = parseFloat(m[1]);
                         if (pct > 0 && pct <= 100) {
                             const calculatedRating = parseFloat((pct / 20).toFixed(1));
-                            // Strictly reject 4.8 (96%) from catalog DOM
-                            if (calculatedRating > 0 && calculatedRating <= 5 && calculatedRating !== 4.8) {
+                            if (calculatedRating > 0 && calculatedRating <= 5) {
                                 return calculatedRating;
                             }
                         }
@@ -619,9 +617,14 @@
                                                 weightedSum += count * star;
                                             }
                                         }
+                                        if (totalMarks > 0) {
+                                            itemRating = parseFloat((weightedSum / totalMarks).toFixed(1));
+                                        }
+                                    }
                                     goodsMap.set(String(item.id), {
                                         ...prev,
-                                        ...item,
+                                        id: String(item.id),
+                                        comments_amount: item.comments_amount || prev.comments_amount,
                                         rating: itemRating > 0 ? itemRating : prev.rating,
                                         stars_rating: itemRating > 0 ? itemRating : prev.stars_rating
                                     });
@@ -654,7 +657,8 @@
                                 }
                                 goodsMap.set(String(obj.id), {
                                     ...prev,
-                                    ...obj,
+                                    id: String(obj.id),
+                                    comments_amount: obj.comments_amount || prev.comments_amount,
                                     rating: itemRating > 0 ? itemRating : prev.rating,
                                     stars_rating: itemRating > 0 ? itemRating : prev.stars_rating
                                 });
@@ -832,7 +836,7 @@
                 // Also check DOM active stars for the tile!
                 if (!exactRatingMap.has(prodId)) {
                     const domStars = extractStarsFromDomTile(item);
-                    if (domStars > 0 && domStars <= 5 && domStars !== 4.8) {
+                    if (domStars > 0 && domStars <= 5) {
                         exactRatingMap.set(prodId, domStars);
                     }
                 }

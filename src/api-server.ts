@@ -136,7 +136,7 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
                       foundRating = parseFloat(commentsJson.data.average_rating.toFixed(1));
                       break;
                     }
-                    if (typeof commentsJson.data.rating === 'number' && commentsJson.data.rating > 0 && commentsJson.data.rating <= 5 && commentsJson.data.rating !== 4.8) {
+                    if (typeof commentsJson.data.rating === 'number' && commentsJson.data.rating > 0 && commentsJson.data.rating <= 5) {
                       foundRating = parseFloat(commentsJson.data.rating.toFixed(1));
                       break;
                     }
