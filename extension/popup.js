@@ -299,9 +299,16 @@ if (btnRefreshTabs) {
     });
 }
 
-// Reset all cached sessions
+// Reset all cached sessions & clear remote database
 if (btnResetAll) {
-    btnResetAll.addEventListener('click', () => {
+    btnResetAll.addEventListener('click', async () => {
+        const webhookUrl = inputWebhook ? inputWebhook.value.trim() : '';
+        if (webhookUrl) {
+            try {
+                const clearUrl = webhookUrl.replace(/\/products\/?$/, '/products/clear');
+                await fetch(clearUrl, { method: 'POST' }).catch(() => null);
+            } catch (_) {}
+        }
         chrome.runtime.sendMessage({ action: 'RESET_ALL_SESSIONS' }, () => {
             btnStart.disabled = false;
             btnStop.disabled = true;
