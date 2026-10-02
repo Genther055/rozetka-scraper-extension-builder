@@ -459,12 +459,47 @@
         return 'Rozetka';
     }
 
-    // Directly extracts visual or numeric rating from catalog tile DOM (counting active yellow stars vs total stars, or attributes)
+    // Directly extracts visual rating from Rozetka's rz-stars-rating-progress or attributes
     function extractStarsFromDomTile(tileEl) {
         if (!tileEl) return 0;
 
         try {
-            // 1. Check direct rating containers for numeric attributes / aria / title
+            // Priority 1: Official Rozetka [data-testid="stars-rating"] progress bar (e.g. style="width: calc(84% - 2px);" -> 84 / 20 = 4.2)
+            const yellowBars = tileEl.querySelectorAll('[data-testid="stars-rating"], rz-stars-rating-progress div.bg-yellow, rz-stars-rating-progress div[class*="bg-yellow"], rz-stars-rating-progress div[class*="bg-orange"], [class*="stars-rating-progress"] div[class*="bg-"]');
+            for (const yBar of yellowBars) {
+                const style = (yBar.getAttribute('style') || '').toLowerCase();
+                const m = style.match(/width\s*:\s*(?:calc\s*\(\s*)?(\d+(?:\.\d+)?)\s*%/i) || style.match(/(\d+(?:\.\d+)?)\s*%/i);
+                if (m && m[1]) {
+                    const pct = parseFloat(m[1]);
+                    if (pct > 0 && pct <= 100) {
+                        const calculatedRating = parseFloat((pct / 20).toFixed(1));
+                        if (calculatedRating > 0 && calculatedRating <= 5) {
+                            return calculatedRating;
+                        }
+                    }
+                }
+            }
+
+            // Priority 2: Any child div inside rz-stars-rating-progress with style width %
+            const progressEls = tileEl.querySelectorAll('rz-stars-rating-progress, [class*="stars-rating-progress"]');
+            for (const pEl of progressEls) {
+                const innerDivs = pEl.querySelectorAll('div');
+                for (const d of innerDivs) {
+                    const s = (d.getAttribute('style') || '').toLowerCase();
+                    const m = s.match(/width\s*:\s*(?:calc\s*\(\s*)?(\d+(?:\.\d+)?)\s*%/i);
+                    if (m && m[1]) {
+                        const pct = parseFloat(m[1]);
+                        if (pct > 0 && pct <= 100) {
+                            const calculatedRating = parseFloat((pct / 20).toFixed(1));
+                            if (calculatedRating > 0 && calculatedRating <= 5) {
+                                return calculatedRating;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Priority 3: Check direct rating containers for numeric attributes / aria / title
             const ratingContainers = tileEl.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"], [class*="stars"], rz-product-seller, .product-seller');
             for (const container of ratingContainers) {
                 for (const attr of ['data-rating', 'data-score', 'data-value', 'ng-reflect-value', 'ng-reflect-rating', 'ng-reflect-score', 'aria-valuenow']) {
@@ -485,56 +520,6 @@
                         if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) {
                             return parseFloat(num.toFixed(1));
                         }
-                    }
-                }
-            }
-
-            // 2. Count active yellow/gold star SVGs/icons within the rating container
-            const starContainers = tileEl.querySelectorAll('rz-stars-rating-progress, rz-tile-rating, .goods-tile__stars, [class*="stars-rating"], [class*="stars"]');
-            for (const sCont of starContainers) {
-                const starItems = Array.from(sCont.querySelectorAll('svg, use, i, li, span.star, [class*="star-item"], [class*="star_item"]')).filter(el => {
-                    const tag = el.tagName.toLowerCase();
-                    const cls = ((el.className && typeof el.className === 'string') ? el.className : (el.getAttribute('class') || '')).toLowerCase();
-                    const href = (el.getAttribute('href') || el.getAttribute('xlink:href') || '').toLowerCase();
-                    return tag === 'svg' || tag === 'use' || tag === 'i' || cls.includes('star') || href.includes('star');
-                });
-
-                const distinctStars = starItems.filter(el => {
-                    if (el.tagName.toLowerCase() === 'use' && el.parentElement && el.parentElement.tagName.toLowerCase() === 'svg') {
-                        return false;
-                    }
-                    return true;
-                });
-
-                if (distinctStars.length >= 3 && distinctStars.length <= 10) {
-                    let activeCount = 0;
-                    for (const starEl of distinctStars) {
-                        const cls = ((starEl.className && typeof starEl.className === 'string') ? starEl.className : (starEl.getAttribute('class') || '')).toLowerCase();
-                        const style = (starEl.getAttribute('style') || '').toLowerCase();
-                        const fill = (starEl.getAttribute('fill') || '').toLowerCase();
-                        const useEl = starEl.querySelector('use');
-                        const href = (starEl.getAttribute('href') || starEl.getAttribute('xlink:href') || (useEl ? (useEl.getAttribute('href') || useEl.getAttribute('xlink:href') || '') : '')).toLowerCase();
-
-                        const isInactive = cls.includes('empty') || cls.includes('gray') || cls.includes('grey') || cls.includes('inactive') || cls.includes('star_color_gray') || cls.includes('star--empty') || cls.includes('star--inactive') || href.includes('empty') || href.includes('gray') || fill === '#e9e9e9' || fill === '#d2d2d2' || fill === '#e0e0e0';
-
-                        const isActive = !isInactive && (
-                            cls.includes('active') || cls.includes('filled') || cls.includes('yellow') || cls.includes('gold') || cls.includes('orange') || cls.includes('full') || cls.includes('star_color_yellow') || cls.includes('star--active') || cls.includes('star_active') || cls.includes('selected') ||
-                            href.includes('active') || href.includes('fill') || href.includes('gold') || href.includes('yellow') ||
-                            fill.includes('ffa900') || fill.includes('ffa800') || fill.includes('ffc107') || fill.includes('f5a623') ||
-                            style.includes('ffa900') || style.includes('ffa800') || style.includes('ffc107') || style.includes('f5a623') || style.includes('rgb(255, 169') || style.includes('rgb(255, 168')
-                        );
-
-                        if (isActive) {
-                            activeCount++;
-                        }
-                    }
-
-                    if (activeCount > 0 && activeCount <= 5 && distinctStars.length <= 5) {
-                        return parseFloat(activeCount.toFixed(1));
-                    }
-                    if (activeCount > 0 && distinctStars.length > 5) {
-                        const normalized = (activeCount / distinctStars.length) * 5;
-                        return parseFloat(normalized.toFixed(1));
                     }
                 }
             }
