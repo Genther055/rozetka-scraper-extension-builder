@@ -274,20 +274,22 @@
         return '';
     }
 
-    // Step-by-step scrolling through full height to ensure all 60 items mount
+    // Step-by-step scrolling through full height to ensure all 60 items mount and hydrate in DOM
     async function silentBackgroundScroll() {
         try {
             let lastHeight = 0;
             let currentScroll = 0;
-            for (let i = 0; i < 15; i++) {
+            for (let i = 0; i < 20; i++) {
                 const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
-                currentScroll = Math.min(maxH, currentScroll + 650);
+                currentScroll = Math.min(maxH, currentScroll + 550);
                 window.scrollTo({ top: currentScroll, behavior: 'auto' });
-                await new Promise(r => setTimeout(r, 140));
+                window.dispatchEvent(new Event('scroll'));
+                await new Promise(r => setTimeout(r, 160));
                 if (currentScroll >= maxH && maxH === lastHeight) break;
                 lastHeight = maxH;
             }
             window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight), behavior: 'auto' });
+            window.dispatchEvent(new Event('scroll'));
             await new Promise(r => setTimeout(r, 350));
         } catch (_) {}
     }
@@ -459,7 +461,52 @@
         return 'Rozetka';
     }
 
-    // Directly extracts visual rating from Rozetka's rz-stars-rating-progress or attributes
+    // Directly extracts visual review count from DOM tile during page scrolling
+    function extractReviewsFromDomTile(tileEl) {
+        if (!tileEl || !(tileEl instanceof Element)) return 0;
+        try {
+            const tileRawText = (tileEl.innerText || tileEl.textContent || '');
+            if (tileRawText.includes('Залишити відгук') || tileRawText.includes('Оставить отзыв')) {
+                return 0;
+            }
+
+            // 1. Check inside rz-tile-rating or .goods-tile__rating
+            const ratingEl = tileEl.querySelector('rz-tile-rating, .goods-tile__rating, app-rating, [class*="tile-rating"]');
+            if (ratingEl) {
+                const rzRevLink = ratingEl.querySelector('a.goods-tile__reviews-link, a[href*="comments"], [data-testid*="reviews"], [class*="reviews-link"], [class*="reviews-count"], button.reset-btn > span, button > span.text-sm, span.text-sm, a, button, span');
+                if (rzRevLink && !rzRevLink.closest('rz-stars-rating-progress, [data-testid="stars-rating"]')) {
+                    const linkText = (rzRevLink.textContent || rzRevLink.innerText || '').trim();
+                    if (!linkText.includes('Залишити') && !linkText.includes('Оставить') && !linkText.includes('₴')) {
+                        const countMatch = linkText.match(/(\d[\d\s\u00A0]*)/);
+                        if (countMatch && countMatch[1]) {
+                            const revVal = parseInt(countMatch[1].replace(/\D/g, ''), 10);
+                            if (revVal > 0 && revVal < 500000) {
+                                return revVal;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Dedicated review link selectors anywhere on the tile
+            const reviewElements = tileEl.querySelectorAll('a.goods-tile__reviews-link, a[href*="#comments"], a[href*="comments"], [class*="reviews-link"], [class*="reviews-count"], [data-testid*="reviews"]');
+            for (const el of reviewElements) {
+                if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price, rz-stars-rating-progress, [class*="stars-rating"]')) continue;
+                const t = (el.innerText || el.textContent || '').trim();
+                if (t.includes('Залишити') || t.includes('Оставить') || t.includes('₴')) continue;
+                const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
+                if (countMatch && countMatch[1]) {
+                    const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
+                    if (num > 0 && num < 500000) {
+                        return num;
+                    }
+                }
+            }
+        } catch (_) {}
+        return 0;
+    }
+
+    // Directly extracts visual rating from Rozetka's rz-stars-rating-progress or attributes during page scrolling
     function extractStarsFromDomTile(tileEl) {
         if (!tileEl) return 0;
 
@@ -467,14 +514,13 @@
             // Priority 1: Official Rozetka [data-testid="stars-rating"] progress bar (e.g. style="width: calc(84% - 2px);" -> 84 / 20 = 4.2)
             const yellowBars = tileEl.querySelectorAll('[data-testid="stars-rating"], rz-stars-rating-progress div.bg-yellow, rz-stars-rating-progress div[class*="bg-yellow"], rz-stars-rating-progress div[class*="bg-orange"], [class*="stars-rating-progress"] div[class*="bg-"]');
             for (const yBar of yellowBars) {
-                const style = (yBar.getAttribute('style') || '').toLowerCase();
+                const style = (yBar.getAttribute('style') || yBar.style?.width || '').toLowerCase();
                 const m = style.match(/width\s*:\s*(?:calc\s*\(\s*)?(\d+(?:\.\d+)?)\s*%/i) || style.match(/(\d+(?:\.\d+)?)\s*%/i);
                 if (m && m[1]) {
                     const pct = parseFloat(m[1]);
                     if (pct > 0 && pct <= 100) {
                         const calculatedRating = parseFloat((pct / 20).toFixed(1));
-                        // Strictly reject 4.8 (96%) as it is Rozetka's SSR catalog placeholder
-                        if (calculatedRating > 0 && calculatedRating <= 5 && calculatedRating !== 4.8) {
+                        if (calculatedRating > 0 && calculatedRating <= 5) {
                             return calculatedRating;
                         }
                     }
@@ -486,14 +532,13 @@
             for (const pEl of progressEls) {
                 const innerDivs = pEl.querySelectorAll('div');
                 for (const d of innerDivs) {
-                    const s = (d.getAttribute('style') || '').toLowerCase();
+                    const s = (d.getAttribute('style') || d.style?.width || '').toLowerCase();
                     const m = s.match(/width\s*:\s*(?:calc\s*\(\s*)?(\d+(?:\.\d+)?)\s*%/i);
                     if (m && m[1]) {
                         const pct = parseFloat(m[1]);
                         if (pct > 0 && pct <= 100) {
                             const calculatedRating = parseFloat((pct / 20).toFixed(1));
-                            // Strictly reject 4.8 (96%) from catalog DOM
-                            if (calculatedRating > 0 && calculatedRating <= 5 && calculatedRating !== 4.8) {
+                            if (calculatedRating > 0 && calculatedRating <= 5) {
                                 return calculatedRating;
                             }
                         }
@@ -501,14 +546,20 @@
                 }
             }
 
-            // Priority 3: Check direct rating containers for numeric attributes / aria / title
+            // Priority 3: Check individual filled star icons / SVGs
+            const filledStars = tileEl.querySelectorAll('svg[class*="active"], svg[class*="fill"], svg.text-yellow-400, svg.fill-yellow, [class*="star-active"], [class*="star-filled"], svg use[href*="star-filled"], svg use[href*="star-yellow"]');
+            if (filledStars.length > 0 && filledStars.length <= 5) {
+                return filledStars.length;
+            }
+
+            // Priority 4: Check direct rating containers for numeric attributes / aria / title
             const ratingContainers = tileEl.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, app-rating, .goods-tile__stars, [class*="rating"], [class*="stars"], rz-product-seller, .product-seller');
             for (const container of ratingContainers) {
                 for (const attr of ['data-rating', 'data-score', 'data-value', 'ng-reflect-value', 'ng-reflect-rating', 'ng-reflect-score', 'aria-valuenow']) {
                     const valStr = container.getAttribute(attr);
                     if (valStr) {
                         const num = parseFloat(valStr.replace(',', '.'));
-                        if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) {
+                        if (!isNaN(num) && num > 0 && num <= 5) {
                             return parseFloat(num.toFixed(1));
                         }
                     }
@@ -519,7 +570,7 @@
                     const m = labelText.match(/([1-5](?:[.,]\d+)?)\s*(?:зір|star|з\s*5|\/\s*5|из\s*5)/i) || labelText.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)/i);
                     if (m && m[1]) {
                         const num = parseFloat(m[1].replace(',', '.'));
-                        if (!isNaN(num) && num > 0 && num <= 5 && num !== 4.8) {
+                        if (!isNaN(num) && num > 0 && num <= 5) {
                             return parseFloat(num.toFixed(1));
                         }
                     }
@@ -808,7 +859,7 @@
                         let rawRating = pg.stars_rating !== undefined ? pg.stars_rating : (pg.rating !== undefined ? pg.rating : (pg.star !== undefined ? pg.star : pg.stars));
                         if (rawRating !== undefined && rawRating !== null) {
                             const numVal = typeof rawRating === 'number' ? rawRating : parseFloat(String(rawRating).replace(',', '.'));
-                            if (!isNaN(numVal) && numVal > 0 && numVal <= 5 && numVal !== 4.8) {
+                            if (!isNaN(numVal) && numVal > 0 && numVal <= 5) {
                                 exactRatingMap.set(prodId, parseFloat(numVal.toFixed(1)));
                             }
                         }
@@ -818,7 +869,7 @@
                 // Also check DOM active stars for the tile!
                 if (!exactRatingMap.has(prodId)) {
                     const domStars = extractStarsFromDomTile(item);
-                    if (domStars > 0 && domStars <= 5 && domStars !== 4.8) {
+                    if (domStars > 0 && domStars <= 5) {
                         exactRatingMap.set(prodId, domStars);
                     }
                 }
@@ -860,11 +911,11 @@
                     if (m && m[1]) {
                         const prodId = m[1];
                         const apiItem = apiProductMap.get(prodId);
-                        const domRev = extractReviews(item);
+                        const domRev = extractReviewsFromDomTile(item);
                         const revCount = (apiItem && apiItem.comments_amount !== undefined) ? parseInt(String(apiItem.comments_amount), 10) : domRev;
                         if (revCount > 0) {
-                            // If we don't have an exact rating yet, or need to verify marks from API
-                            if (!exactRatingMap.has(prodId) || exactRatingMap.get(prodId) === 4.8) {
+                            // If we don't have an exact rating yet, fetch marks from API
+                            if (!exactRatingMap.has(prodId)) {
                                 prodsNeedingRating.push({ prodId, revCount });
                             }
                         }
@@ -1039,71 +1090,27 @@
                     oldPrice = Math.round(price / (1 - (discount / 100)));
                 }
 
-                // 3. Reviews Count
-                let reviews = 0;
-                const tileRawText = (item.innerText || item.textContent || '');
-                const hasZeroReviewsBadge = tileRawText.includes('Залишити відгук') || tileRawText.includes('Оставить отзыв');
-
-                if (!hasZeroReviewsBadge) {
-                    // Try rz-tile-rating specifically first
-                    const rzRatingEl = item.querySelector('rz-tile-rating');
-                    if (rzRatingEl) {
-                        const rzRevLink = rzRatingEl.querySelector('a.goods-tile__reviews-link, a[href*="comments"], [data-testid*="reviews"], [class*="reviews-link"], [class*="reviews-count"], button.reset-btn > span, button > span.text-sm, span.text-sm');
-                        if (rzRevLink && !rzRevLink.closest('rz-stars-rating-progress')) {
-                            const linkText = (rzRevLink.textContent || rzRevLink.innerText || '').trim();
-                            if (!linkText.includes('Залишити') && !linkText.includes('Оставить')) {
-                                const countMatch = linkText.match(/(\d[\d\s\u00A0]*)/);
-                                if (countMatch && countMatch[1]) {
-                                    const revVal = parseInt(countMatch[1].replace(/\D/g, ''), 10);
-                                    if (revVal > 0 && revVal < 500000) {
-                                        reviews = revVal;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Try direct review link selectors if not found
-                    if (reviews === 0) {
-                        const reviewElements = item.querySelectorAll('a.goods-tile__reviews-link, a[href*="#comments"], a[href*="comments"], [class*="reviews-link"], [class*="reviews-count"]');
-                        for (const el of reviewElements) {
-                            if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price, rz-stars-rating-progress, [class*="stars-rating"]')) continue;
-                            const t = (el.innerText || el.textContent || '').trim();
-                            if (t.includes('Залишити') || t.includes('Оставить')) continue;
-                            const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
-                            if (countMatch && countMatch[1]) {
-                                const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
-                                if (num > 0 && num < 500000) {
-                                    reviews = num;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    // Fallback to official API
-                    if (reviews === 0 && apiDetails && apiDetails.comments_amount) {
-                        reviews = parseInt(String(apiDetails.comments_amount), 10) || 0;
-                    }
+                // 3. Reviews Count directly from DOM Tile during page scrolling
+                let reviews = extractReviewsFromDomTile(item);
+                if (reviews === 0 && apiDetails && apiDetails.comments_amount) {
+                    reviews = parseInt(String(apiDetails.comments_amount), 10) || 0;
                 }
 
-                // 4. Rating (1.0 to 5.0) - Exact Mathematical & Multi-Source Resolution
+                // 4. Rating (1.0 to 5.0) - Direct DOM stars on page scrolling + Multi-Source Resolution
                 let rating = 0;
 
                 if (reviews === 0) {
                     rating = 0;
                 } else {
-                    // Priority 1: Direct Rozetka Comments Stats API or Precomputed Exact Map
-                    if (prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {
-                        rating = exactRatingMap.get(prodId);
+                    // Priority 1: Direct DOM active yellow stars on the catalog tile (calculated from width % / visual stars during scroll)
+                    const domStars = extractStarsFromDomTile(item);
+                    if (domStars > 0 && domStars <= 5) {
+                        rating = domStars;
                     }
 
-                    // Priority 2: Direct DOM active yellow stars on the catalog tile
-                    if (rating === 0) {
-                        const domStars = extractStarsFromDomTile(item);
-                        if (domStars > 0 && domStars <= 5) {
-                            rating = domStars;
-                        }
+                    // Priority 2: Direct Rozetka Comments Stats API or Precomputed Exact Map
+                    if (rating === 0 && prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {
+                        rating = exactRatingMap.get(prodId);
                     }
 
                     // Priority 3: Page Goods State from Angular SSR TransferState & JSON-LD
