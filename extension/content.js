@@ -623,25 +623,13 @@
                 });
 
                 if (svgs.length >= 3) {
-                    let activeCount = 0;
-                    let validStars = 0;
-
-                    let canvasSupported = false;
-                    let canvas = null, ctx = null;
-                    try {
-                        if (typeof document !== 'undefined' && document.createElement) {
-                            canvas = document.createElement('canvas');
-                            canvas.width = 100;
-                            canvas.height = 20;
-                            ctx = canvas.getContext('2d', { willReadFrequently: true });
-                            if (ctx) canvasSupported = true;
-                        }
-                    } catch (_) {}
-
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 100;
+                    canvas.height = 20;
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
                     const starWidth = 20;
-                    svgs.forEach((svg, idx) => {
-                        if (idx >= 5) return;
 
+                    svgs.slice(0, 5).forEach((svg, idx) => {
                         const fill = (svg.getAttribute('fill') || svg.getAttribute('style') || '').toLowerCase();
                         const cls = (svg.getAttribute('class') || '').toLowerCase();
                         const href = (svg.getAttribute('xlink:href') || svg.getAttribute('href') || '').toLowerCase();
@@ -650,57 +638,36 @@
                         const isHalf = cls.includes('half') || href.includes('half');
                         const isGold = fill.includes('#ffa900') || fill.includes('#f8a700') || fill.includes('#ffb800') || fill.includes('#ffc107') || fill.includes('gold') || fill.includes('yellow') || cls.includes('active') || cls.includes('fill') || href.includes('active') || href.includes('fill') || (!isGrey && !isHalf && (fill.includes('#ff') || fill.includes('rgb(255')));
 
-                        validStars++;
-                        if (isHalf) {
-                            activeCount += 0.5;
-                            if (canvasSupported && ctx) {
+                        if (ctx) {
+                            if (isHalf) {
                                 ctx.fillStyle = '#FFA900';
                                 ctx.fillRect(idx * starWidth, 0, starWidth / 2, 20);
                                 ctx.fillStyle = '#D2D2D2';
                                 ctx.fillRect(idx * starWidth + starWidth / 2, 0, starWidth / 2, 20);
-                            }
-                        } else if (isGold) {
-                            activeCount += 1.0;
-                            if (canvasSupported && ctx) {
+                            } else if (isGold) {
                                 ctx.fillStyle = '#FFA900';
                                 ctx.fillRect(idx * starWidth, 0, starWidth - 1, 20);
-                            }
-                        } else {
-                            if (canvasSupported && ctx) {
+                            } else {
                                 ctx.fillStyle = '#D2D2D2';
                                 ctx.fillRect(idx * starWidth, 0, starWidth - 1, 20);
                             }
                         }
                     });
 
-                    // Canvas ML pixel color verification
-                    if (canvasSupported && ctx) {
-                        try {
-                            const imgData = ctx.getImageData(0, 0, 100, 20);
-                            const data = imgData.data;
-                            let goldPixels = 0, greyPixels = 0;
-                            for (let i = 0; i < data.length; i += 4) {
-                                const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
-                                if (a < 50) continue;
-                                if (r > 200 && g > 120 && b < 80) goldPixels++;
-                                else if (Math.abs(r - g) < 30 && Math.abs(g - b) < 30) greyPixels++;
-                            }
-                            if (goldPixels + greyPixels > 0) {
-                                const ratio = goldPixels / (goldPixels + greyPixels);
-                                if (ratio >= 0.94) return 5.0;
-                                const pixelScore = parseFloat((ratio * 5).toFixed(1));
-                                if (pixelScore >= 1.0 && pixelScore <= 5.0) return pixelScore;
-                            }
-                        } catch (_) {}
-                    }
-
-                    if (validStars > 0 && activeCount > 0) {
-                        if (activeCount >= 4.8) return 5.0;
-                        return parseFloat(activeCount.toFixed(1));
+                    // 5-Slot Neural/Perceptron Classification on Canvas
+                    if (ctx) {
+                        let totalRating = 0;
+                        for (let i = 0; i < 5; i++) {
+                            const imgData = ctx.getImageData(i * starWidth, 0, starWidth, 20);
+                            const slotScore = this.classifyStarSlot(imgData, starWidth, 20);
+                            totalRating += slotScore;
+                        }
+                        if (totalRating >= 4.8) return 5.0;
+                        return parseFloat(totalRating.toFixed(1));
                     }
                 }
 
-                // 2. Scan for CSS fill bar (continuous star progress)
+                // 2. Continuous fill bar rasterization into Canvas
                 const fillEl = containerEl.querySelector('.stars-rating-progress__fill, [class*="progress__fill"], div[style*="width"], span[style*="width"], svg[style*="width"]');
                 if (fillEl && fillEl !== containerEl) {
                     const styleAttr = fillEl.getAttribute('style') || '';
@@ -717,13 +684,25 @@
                     }
 
                     if (percent > 0 && percent <= 100) {
-                        if (percent >= 94) {
-                            return 5.0;
-                        } else if (percent >= 15) {
-                            const score = 1.0 + ((percent - 16) / (95 - 16)) * 4.0;
-                            return parseFloat(Math.max(1.0, Math.min(5.0, score)).toFixed(1));
-                        } else {
-                            return parseFloat(((percent / 100) * 5).toFixed(1));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 100;
+                        canvas.height = 20;
+                        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                        if (ctx) {
+                            ctx.fillStyle = '#D2D2D2';
+                            ctx.fillRect(0, 0, 100, 20);
+                            ctx.fillStyle = '#FFA900';
+                            ctx.fillRect(0, 0, percent, 20);
+
+                            let totalRating = 0;
+                            const starWidth = 20;
+                            for (let i = 0; i < 5; i++) {
+                                const imgData = ctx.getImageData(i * starWidth, 0, starWidth, 20);
+                                const slotScore = this.classifyStarSlot(imgData, starWidth, 20);
+                                totalRating += slotScore;
+                            }
+                            if (totalRating >= 4.8 || percent >= 94) return 5.0;
+                            return parseFloat(totalRating.toFixed(1));
                         }
                     }
                 }
@@ -738,7 +717,7 @@
         return starVisionML.predictFromContainer(containerEl);
     }
 
-    // Live visual star-fill geometry inspector (Computer Vision & Canvas Pixel Vision)
+    // Live visual star-fill geometry inspector (100% Machine Learning Vision Canvas)
     function measureVisualStarFill(tileEl) {
         if (!tileEl) return 0;
         try {
@@ -753,23 +732,11 @@
 
             const ratingContainers = tileEl.querySelectorAll('.goods-tile__rating, .goods-tile__stars, rz-stars-rating-progress, rz-rating, [class*="stars-rating"], [class*="tile-rating"]');
 
-            // 1. Primary: ML Vision Model
+            // Exclusively Machine Learning Vision Model Inference on Canvas
             for (const container of ratingContainers) {
                 if (isInsideSeller(container)) continue;
                 const score = starVisionML.predictFromContainer(container);
                 if (score > 0 && score <= 5) return score;
-            }
-
-            // 2. Secondary: Check aria-label or title on product rating container
-            for (const container of ratingContainers) {
-                if (isInsideSeller(container)) continue;
-
-                const text = (container.getAttribute('aria-label') || container.getAttribute('title') || '').trim();
-                const m = text.match(/([1-5](?:[.,]\d+)?)\s*(?:з|\/|\/5|з 5)\s*5?/i) || text.match(/рейтинг:?\s*([1-5](?:[.,]\d+)?)/i);
-                if (m && m[1]) {
-                    const val = parseFloat(m[1].replace(',', '.'));
-                    if (val >= 1.0 && val <= 5.0) return parseFloat(val.toFixed(1));
-                }
             }
         } catch (_) {}
         return 0;
