@@ -482,9 +482,24 @@
         return '';
     }
 
-    const pageSellerMap = new Map();
+    function unescapeAngularState(str) {
+        if (!str) return '';
+        return str
+            .replace(/&q;/g, '"')
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/&a;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&l;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&g;/g, '>')
+            .replace(/&s;/g, "'");
+    }
 
-    function parseSellersFromAnyJson(obj, sellersMap) {
+    const pageSellerMap = new Map();
+    const pageSellersCountMap = new Map();
+
+    function parseSellersFromAnyJson(obj, sellersMap, sellersCountMap) {
         if (!obj || typeof obj !== 'object') return;
 
         // Build seller lookup table if present (e.g. obj.sellers = { "123": { "title": "Mini Shop" } })
@@ -541,6 +556,11 @@
                 }
             }
 
+            const sCount = node.sellers_count || node.sellersCount || node.other_sellers_count;
+            if (typeof sCount === 'number' && sCount > 0 && prodId && sellersCountMap) {
+                sellersCountMap.set(prodId, sCount);
+            }
+
             for (const k of Object.keys(node)) {
                 if (typeof node[k] === 'object') traverse(node[k]);
             }
@@ -555,21 +575,24 @@
             const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
             for (const script of jsonLdScripts) {
                 try {
-                    const jsonText = script.textContent || script.innerText || '';
-                    if (!jsonText) continue;
+                    const raw = script.textContent || script.innerText || '';
+                    if (!raw) continue;
+                    const jsonText = unescapeAngularState(raw);
                     const data = JSON.parse(jsonText);
-                    parseSellersFromAnyJson(data, pageSellerMap);
+                    parseSellersFromAnyJson(data, pageSellerMap, pageSellersCountMap);
                 } catch (_) {}
             }
 
-            // 2. Scan JSON / state scripts
+            // 2. Scan JSON / state scripts (including serverApp-state with unescaped Angular TransferState)
             const jsonScripts = document.querySelectorAll('script[type="application/json"], script#serverApp-state, script:not([src])');
             for (const s of jsonScripts) {
-                const txt = s.textContent || s.innerText || '';
-                if (txt.includes('{') && (txt.includes('seller') || txt.includes('goods') || txt.includes('merchant'))) {
+                const raw = s.textContent || s.innerText || '';
+                if (!raw) continue;
+                const txt = unescapeAngularState(raw);
+                if (txt.includes('{') && (txt.includes('seller') || txt.includes('goods') || txt.includes('merchant') || txt.includes('catalog'))) {
                     try {
                         const parsed = JSON.parse(txt);
-                        parseSellersFromAnyJson(parsed, pageSellerMap);
+                        parseSellersFromAnyJson(parsed, pageSellerMap, pageSellersCountMap);
                     } catch (_) {
                         // Regex fallback for non-standard serialized chunks
                         const regex = /"id"\s*:\s*(\d{5,})[\s\S]{1,800}?"(?:seller_title|sellerName|seller)"\s*:\s*(?:\{[^}]*?"title"\s*:\s*"([^"]+)"|"([^"]+)")/g;
@@ -1437,7 +1460,9 @@
                     apiSeller = cleanSellerName(apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || '');
                 }
                 const seller = (apiSeller && apiSeller.toLowerCase() !== 'rozetka') ? apiSeller : (extractSeller(item, link, name) || 'Rozetka');
-                const sellersCount = (apiProd && typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0) ? apiProd.sellers_count : 1;
+                const sellersCount = (apiProd && typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0)
+                    ? apiProd.sellers_count
+                    : (prodId && pageSellersCountMap.has(prodId) ? pageSellersCountMap.get(prodId) : 1);
 
                 if ((!oldPrice || oldPrice <= price) && apiProd && apiProd.old_price && apiProd.old_price > price) {
                     oldPrice = apiProd.old_price;
