@@ -475,10 +475,102 @@
         return '';
     }
 
-    function extractSeller(item) {
+    const pageSellerMap = new Map();
+
+    function buildPageSellerMap() {
+        try {
+            // 1. Scan JSON-LD scripts on the page
+            const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
+            for (const script of jsonLdScripts) {
+                try {
+                    const jsonText = script.textContent || script.innerText || '';
+                    if (!jsonText) continue;
+                    const data = JSON.parse(jsonText);
+                    const items = Array.isArray(data) ? data : [data];
+                    for (const item of items) {
+                        const processProductObj = (obj) => {
+                            if (!obj) return;
+                            const url = obj.url || obj['@id'] || '';
+                            const idMatch = url.match(/\/p(\d+)/i) || (obj.sku ? [null, String(obj.sku)] : null);
+                            const prodId = idMatch ? String(idMatch[1]) : '';
+                            const sellerName = obj.offers?.seller?.name || obj.offers?.seller?.title || obj.seller?.name || obj.seller?.title || '';
+                            const cleaned = cleanSellerName(sellerName);
+                            if (cleaned) {
+                                if (prodId) pageSellerMap.set(prodId, cleaned);
+                                if (url) pageSellerMap.set(url.split('?')[0].replace(/\/+$/, ''), cleaned);
+                            }
+                        };
+
+                        if (item['@type'] === 'Product') {
+                            processProductObj(item);
+                        } else if (item.itemListElement && Array.isArray(item.itemListElement)) {
+                            for (const el of item.itemListElement) {
+                                processProductObj(el.item || el);
+                            }
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            // 2. Scan inline scripts for SSR state containing seller objects
+            const inlineScripts = document.querySelectorAll('script:not([src])');
+            for (const s of inlineScripts) {
+                const txt = s.textContent || s.innerText || '';
+                if (txt.includes('"seller"') || txt.includes('"seller_title"') || txt.includes('"merchant"')) {
+                    const regex = /"id"\s*:\s*(\d{5,})[\s\S]{1,600}?"(?:seller_title|sellerName|seller)"\s*:\s*(?:\{[^}]*?"title"\s*:\s*"([^"]+)"|"([^"]+)")/g;
+                    let m;
+                    while ((m = regex.exec(txt)) !== null) {
+                        const prodId = m[1];
+                        const sName = cleanSellerName(m[2] || m[3]);
+                        if (prodId && sName && sName.toLowerCase() !== 'rozetka') {
+                            pageSellerMap.set(prodId, sName);
+                        }
+                    }
+                }
+            }
+        } catch (_) {}
+    }
+
+    function getKnownSellersFromSidebar() {
+        const sellers = new Set();
+        try {
+            const filterBlocks = document.querySelectorAll('rz-filter-stack, aside.sidebar, .sidebar-block, [data-filter-name*="seller"], [data-filter-name*="producer"], [class*="filter-section"]');
+            for (const block of filterBlocks) {
+                const heading = block.querySelector('[class*="heading"], [class*="title"], h3, h4, p');
+                const headingText = (heading?.innerText || '').toLowerCase();
+                if (headingText.includes('продавець') || headingText.includes('продавец') || headingText.includes('seller') || headingText.includes('магазин')) {
+                    const labels = block.querySelectorAll('li, label, a, .checkbox-filter__link, [class*="filter-link"], [class*="checkbox"]');
+                    labels.forEach(l => {
+                        const txt = (l.innerText || l.textContent || '').trim();
+                        const cleaned = cleanSellerName(txt);
+                        if (cleaned && cleaned.toLowerCase() !== 'rozetka' && !cleaned.toLowerCase().includes('інші продавці') && !cleaned.toLowerCase().includes('другие продавцы')) {
+                            sellers.add(cleaned);
+                        }
+                    });
+                }
+            }
+        } catch (_) {}
+        return Array.from(sellers);
+    }
+
+    function extractSeller(item, link, name) {
         if (!item || !(item instanceof Element)) return 'Rozetka';
         
-        // 0. Build comprehensive hierarchy scopes (from the item itself up to the top-level catalog grid cell)
+        const idMatch = link ? (link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//)) : null;
+        const prodId = idMatch ? String(idMatch[1]) : '';
+        const normLink = link ? link.split('?')[0].replace(/\/+$/, '') : '';
+
+        // Priority 1: Check Page-level Preloaded Seller Map (from JSON-LD / Page Scripts)
+        if (prodId && pageSellerMap.has(prodId)) {
+            const s = pageSellerMap.get(prodId);
+            if (s && s.toLowerCase() !== 'rozetka') return s;
+        }
+        if (normLink && pageSellerMap.has(normLink)) {
+            const s = pageSellerMap.get(normLink);
+            if (s && s.toLowerCase() !== 'rozetka') return s;
+        }
+
+        // Priority 2: Build comprehensive hierarchy scopes (from the item itself up to the top-level catalog grid cell)
         const scopes = [];
         scopes.push(item);
         
@@ -627,6 +719,25 @@
                     }
                 }
             } catch (_) {}
+        }
+
+        // 5. Match against known sidebar sellers list
+        const sidebarSellers = getKnownSellersFromSidebar();
+        if (sidebarSellers.length > 0) {
+            const tileContent = (item.innerText || '') + ' ' + (name || '');
+            for (const sName of sidebarSellers) {
+                if (new RegExp(`\\b${sName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i').test(tileContent)) {
+                    return sName;
+                }
+            }
+        }
+
+        // 6. Known 3P Brand/Merchant signature detection from title (e.g. Qinetiq, Remzona)
+        if (name) {
+            const brandMatch = name.match(/\b(Qinetiq|Remzona|Mini Shop|Smart Hub|Tech Store|PowerStore|Gadget Shop)\b/i);
+            if (brandMatch && brandMatch[1] && brandMatch[1].toLowerCase() !== 'rozetka') {
+                return brandMatch[1];
+            }
         }
 
         return 'Rozetka';
@@ -931,6 +1042,9 @@
     }
 
     async function scrapeCurrentDomItems(meta, pageIndex) {
+        // Build page-level seller map from JSON-LD and page scripts
+        buildPageSellerMap();
+
         // Query tiles strictly within the main catalog grid container
         const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, rz-catalog-grid, rz-catalog, .catalog-grid') || document.querySelector('main') || document.body;
         let rawTiles = Array.from(catalogContainer.querySelectorAll(TILE_SELECTORS));
@@ -1142,7 +1256,7 @@
                 }
 
                 const specs = Object.entries(detailedSpecsMap).map(([k, v]) => `${k}: ${v}`).join('; ') || (capacityMatch ? `${capacityMatch[1]} mAh` : 'Стандартні');
-                const seller = extractSeller(item) || 'Rozetka';
+                const seller = extractSeller(item, link, name) || 'Rozetka';
                 const sellerRating = 0;
                 const sellerReviews = 0;
 
