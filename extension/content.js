@@ -531,46 +531,40 @@
         if (!tileEl || !(tileEl instanceof Element)) return 0;
         try {
             // Strictly exclude seller rating & seller info elements
-            const sellerContainers = tileEl.querySelectorAll('rz-product-seller, rz-goods-seller, .product-seller, .goods-tile__seller, .seller-rating, [class*="seller"], [class*="merchant"], [class*="shop"], [class*="store"], .seller-info');
-
             const isInsideSeller = (el) => {
-                for (const sc of sellerContainers) {
-                    if (sc.contains(el)) return true;
-                }
-                return false;
+                return !!el.closest('rz-product-seller, rz-goods-seller, .product-seller, .goods-tile__seller, .seller-rating, .seller-info, .goods-tile__sub-rating');
             };
 
-            // 1. Direct review links on the tile
-            const reviewElements = tileEl.querySelectorAll('a.goods-tile__reviews-link, a[href*="#comments"], a[href*="comments"], [class*="reviews-link"], [class*="reviews-count"], [data-testid*="reviews"], rz-tile-rating a, .goods-tile__rating a');
+            // 1. Direct rz-tile-rating or .goods-tile__rating
+            const ratingEl = tileEl.querySelector('rz-tile-rating, .goods-tile__rating, app-rating, [class*="tile-rating"]:not([class*="seller"])');
+            if (ratingEl && !isInsideSeller(ratingEl)) {
+                // Find review elements inside rating block (span, a, button, div)
+                const revNodes = ratingEl.querySelectorAll('a, span, [class*="reviews"], [class*="comments"], [data-testid*="reviews"]');
+                for (const el of revNodes) {
+                    if (el.closest('rz-stars-rating-progress, [data-testid="stars-rating"], svg, [class*="stars-rating"]')) continue;
+                    const txt = (el.innerText || el.textContent || '').trim();
+                    if (txt.includes('Залишити') || txt.includes('Оставить') || txt.includes('₴')) continue;
+                    const m = txt.match(/(\d[\d\s\u00A0]*)/);
+                    if (m && m[1]) {
+                        const num = parseInt(m[1].replace(/\D/g, ''), 10);
+                        if (num > 0 && num < 500000) return num;
+                    }
+                }
+            }
+
+            // 2. Dedicated review link / span selectors anywhere on the tile
+            const reviewElements = tileEl.querySelectorAll('a.goods-tile__reviews-link, span.goods-tile__reviews-link, .goods-tile__reviews-link, a[href*="#comments"], a[href*="comments"], [class*="reviews-link"], [class*="reviews-count"], [data-testid*="reviews"]');
             for (const el of reviewElements) {
                 if (isInsideSeller(el)) continue;
                 if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price, rz-stars-rating-progress, [class*="stars-rating"]')) continue;
                 
                 const t = (el.innerText || el.textContent || '').trim();
-                // If it's the "Залишити відгук" button itself, skip it
-                if (t.includes('Залишити') || t.includes('Оставить') || t.includes('₴')) {
-                    continue;
-                }
+                if (t.includes('Залишити') || t.includes('Оставить') || t.includes('₴')) continue;
                 const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
                 if (countMatch && countMatch[1]) {
                     const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
                     if (num > 0 && num < 500000) {
                         return num;
-                    }
-                }
-            }
-
-            // 2. Search inside product rating container
-            const ratingEl = tileEl.querySelector('rz-tile-rating, .goods-tile__rating, app-rating, [class*="tile-rating"]');
-            if (ratingEl && !isInsideSeller(ratingEl)) {
-                const links = ratingEl.querySelectorAll('a');
-                for (const l of links) {
-                    const t = (l.innerText || l.textContent || '').trim();
-                    if (t.includes('Залишити') || t.includes('Оставить') || t.includes('₴')) continue;
-                    const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
-                    if (countMatch && countMatch[1]) {
-                        const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
-                        if (num > 0 && num < 500000) return num;
                     }
                 }
             }
