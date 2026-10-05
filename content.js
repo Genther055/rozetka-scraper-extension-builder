@@ -712,151 +712,6 @@
         return measureVisualStarFill(tileEl);
     }
 
-    // Extract raw Rozetka goods state from Angular SSR TransferState & JSON-LD
-    function extractPageGoodsState() {
-        const goodsMap = new Map();
-        try {
-            // 1. Angular Universal TransferState script <script id="serverApp-state">
-            const serverStateEl = document.getElementById('serverApp-state');
-            if (serverStateEl && serverStateEl.textContent) {
-                let raw = serverStateEl.textContent;
-                raw = raw.replace(/&q;/g, '"').replace(/&a;/g, '&').replace(/&s;/g, "'").replace(/&l;/g, '<').replace(/&g;/g, '>');
-                try {
-                    const stateObj = JSON.parse(raw);
-                    const traverse = (obj) => {
-                        if (!obj || typeof obj !== 'object') return;
-                        if (Array.isArray(obj)) {
-                            for (const item of obj) {
-                                if (item && item.id) {
-                                    const prev = goodsMap.get(String(item.id)) || {};
-                                    let itemRating = 0;
-                                    if (item.marks && typeof item.marks === 'object') {
-                                        let totalMarks = 0, weightedSum = 0;
-                                        if (Array.isArray(item.marks)) {
-                                            for (const mItem of item.marks) {
-                                                const star = Number(mItem.mark || mItem.star) || 0;
-                                                const cnt = Number(mItem.count || mItem.amount) || 0;
-                                                if (star >= 1 && star <= 5 && cnt > 0) {
-                                                    totalMarks += cnt;
-                                                    weightedSum += cnt * star;
-                                                }
-                                            }
-                                        } else {
-                                            for (let star = 1; star <= 5; star++) {
-                                                const count = Number(item.marks[String(star)]) || Number(item.marks[star]) || 0;
-                                                totalMarks += count;
-                                                weightedSum += count * star;
-                                            }
-                                        }
-                                        if (totalMarks > 0) {
-                                            itemRating = parseFloat((weightedSum / totalMarks).toFixed(1));
-                                        }
-                                    }
-                                    goodsMap.set(String(item.id), {
-                                        ...prev,
-                                        id: String(item.id),
-                                        comments_amount: item.comments_amount || prev.comments_amount,
-                                        rating: itemRating > 0 ? itemRating : prev.rating,
-                                        stars_rating: itemRating > 0 ? itemRating : prev.stars_rating
-                                    });
-                                }
-                                traverse(item);
-                            }
-                        } else {
-                            if (obj.id) {
-                                const prev = goodsMap.get(String(obj.id)) || {};
-                                let itemRating = 0;
-                                if (obj.marks && typeof obj.marks === 'object') {
-                                    let totalMarks = 0, weightedSum = 0;
-                                    if (Array.isArray(obj.marks)) {
-                                        for (const mItem of obj.marks) {
-                                            const star = Number(mItem.mark || mItem.star) || 0;
-                                            const cnt = Number(mItem.count || mItem.amount) || 0;
-                                            if (star >= 1 && star <= 5 && cnt > 0) {
-                                                totalMarks += cnt;
-                                                weightedSum += cnt * star;
-                                            }
-                                        }
-                                    } else {
-                                        for (let star = 1; star <= 5; star++) {
-                                            const count = Number(obj.marks[String(star)]) || Number(obj.marks[star]) || 0;
-                                            totalMarks += count;
-                                            weightedSum += count * star;
-                                        }
-                                    }
-                                    if (totalMarks > 0) itemRating = parseFloat((weightedSum / totalMarks).toFixed(1));
-                                }
-                                goodsMap.set(String(obj.id), {
-                                    ...prev,
-                                    id: String(obj.id),
-                                    comments_amount: obj.comments_amount || prev.comments_amount,
-                                    rating: itemRating > 0 ? itemRating : prev.rating,
-                                    stars_rating: itemRating > 0 ? itemRating : prev.stars_rating
-                                });
-                            }
-                            for (const key of Object.keys(obj)) {
-                                traverse(obj[key]);
-                            }
-                        }
-                    };
-                    traverse(stateObj);
-                } catch (_) {}
-            }
-
-
-
-            // 3. Direct DOM User Comments Marks & Rating on Product Page (e.g. "Оцінка користувачів 4.6/5 ★" or seller "4.6/5 ★ 84 оцінок")
-            try {
-                const pageIdMatch = window.location.href.match(/\/p(\d+)/i) || window.location.href.match(/\/(\d{5,})\//);
-                if (pageIdMatch && pageIdMatch[1]) {
-                    const pageProdId = pageIdMatch[1];
-                    const prev = goodsMap.get(pageProdId) || {};
-
-                    // Look for exact "Оцінка користувачів X.X/5" element ONLY inside product comments stats
-                    const userRatingNodes = document.querySelectorAll('rz-product-comments-stats, .product-comments__rating, .comments-stats, .product-comments-marks, [class*="comments-stats"], [class*="comments-marks"], [class*="product-comments"], [class*="rating-score"]');
-                    let foundDomRating = 0;
-                    for (const uNode of userRatingNodes) {
-                        if (uNode.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"]')) continue;
-                        
-                        // Check CSS width in stars progress inside comments
-                        const widthEls = uNode.querySelectorAll('[style*="width"]');
-                        for (const wEl of widthEls) {
-                            const mWidth = (wEl.getAttribute('style') || '').match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
-                            if (mWidth && mWidth[1]) {
-                                const percent = parseFloat(mWidth[1]);
-                                if (percent > 0 && percent <= 100) {
-                                    foundDomRating = parseFloat(((percent / 100) * 5).toFixed(1));
-                                    break;
-                                }
-                            }
-                        }
-                        if (foundDomRating > 0) break;
-
-                        const txt = (uNode.innerText || uNode.textContent || '').trim();
-                        if (/продавец|продавець|seller/i.test(txt)) continue;
-                        const m = txt.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i);
-                        if (m && m[1]) {
-                            const val = parseFloat(m[1].replace(',', '.'));
-                            if (val > 0 && val <= 5) {
-                                foundDomRating = val;
-                                break;
-                            }
-                        }
-                    }
-                    if (foundDomRating > 0) {
-                        goodsMap.set(pageProdId, {
-                            ...prev,
-                            id: pageProdId,
-                            stars_rating: foundDomRating,
-                            rating: foundDomRating
-                        });
-                    }
-                }
-            } catch (_) {}
-        } catch (_) {}
-        return goodsMap;
-    }
-
     async function scrapeCurrentDomItems(meta, pageIndex) {
         // Query tiles across entire main content area (filtering non-catalog via isUnwantedTile)
         let rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
@@ -895,56 +750,16 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // 1. Extract embedded goods state from page (Angular SSR)
-        const pageGoodsMap = extractPageGoodsState();
-
-        // 2. Batch fetch official Rozetka product details (seller, price, stock) - zero rate-limit risk
-        const apiProductMap = new Map();
-
-        try {
-            const productIds = [];
-            for (const { link } of distinctTiles) {
-                const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
-                if (m && m[1]) productIds.push(m[1]);
-            }
-            if (productIds.length > 0) {
-                // Batch fetch general product details (seller, price, stock) - zero rate-limit risk
-                const chunkSize = 60;
-                for (let i = 0; i < productIds.length; i += chunkSize) {
-                    const chunk = productIds.slice(i, i + chunkSize);
-                    const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${chunk.join(',')}`;
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 3000);
-                    const res = await fetch(apiUrl, { signal: controller.signal }).catch(() => null);
-                    clearTimeout(timeoutId);
-                    if (res && res.ok) {
-                        const json = await res.json().catch(() => null);
-                        if (json && Array.isArray(json.data)) {
-                            for (const apiProd of json.data) {
-                                if (apiProd && apiProd.id) {
-                                    apiProductMap.set(String(apiProd.id), apiProd);
-                                }
-                            }
-                        }
-                    }
-                }
-
-
-            }
-        } catch (_) {}
-
         const newItems = [];
 
         for (const { item, link, name } of distinctTiles) {
             try {
                 const idMatch = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
                 const prodId = idMatch ? String(idMatch[1]) : '';
-                const apiDetails = prodId ? apiProductMap.get(prodId) : null;
 
-                // 1. Current Price (Triple-layer Bulletproof Resolution)
+                // 1. Current Price (100% DOM-based resolution)
                 let price = 0;
 
-                // Layer 1: Dedicated DOM Selectors
                 const priceSelectors = [
                     'rz-tile-price .price',
                     '.price.color-red',
@@ -972,23 +787,12 @@
                     }
                 }
 
-                // Layer 2: Text RegEx with currency symbol ₴ or грн
                 if (price <= 0) {
                     const tileText = (item.innerText || item.textContent || '');
                     const mPrice = tileText.match(/(\d[\d\s\u00A0\u202F.,]*)\s*(?:₴|грн|uah)/i);
                     if (mPrice && mPrice[1]) {
                         const val = parseInt(mPrice[1].replace(/\D/g, ''), 10) || 0;
                         if (val > 0) price = val;
-                    }
-                }
-
-                // Layer 3: Official Rozetka API Backend Details
-                if (price <= 0 && apiDetails) {
-                    if (apiDetails.price) {
-                        price = parseInt(String(apiDetails.price).replace(/\D/g, ''), 10) || 0;
-                    }
-                    if (price <= 0 && apiDetails.old_price) {
-                        price = parseInt(String(apiDetails.old_price).replace(/\D/g, ''), 10) || 0;
                     }
                 }
 
@@ -1028,11 +832,6 @@
                     }
                 }
 
-                if (!oldPrice && apiDetails && apiDetails.old_price) {
-                    const apiOld = parseInt(String(apiDetails.old_price).replace(/\D/g, ''), 10) || 0;
-                    if (apiOld > price) oldPrice = apiOld;
-                }
-
                 if (oldPrice > price && discount === 0) {
                     discount = Math.round(((oldPrice - price) / oldPrice) * 100);
                 } else if (discount > 0 && (!oldPrice || oldPrice <= price) && price > 0) {
@@ -1041,9 +840,6 @@
 
                 // 3. Reviews Count directly from DOM Tile during page scrolling
                 let reviews = extractReviewsFromDomTile(item);
-                if (reviews === 0 && apiDetails && apiDetails.comments_amount) {
-                    reviews = parseInt(String(apiDetails.comments_amount), 10) || 0;
-                }
 
                 // 4. Rating (1.0 to 5.0) - Exclusively Canvas Computer Vision & DOM Pixel Geometry
                 let rating = 0;
@@ -1079,15 +875,8 @@
                 }
 
                 let questions = 0;
-                if (apiDetails && apiDetails.questions_amount) {
-                    questions = parseInt(String(apiDetails.questions_amount), 10) || 0;
-                }
-
                 const itemText = item.innerText || '';
                 let inStock = !(item.classList.contains('tile-disabled') || itemText.includes('Немає в наявності') || itemText.includes('Нет в наличии'));
-                if (apiDetails && apiDetails.sell_status) {
-                    inStock = (apiDetails.sell_status !== 'unavailable');
-                }
 
                 // Extract all available DOM params and chips
                 const detailedSpecsMap = {};
@@ -1127,17 +916,9 @@
                 }
 
                 const specs = Object.entries(detailedSpecsMap).map(([k, v]) => `${k}: ${v}`).join('; ') || (capacityMatch ? `${capacityMatch[1]} mAh` : 'Стандартні');
-
-                let seller = 'Rozetka';
-                let sellerRating = 0;
-                let sellerReviews = 0;
-                if (apiDetails && apiDetails.seller) {
-                    seller = (apiDetails.seller.title || apiDetails.seller.name || '').trim() || 'Rozetka';
-                    if (apiDetails.seller.rating) sellerRating = parseFloat(String(apiDetails.seller.rating)) || 0;
-                    if (apiDetails.seller.feedbacks) sellerReviews = parseInt(String(apiDetails.seller.feedbacks), 10) || 0;
-                } else {
-                    seller = extractSeller(item) || 'Rozetka';
-                }
+                const seller = extractSeller(item) || 'Rozetka';
+                const sellerRating = 0;
+                const sellerReviews = 0;
 
                 newItems.push({
                     name,

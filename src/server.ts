@@ -54,29 +54,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
  * REST API endpoints for TradeScout Ingestion & AI analysis
  */
 
-// Asynchronous background seller resolver for Rozetka products
-async function resolveSellerInServerBackground(productId: string, normalizedLink: string) {
-  try {
-    const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productId}`;
-    const response = await fetch(apiUrl);
-    if (response.ok) {
-      const apiData: any = await response.json();
-      const sellerTitle = apiData.data?.[0]?.seller?.title;
-      if (sellerTitle) {
-        const cleanedSeller = sellerTitle.trim();
-        const currentProducts = await getCurrentProducts();
-        const index = currentProducts.findIndex((p: any) => p && p.link === normalizedLink);
-        if (index !== -1) {
-          currentProducts[index].seller = cleanedSeller;
-          await saveCurrentProducts(currentProducts);
-          console.log(`[Backend Enriched] Successfully updated seller for ${normalizedLink} -> ${cleanedSeller}`);
-        }
-      }
-    }
-  } catch (error: any) {
-    console.error(`[Backend Enrichment Error] Failed to resolve seller for ${productId}:`, error.message);
-  }
-}
+
 
 interface LiveScrapingTask {
   tabId?: number;
@@ -232,12 +210,6 @@ app.post('/api/products', async (req, res) => {
             aiStatus: 'pending',
             aiVerdict: ''
           });
-
-          const productIdMatch = normalizedLink.match(/p(\d+)/);
-          const productId = productIdMatch ? productIdMatch[1] : null;
-          if (productId) {
-            resolveSellerInServerBackground(productId, normalizedLink);
-          }
         } else {
           const index = products.findIndex(p => p && getItemKey(p) === itemKey);
           if (index !== -1) {
@@ -263,14 +235,6 @@ app.post('/api/products', async (req, res) => {
             if (item.detailedSpecsMap) products[index].detailedSpecsMap = item.detailedSpecsMap;
             if (item.seller) products[index].seller = item.seller;
             if (item.sellersCount) products[index].sellersCount = item.sellersCount;
-
-            if (products[index].seller === 'Rozetka') {
-              const productIdMatch = normalizedLink.match(/p(\d+)/);
-              const productId = productIdMatch ? productIdMatch[1] : null;
-              if (productId) {
-                resolveSellerInServerBackground(productId, normalizedLink);
-              }
-            }
           }
         }
       } catch (e) {
