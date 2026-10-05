@@ -477,10 +477,10 @@
     function extractSeller(item) {
         if (!item || !(item instanceof Element)) return 'Rozetka';
         
-        const container = item.closest('li, rz-catalog-tile, rz-product-tile, .catalog-grid__cell, article.goods-tile') || item;
+        const container = item.closest('li, rz-catalog-tile, rz-product-tile, .catalog-grid__cell, article.goods-tile, rz-product, .product-about') || item;
 
         // 1. Direct seller links / anchors (checking text and URL slug)
-        const sellerLinks = container.querySelectorAll('a[href*="/seller/"], a[href*="seller="], a[href*="/merchant/"], [data-testid*="seller"] a, .goods-tile__seller a, .goods-tile__seller-name a, rz-goods-seller a, .seller a, [class*="seller"] a');
+        const sellerLinks = container.querySelectorAll('a[href*="/seller/"], a[href*="seller="], a[href*="/merchant/"], [data-testid*="seller"] a, .goods-tile__seller a, .goods-tile__seller-name a, rz-goods-seller a, .seller a, [class*="seller"] a, .product-seller a');
         for (const a of sellerLinks) {
             const txt = a.innerText || a.textContent || a.getAttribute('title') || '';
             const s = cleanSellerName(txt);
@@ -498,11 +498,15 @@
         const sellerSelectors = [
             'rz-goods-seller',
             'rz-product-seller',
+            'rz-seller',
+            '.product-seller',
+            '.product-seller__title',
+            '.product-seller__name',
             '.goods-tile__seller',
             '.goods-tile__seller-name',
             '.goods-tile__seller-title',
-            'rz-seller',
             '[class*="goods-tile__seller"]',
+            '[class*="product-seller"]',
             '[class*="seller-name"]',
             '[class*="seller-title"]',
             '.seller-title',
