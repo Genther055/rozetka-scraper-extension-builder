@@ -460,15 +460,16 @@
     function cleanSellerName(raw) {
         if (!raw) return '';
         let text = String(raw).trim();
-        text = text.replace(/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин)\s*:?\s*/i, '');
-        const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0 && !/^(?:продавець(?:\s+товару)?|продавец|seller|магазин)\s*:?$/i.test(l));
+        text = text.replace(/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца|доставка\s+від|доставка\s+от)\s*:?\s*/i, '');
+        const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0 && !/^(?:продавець(?:\s+товару)?|продавец|seller|магазин|від\s+продавця|от\s+продавца)\s*:?$/i.test(l));
         if (lines.length === 0) return '';
         let name = lines[0];
         name = name.replace(/\s*\b\d(?:[.,]\d)?\s*\(\s*\d+%\s*\).*$/, '');
         name = name.replace(/\s*\(\s*\d+%\s*\).*$/, '');
-        name = name.replace(/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин)\s*:?\s*/i, '');
-        name = name.trim();
-        if (name.length >= 2 && name.length <= 80 && !/^\d+$/.test(name) && !/^(?:відгук|отзыв|купити|купить|додати|в кошик)/i.test(name)) {
+        name = name.replace(/\s+\d(?:[.,]\d)?\s*★.*$/, '');
+        name = name.replace(/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца)\s*:?\s*/i, '');
+        name = name.replace(/[>›»\s]+$/, '').trim();
+        if (name.length >= 2 && name.length <= 80 && !/^\d+$/.test(name) && !/^(?:відгук|отзыв|купити|купить|додати|в кошик|немає|в наявності|новинка|акція|топ|скидка|знижка|уточнюйте)/i.test(name)) {
             return name;
         }
         return '';
@@ -477,68 +478,157 @@
     function extractSeller(item) {
         if (!item || !(item instanceof Element)) return 'Rozetka';
         
-        const container = item.closest('li, rz-catalog-tile, rz-product-tile, .catalog-grid__cell, article.goods-tile, rz-product, .product-about') || item;
-
-        // 1. Direct seller links / anchors (checking text and URL slug)
-        const sellerLinks = container.querySelectorAll('a[href*="/seller/"], a[href*="seller="], a[href*="/merchant/"], [data-testid*="seller"] a, .goods-tile__seller a, .goods-tile__seller-name a, rz-goods-seller a, .seller a, [class*="seller"] a, .product-seller a');
-        for (const a of sellerLinks) {
-            const txt = a.innerText || a.textContent || a.getAttribute('title') || '';
-            const s = cleanSellerName(txt);
-            if (s && s.toLowerCase() !== 'rozetka') return s;
-
-            // Extract from URL slug e.g. /seller/qinetiq/
-            const href = a.getAttribute('href') || '';
-            const m = href.match(/\/(?:seller|merchant)\/([^\/?#]+)/i);
-            if (m && m[1] && m[1].toLowerCase() !== 'rozetka') {
-                return decodeURIComponent(m[1]).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+        // 0. Build comprehensive hierarchy scopes (from the item itself up to the top-level catalog grid cell)
+        const scopes = [];
+        scopes.push(item);
+        
+        const topCell = item.closest('li.catalog-grid__cell, li[class*="catalog-grid__cell"], li, rz-catalog-tile, rz-product-tile, .catalog-grid__cell, [data-goods-id], rz-product, .product-about, [class*="product-about"]');
+        if (topCell && topCell !== item) {
+            scopes.push(topCell);
+            if (topCell.parentElement && (topCell.parentElement.tagName === 'LI' || topCell.parentElement.classList.contains('catalog-grid__cell') || topCell.parentElement.tagName === 'RZ-CATALOG-TILE')) {
+                scopes.push(topCell.parentElement);
             }
         }
 
-        // 2. Dedicated seller elements across tile and container
-        const sellerSelectors = [
+        // 1. Direct seller links across all scopes
+        const sellerLinkSelectors = [
+            'a[href*="/seller/"]',
+            'a[href*="/merchant/"]',
+            'a[href*="seller="]',
+            'a[href*="seller_id="]',
+            'a[href*="merchant="]',
+            'a.goods-tile__seller-link',
+            'a.goods-tile__seller-name',
+            'a.product-seller__title',
+            'a.product-seller__link',
+            'a.product-seller__name',
+            'rz-goods-seller a',
+            'rz-product-seller a',
+            'rz-seller a',
+            '.goods-tile__seller a',
+            '.product-seller a',
+            '[data-testid*="seller"] a',
+            '[data-testid*="merchant"] a'
+        ];
+
+        for (const scope of scopes) {
+            for (const sel of sellerLinkSelectors) {
+                try {
+                    const links = scope.querySelectorAll(sel);
+                    for (const a of links) {
+                        const txt = a.innerText || a.textContent || a.getAttribute('title') || a.getAttribute('aria-label') || '';
+                        const s = cleanSellerName(txt);
+                        if (s && s.toLowerCase() !== 'rozetka') return s;
+
+                        // Check child img alt inside seller link
+                        const img = a.querySelector('img[alt], img[title]');
+                        if (img) {
+                            const imgName = cleanSellerName(img.getAttribute('alt') || img.getAttribute('title'));
+                            if (imgName && imgName.toLowerCase() !== 'rozetka') return imgName;
+                        }
+
+                        // Fallback to URL slug if text was empty or just an icon
+                        const href = a.getAttribute('href') || '';
+                        const m = href.match(/\/(?:seller|merchant)\/([^\/?#]+)/i) || href.match(/[?&](?:seller|merchant|seller_id)=([^&#]+)/i);
+                        if (m && m[1] && m[1].toLowerCase() !== 'rozetka' && !/^\d+$/.test(m[1])) {
+                            const slugName = decodeURIComponent(m[1]).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+                            if (slugName.length >= 2) return slugName;
+                        }
+                    }
+                } catch (_) {}
+            }
+        }
+
+        // 2. Dedicated seller DOM tags and classes across all scopes
+        const sellerContainerSelectors = [
             'rz-goods-seller',
             'rz-product-seller',
             'rz-seller',
             '.product-seller',
             '.product-seller__title',
             '.product-seller__name',
+            '.product-seller__shop',
             '.goods-tile__seller',
             '.goods-tile__seller-name',
             '.goods-tile__seller-title',
+            '.goods-tile__seller-link',
+            '.goods-tile__shop',
+            '.goods-tile__merchant',
             '[class*="goods-tile__seller"]',
             '[class*="product-seller"]',
+            '[class*="product__seller"]',
             '[class*="seller-name"]',
             '[class*="seller-title"]',
+            '[class*="shop-name"]',
             '.seller-title',
             '.seller-name',
             '.shop-name',
-            '.goods-tile__shop',
             '[data-testid*="seller"]',
             '[data-testid*="merchant"]',
-            '.goods-tile__merchant',
             '[class*="merchant"]'
         ];
-        
-        for (const sel of sellerSelectors) {
+
+        for (const scope of scopes) {
+            for (const sel of sellerContainerSelectors) {
+                try {
+                    const elements = scope.querySelectorAll(sel);
+                    for (const el of elements) {
+                        const s = cleanSellerName(el.innerText || el.textContent || el.getAttribute('title') || el.getAttribute('aria-label'));
+                        if (s && s.toLowerCase() !== 'rozetka') return s;
+
+                        const img = el.querySelector('img[alt], img[title]');
+                        if (img) {
+                            const imgName = cleanSellerName(img.getAttribute('alt') || img.getAttribute('title'));
+                            if (imgName && imgName.toLowerCase() !== 'rozetka') return imgName;
+                        }
+                    }
+                } catch (_) {}
+            }
+        }
+
+        // 3. Container data attributes
+        for (const scope of scopes) {
+            const attrSeller = scope.getAttribute('data-seller') || scope.getAttribute('data-seller-name') || scope.getAttribute('data-merchant') || scope.getAttribute('data-goods-seller');
+            if (attrSeller) {
+                const s = cleanSellerName(attrSeller);
+                if (s && s.toLowerCase() !== 'rozetka') return s;
+            }
+        }
+
+        // 4. Deep multiline text scan across all scopes
+        for (const scope of scopes) {
             try {
-                const elements = container.querySelectorAll(sel);
-                for (const el of elements) {
-                    const s = cleanSellerName(el.innerText || el.textContent || el.getAttribute('title'));
+                const fullText = scope.innerText || scope.textContent || '';
+                if (!fullText) continue;
+
+                // Match single line: "Продавець: Mini Shop"
+                const m1 = fullText.match(/(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца)\s*:?\s*([^\n\r\t,;]+)/i);
+                if (m1 && m1[1]) {
+                    const s = cleanSellerName(m1[1]);
                     if (s && s.toLowerCase() !== 'rozetka') return s;
+                }
+
+                // Match multi line: "Продавець:\nMini Shop" or "Продавец\nMini Shop"
+                const m2 = fullText.match(/(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца)\s*:?\s*[\r\n]+\s*([^\r\n\t,;]+)/i);
+                if (m2 && m2[1]) {
+                    const s = cleanSellerName(m2[1]);
+                    if (s && s.toLowerCase() !== 'rozetka') return s;
+                }
+
+                // Scan line by line for seller labels
+                const lines = fullText.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+                for (let i = 0; i < lines.length; i++) {
+                    const l = lines[i];
+                    if (/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца)\s*:?$/i.test(l)) {
+                        if (i + 1 < lines.length) {
+                            const nextLineSeller = cleanSellerName(lines[i + 1]);
+                            if (nextLineSeller && nextLineSeller.toLowerCase() !== 'rozetka') return nextLineSeller;
+                        }
+                    }
                 }
             } catch (_) {}
         }
-        
-        // 3. Regex match on container text
-        try {
-            const itemText = container.innerText || container.textContent || '';
-            const match = itemText.match(/(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин)\s*:?\s*([^\n\r\t,;]+)/i);
-            if (match && match[1]) {
-                const s = cleanSellerName(match[1]);
-                if (s && s.toLowerCase() !== 'rozetka') return s;
-            }
-        } catch (_) {}
-        
+
         return 'Rozetka';
     }
 
