@@ -363,7 +363,7 @@ export class DashboardComponent implements OnInit {
   // Navigation & Tabs
   activeTab: 'overview' | 'explorer' | 'demand' | 'quant' | 'details' | 'history' | 'settings' = 'overview';
   quantSimulationPrice: number = 0;
-  quantExpectedRating: number = 4.8;
+  quantExpectedRating: number = 0;
   quantExpectedDiscount: number = 0;
   quantStrategyMode: 'balanced' | 'volume' | 'profit' = 'balanced';
   quantActiveModule: 'all' | 'revenue' | 'elasticity' | 'gini' | 'correlation' | 'montecarlo' = 'all';
@@ -6014,7 +6014,8 @@ export class DashboardComponent implements OnInit {
       const noise = Math.exp(0.12 * z1);
 
       // Social Proof Multiplier
-      const ratingFactor = Math.pow((this.quantExpectedRating || 4.8) / 4.5, 1.3);
+      const targetRating = this.quantExpectedRating || this.avgRating || 4.5;
+      const ratingFactor = Math.pow(targetRating / 4.5, 1.3);
       // Discount Promotion Factor
       const discountFactor = 1 + ((this.quantExpectedDiscount || 0) / 100) * (ed >= 1.3 ? 0.85 : 0.45);
 

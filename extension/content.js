@@ -720,47 +720,10 @@
         } catch (_) {}
     }
 
-    // Directly extracts visual rating from discrete star elements or text attributes
+    // Directly extracts visual rating using Computer Vision star-fill geometry measurement
     function extractStarsFromDomTile(tileEl) {
         if (!tileEl) return 0;
-
-        try {
-            // 0. Method: Real-time visual star fill measurement
-            const visualFill = measureVisualStarFill(tileEl);
-            if (visualFill > 0 && visualFill <= 5) {
-                return visualFill;
-            }
-
-            // 1. Check explicit text rating or aria-label attributes (strictly excluding seller badge)
-            const ratingContainers = tileEl.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, rz-rating, app-rating, .goods-tile__rating, .goods-tile__stars, [class*="tile-rating"], [class*="stars-rating"], rz-product-comments-stats, .product-comments__rating, .comments-stats');
-            for (const container of ratingContainers) {
-                if (container.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"], .seller-info')) continue;
-                const labelText = container.getAttribute('aria-label') || container.getAttribute('title') || container.innerText || '';
-                if (labelText && !/продавец|продавець|seller/i.test(labelText)) {
-                    const m = labelText.match(/(?:оцінка(?:\s+користувачів)?|рейтинг|rating|score)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || 
-                              labelText.match(/\b([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5\b/i) ||
-                              labelText.match(/^([1-5]\.\d)$/);
-                    if (m && m[1]) {
-                        const num = parseFloat(m[1].replace(',', '.'));
-                        if (!isNaN(num) && num >= 1.0 && num <= 5.0) {
-                            return parseFloat(num.toFixed(1));
-                        }
-                    }
-                }
-            }
-
-            // 2. Check discrete star elements (filled vs empty count)
-            const starBlock = tileEl.querySelector('rz-stars-rating-progress, rz-tile-rating, [class*="stars-rating"], [class*="rating-block"], app-rating');
-            if (starBlock && !starBlock.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"]')) {
-                const filledStars = starBlock.querySelectorAll('.star--filled, .star-filled, [class*="star-filled"], [class*="star_filled"], [class*="fill-yellow"], svg.text-yellow-400');
-                const emptyStars = starBlock.querySelectorAll('.star--empty, .star-empty, [class*="star-empty"], [class*="star_empty"], [class*="fill-gray"], svg.text-gray-300, svg.text-gray-400');
-                if (filledStars.length > 0 && emptyStars.length > 0 && (filledStars.length + emptyStars.length <= 6)) {
-                    return filledStars.length;
-                }
-            }
-        } catch (_) {}
-
-        return 0;
+        return measureVisualStarFill(tileEl);
     }
 
     // Extract raw Rozetka goods state from Angular SSR TransferState & JSON-LD
@@ -1185,7 +1148,7 @@
                         rating = liveVisualRatingMap.get(prodId);
                     }
 
-                    // Priority 1: Visual star-fill geometry measured directly on the tile element
+                    // Priority 1: Visual star-fill geometry measured directly on the tile element (Canvas / Pixel Geometry)
                     if (rating === 0) {
                         const visualScore = measureVisualStarFill(item);
                         if (visualScore > 0 && visualScore <= 5) {
@@ -1193,17 +1156,9 @@
                         }
                     }
 
-                    // Priority 2: Exact Schema.org aggregateRating JSON-LD or Marks API
+                    // Priority 2: Schema.org aggregateRating JSON-LD directly for single product pages
                     if (rating === 0 && prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {
                         rating = exactRatingMap.get(prodId);
-                    }
-
-                    // Priority 3: Page Goods State from Angular SSR TransferState & JSON-LD
-                    if (rating === 0 && prodId && pageGoodsMap.has(prodId)) {
-                        const pg = pageGoodsMap.get(prodId);
-                        if (pg && pg.rating && pg.rating > 0) {
-                            rating = pg.rating;
-                        }
                     }
                 }
 
