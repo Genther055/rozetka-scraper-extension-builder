@@ -250,6 +250,19 @@ async function notifyServerScrapingStatus(taskData) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = message.tabId || (sender && sender.tab ? sender.tab.id : null);
 
+    // 0. Screen capture for ML Vision Engine
+    if (message.action === 'CAPTURE_TAB_VIEWPORT') {
+        const targetWindowId = sender && sender.tab ? sender.tab.windowId : null;
+        chrome.tabs.captureVisibleTab(targetWindowId, { format: 'png' }, (dataUrl) => {
+            if (chrome.runtime.lastError || !dataUrl) {
+                sendResponse({ success: false, error: chrome.runtime.lastError?.message });
+            } else {
+                sendResponse({ success: true, dataUrl });
+            }
+        });
+        return true;
+    }
+
     // 0. Tab reports it is idle on load
     if (message.action === 'tabIdle' && tabId) {
         if (!stoppedTabs.has(tabId)) {

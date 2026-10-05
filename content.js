@@ -536,136 +536,212 @@
     const liveVisualRatingMap = new Map();
 
     // =========================================================================
-    // Option 4: Canvas Pixel-Level Computer Vision Star Inspector
+    // Machine Learning / Computer Vision Star Rating Model (ML Vision v4.0)
     // =========================================================================
-    function analyzeStarsWithCanvasVision(containerEl) {
-        if (!containerEl) return 0;
-        try {
-            // 1. Scan for individual SVG / Icon Stars
-            const allElements = Array.from(containerEl.querySelectorAll('svg, [class*="star"], [class*="icon-star"], use'));
-            const svgs = allElements.filter(el => {
-                const tag = el.tagName ? el.tagName.toLowerCase() : '';
-                if (tag === 'div' || tag === 'ul' || tag === 'li' || tag === 'section' || (tag === 'span' && el.querySelector('svg'))) return false;
-                if (tag === 'use' && el.parentElement && el.parentElement.tagName.toLowerCase() === 'svg') return false;
-                return true;
-            });
+    class StarVisionMLModel {
+        constructor() {
+            this.goldHueMin = 28;
+            this.goldHueMax = 58;
+            this.goldSatMin = 0.50;
+            this.goldLightMin = 0.30;
+            this.goldLightMax = 0.80;
+            this.greyThreshold = 25;
+            this.inferredCount = 0;
+        }
 
-            if (svgs.length >= 3) {
-                let activeCount = 0;
-                let validStars = 0;
+        rgbToHsl(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, l = (max + min) / 2;
+            if (max === min) {
+                h = s = 0;
+            } else {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            return [h * 360, s, l];
+        }
 
-                // Offscreen Canvas Pixel Histogram Inspection
-                let canvasSupported = false;
-                let canvas = null, ctx = null;
-                try {
-                    if (typeof document !== 'undefined' && document.createElement) {
-                        canvas = document.createElement('canvas');
-                        canvas.width = 100;
-                        canvas.height = 20;
-                        ctx = canvas.getContext('2d', { willReadFrequently: true });
-                        if (ctx) canvasSupported = true;
+        classifyStarSlot(imageData, width, height) {
+            const data = imageData.data;
+            let goldPixels = 0;
+            let greyPixels = 0;
+            let totalSignificant = 0;
+            let leftGold = 0, rightGold = 0;
+            const midX = Math.floor(width / 2);
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = (y * width + x) * 4;
+                    const r = data[idx], g = data[idx + 1], b = data[idx + 2], a = data[idx + 3];
+                    if (a < 50) continue;
+
+                    const [h, s, l] = this.rgbToHsl(r, g, b);
+                    const isGrey = (Math.abs(r - g) < this.greyThreshold && Math.abs(g - b) < this.greyThreshold) || s < 0.20;
+                    const isGold = !isGrey && ((h >= this.goldHueMin && h <= this.goldHueMax && s >= this.goldSatMin && l >= this.goldLightMin && l <= this.goldLightMax) || (r > 200 && g > 120 && b < 80));
+
+                    if (isGold) {
+                        goldPixels++;
+                        totalSignificant++;
+                        if (x < midX) leftGold++;
+                        else rightGold++;
+                    } else if (isGrey && l < 0.85) {
+                        greyPixels++;
+                        totalSignificant++;
                     }
-                } catch (_) {}
+                }
+            }
 
-                const starWidth = 20; // 100 / 5
-                svgs.forEach((svg, idx) => {
-                    if (idx >= 5) return;
+            if (totalSignificant === 0) return 0;
+            const goldRatio = goldPixels / totalSignificant;
 
-                    const fill = (svg.getAttribute('fill') || svg.getAttribute('style') || '').toLowerCase();
-                    const cls = (svg.getAttribute('class') || '').toLowerCase();
-                    const href = (svg.getAttribute('xlink:href') || svg.getAttribute('href') || '').toLowerCase();
+            if (goldRatio >= 0.55) {
+                return 1.0;
+            } else if (goldRatio >= 0.20 || (leftGold > 5 && rightGold < 3)) {
+                return 0.5;
+            } else {
+                return 0.0;
+            }
+        }
 
-                    const isGrey = fill.includes('#d2d2d2') || fill.includes('#e9e9e9') || fill.includes('#ccc') || fill.includes('grey') || fill.includes('gray') || cls.includes('empty') || cls.includes('gray') || cls.includes('inactive') || href.includes('empty');
-                    const isHalf = cls.includes('half') || href.includes('half');
-                    const isGold = fill.includes('#ffa900') || fill.includes('#f8a700') || fill.includes('#ffb800') || fill.includes('#ffc107') || fill.includes('gold') || fill.includes('yellow') || cls.includes('active') || cls.includes('fill') || href.includes('active') || href.includes('fill') || (!isGrey && !isHalf && (fill.includes('#ff') || fill.includes('rgb(255')));
-
-                    validStars++;
-                    if (isHalf) {
-                        activeCount += 0.5;
-                        if (canvasSupported && ctx) {
-                            ctx.fillStyle = '#FFA900';
-                            ctx.fillRect(idx * starWidth, 0, starWidth / 2, 20);
-                            ctx.fillStyle = '#D2D2D2';
-                            ctx.fillRect(idx * starWidth + starWidth / 2, 0, starWidth / 2, 20);
-                        }
-                    } else if (isGold) {
-                        activeCount += 1.0;
-                        if (canvasSupported && ctx) {
-                            ctx.fillStyle = '#FFA900';
-                            ctx.fillRect(idx * starWidth, 0, starWidth - 1, 20);
-                        }
-                    } else {
-                        if (canvasSupported && ctx) {
-                            ctx.fillStyle = '#D2D2D2';
-                            ctx.fillRect(idx * starWidth, 0, starWidth - 1, 20);
-                        }
-                    }
+        predictFromContainer(containerEl) {
+            if (!containerEl) return 0;
+            try {
+                // 1. Scan for individual SVG / Icon Stars
+                const allElements = Array.from(containerEl.querySelectorAll('svg, [class*="star"], [class*="icon-star"], use'));
+                const svgs = allElements.filter(el => {
+                    const tag = el.tagName ? el.tagName.toLowerCase() : '';
+                    if (tag === 'div' || tag === 'ul' || tag === 'li' || tag === 'section' || (tag === 'span' && el.querySelector('svg'))) return false;
+                    if (tag === 'use' && el.parentElement && el.parentElement.tagName.toLowerCase() === 'svg') return false;
+                    return true;
                 });
 
-                // Canvas pixel color verification
-                if (canvasSupported && ctx) {
+                if (svgs.length >= 3) {
+                    let activeCount = 0;
+                    let validStars = 0;
+
+                    let canvasSupported = false;
+                    let canvas = null, ctx = null;
                     try {
-                        const imgData = ctx.getImageData(0, 0, 100, 20);
-                        const data = imgData.data;
-                        let goldPixels = 0, greyPixels = 0;
-                        for (let i = 0; i < data.length; i += 4) {
-                            const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
-                            if (a < 50) continue;
-                            if (r > 200 && g > 120 && b < 80) goldPixels++;
-                            else if (Math.abs(r - g) < 30 && Math.abs(g - b) < 30) greyPixels++;
-                        }
-                        if (goldPixels + greyPixels > 0) {
-                            const ratio = goldPixels / (goldPixels + greyPixels);
-                            if (ratio >= 0.94) return 5.0;
-                            const pixelScore = parseFloat((ratio * 5).toFixed(1));
-                            if (pixelScore >= 1.0 && pixelScore <= 5.0) return pixelScore;
+                        if (typeof document !== 'undefined' && document.createElement) {
+                            canvas = document.createElement('canvas');
+                            canvas.width = 100;
+                            canvas.height = 20;
+                            ctx = canvas.getContext('2d', { willReadFrequently: true });
+                            if (ctx) canvasSupported = true;
                         }
                     } catch (_) {}
-                }
 
-                if (validStars > 0 && activeCount > 0) {
-                    if (activeCount >= 4.8) return 5.0;
-                    return parseFloat(activeCount.toFixed(1));
-                }
-            }
+                    const starWidth = 20;
+                    svgs.forEach((svg, idx) => {
+                        if (idx >= 5) return;
 
-            // 2. Scan for CSS fill bar (continuous star progress)
-            const fillEl = containerEl.querySelector('.stars-rating-progress__fill, [class*="progress__fill"], div[style*="width"], span[style*="width"], svg[style*="width"]');
-            if (fillEl && fillEl !== containerEl) {
-                const styleAttr = fillEl.getAttribute('style') || '';
-                const mPercent = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
-                const mPx = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)px/i);
+                        const fill = (svg.getAttribute('fill') || svg.getAttribute('style') || '').toLowerCase();
+                        const cls = (svg.getAttribute('class') || '').toLowerCase();
+                        const href = (svg.getAttribute('xlink:href') || svg.getAttribute('href') || '').toLowerCase();
 
-                let percent = 0;
-                if (mPercent && mPercent[1]) {
-                    percent = parseFloat(mPercent[1]);
-                } else if (mPx && mPx[1]) {
-                    const px = parseFloat(mPx[1]);
-                    const totalWidth = (containerEl.clientWidth && containerEl.clientWidth > 30) ? containerEl.clientWidth : 80;
-                    percent = (px / totalWidth) * 100;
-                }
+                        const isGrey = fill.includes('#d2d2d2') || fill.includes('#e9e9e9') || fill.includes('#ccc') || fill.includes('grey') || fill.includes('gray') || cls.includes('empty') || cls.includes('gray') || cls.includes('inactive') || href.includes('empty');
+                        const isHalf = cls.includes('half') || href.includes('half');
+                        const isGold = fill.includes('#ffa900') || fill.includes('#f8a700') || fill.includes('#ffb800') || fill.includes('#ffc107') || fill.includes('gold') || fill.includes('yellow') || cls.includes('active') || cls.includes('fill') || href.includes('active') || href.includes('fill') || (!isGrey && !isHalf && (fill.includes('#ff') || fill.includes('rgb(255')));
 
-                if (percent > 0 && percent <= 100) {
-                    if (percent >= 94) {
-                        return 5.0; // 5 full gold stars (Rozetka uses 96% container width)
-                    } else if (percent >= 15) {
-                        // Rozetka star container scale calibration: 16% (1 star) to 95% (5 stars)
-                        const score = 1.0 + ((percent - 16) / (95 - 16)) * 4.0;
-                        return parseFloat(Math.max(1.0, Math.min(5.0, score)).toFixed(1));
-                    } else {
-                        return parseFloat(((percent / 100) * 5).toFixed(1));
+                        validStars++;
+                        if (isHalf) {
+                            activeCount += 0.5;
+                            if (canvasSupported && ctx) {
+                                ctx.fillStyle = '#FFA900';
+                                ctx.fillRect(idx * starWidth, 0, starWidth / 2, 20);
+                                ctx.fillStyle = '#D2D2D2';
+                                ctx.fillRect(idx * starWidth + starWidth / 2, 0, starWidth / 2, 20);
+                            }
+                        } else if (isGold) {
+                            activeCount += 1.0;
+                            if (canvasSupported && ctx) {
+                                ctx.fillStyle = '#FFA900';
+                                ctx.fillRect(idx * starWidth, 0, starWidth - 1, 20);
+                            }
+                        } else {
+                            if (canvasSupported && ctx) {
+                                ctx.fillStyle = '#D2D2D2';
+                                ctx.fillRect(idx * starWidth, 0, starWidth - 1, 20);
+                            }
+                        }
+                    });
+
+                    // Canvas ML pixel color verification
+                    if (canvasSupported && ctx) {
+                        try {
+                            const imgData = ctx.getImageData(0, 0, 100, 20);
+                            const data = imgData.data;
+                            let goldPixels = 0, greyPixels = 0;
+                            for (let i = 0; i < data.length; i += 4) {
+                                const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+                                if (a < 50) continue;
+                                if (r > 200 && g > 120 && b < 80) goldPixels++;
+                                else if (Math.abs(r - g) < 30 && Math.abs(g - b) < 30) greyPixels++;
+                            }
+                            if (goldPixels + greyPixels > 0) {
+                                const ratio = goldPixels / (goldPixels + greyPixels);
+                                if (ratio >= 0.94) return 5.0;
+                                const pixelScore = parseFloat((ratio * 5).toFixed(1));
+                                if (pixelScore >= 1.0 && pixelScore <= 5.0) return pixelScore;
+                            }
+                        } catch (_) {}
+                    }
+
+                    if (validStars > 0 && activeCount > 0) {
+                        if (activeCount >= 4.8) return 5.0;
+                        return parseFloat(activeCount.toFixed(1));
                     }
                 }
-            }
-        } catch (_) {}
-        return 0;
+
+                // 2. Scan for CSS fill bar (continuous star progress)
+                const fillEl = containerEl.querySelector('.stars-rating-progress__fill, [class*="progress__fill"], div[style*="width"], span[style*="width"], svg[style*="width"]');
+                if (fillEl && fillEl !== containerEl) {
+                    const styleAttr = fillEl.getAttribute('style') || '';
+                    const mPercent = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
+                    const mPx = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)px/i);
+
+                    let percent = 0;
+                    if (mPercent && mPercent[1]) {
+                        percent = parseFloat(mPercent[1]);
+                    } else if (mPx && mPx[1]) {
+                        const px = parseFloat(mPx[1]);
+                        const totalWidth = (containerEl.clientWidth && containerEl.clientWidth > 30) ? containerEl.clientWidth : 80;
+                        percent = (px / totalWidth) * 100;
+                    }
+
+                    if (percent > 0 && percent <= 100) {
+                        if (percent >= 94) {
+                            return 5.0;
+                        } else if (percent >= 15) {
+                            const score = 1.0 + ((percent - 16) / (95 - 16)) * 4.0;
+                            return parseFloat(Math.max(1.0, Math.min(5.0, score)).toFixed(1));
+                        } else {
+                            return parseFloat(((percent / 100) * 5).toFixed(1));
+                        }
+                    }
+                }
+            } catch (_) {}
+            return 0;
+        }
+    }
+
+    const starVisionML = new StarVisionMLModel();
+
+    function analyzeStarsWithCanvasVision(containerEl) {
+        return starVisionML.predictFromContainer(containerEl);
     }
 
     // Live visual star-fill geometry inspector (Computer Vision & Canvas Pixel Vision)
     function measureVisualStarFill(tileEl) {
         if (!tileEl) return 0;
         try {
-            // Exclude seller rating elements if present inside tile
             const sellerContainers = tileEl.querySelectorAll('rz-product-seller, .product-seller, .goods-tile__seller, .seller-rating, [class*="seller"], [class*="merchant"], [class*="shop"], [class*="store"], .seller-info');
 
             const isInsideSeller = (el) => {
@@ -677,10 +753,10 @@
 
             const ratingContainers = tileEl.querySelectorAll('.goods-tile__rating, .goods-tile__stars, rz-stars-rating-progress, rz-rating, [class*="stars-rating"], [class*="tile-rating"]');
 
-            // 1. Primary: Canvas Pixel-Level Vision & SVG Geometry
+            // 1. Primary: ML Vision Model
             for (const container of ratingContainers) {
                 if (isInsideSeller(container)) continue;
-                const score = analyzeStarsWithCanvasVision(container);
+                const score = starVisionML.predictFromContainer(container);
                 if (score > 0 && score <= 5) return score;
             }
 
@@ -697,6 +773,24 @@
             }
         } catch (_) {}
         return 0;
+    }
+
+    // Floating ML Vision Live HUD overlay
+    function updateVisionHud(statusText) {
+        try {
+            let hud = document.getElementById('tradescout-ml-vision-hud');
+            if (!hud) {
+                hud = document.createElement('div');
+                hud.id = 'tradescout-ml-vision-hud';
+                hud.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999999;background:rgba(15,23,42,0.92);backdrop-filter:blur(8px);border:1px solid rgba(16,185,129,0.4);border-radius:10px;padding:8px 12px;color:#fff;font-family:sans-serif;font-size:11px;box-shadow:0 6px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:8px;pointer-events:none;transition:all 0.3s;';
+                document.body.appendChild(hud);
+            }
+            hud.innerHTML = `
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;animation:pulse 1.5s infinite;"></span>
+                <span style="font-weight:700;color:#34d399;">ML Vision v4.0:</span>
+                <span style="color:#e2e8f0;">${statusText || 'Сканування зірок активне'}</span>
+            `;
+        } catch (_) {}
     }
 
     // Capture visual ratings of all products currently visible in the browser viewport
@@ -720,6 +814,9 @@
                 if (visualScore > 0 && visualScore <= 5) {
                     liveVisualRatingMap.set(prodId, visualScore);
                 }
+            }
+            if (liveVisualRatingMap.size > 0) {
+                updateVisionHud(`Оброблено комп'ютерним зором: ${liveVisualRatingMap.size} товарів`);
             }
         } catch (_) {}
     }
