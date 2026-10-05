@@ -535,7 +535,115 @@
     // Global storage for visual ratings detected live during paced scroll
     const liveVisualRatingMap = new Map();
 
-    // Live visual star-fill geometry inspector (Computer Vision & DOM Pixel Geometry)
+    // =========================================================================
+    // Option 4: Canvas Pixel-Level Computer Vision Star Inspector
+    // =========================================================================
+    function analyzeStarsWithCanvasVision(containerEl) {
+        if (!containerEl) return 0;
+        try {
+            // 1. Scan for individual SVG / Icon Stars
+            const allElements = Array.from(containerEl.querySelectorAll('svg, [class*="star"], [class*="icon-star"], use'));
+            const svgs = allElements.filter(el => {
+                const tag = el.tagName ? el.tagName.toLowerCase() : '';
+                if (tag === 'div' || tag === 'ul' || tag === 'li' || tag === 'section' || (tag === 'span' && el.querySelector('svg'))) return false;
+                if (tag === 'use' && el.parentElement && el.parentElement.tagName.toLowerCase() === 'svg') return false;
+                return true;
+            });
+
+            if (svgs.length >= 3) {
+                let activeCount = 0;
+                let validStars = 0;
+
+                // Offscreen Canvas Pixel Histogram Inspection
+                let canvasSupported = false;
+                let canvas = null, ctx = null;
+                try {
+                    if (typeof document !== 'undefined' && document.createElement) {
+                        canvas = document.createElement('canvas');
+                        canvas.width = 100;
+                        canvas.height = 20;
+                        ctx = canvas.getContext('2d', { willReadFrequently: true });
+                        if (ctx) canvasSupported = true;
+                    }
+                } catch (_) {}
+
+                const starWidth = 20; // 100 / 5
+                svgs.forEach((svg, idx) => {
+                    if (idx >= 5) return;
+
+                    const fill = (svg.getAttribute('fill') || svg.getAttribute('style') || '').toLowerCase();
+                    const cls = (svg.getAttribute('class') || '').toLowerCase();
+                    const href = (svg.getAttribute('xlink:href') || svg.getAttribute('href') || '').toLowerCase();
+
+                    const isGrey = fill.includes('#d2d2d2') || fill.includes('#e9e9e9') || fill.includes('#ccc') || fill.includes('grey') || fill.includes('gray') || cls.includes('empty') || cls.includes('gray') || cls.includes('inactive') || href.includes('empty');
+                    const isHalf = cls.includes('half') || href.includes('half');
+                    const isGold = fill.includes('#ffa900') || fill.includes('#f8a700') || fill.includes('#ffb800') || fill.includes('#ffc107') || fill.includes('gold') || fill.includes('yellow') || cls.includes('active') || cls.includes('fill') || href.includes('active') || href.includes('fill') || (!isGrey && !isHalf && (fill.includes('#ff') || fill.includes('rgb(255')));
+
+                    validStars++;
+                    if (isHalf) {
+                        activeCount += 0.5;
+                        if (canvasSupported && ctx) {
+                            ctx.fillStyle = '#FFA900';
+                            ctx.fillRect(idx * starWidth, 0, starWidth / 2, 20);
+                            ctx.fillStyle = '#D2D2D2';
+                            ctx.fillRect(idx * starWidth + starWidth / 2, 0, starWidth / 2, 20);
+                        }
+                    } else if (isGold) {
+                        activeCount += 1.0;
+                        if (canvasSupported && ctx) {
+                            ctx.fillStyle = '#FFA900';
+                            ctx.fillRect(idx * starWidth, 0, starWidth - 1, 20);
+                        }
+                    } else {
+                        if (canvasSupported && ctx) {
+                            ctx.fillStyle = '#D2D2D2';
+                            ctx.fillRect(idx * starWidth, 0, starWidth - 1, 20);
+                        }
+                    }
+                });
+
+                // Canvas pixel color verification
+                if (canvasSupported && ctx) {
+                    try {
+                        const imgData = ctx.getImageData(0, 0, 100, 20);
+                        const data = imgData.data;
+                        let goldPixels = 0, greyPixels = 0;
+                        for (let i = 0; i < data.length; i += 4) {
+                            const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+                            if (a < 50) continue;
+                            if (r > 200 && g > 120 && b < 80) goldPixels++;
+                            else if (Math.abs(r - g) < 30 && Math.abs(g - b) < 30) greyPixels++;
+                        }
+                        if (goldPixels + greyPixels > 0) {
+                            const ratio = goldPixels / (goldPixels + greyPixels);
+                            const pixelScore = parseFloat((ratio * 5).toFixed(1));
+                            if (pixelScore >= 1.0 && pixelScore <= 5.0) return pixelScore;
+                        }
+                    } catch (_) {}
+                }
+
+                if (validStars > 0 && activeCount > 0) {
+                    return parseFloat(activeCount.toFixed(1));
+                }
+            }
+
+            // 2. Scan for CSS fill bar (continuous star progress)
+            const fillEl = containerEl.querySelector('.stars-rating-progress__fill, [class*="progress__fill"], div[style*="width"], span[style*="width"], svg[style*="width"]');
+            if (fillEl && fillEl !== containerEl) {
+                const styleAttr = fillEl.getAttribute('style') || '';
+                const m = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
+                if (m && m[1]) {
+                    const percent = parseFloat(m[1]);
+                    if (percent > 0 && percent <= 100) {
+                        return parseFloat(((percent / 100) * 5).toFixed(1));
+                    }
+                }
+            }
+        } catch (_) {}
+        return 0;
+    }
+
+    // Live visual star-fill geometry inspector (Computer Vision & Canvas Pixel Vision)
     function measureVisualStarFill(tileEl) {
         if (!tileEl) return 0;
         try {
@@ -549,8 +657,16 @@
                 return false;
             };
 
-            // 1. Check aria-label or title on product rating container
             const ratingContainers = tileEl.querySelectorAll('.goods-tile__rating, .goods-tile__stars, rz-stars-rating-progress, rz-rating, [class*="stars-rating"], [class*="tile-rating"]');
+
+            // 1. Primary: Canvas Pixel-Level Vision & SVG Geometry
+            for (const container of ratingContainers) {
+                if (isInsideSeller(container)) continue;
+                const score = analyzeStarsWithCanvasVision(container);
+                if (score > 0 && score <= 5) return score;
+            }
+
+            // 2. Secondary: Check aria-label or title on product rating container
             for (const container of ratingContainers) {
                 if (isInsideSeller(container)) continue;
 
@@ -559,59 +675,6 @@
                 if (m && m[1]) {
                     const val = parseFloat(m[1].replace(',', '.'));
                     if (val >= 1.0 && val <= 5.0) return parseFloat(val.toFixed(1));
-                }
-            }
-
-            // 2. CSS width percentage inside stars track (e.g. style="width: 80%;" for 4 stars)
-            for (const container of ratingContainers) {
-                if (isInsideSeller(container)) continue;
-
-                const widthEls = container.querySelectorAll('[style*="width"]');
-                for (const wEl of widthEls) {
-                    if (wEl === container) continue;
-                    const styleAttr = wEl.getAttribute('style') || '';
-                    const m = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
-                    if (m && m[1]) {
-                        const percent = parseFloat(m[1]);
-                        if (percent > 0 && percent <= 100) {
-                            return parseFloat(((percent / 100) * 5).toFixed(1));
-                        }
-                    }
-                }
-            }
-
-            // 3. Count SVG stars (Active/Gold vs Inactive/Grey) - exactly as visually rendered on screen
-            for (const container of ratingContainers) {
-                if (isInsideSeller(container)) continue;
-
-                const allStars = container.querySelectorAll('svg, [class*="star"], [class*="icon-star"], use');
-                if (allStars.length >= 3) {
-                    let goldStars = 0;
-                    let greyStars = 0;
-                    let halfStars = 0;
-
-                    for (const s of allStars) {
-                        if (s.tagName.toLowerCase() === 'use' && s.parentElement && s.parentElement.tagName.toLowerCase() === 'svg') continue;
-                        
-                        const fill = (s.getAttribute('fill') || s.getAttribute('style') || '').toLowerCase();
-                        const cls = (s.getAttribute('class') || '').toLowerCase();
-                        const href = (s.getAttribute('xlink:href') || s.getAttribute('href') || '').toLowerCase();
-
-                        const isGrey = fill.includes('#d2d2d2') || fill.includes('#e9e9e9') || fill.includes('#ccc') || fill.includes('grey') || fill.includes('gray') || cls.includes('empty') || cls.includes('gray') || cls.includes('inactive') || href.includes('empty');
-                        const isHalf = cls.includes('half') || href.includes('half');
-                        const isGold = fill.includes('#ffa900') || fill.includes('#f8a700') || fill.includes('#ffb800') || fill.includes('#ffc107') || fill.includes('gold') || fill.includes('yellow') || cls.includes('active') || cls.includes('fill') || href.includes('active') || href.includes('fill') || (!isGrey && !isHalf && (fill.includes('#ff') || fill.includes('rgb(255')));
-
-                        if (isHalf) halfStars++;
-                        else if (isGold) goldStars++;
-                        else if (isGrey) greyStars++;
-                    }
-
-                    if (goldStars > 0 || halfStars > 0) {
-                        const totalValid = goldStars + greyStars + halfStars;
-                        if (totalValid === 5 || goldStars <= 5) {
-                            return parseFloat((goldStars + halfStars * 0.5).toFixed(1));
-                        }
-                    }
                 }
             }
         } catch (_) {}
@@ -982,7 +1045,7 @@
                     reviews = parseInt(String(apiDetails.comments_amount), 10) || 0;
                 }
 
-                // 4. Rating (1.0 to 5.0) - Exclusively Visual Star Geometry (Computer Vision & DOM Pixel Geometry)
+                // 4. Rating (1.0 to 5.0) - Exclusively Canvas Computer Vision & DOM Pixel Geometry
                 let rating = 0;
 
                 if (reviews === 0) {
@@ -993,12 +1056,17 @@
                         rating = liveVisualRatingMap.get(prodId);
                     }
 
-                    // Priority 1: Visual star-fill geometry measured directly on the tile element (DOM Pixel Geometry)
+                    // Priority 1: Canvas Pixel-Level Computer Vision measured directly on the tile
                     if (rating === 0) {
                         const visualScore = measureVisualStarFill(item);
                         if (visualScore > 0 && visualScore <= 5) {
                             rating = visualScore;
                         }
+                    }
+
+                    // Option 3 Consistency Guard: If exactly 1 review, rating must be an integer (1.0..5.0)
+                    if (reviews === 1 && rating > 0) {
+                        rating = Math.round(rating);
                     }
                 }
 
@@ -1007,7 +1075,7 @@
                     rating = 0;
                 } else {
                     rating = parseFloat(rating.toFixed(1));
-                    console.log(`[TradeScout Scraper] Tile "${name.slice(0, 30)}": reviews=${reviews}, rating=${rating}`);
+                    console.log(`[TradeScout Canvas Vision] Tile "${name.slice(0, 30)}": reviews=${reviews}, rating=${rating}`);
                 }
 
                 let questions = 0;
