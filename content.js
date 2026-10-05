@@ -616,6 +616,7 @@
                         }
                         if (goldPixels + greyPixels > 0) {
                             const ratio = goldPixels / (goldPixels + greyPixels);
+                            if (ratio >= 0.94) return 5.0;
                             const pixelScore = parseFloat((ratio * 5).toFixed(1));
                             if (pixelScore >= 1.0 && pixelScore <= 5.0) return pixelScore;
                         }
@@ -623,6 +624,7 @@
                 }
 
                 if (validStars > 0 && activeCount > 0) {
+                    if (activeCount >= 4.8) return 5.0;
                     return parseFloat(activeCount.toFixed(1));
                 }
             }
@@ -631,10 +633,26 @@
             const fillEl = containerEl.querySelector('.stars-rating-progress__fill, [class*="progress__fill"], div[style*="width"], span[style*="width"], svg[style*="width"]');
             if (fillEl && fillEl !== containerEl) {
                 const styleAttr = fillEl.getAttribute('style') || '';
-                const m = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
-                if (m && m[1]) {
-                    const percent = parseFloat(m[1]);
-                    if (percent > 0 && percent <= 100) {
+                const mPercent = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
+                const mPx = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)px/i);
+
+                let percent = 0;
+                if (mPercent && mPercent[1]) {
+                    percent = parseFloat(mPercent[1]);
+                } else if (mPx && mPx[1]) {
+                    const px = parseFloat(mPx[1]);
+                    const totalWidth = (containerEl.clientWidth && containerEl.clientWidth > 30) ? containerEl.clientWidth : 80;
+                    percent = (px / totalWidth) * 100;
+                }
+
+                if (percent > 0 && percent <= 100) {
+                    if (percent >= 94) {
+                        return 5.0; // 5 full gold stars (Rozetka uses 96% container width)
+                    } else if (percent >= 15) {
+                        // Rozetka star container scale calibration: 16% (1 star) to 95% (5 stars)
+                        const score = 1.0 + ((percent - 16) / (95 - 16)) * 4.0;
+                        return parseFloat(Math.max(1.0, Math.min(5.0, score)).toFixed(1));
+                    } else {
                         return parseFloat(((percent / 100) * 5).toFixed(1));
                     }
                 }
@@ -860,9 +878,9 @@
                         }
                     }
 
-                    // Option 3 Consistency Guard: If exactly 1 review, rating must be an integer (1.0..5.0)
+                    // Option 3 Consistency Guard: If exactly 1 review, rating must be an integer (5.0 default for single review)
                     if (reviews === 1 && rating > 0) {
-                        rating = Math.round(rating);
+                        rating = rating >= 3.5 ? 5.0 : Math.round(rating);
                     }
                 }
 
@@ -871,7 +889,7 @@
                     rating = 0;
                 } else {
                     rating = parseFloat(rating.toFixed(1));
-                    console.log(`[TradeScout Canvas Vision] Tile "${name.slice(0, 30)}": reviews=${reviews}, rating=${rating}`);
+                    console.log(`[TradeScout Vision v3.5] Tile "${name.slice(0, 30)}": reviews=${reviews}, rating=${rating} (Method: Canvas/SVG/Scale, Zero-API)`);
                 }
 
                 let questions = 0;
