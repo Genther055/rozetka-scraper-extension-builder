@@ -177,21 +177,57 @@
         return 60;
     }
 
-    // Precise filter: eliminate only non-catalog containers (recently viewed sliders, recommendation carousels, sidebars, footers)
+    // Precise filter: eliminate non-catalog containers (recently viewed sliders, recommendation carousels, sidebars, banners, sponsored ads)
     function isUnwantedTile(item) {
         if (!item || !(item instanceof Element)) return true;
         
-        // 1. Strictly exclude non-catalog containers (rz-section-slider, recently viewed, recommendations, sidebars, footers)
+        // 1. Strictly exclude non-catalog containers (rz-section-slider, recently viewed, recommendations, sidebars, carousels, footers, headers)
         const unwantedContainer = item.closest(`
-            rz-section-slider, rz-goods-section-slider, rz-viewed-goods, .recently-viewed, .goods-viewed, rz-recent-goods, [data-testid="viewed-goods"],
+            rz-section-slider, rz-goods-section-slider, rz-viewed-goods, .recently-viewed, .goods-viewed, rz-recent-goods, [data-testid*="viewed"], [data-testid*="recently"],
             aside, .sidebar, rz-sidebar, 
             rz-goods-carousel, rz-carousel, rz-goods-slider, rz-slider, app-goods-carousel, app-slider, .goods-carousel,
-            rz-similar-goods, rz-recommended-goods, rz-accessories,
+            rz-similar-goods, rz-recommended-goods, rz-accessories, .recommendations, [data-testid*="carousel"], [data-testid*="slider"],
+            .catalog-banner, .advertising-slot, .main-goods__cell--advertising,
             footer, header
         `);
         if (unwantedContainer) return true;
 
-        // 2. Must have a valid product link
+        // 2. Exclude sponsored / advertising classes and attributes
+        const tileClasses = (item.className || '').toLowerCase();
+        if (
+            tileClasses.includes('catalog-banner') || 
+            tileClasses.includes('rz-banner') || 
+            tileClasses.includes('banner-tile') || 
+            tileClasses.includes('advertising-slot') ||
+            tileClasses.includes('goods-tile--ad') ||
+            tileClasses.includes('goods-tile_ad') ||
+            tileClasses.includes('goods-tile_state_advertising') ||
+            item.hasAttribute('data-ad') ||
+            item.hasAttribute('data-advertisement') ||
+            item.hasAttribute('data-advert') ||
+            item.hasAttribute('data-sponsored')
+        ) {
+            return true;
+        }
+
+        // 3. Check for explicit "Реклама" / "Спонсор" text inside promo badges or labels
+        const promoElements = item.querySelectorAll('.goods-tile__label, .promo-label, [data-testid*="promo-label"], [data-testid*="ad-badge"], .goods-tile__badge, [class*="badge"], [class*="label"], [class*="sticker"]');
+        for (const el of promoElements) {
+            const txt = (el.textContent || '').trim().toLowerCase();
+            if (
+                txt === 'реклама' || 
+                txt.includes('реклама') || 
+                txt.includes('спонсор') || 
+                txt.includes('спонсоровано') || 
+                txt.includes('sponsored') || 
+                txt === 'ad' || 
+                txt === 'adv'
+            ) {
+                return true;
+            }
+        }
+
+        // 4. Must have a valid product link
         const link = extractLink(item);
         if (!link) return true;
 
@@ -795,8 +831,12 @@
     }
 
     async function scrapeCurrentDomItems(meta, pageIndex) {
-        // Query tiles across entire main content area (filtering non-catalog via isUnwantedTile)
-        let rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
+        // Query tiles strictly within the main catalog grid container
+        const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, rz-catalog-grid, rz-catalog, .catalog-grid') || document.querySelector('main') || document.body;
+        let rawTiles = Array.from(catalogContainer.querySelectorAll(TILE_SELECTORS));
+        if (rawTiles.length === 0) {
+            rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
+        }
 
         // Filter out unwanted slider/carousel/banner/viewed elements and avoid duplicates
         const distinctTiles = [];
@@ -814,6 +854,9 @@
             if (sentLinks.has(link) || seenElements.has(link)) continue;
             seenElements.add(link);
             distinctTiles.push({ item, link, name });
+
+            // Rozetka standard page contains at most 60 products per page
+            if (distinctTiles.length >= 60) break;
         }
 
         // Product page fallback (when user triggers scraper on a single product page e.g. /p470077279/)
