@@ -460,15 +460,15 @@
     function cleanSellerName(raw) {
         if (!raw) return '';
         let text = String(raw).trim();
-        text = text.replace(/^(?:продавець|продавец|seller|магазин)\s*:?\s*/i, '');
-        const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0);
+        text = text.replace(/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин)\s*:?\s*/i, '');
+        const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0 && !/^(?:продавець(?:\s+товару)?|продавец|seller|магазин)\s*:?$/i.test(l));
         if (lines.length === 0) return '';
         let name = lines[0];
         name = name.replace(/\s*\b\d(?:[.,]\d)?\s*\(\s*\d+%\s*\).*$/, '');
         name = name.replace(/\s*\(\s*\d+%\s*\).*$/, '');
-        name = name.replace(/^продавець:?\s*/i, '').replace(/^продавец:?\s*/i, '').replace(/^seller:?\s*/i, '').replace(/^магазин:?\s*/i, '');
+        name = name.replace(/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин)\s*:?\s*/i, '');
         name = name.trim();
-        if (name.length >= 2 && name.length <= 80 && !/^\d+$/.test(name) && !/^(?:відгук|отзыв|купити|купить)/i.test(name)) {
+        if (name.length >= 2 && name.length <= 80 && !/^\d+$/.test(name) && !/^(?:відгук|отзыв|купити|купить|додати|в кошик)/i.test(name)) {
             return name;
         }
         return '';
@@ -477,13 +477,24 @@
     function extractSeller(item) {
         if (!item || !(item instanceof Element)) return 'Rozetka';
         
-        // 1. Direct seller links / anchors
-        const sellerLink = item.querySelector('a[href*="/seller/"], a[href*="seller="], [data-testid*="seller"], .goods-tile__seller a, .goods-tile__seller-name, rz-goods-seller a, .seller a, [class*="seller"] a');
-        if (sellerLink) {
-            const s = cleanSellerName(sellerLink.innerText || sellerLink.getAttribute('title') || sellerLink.textContent);
-            if (s) return s;
+        const container = item.closest('li, rz-catalog-tile, rz-product-tile, .catalog-grid__cell, article.goods-tile') || item;
+
+        // 1. Direct seller links / anchors (checking text and URL slug)
+        const sellerLinks = container.querySelectorAll('a[href*="/seller/"], a[href*="seller="], a[href*="/merchant/"], [data-testid*="seller"] a, .goods-tile__seller a, .goods-tile__seller-name a, rz-goods-seller a, .seller a, [class*="seller"] a');
+        for (const a of sellerLinks) {
+            const txt = a.innerText || a.textContent || a.getAttribute('title') || '';
+            const s = cleanSellerName(txt);
+            if (s && s.toLowerCase() !== 'rozetka') return s;
+
+            // Extract from URL slug e.g. /seller/qinetiq/
+            const href = a.getAttribute('href') || '';
+            const m = href.match(/\/(?:seller|merchant)\/([^\/?#]+)/i);
+            if (m && m[1] && m[1].toLowerCase() !== 'rozetka') {
+                return decodeURIComponent(m[1]).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+            }
         }
 
+        // 2. Dedicated seller elements across tile and container
         const sellerSelectors = [
             'rz-goods-seller',
             'rz-product-seller',
@@ -506,20 +517,21 @@
         
         for (const sel of sellerSelectors) {
             try {
-                const el = item.querySelector(sel);
-                if (el) {
-                    const s = cleanSellerName(el.innerText || el.textContent);
-                    if (s) return s;
+                const elements = container.querySelectorAll(sel);
+                for (const el of elements) {
+                    const s = cleanSellerName(el.innerText || el.textContent || el.getAttribute('title'));
+                    if (s && s.toLowerCase() !== 'rozetka') return s;
                 }
             } catch (_) {}
         }
         
+        // 3. Regex match on container text
         try {
-            const itemText = item.innerText || item.textContent || '';
-            const match = itemText.match(/(?:продавець|продавец|seller|магазин)\s*:\s*([^\n\r\t,;]+)/i);
+            const itemText = container.innerText || container.textContent || '';
+            const match = itemText.match(/(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин)\s*:?\s*([^\n\r\t,;]+)/i);
             if (match && match[1]) {
                 const s = cleanSellerName(match[1]);
-                if (s) return s;
+                if (s && s.toLowerCase() !== 'rozetka') return s;
             }
         } catch (_) {}
         
