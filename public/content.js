@@ -1236,6 +1236,33 @@
 
         if (distinctTiles.length === 0) return [];
 
+        // Batch fetch official Rozetka product details (seller title, other sellers count, old price) for all tiles on this page
+        const apiProductDetailsMap = new Map();
+        try {
+            const productIds = [];
+            for (const { link } of distinctTiles) {
+                const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
+                if (m && m[1]) productIds.push(m[1]);
+            }
+            if (productIds.length > 0) {
+                const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productIds.join(',')}`;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2200);
+                const res = await fetch(apiUrl, { signal: controller.signal, credentials: 'omit' }).catch(() => null);
+                clearTimeout(timeoutId);
+                if (res && res.ok) {
+                    const json = await res.json().catch(() => null);
+                    if (json && Array.isArray(json.data)) {
+                        for (const apiProd of json.data) {
+                            if (apiProd && apiProd.id) {
+                                apiProductDetailsMap.set(String(apiProd.id), apiProd);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_) {}
+
         const newItems = [];
 
         for (const { item, link, name } of distinctTiles) {
@@ -1403,7 +1430,23 @@
                 }
 
                 const specs = Object.entries(detailedSpecsMap).map(([k, v]) => `${k}: ${v}`).join('; ') || (capacityMatch ? `${capacityMatch[1]} mAh` : 'Стандартні');
-                const seller = extractSeller(item, link, name) || 'Rozetka';
+                
+                const apiProd = prodId ? apiProductDetailsMap.get(prodId) : null;
+                let apiSeller = '';
+                if (apiProd && apiProd.seller) {
+                    apiSeller = cleanSellerName(apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || '');
+                }
+                const seller = (apiSeller && apiSeller.toLowerCase() !== 'rozetka') ? apiSeller : (extractSeller(item, link, name) || 'Rozetka');
+                const sellersCount = (apiProd && typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0) ? apiProd.sellers_count : 1;
+
+                if ((!oldPrice || oldPrice <= price) && apiProd && apiProd.old_price && apiProd.old_price > price) {
+                    oldPrice = apiProd.old_price;
+                    if (discount === 0) discount = Math.round(((oldPrice - price) / oldPrice) * 100);
+                }
+                if (discount === 0 && apiProd && apiProd.discount && apiProd.discount > 0) {
+                    discount = apiProd.discount;
+                }
+
                 const sellerRating = 0;
                 const sellerReviews = 0;
 
@@ -1425,7 +1468,7 @@
                     seller,
                     sellerRating,
                     sellerReviews,
-                    sellersCount: 1,
+                    sellersCount,
                     priceChange: 0,
                     reviewsGrowth: 0,
                     link
