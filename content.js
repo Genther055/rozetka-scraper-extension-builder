@@ -542,16 +542,19 @@
             // Exclude seller rating elements if present inside tile
             const sellerContainers = tileEl.querySelectorAll('rz-product-seller, .product-seller, .goods-tile__seller, .seller-rating, [class*="seller"], [class*="merchant"], [class*="shop"], [class*="store"], .seller-info');
 
-            // 1. Aria-label or title check on rating components
-            const ratingAriaNodes = tileEl.querySelectorAll('rz-stars-rating-progress [aria-label], .goods-tile__rating [aria-label], [data-testid*="rating"] [aria-label], rz-stars-rating-progress[aria-label]');
-            for (const node of ratingAriaNodes) {
-                let skip = false;
+            const isInsideSeller = (el) => {
                 for (const sc of sellerContainers) {
-                    if (sc.contains(node)) { skip = true; break; }
+                    if (sc.contains(el)) return true;
                 }
-                if (skip) continue;
+                return false;
+            };
 
-                const text = (node.getAttribute('aria-label') || node.getAttribute('title') || '').trim();
+            // 1. Check aria-label or title on product rating container
+            const ratingContainers = tileEl.querySelectorAll('.goods-tile__rating, .goods-tile__stars, rz-stars-rating-progress, rz-rating, [class*="stars-rating"], [class*="tile-rating"]');
+            for (const container of ratingContainers) {
+                if (isInsideSeller(container)) continue;
+
+                const text = (container.getAttribute('aria-label') || container.getAttribute('title') || '').trim();
                 const m = text.match(/([1-5](?:[.,]\d+)?)\s*(?:з|\/|\/5|з 5)\s*5?/i) || text.match(/рейтинг:?\s*([1-5](?:[.,]\d+)?)/i);
                 if (m && m[1]) {
                     const val = parseFloat(m[1].replace(',', '.'));
@@ -559,58 +562,56 @@
                 }
             }
 
-            // 2. Target progress star components strictly (the visual golden fill bar)
-            const progressElements = tileEl.querySelectorAll('rz-stars-rating-progress, .stars-rating-progress, [data-testid="stars-rating"]');
-            for (const container of progressElements) {
-                let skip = false;
-                for (const sc of sellerContainers) {
-                    if (sc.contains(container)) { skip = true; break; }
-                }
-                if (skip) continue;
+            // 2. CSS width percentage inside stars track (e.g. style="width: 80%;" for 4 stars)
+            for (const container of ratingContainers) {
+                if (isInsideSeller(container)) continue;
 
-                // Look for inner fill element (the golden active overlay)
-                const fillEl = container.querySelector('.stars-rating-progress__fill, [class*="progress__fill"], div[style*="width"], span[style*="width"], svg[style*="width"]');
-                if (!fillEl) continue; // NEVER fallback to container itself!
-                
-                // Method A: CSS style percentage width (e.g. style="width: calc(88.4% - 2px);" or style="width: 88.4%;")
-                const styleAttr = fillEl.getAttribute('style') || '';
-                const m = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
-                if (m && m[1]) {
-                    const percent = parseFloat(m[1]);
-                    if (percent > 0 && percent <= 100) {
-                        const calculatedRating = parseFloat(((percent / 100) * 5).toFixed(1));
-                        if (calculatedRating >= 1.0 && calculatedRating <= 5.0) {
-                            return calculatedRating;
+                const widthEls = container.querySelectorAll('[style*="width"]');
+                for (const wEl of widthEls) {
+                    if (wEl === container) continue;
+                    const styleAttr = wEl.getAttribute('style') || '';
+                    const m = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
+                    if (m && m[1]) {
+                        const percent = parseFloat(m[1]);
+                        if (percent > 0 && percent <= 100) {
+                            return parseFloat(((percent / 100) * 5).toFixed(1));
                         }
-                    }
-                }
-
-                // Method B: Exact visual bounding box measurement in rendered pixels (DOM Pixel Geometry)
-                const trackRect = container.getBoundingClientRect();
-                const fillRect = fillEl.getBoundingClientRect();
-                if (trackRect.width > 15 && fillRect.width > 0 && fillRect.width <= trackRect.width) {
-                    const ratio = Math.min(1, Math.max(0, fillRect.width / trackRect.width));
-                    const visualScore = parseFloat((ratio * 5).toFixed(1));
-                    if (visualScore >= 1.0 && visualScore <= 5.0) {
-                        return visualScore;
                     }
                 }
             }
 
-            // 3. Count individual active star icons (e.g., SVG stars)
-            const starTrack = tileEl.querySelector('rz-stars-rating-progress, .goods-tile__stars, .stars-rating');
-            if (starTrack) {
-                const activeStars = starTrack.querySelectorAll('.icon-star--active, .star--active, .star-active, [class*="star_active"], [class*="star--active"], [class*="star-fill"], svg[fill="#ffa900"], svg[fill="#f8a700"], svg[fill="#ffb800"]');
-                let starCount = 0;
-                for (const s of activeStars) {
-                    let skip = false;
-                    for (const sc of sellerContainers) {
-                        if (sc.contains(s)) { skip = true; break; }
+            // 3. Count SVG stars (Active/Gold vs Inactive/Grey) - exactly as visually rendered on screen
+            for (const container of ratingContainers) {
+                if (isInsideSeller(container)) continue;
+
+                const allStars = container.querySelectorAll('svg, [class*="star"], [class*="icon-star"], use');
+                if (allStars.length >= 3) {
+                    let goldStars = 0;
+                    let greyStars = 0;
+                    let halfStars = 0;
+
+                    for (const s of allStars) {
+                        if (s.tagName.toLowerCase() === 'use' && s.parentElement && s.parentElement.tagName.toLowerCase() === 'svg') continue;
+                        
+                        const fill = (s.getAttribute('fill') || s.getAttribute('style') || '').toLowerCase();
+                        const cls = (s.getAttribute('class') || '').toLowerCase();
+                        const href = (s.getAttribute('xlink:href') || s.getAttribute('href') || '').toLowerCase();
+
+                        const isGrey = fill.includes('#d2d2d2') || fill.includes('#e9e9e9') || fill.includes('#ccc') || fill.includes('grey') || fill.includes('gray') || cls.includes('empty') || cls.includes('gray') || cls.includes('inactive') || href.includes('empty');
+                        const isHalf = cls.includes('half') || href.includes('half');
+                        const isGold = fill.includes('#ffa900') || fill.includes('#f8a700') || fill.includes('#ffb800') || fill.includes('#ffc107') || fill.includes('gold') || fill.includes('yellow') || cls.includes('active') || cls.includes('fill') || href.includes('active') || href.includes('fill') || (!isGrey && !isHalf && (fill.includes('#ff') || fill.includes('rgb(255')));
+
+                        if (isHalf) halfStars++;
+                        else if (isGold) goldStars++;
+                        else if (isGrey) greyStars++;
                     }
-                    if (!skip) starCount++;
-                }
-                if (starCount > 0 && starCount <= 5) {
-                    return parseFloat(starCount.toFixed(1));
+
+                    if (goldStars > 0 || halfStars > 0) {
+                        const totalValid = goldStars + greyStars + halfStars;
+                        if (totalValid === 5 || goldStars <= 5) {
+                            return parseFloat((goldStars + halfStars * 0.5).toFixed(1));
+                        }
+                    }
                 }
             }
         } catch (_) {}
@@ -981,7 +982,7 @@
                     reviews = parseInt(String(apiDetails.comments_amount), 10) || 0;
                 }
 
-                // 4. Rating (1.0 to 5.0) - Exclusively Visual Star Geometry (Computer Vision) & Exact SSR Math Marks
+                // 4. Rating (1.0 to 5.0) - Exclusively Visual Star Geometry (Computer Vision & DOM Pixel Geometry)
                 let rating = 0;
 
                 if (reviews === 0) {
@@ -999,19 +1000,6 @@
                             rating = visualScore;
                         }
                     }
-
-                    // Priority 2: Genuine mathematical marks breakdown from Angular SSR if available for this specific product ID
-                    if (rating === 0 && prodId && pageGoodsMap.has(prodId)) {
-                        const pg = pageGoodsMap.get(prodId);
-                        if (pg && pg.rating && pg.rating > 0 && pg.rating <= 5) {
-                            rating = pg.rating;
-                        }
-                    }
-                }
-
-                // Anti-Stub Suppression: If rating is 4.8 without reviews or without real product star progress, force 0
-                if (rating === 4.8 && (reviews === 0 || !item.querySelector('rz-stars-rating-progress, .stars-rating-progress, [data-testid="stars-rating"]'))) {
-                    rating = 0;
                 }
 
                 // Final clean rating formatting
