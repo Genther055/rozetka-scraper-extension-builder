@@ -457,21 +457,31 @@
         });
     }
 
+    function cleanSellerName(raw) {
+        if (!raw) return '';
+        let text = String(raw).trim();
+        text = text.replace(/^(?:продавець|продавец|seller|магазин)\s*:?\s*/i, '');
+        const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0);
+        if (lines.length === 0) return '';
+        let name = lines[0];
+        name = name.replace(/\s*\b\d(?:[.,]\d)?\s*\(\s*\d+%\s*\).*$/, '');
+        name = name.replace(/\s*\(\s*\d+%\s*\).*$/, '');
+        name = name.replace(/^продавець:?\s*/i, '').replace(/^продавец:?\s*/i, '').replace(/^seller:?\s*/i, '').replace(/^магазин:?\s*/i, '');
+        name = name.trim();
+        if (name.length >= 2 && name.length <= 80 && !/^\d+$/.test(name) && !/^(?:відгук|отзыв|купити|купить)/i.test(name)) {
+            return name;
+        }
+        return '';
+    }
+
     function extractSeller(item) {
         if (!item || !(item instanceof Element)) return 'Rozetka';
         
         // 1. Direct seller links / anchors
         const sellerLink = item.querySelector('a[href*="/seller/"], a[href*="seller="], [data-testid*="seller"], .goods-tile__seller a, .goods-tile__seller-name, rz-goods-seller a, .seller a, [class*="seller"] a');
         if (sellerLink) {
-            let s = (sellerLink.innerText || sellerLink.getAttribute('title') || sellerLink.textContent || '').trim();
-            s = s.replace(/^продавець:?\s*/i, '')
-                 .replace(/^продавец:?\s*/i, '')
-                 .replace(/^seller:?\s*/i, '')
-                 .replace(/^магазин:?\s*/i, '')
-                 .trim();
-            if (s && s.length > 1 && !s.includes('\n') && s.length < 60) {
-                return s;
-            }
+            const s = cleanSellerName(sellerLink.innerText || sellerLink.getAttribute('title') || sellerLink.textContent);
+            if (s) return s;
         }
 
         const sellerSelectors = [
@@ -497,16 +507,9 @@
         for (const sel of sellerSelectors) {
             try {
                 const el = item.querySelector(sel);
-                if (el && (el.innerText || el.textContent)) {
-                    let s = (el.innerText || el.textContent || '').trim();
-                    s = s.replace(/^продавець:?\s*/i, '')
-                         .replace(/^продавец:?\s*/i, '')
-                         .replace(/^seller:?\s*/i, '')
-                         .replace(/^магазин:?\s*/i, '')
-                         .trim();
-                    if (s && s.length > 1 && !s.includes('\n') && s.length < 60) {
-                        return s;
-                    }
+                if (el) {
+                    const s = cleanSellerName(el.innerText || el.textContent);
+                    if (s) return s;
                 }
             } catch (_) {}
         }
@@ -515,10 +518,8 @@
             const itemText = item.innerText || item.textContent || '';
             const match = itemText.match(/(?:продавець|продавец|seller|магазин)\s*:\s*([^\n\r\t,;]+)/i);
             if (match && match[1]) {
-                let s = match[1].trim();
-                if (s && s.length > 1 && s.length < 60) {
-                    return s;
-                }
+                const s = cleanSellerName(match[1]);
+                if (s) return s;
             }
         } catch (_) {}
         
