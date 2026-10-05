@@ -460,10 +460,26 @@
     function extractSeller(item) {
         if (!item || !(item instanceof Element)) return 'Rozetka';
         
+        // 1. Direct seller links / anchors
+        const sellerLink = item.querySelector('a[href*="/seller/"], a[href*="seller="], [data-testid*="seller"], .goods-tile__seller a, .goods-tile__seller-name, rz-goods-seller a, .seller a, [class*="seller"] a');
+        if (sellerLink) {
+            let s = (sellerLink.innerText || sellerLink.getAttribute('title') || sellerLink.textContent || '').trim();
+            s = s.replace(/^продавець:?\s*/i, '')
+                 .replace(/^продавец:?\s*/i, '')
+                 .replace(/^seller:?\s*/i, '')
+                 .replace(/^магазин:?\s*/i, '')
+                 .trim();
+            if (s && s.length > 1 && !s.includes('\n') && s.length < 60) {
+                return s;
+            }
+        }
+
         const sellerSelectors = [
+            'rz-goods-seller',
+            'rz-product-seller',
             '.goods-tile__seller',
             '.goods-tile__seller-name',
-            'rz-goods-seller',
+            '.goods-tile__seller-title',
             'rz-seller',
             '[class*="goods-tile__seller"]',
             '[class*="seller-name"]',
@@ -481,8 +497,8 @@
         for (const sel of sellerSelectors) {
             try {
                 const el = item.querySelector(sel);
-                if (el && el.innerText && el.innerText.trim().length > 1) {
-                    let s = el.innerText.trim();
+                if (el && (el.innerText || el.textContent)) {
+                    let s = (el.innerText || el.textContent || '').trim();
                     s = s.replace(/^продавець:?\s*/i, '')
                          .replace(/^продавец:?\s*/i, '')
                          .replace(/^seller:?\s*/i, '')
@@ -496,8 +512,8 @@
         }
         
         try {
-            const itemText = item.innerText || '';
-            const match = itemText.match(/(?:продавець|продавец|seller)\s*:\s*([^\n\r\t,;]+)/i);
+            const itemText = item.innerText || item.textContent || '';
+            const match = itemText.match(/(?:продавець|продавец|seller|магазин)\s*:\s*([^\n\r\t,;]+)/i);
             if (match && match[1]) {
                 let s = match[1].trim();
                 if (s && s.length > 1 && s.length < 60) {
@@ -509,58 +525,51 @@
         return 'Rozetka';
     }
 
-    // Directly extracts visual review count from DOM tile during page scrolling
+    // Directly extracts visual review count from DOM tile during page scrolling (0 Network Requests)
     function extractReviewsFromDomTile(tileEl) {
         if (!tileEl || !(tileEl instanceof Element)) return 0;
         try {
-            const tileRawText = (tileEl.innerText || tileEl.textContent || '');
-            if (tileRawText.includes('Залишити відгук') || tileRawText.includes('Оставить отзыв')) {
-                return 0;
-            }
+            // Strictly exclude seller rating & seller info elements
+            const sellerContainers = tileEl.querySelectorAll('rz-product-seller, rz-goods-seller, .product-seller, .goods-tile__seller, .seller-rating, [class*="seller"], [class*="merchant"], [class*="shop"], [class*="store"], .seller-info');
 
-            // Exclude seller rating & seller info elements
-            const sellerContainers = tileEl.querySelectorAll('rz-product-seller, .product-seller, .goods-tile__seller, .seller-rating, [class*="seller"], [class*="merchant"], [class*="shop"], [class*="store"], .seller-info');
-
-            // 1. Check inside rz-tile-rating or .goods-tile__rating
-            const ratingEl = tileEl.querySelector('rz-tile-rating, .goods-tile__rating, app-rating, [class*="tile-rating"]');
-            if (ratingEl) {
-                const rzRevLink = ratingEl.querySelector('a.goods-tile__reviews-link, a[href*="comments"], [data-testid*="reviews"], [class*="reviews-link"]');
-                if (rzRevLink && !rzRevLink.closest('rz-stars-rating-progress, [data-testid="stars-rating"]')) {
-                    let skip = false;
-                    for (const sc of sellerContainers) {
-                        if (sc.contains(rzRevLink)) { skip = true; break; }
-                    }
-                    if (!skip) {
-                        const linkText = (rzRevLink.textContent || rzRevLink.innerText || '').trim();
-                        if (!linkText.includes('Залишити') && !linkText.includes('Оставить') && !linkText.includes('₴')) {
-                            const countMatch = linkText.match(/(\d[\d\s\u00A0]*)/);
-                            if (countMatch && countMatch[1]) {
-                                const revVal = parseInt(countMatch[1].replace(/\D/g, ''), 10);
-                                if (revVal > 0 && revVal < 500000) {
-                                    return revVal;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 2. Dedicated review link selectors anywhere on the tile
-            const reviewElements = tileEl.querySelectorAll('a.goods-tile__reviews-link, a[href*="#comments"], a[href*="comments"], [class*="reviews-link"], [class*="reviews-count"]');
-            for (const el of reviewElements) {
-                let skip = false;
+            const isInsideSeller = (el) => {
                 for (const sc of sellerContainers) {
-                    if (sc.contains(el)) { skip = true; break; }
+                    if (sc.contains(el)) return true;
                 }
-                if (skip) continue;
+                return false;
+            };
+
+            // 1. Direct review links on the tile
+            const reviewElements = tileEl.querySelectorAll('a.goods-tile__reviews-link, a[href*="#comments"], a[href*="comments"], [class*="reviews-link"], [class*="reviews-count"], [data-testid*="reviews"], rz-tile-rating a, .goods-tile__rating a');
+            for (const el of reviewElements) {
+                if (isInsideSeller(el)) continue;
                 if (el.closest('[class*="price"], del, s, strike, rz-promo-label, rz-tile-price, rz-stars-rating-progress, [class*="stars-rating"]')) continue;
+                
                 const t = (el.innerText || el.textContent || '').trim();
-                if (t.includes('Залишити') || t.includes('Оставить') || t.includes('₴')) continue;
+                // If it's the "Залишити відгук" button itself, skip it
+                if (t.includes('Залишити') || t.includes('Оставить') || t.includes('₴')) {
+                    continue;
+                }
                 const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
                 if (countMatch && countMatch[1]) {
                     const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
                     if (num > 0 && num < 500000) {
                         return num;
+                    }
+                }
+            }
+
+            // 2. Search inside product rating container
+            const ratingEl = tileEl.querySelector('rz-tile-rating, .goods-tile__rating, app-rating, [class*="tile-rating"]');
+            if (ratingEl && !isInsideSeller(ratingEl)) {
+                const links = ratingEl.querySelectorAll('a');
+                for (const l of links) {
+                    const t = (l.innerText || l.textContent || '').trim();
+                    if (t.includes('Залишити') || t.includes('Оставить') || t.includes('₴')) continue;
+                    const countMatch = t.match(/(\d[\d\s\u00A0]*)/);
+                    if (countMatch && countMatch[1]) {
+                        const num = parseInt(countMatch[1].replace(/\D/g, ''), 10);
+                        if (num > 0 && num < 500000) return num;
                     }
                 }
             }
@@ -698,7 +707,7 @@
                             const slotScore = this.classifyStarSlot(imgData, starWidth, 20);
                             totalRating += slotScore;
                         }
-                        if (totalRating >= 4.8) return 5.0;
+                        if (totalRating >= 4.95) return 5.0;
                         return parseFloat(totalRating.toFixed(1));
                     }
                 }
@@ -720,26 +729,14 @@
                     }
 
                     if (percent > 0 && percent <= 100) {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = 100;
-                        canvas.height = 20;
-                        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                        if (ctx) {
-                            ctx.fillStyle = '#D2D2D2';
-                            ctx.fillRect(0, 0, 100, 20);
-                            ctx.fillStyle = '#FFA900';
-                            ctx.fillRect(0, 0, percent, 20);
-
-                            let totalRating = 0;
-                            const starWidth = 20;
-                            for (let i = 0; i < 5; i++) {
-                                const imgData = ctx.getImageData(i * starWidth, 0, starWidth, 20);
-                                const slotScore = this.classifyStarSlot(imgData, starWidth, 20);
-                                totalRating += slotScore;
-                            }
-                            if (totalRating >= 4.8 || percent >= 94) return 5.0;
-                            return parseFloat(totalRating.toFixed(1));
+                        const rawPercent = Math.min(100, Math.max(0, percent));
+                        let score = (rawPercent / 100) * 5.0;
+                        if (rawPercent >= 99) {
+                            score = 5.0;
+                        } else {
+                            score = parseFloat(score.toFixed(1));
                         }
+                        return Math.max(0.5, Math.min(5.0, score));
                     }
                 }
             } catch (_) {}
@@ -753,27 +750,29 @@
         return starVisionML.predictFromContainer(containerEl);
     }
 
-    // Live visual star-fill geometry inspector (100% Machine Learning Vision Canvas)
+    // Live visual star-fill geometry inspector (strictly isolated from seller section)
     function measureVisualStarFill(tileEl) {
         if (!tileEl) return 0;
         try {
-            const sellerContainers = tileEl.querySelectorAll('rz-product-seller, .product-seller, .goods-tile__seller, .seller-rating, [class*="seller"], [class*="merchant"], [class*="shop"], [class*="store"], .seller-info');
-
-            const isInsideSeller = (el) => {
-                for (const sc of sellerContainers) {
-                    if (sc.contains(el)) return true;
+            // Strictly target the PRODUCT rating block at the top of the tile
+            const productRatingEl = tileEl.querySelector('rz-tile-rating, .goods-tile__rating, app-rating, [class*="tile-rating"]:not([class*="seller"])');
+            if (productRatingEl) {
+                const isInsideSeller = !!productRatingEl.closest('rz-product-seller, rz-goods-seller, .goods-tile__seller, .goods-tile__seller-name, .seller-info, .seller-rating, .goods-tile__sub-rating');
+                if (!isInsideSeller) {
+                    const score = starVisionML.predictFromContainer(productRatingEl);
+                    if (score > 0 && score <= 5) return score;
                 }
-                return false;
-            };
+            }
 
-            const ratingContainers = tileEl.querySelectorAll('.goods-tile__rating, .goods-tile__stars, rz-stars-rating-progress, rz-rating, [class*="stars-rating"], [class*="tile-rating"]');
-
-            // Exclusively Machine Learning Vision Model Inference on Canvas
-            for (const container of ratingContainers) {
-                if (isInsideSeller(container)) continue;
-                const score = starVisionML.predictFromContainer(container);
+            // Fallback: Check stars progress elements outside seller
+            const starsElements = tileEl.querySelectorAll('rz-stars-rating-progress, .stars-rating-progress');
+            for (const el of starsElements) {
+                if (el.closest('rz-product-seller, rz-goods-seller, .goods-tile__seller, .goods-tile__seller-name, .seller-info, .seller-rating, .goods-tile__sub-rating')) continue;
+                const score = starVisionML.predictFromContainer(el);
                 if (score > 0 && score <= 5) return score;
             }
+
+            return 0;
         } catch (_) {}
         return 0;
     }
@@ -885,29 +884,35 @@
                 // 1. Current Price (100% DOM-based resolution)
                 let price = 0;
 
-                const priceSelectors = [
-                    'rz-tile-price .price',
-                    '.price.color-red',
-                    '.goods-tile__price-value',
-                    '.goods-tile__price.price_color_red',
-                    '.goods-tile__price',
-                    'rz-price',
-                    'app-price',
-                    '.price:not(.old-price):not([class*="old"])',
-                    '[class*="price-value"]',
-                    '[class*="price__value"]',
-                    '[class*="price__current"]',
-                    '[class*="price_type_current"]',
-                    '[data-testid*="price"]'
-                ];
-                for (const sel of priceSelectors) {
-                    const el = item.querySelector(sel);
-                    if (el && el.innerText) {
-                        if (el.closest('.goods-tile__price--old, .old-price, [class*="old"], del, s, strike')) continue;
-                        const val = parseInt(el.innerText.replace(/\D/g, ''), 10) || 0;
-                        if (val > 0) {
-                            price = val;
-                            break;
+                const directPriceEl = item.querySelector('rz-tile-price .price, .goods-tile__price-value, .price.color-red, .goods-tile__price.price_color_red, [class*="price_type_current"], [data-testid*="price"]');
+                if (directPriceEl) {
+                    const pClone = directPriceEl.cloneNode(true);
+                    pClone.querySelectorAll?.('.goods-tile__price--old, .old-price, [class*="old"], del, s, strike').forEach(e => e.remove());
+                    const m = (pClone.textContent || pClone.innerText || '').match(/(\d[\d\s\u00A0\u202F]*)/);
+                    if (m && m[1]) {
+                        price = parseInt(m[1].replace(/\D/g, ''), 10) || 0;
+                    }
+                }
+
+                if (price <= 0) {
+                    const priceSelectors = [
+                        '.goods-tile__price',
+                        'rz-price',
+                        'app-price',
+                        '.price:not(.old-price):not([class*="old"])',
+                        '[class*="price-value"]',
+                        '[class*="price__value"]'
+                    ];
+                    for (const sel of priceSelectors) {
+                        const el = item.querySelector(sel);
+                        if (el) {
+                            const clone = el.cloneNode(true);
+                            clone.querySelectorAll?.('.goods-tile__price--old, .old-price, [class*="old"], del, s, strike').forEach(e => e.remove());
+                            const m = (clone.textContent || clone.innerText || '').match(/(\d[\d\s\u00A0\u202F]*)/);
+                            if (m && m[1]) {
+                                const val = parseInt(m[1].replace(/\D/g, ''), 10) || 0;
+                                if (val > 0) { price = val; break; }
+                            }
                         }
                     }
                 }
@@ -984,15 +989,10 @@
                             rating = visualScore;
                         }
                     }
-
-                    // Option 3 Consistency Guard: If exactly 1 review, rating must be an integer (5.0 default for single review)
-                    if (reviews === 1 && rating > 0) {
-                        rating = rating >= 3.5 ? 5.0 : Math.round(rating);
-                    }
                 }
 
                 // Final clean rating formatting
-                if (reviews === 0 || rating < 0 || rating > 5) {
+                if (reviews === 0 || rating <= 0 || rating > 5) {
                     rating = 0;
                 } else {
                     rating = parseFloat(rating.toFixed(1));
