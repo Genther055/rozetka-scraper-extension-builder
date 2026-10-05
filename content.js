@@ -274,23 +274,35 @@
         return '';
     }
 
-    // Step-by-step scrolling through full height to ensure all 60 items mount and hydrate in DOM
+    // Paced Visual Inspector Scrolling through full page height
     async function silentBackgroundScroll() {
         try {
             let lastHeight = 0;
             let currentScroll = 0;
-            for (let i = 0; i < 20; i++) {
+            const stepPx = 380; // steady, paced human-like steps
+            const maxSteps = 30;
+
+            for (let i = 0; i < maxSteps; i++) {
                 const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
-                currentScroll = Math.min(maxH, currentScroll + 550);
-                window.scrollTo({ top: currentScroll, behavior: 'auto' });
+                currentScroll = Math.min(maxH, currentScroll + stepPx);
+                window.scrollTo({ top: currentScroll, behavior: 'smooth' });
                 window.dispatchEvent(new Event('scroll'));
-                await new Promise(r => setTimeout(r, 160));
+                document.dispatchEvent(new Event('scroll'));
+                
+                // Allow browser & Angular time to render components in the viewport
+                await new Promise(r => setTimeout(r, 240));
+                
+                // Live computer vision / DOM geometry inspection of star fill in viewport
+                captureVisualRatingsInViewport();
+
                 if (currentScroll >= maxH && maxH === lastHeight) break;
                 lastHeight = maxH;
             }
-            window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight), behavior: 'auto' });
+
+            window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight), behavior: 'smooth' });
             window.dispatchEvent(new Event('scroll'));
             await new Promise(r => setTimeout(r, 350));
+            captureVisualRatingsInViewport();
         } catch (_) {}
     }
 
@@ -646,11 +658,79 @@
         return 0;
     }
 
+    // Global storage for visual ratings detected live during paced scroll
+    const liveVisualRatingMap = new Map();
+
+    // Live visual star-fill geometry inspector (Computer Vision & DOM Pixel Geometry)
+    function measureVisualStarFill(tileEl) {
+        if (!tileEl) return 0;
+        try {
+            // 1. Target progress star components
+            const progressElements = tileEl.querySelectorAll('rz-stars-rating-progress, [class*="stars-rating-progress"], .goods-tile__stars, .goods-tile__rating, .stars-rating, app-rating');
+            for (const container of progressElements) {
+                if (container.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"], [class*="shop"], [class*="store"], .seller-info')) continue;
+                
+                // Look for inner fill element (the golden active overlay)
+                const fillEl = container.querySelector('.stars-rating-progress__fill, [class*="progress__fill"], [class*="fill"], div[style*="width"], span[style*="width"], svg[style*="width"]') || container;
+                
+                // Method A: Exact visual bounding box measurement in rendered pixels (Canvas / Geometry Vision)
+                const trackRect = container.getBoundingClientRect();
+                const fillRect = fillEl.getBoundingClientRect();
+                if (trackRect.width > 20 && fillRect.width > 0) {
+                    const ratio = Math.min(1, Math.max(0, fillRect.width / trackRect.width));
+                    const visualScore = parseFloat((ratio * 5).toFixed(1));
+                    if (visualScore >= 1.0 && visualScore <= 5.0) {
+                        return visualScore;
+                    }
+                }
+
+                // Method B: CSS style percentage width (e.g. style="width: calc(91.75% - 2px);" or style="width: 91.75%;")
+                const styleAttr = fillEl.getAttribute('style') || container.getAttribute('style') || '';
+                const m = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
+                if (m && m[1]) {
+                    const percent = parseFloat(m[1]);
+                    if (percent > 0 && percent <= 100) {
+                        const calculatedRating = parseFloat(((percent / 100) * 5).toFixed(1));
+                        if (calculatedRating >= 1.0 && calculatedRating <= 5.0) {
+                            return calculatedRating;
+                        }
+                    }
+                }
+            }
+        } catch (_) {}
+        return 0;
+    }
+
+    // Capture visual ratings of all products currently visible in the browser viewport
+    function captureVisualRatingsInViewport() {
+        try {
+            const rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
+            for (const tile of rawTiles) {
+                if (isUnwantedTile(tile)) continue;
+                const link = extractLink(tile);
+                if (!link) continue;
+                const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
+                const prodId = m ? m[1] : link;
+
+                const visualScore = measureVisualStarFill(tile);
+                if (visualScore > 0 && visualScore <= 5) {
+                    liveVisualRatingMap.set(prodId, visualScore);
+                }
+            }
+        } catch (_) {}
+    }
+
     // Directly extracts visual rating from discrete star elements or text attributes
     function extractStarsFromDomTile(tileEl) {
         if (!tileEl) return 0;
 
         try {
+            // 0. Method: Real-time visual star fill measurement
+            const visualFill = measureVisualStarFill(tileEl);
+            if (visualFill > 0 && visualFill <= 5) {
+                return visualFill;
+            }
+
             // 1. Check explicit text rating or aria-label attributes (strictly excluding seller badge)
             const ratingContainers = tileEl.querySelectorAll('rz-tile-rating, rz-stars-rating-progress, rz-rating, app-rating, .goods-tile__rating, .goods-tile__stars, [class*="tile-rating"], [class*="stars-rating"], rz-product-comments-stats, .product-comments__rating, .comments-stats');
             for (const container of ratingContainers) {
@@ -669,24 +749,7 @@
                 }
             }
 
-            // 2. Check CSS width percentage on rz-stars-rating-progress (e.g. style="width: calc(91.75% - 2px);" or style="width: 91.75%;")
-            const progressElements = tileEl.querySelectorAll('rz-stars-rating-progress, rz-stars-rating-progress *, [class*="stars-rating-progress"], [class*="stars-rating"] [style*="width"]');
-            for (const pEl of progressElements) {
-                if (pEl.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"]')) continue;
-                const styleAttr = pEl.getAttribute('style') || '';
-                const m = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
-                if (m && m[1]) {
-                    const percent = parseFloat(m[1]);
-                    if (percent > 0 && percent <= 100) {
-                        const calculatedRating = parseFloat(((percent / 100) * 5).toFixed(1));
-                        if (calculatedRating >= 1.0 && calculatedRating <= 5.0) {
-                            return calculatedRating;
-                        }
-                    }
-                }
-            }
-
-            // 3. Check discrete star elements (filled vs empty count)
+            // 2. Check discrete star elements (filled vs empty count)
             const starBlock = tileEl.querySelector('rz-stars-rating-progress, rz-tile-rating, [class*="stars-rating"], [class*="rating-block"], app-rating');
             if (starBlock && !starBlock.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"]')) {
                 const filledStars = starBlock.querySelectorAll('.star--filled, .star-filled, [class*="star-filled"], [class*="star_filled"], [class*="fill-yellow"], svg.text-yellow-400');
@@ -1117,8 +1180,13 @@
                 if (reviews === 0) {
                     rating = 0;
                 } else {
+                    // Priority 0: Real-time visual star-fill geometry detected during paced scrolling
+                    if (prodId && liveVisualRatingMap.has(prodId) && liveVisualRatingMap.get(prodId) > 0) {
+                        rating = liveVisualRatingMap.get(prodId);
+                    }
+
                     // Priority 1: Direct Rozetka Comments Marks API or Precomputed Exact Map
-                    if (prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {
+                    if (rating === 0 && prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {
                         rating = exactRatingMap.get(prodId);
                     }
 
@@ -1321,6 +1389,7 @@
         const pageLinksSeen = new Set();
 
         const harvestBatch = async () => {
+            captureVisualRatingsInViewport();
             const batch = await scrapeCurrentDomItems(meta, currentPage);
             for (const item of batch) {
                 if (item.link && !pageLinksSeen.has(item.link)) {
@@ -1352,8 +1421,9 @@
             window.dispatchEvent(new Event('scroll'));
             document.dispatchEvent(new Event('scroll'));
 
-            // Allow DOM render
+            // Allow DOM render and capture visual star fills
             await new Promise(r => setTimeout(r, 350));
+            captureVisualRatingsInViewport();
             await harvestBatch();
 
             if (pageNewProducts.length >= targetForThisPage) break;
