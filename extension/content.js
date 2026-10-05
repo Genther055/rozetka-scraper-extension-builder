@@ -584,6 +584,45 @@
                     }
                 }
             }
+
+            // 3. Scan DOM on product page: Main Seller Carriage & links
+            const mainSellerLinks = document.querySelectorAll('rz-seller-carriage a[href*="/seller/"], .product-seller a[href*="/seller/"], rz-seller-title a, rz-seller-title-feedback a, [class*="product-seller"] a[href*="/seller/"], a[apprzroute][href*="/seller/"], a[href*="/seller/"]');
+            for (const a of mainSellerLinks) {
+                const spanText = a.querySelector('.text-inline, [class*="title"], [class*="name"], span, p, b, strong')?.innerText || a.innerText || a.textContent || '';
+                const sName = cleanSellerName(spanText);
+                const currentUrl = window.location.href;
+                const idMatch = currentUrl.match(/\/p(\d+)/i) || currentUrl.match(/\/(\d{5,})\//);
+                if (idMatch && sName && sName.toLowerCase() !== 'rozetka') {
+                    pageSellerMap.set(idMatch[1], sName);
+                }
+            }
+
+            // 4. Scan DOM on product page: Other Sellers carousel (rz-other-sellers)
+            const otherSellerItems = document.querySelectorAll('rz-other-sellers li, [data-testid="all_sellers"] li, .other-sellers li, rz-scroll-slider li');
+            for (const item of otherSellerItems) {
+                const a = item.querySelector('a[href*="/p"], a[href*="/ua/"]');
+                if (!a) continue;
+                const href = a.getAttribute('href') || '';
+                const idMatch = href.match(/\/p(\d+)/i) || href.match(/\/(\d{5,})\//);
+                if (!idMatch) continue;
+                const prodId = idMatch[1];
+                
+                let sName = '';
+                const sellerA = item.querySelector('a[href*="/seller/"]');
+                if (sellerA) {
+                    sName = cleanSellerName(sellerA.querySelector('.text-inline, span')?.innerText || sellerA.innerText || '');
+                }
+                if (!sName) {
+                    const itemTxt = item.innerText || item.textContent || '';
+                    const mSeller = itemTxt.match(/(?:продавець|продавец|seller)\s*:?\s*([^\n\r\t,;]+)/i);
+                    if (mSeller && mSeller[1]) {
+                        sName = cleanSellerName(mSeller[1]);
+                    }
+                }
+                if (sName && sName.toLowerCase() !== 'rozetka') {
+                    pageSellerMap.set(prodId, sName);
+                }
+            }
         } catch (_) {}
     }
 
@@ -688,6 +727,7 @@
             'a[href*="seller="]',
             'a[href*="seller_id="]',
             'a[href*="merchant="]',
+            'a[apprzroute][href*="/seller/"]',
             'a.goods-tile__seller-link',
             'a.goods-tile__seller-name',
             'a.product-seller__title',
@@ -696,8 +736,12 @@
             'rz-goods-seller a',
             'rz-product-seller a',
             'rz-seller a',
-            '.goods-tile__seller a',
+            'rz-seller-title a',
+            'rz-seller-title-feedback a',
+            'rz-seller-carriage a',
             '.product-seller a',
+            '.goods-tile__seller a',
+            'rz-other-sellers a',
             '[data-testid*="seller"] a',
             '[data-testid*="merchant"] a'
         ];
@@ -707,7 +751,8 @@
                 try {
                     const links = scope.querySelectorAll(sel);
                     for (const a of links) {
-                        const txt = a.innerText || a.textContent || a.getAttribute('title') || a.getAttribute('aria-label') || '';
+                        const innerSpan = a.querySelector('.text-inline, [class*="title"], [class*="name"], span, p, b, strong');
+                        const txt = (innerSpan ? innerSpan.innerText : '') || a.innerText || a.textContent || a.getAttribute('title') || a.getAttribute('aria-label') || '';
                         const s = cleanSellerName(txt);
                         if (s && s.toLowerCase() !== 'rozetka') return s;
 
@@ -730,6 +775,9 @@
 
         // Dedicated seller DOM tags and classes across all scopes
         const sellerContainerSelectors = [
+            'rz-seller-carriage',
+            'rz-seller-title',
+            'rz-seller-title-feedback',
             'rz-goods-seller',
             'rz-product-seller',
             'rz-seller',
@@ -745,6 +793,9 @@
             '.goods-tile__merchant',
             '.goods-tile__availability',
             '.goods-tile__delivery',
+            'rz-other-sellers li',
+            'rz-other-sellers',
+            '[data-testid="all_sellers"] li',
             '[class*="goods-tile__seller"]',
             '[class*="product-seller"]',
             '[class*="product__seller"]',
