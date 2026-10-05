@@ -92,69 +92,6 @@ async function resolveSellerInServerBackground(productId: string, normalizedLink
               updated = true;
             }
           }
-          if ((currentProducts[index].reviews || 0) > 0) {
-            let foundRating = 0;
-
-            // 1. Try Comments Stats & Marks API endpoints first for exact mathematical ratings
-            const endpoints = [
-              `https://rozetka.com.ua/api/goods-comments/v2/goods/${productId}/comments/stats`,
-              `https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${productId}`,
-              `https://rozetka.com.ua/api/goods-comments/v2/goods/${productId}/marks`
-            ];
-            for (const ep of endpoints) {
-              if (foundRating > 0) break;
-              try {
-                const commentsRes = await fetch(ep).catch(() => null);
-                if (commentsRes && commentsRes.ok) {
-                  const commentsJson: any = await commentsRes.json().catch(() => null);
-                  if (commentsJson && commentsJson.data) {
-                    if (commentsJson.data.marks && typeof commentsJson.data.marks === 'object') {
-                      let totalMarks = 0;
-                      let weightedSum = 0;
-                      if (Array.isArray(commentsJson.data.marks)) {
-                        for (const mItem of commentsJson.data.marks) {
-                          const m = Number(mItem.mark || mItem.star) || 0;
-                          const c = Number(mItem.count || mItem.amount) || 0;
-                          if (m >= 1 && m <= 5 && c > 0) {
-                            totalMarks += c;
-                            weightedSum += c * m;
-                          }
-                        }
-                      } else {
-                        for (let m = 1; m <= 5; m++) {
-                          const count = Number(commentsJson.data.marks[String(m)]) || Number(commentsJson.data.marks[m]) || 0;
-                          totalMarks += count;
-                          weightedSum += count * m;
-                        }
-                      }
-                      if (totalMarks > 0) {
-                        foundRating = parseFloat((weightedSum / totalMarks).toFixed(1));
-                        break;
-                      }
-                    }
-                    if (typeof commentsJson.data.average_rating === 'number' && commentsJson.data.average_rating > 0 && commentsJson.data.average_rating <= 5) {
-                      foundRating = parseFloat(commentsJson.data.average_rating.toFixed(1));
-                      break;
-                    }
-                    if (typeof commentsJson.data.rating === 'number' && commentsJson.data.rating > 0 && commentsJson.data.rating <= 5) {
-                      foundRating = parseFloat(commentsJson.data.rating.toFixed(1));
-                      break;
-                    }
-                  }
-                }
-              } catch (_) {}
-            }
-
-            if (foundRating > 0 && currentProducts[index].rating !== parseFloat(foundRating.toFixed(1))) {
-              currentProducts[index].rating = parseFloat(foundRating.toFixed(1));
-              updated = true;
-            }
-          } else if (!currentProducts[index].reviews || currentProducts[index].reviews === 0) {
-            if (currentProducts[index].rating !== 0) {
-              currentProducts[index].rating = 0;
-              updated = true;
-            }
-          }
           if (updated) {
             await saveCurrentProducts(currentProducts);
             console.log(`[Backend Enriched] Successfully updated product details for ${normalizedLink}`);

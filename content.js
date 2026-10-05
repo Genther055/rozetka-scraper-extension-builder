@@ -1180,63 +1180,29 @@
                 if (reviews === 0) {
                     rating = 0;
                 } else {
-                    // Priority 0: Real-time visual star-fill geometry detected during paced scrolling
+                    // Priority 0: Real-time visual star-fill geometry detected during paced scrolling (Computer Vision)
                     if (prodId && liveVisualRatingMap.has(prodId) && liveVisualRatingMap.get(prodId) > 0) {
                         rating = liveVisualRatingMap.get(prodId);
                     }
 
-                    // Priority 1: Direct Rozetka Comments Marks API or Precomputed Exact Map
+                    // Priority 1: Visual star-fill geometry measured directly on the tile element
+                    if (rating === 0) {
+                        const visualScore = measureVisualStarFill(item);
+                        if (visualScore > 0 && visualScore <= 5) {
+                            rating = visualScore;
+                        }
+                    }
+
+                    // Priority 2: Exact Schema.org aggregateRating JSON-LD or Marks API
                     if (rating === 0 && prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {
                         rating = exactRatingMap.get(prodId);
                     }
 
-                    // Priority 2: Page Goods State from Angular SSR TransferState & JSON-LD
+                    // Priority 3: Page Goods State from Angular SSR TransferState & JSON-LD
                     if (rating === 0 && prodId && pageGoodsMap.has(prodId)) {
                         const pg = pageGoodsMap.get(prodId);
                         if (pg && pg.rating && pg.rating > 0) {
                             rating = pg.rating;
-                        }
-                    }
-
-                    // Priority 3: Direct DOM discrete filled stars or width on the tile
-                    if (rating === 0) {
-                        const domStars = extractStarsFromDomTile(item, reviews);
-                        if (domStars > 0 && domStars <= 5) {
-                            rating = domStars;
-                        }
-                    }
-
-                    // Priority 4: Dedicated Product Comment Rating Element (excluding any seller/merchant block)
-                    if (rating === 0) {
-                        const commentRatingEls = item.querySelectorAll('rz-product-comments-stats, .product-comments__rating, .comments-stats, rz-product-comment-rating');
-                        for (const commentRatingEl of commentRatingEls) {
-                            if (commentRatingEl.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"], [class*="shop"], [class*="store"], .seller-info')) continue;
-                            
-                            // Check CSS width first
-                            const wEls = commentRatingEl.querySelectorAll('[style*="width"]');
-                            for (const wEl of wEls) {
-                                const mWidth = (wEl.getAttribute('style') || '').match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
-                                if (mWidth && mWidth[1]) {
-                                    const percent = parseFloat(mWidth[1]);
-                                    if (percent > 0 && percent <= 100) {
-                                        rating = parseFloat(((percent / 100) * 5).toFixed(1));
-                                        break;
-                                    }
-                                }
-                            }
-                            if (rating > 0) break;
-
-                            const boldSpan = commentRatingEl.querySelector('.font-bold, b, strong, [class*="bold"]') || commentRatingEl;
-                            const t = (boldSpan.textContent || boldSpan.innerText || '').trim();
-                            if (/продавец|продавець|seller|магазин/i.test(t)) continue;
-                            const m = t.match(/оцінка(?:\s+користувачів)?\s*([1-5](?:[.,]\d+)?)\s*(?:\/|з|\/5|з 5)\s*5?/i) || t.match(/([1-5](?:[.,]\d+)?)\s*(?:з|из|\/)\s*5/i);
-                            if (m && m[1]) {
-                                const val = parseFloat(m[1].replace(',', '.'));
-                                if (val > 0 && val <= 5) {
-                                    rating = parseFloat(val.toFixed(1));
-                                    break;
-                                }
-                            }
                         }
                     }
                 }
