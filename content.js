@@ -518,146 +518,6 @@
         return 0;
     }
 
-    // Helper to resolve genuine rating from Rozetka Comments API and Schema.org
-    async function fetchProductSchemaRating(productUrl, prodId) {
-        if (!prodId && productUrl) {
-            const m = productUrl.match(/\/p(\d+)/i) || productUrl.match(/p(\d+)/i) || productUrl.match(/\/(\d{5,})\//);
-            if (m && m[1]) prodId = m[1];
-        }
-
-        // 1. Direct in-tab Comments API (Marks breakdown & stats e.g. 5★:5, 4★:1, 3★:1, 1★:1 -> 4.1)
-        if (prodId) {
-            const exactRating = await fetchExactProductRating(prodId);
-            if (exactRating > 0 && exactRating <= 5) {
-                return exactRating;
-            }
-        }
-
-        // 2. Direct fetch of product HTML or comments HTML inside tab session
-        if (productUrl || prodId) {
-            const candidateUrls = [
-                productUrl,
-                prodId ? `https://rozetka.com.ua/p${prodId}/` : '',
-                prodId ? `https://rozetka.com.ua/p${prodId}/comments/` : '',
-                prodId ? `https://rozetka.com.ua/ua/p${prodId}/comments/` : ''
-            ].filter(Boolean);
-
-            for (const targetUrl of candidateUrls) {
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 3500);
-                    const res = await fetch(targetUrl, { 
-                        headers: { 'Accept': 'text/html,application/xhtml+xml' },
-                        credentials: 'include',
-                        signal: controller.signal 
-                    }).catch(() => null);
-                    clearTimeout(timeoutId);
-                    if (res && res.ok) {
-                        const text = await res.text().catch(() => '');
-                        // 1. Strict Schema.org aggregateRating JSON-LD
-                        const m = text.match(/aggregateRating["'\s]*:\s*\{[^}]*["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?/i) ||
-                                  text.match(/["']ratingValue["'\s]*:\s*"?([1-5](?:\.\d+)?)"?[^}]*aggregateRating/i);
-                        if (m && m[1]) {
-                            const val = parseFloat(m[1].replace(',', '.'));
-                            if (val > 0 && val <= 5) return parseFloat(val.toFixed(1));
-                        }
-                        // 2. CSS width calculation in HTML
-                        const wMatch = text.match(/<rz-stars-rating-progress[^>]*>[\s\S]*?style="[^"]*width:\s*(?:calc\(\s*)?([\d.]+)%[^"]*"[\s\S]*?<\/rz-stars-rating-progress>/i) ||
-                                       text.match(/stars-rating-progress[^>]*style="[^"]*width:\s*(?:calc\(\s*)?([\d.]+)%/i);
-                        if (wMatch && wMatch[1]) {
-                            const percent = parseFloat(wMatch[1]);
-                            if (percent > 0 && percent <= 100) {
-                                return parseFloat(((percent / 100) * 5).toFixed(1));
-                            }
-                        }
-                    }
-                } catch (_) {}
-            }
-        }
-
-        // 3. Request from background service worker
-        try {
-            const bgResponse = await new Promise(resolve => {
-                chrome.runtime.sendMessage({
-                    action: 'FETCH_SCHEMA_RATING',
-                    url: productUrl,
-                    prodId: prodId
-                }, res => {
-                    if (chrome.runtime.lastError || !res) resolve(null);
-                    else resolve(res);
-                });
-            });
-            if (bgResponse && bgResponse.rating > 0 && bgResponse.rating <= 5) {
-                return bgResponse.rating;
-            }
-        } catch (_) {}
-
-        return 0;
-    }
-
-    // Helper to fetch exact mathematical rating from Rozetka Comments API
-    async function fetchExactProductRating(prodId) {
-        if (!prodId) return 0;
-        const endpoints = [
-            `/api/goods-comments/v2/goods/${prodId}/marks`,
-            `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/marks`,
-            `/api/goods-comments/v2/goods/${prodId}/comments/stats`,
-            `https://rozetka.com.ua/api/goods-comments/v2/goods/${prodId}/comments/stats`,
-            `/api/goods-comments/v2/stats?goods_id=${prodId}`,
-            `https://rozetka.com.ua/api/goods-comments/v2/stats?goods_id=${prodId}`
-        ];
-
-        for (const url of endpoints) {
-            try {
-                const res = await fetch(url, { 
-                    headers: { 'Accept': 'application/json' },
-                    credentials: 'include'
-                }).catch(() => null);
-                if (res && res.ok) {
-                    const json = await res.json().catch(() => null);
-                    if (json) {
-                        const data = json.data || json;
-                        const marks = data.marks || (Array.isArray(data) ? data : null);
-                        if (marks) {
-                            let totalMarks = 0;
-                            let weightedSum = 0;
-                            if (Array.isArray(marks)) {
-                                for (const item of marks) {
-                                    const star = Number(item.mark || item.star || item.rating || item.score) || 0;
-                                    const cnt = Number(item.count || item.amount || item.total) || 0;
-                                    if (star >= 1 && star <= 5 && cnt > 0) {
-                                        totalMarks += cnt;
-                                        weightedSum += cnt * star;
-                                    }
-                                }
-                            } else if (typeof marks === 'object') {
-                                for (let star = 1; star <= 5; star++) {
-                                    const cnt = Number(marks[String(star)] ?? marks[star] ?? 0) || 0;
-                                    if (cnt > 0) {
-                                        totalMarks += cnt;
-                                        weightedSum += cnt * star;
-                                    }
-                                }
-                            }
-                            if (totalMarks > 0) {
-                                return parseFloat((weightedSum / totalMarks).toFixed(1));
-                            }
-                        }
-
-                        if (typeof data.average_rating === 'number' && data.average_rating > 0 && data.average_rating <= 5) {
-                            return parseFloat(data.average_rating.toFixed(1));
-                        }
-
-                        if (typeof data.rating === 'number' && data.rating > 0 && data.rating <= 5) {
-                            return parseFloat(data.rating.toFixed(1));
-                        }
-                    }
-                }
-            } catch (_) {}
-        }
-        return 0;
-    }
-
     // Global storage for visual ratings detected live during paced scroll
     const liveVisualRatingMap = new Map();
 
@@ -665,27 +525,40 @@
     function measureVisualStarFill(tileEl) {
         if (!tileEl) return 0;
         try {
-            // 1. Target progress star components
-            const progressElements = tileEl.querySelectorAll('rz-stars-rating-progress, [class*="stars-rating-progress"], .goods-tile__stars, .goods-tile__rating, .stars-rating, app-rating');
+            // Exclude seller rating elements if present inside tile
+            const sellerContainers = tileEl.querySelectorAll('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"], [class*="shop"], [class*="store"], .seller-info');
+
+            // 1. Aria-label or title check on rating components
+            const ratingAriaNodes = tileEl.querySelectorAll('[aria-label*="рейтинг" i], [aria-label*="rating" i], [aria-label*="зір" i], [aria-label*="з 5" i], [aria-label*="/ 5" i], [title*="рейтинг" i], [title*="з 5" i], [title*="/ 5" i]');
+            for (const node of ratingAriaNodes) {
+                let skip = false;
+                for (const sc of sellerContainers) {
+                    if (sc.contains(node)) { skip = true; break; }
+                }
+                if (skip) continue;
+
+                const text = (node.getAttribute('aria-label') || node.getAttribute('title') || '').trim();
+                const m = text.match(/([1-5](?:[.,]\d+)?)\s*(?:з|\/|\/5|з 5)\s*5?/i) || text.match(/рейтинг:?\s*([1-5](?:[.,]\d+)?)/i);
+                if (m && m[1]) {
+                    const val = parseFloat(m[1].replace(',', '.'));
+                    if (val >= 1.0 && val <= 5.0) return parseFloat(val.toFixed(1));
+                }
+            }
+
+            // 2. Target progress star components (the visual golden fill bar)
+            const progressElements = tileEl.querySelectorAll('rz-stars-rating-progress, [class*="stars-rating-progress"], .goods-tile__stars, .goods-tile__rating, .stars-rating, app-rating, [class*="rating-progress"], [class*="rating-stars"]');
             for (const container of progressElements) {
-                if (container.closest('rz-product-seller, .product-seller, [class*="seller"], [class*="merchant"], [class*="shop"], [class*="store"], .seller-info')) continue;
-                
+                let skip = false;
+                for (const sc of sellerContainers) {
+                    if (sc.contains(container)) { skip = true; break; }
+                }
+                if (skip) continue;
+
                 // Look for inner fill element (the golden active overlay)
                 const fillEl = container.querySelector('.stars-rating-progress__fill, [class*="progress__fill"], [class*="fill"], div[style*="width"], span[style*="width"], svg[style*="width"]') || container;
                 
-                // Method A: Exact visual bounding box measurement in rendered pixels (Canvas / Geometry Vision)
-                const trackRect = container.getBoundingClientRect();
-                const fillRect = fillEl.getBoundingClientRect();
-                if (trackRect.width > 20 && fillRect.width > 0) {
-                    const ratio = Math.min(1, Math.max(0, fillRect.width / trackRect.width));
-                    const visualScore = parseFloat((ratio * 5).toFixed(1));
-                    if (visualScore >= 1.0 && visualScore <= 5.0) {
-                        return visualScore;
-                    }
-                }
-
-                // Method B: CSS style percentage width (e.g. style="width: calc(91.75% - 2px);" or style="width: 91.75%;")
-                const styleAttr = fillEl.getAttribute('style') || container.getAttribute('style') || '';
+                // Method A: CSS style percentage width (e.g. style="width: calc(88.4% - 2px);" or style="width: 88.4%;")
+                const styleAttr = (fillEl.getAttribute('style') || container.getAttribute('style') || '');
                 const m = styleAttr.match(/width:\s*(?:calc\(\s*)?([\d.]+)%/i);
                 if (m && m[1]) {
                     const percent = parseFloat(m[1]);
@@ -696,6 +569,31 @@
                         }
                     }
                 }
+
+                // Method B: Exact visual bounding box measurement in rendered pixels (DOM Pixel Geometry)
+                const trackRect = container.getBoundingClientRect();
+                const fillRect = fillEl.getBoundingClientRect();
+                if (trackRect.width > 15 && fillRect.width > 0) {
+                    const ratio = Math.min(1, Math.max(0, fillRect.width / trackRect.width));
+                    const visualScore = parseFloat((ratio * 5).toFixed(1));
+                    if (visualScore >= 1.0 && visualScore <= 5.0) {
+                        return visualScore;
+                    }
+                }
+            }
+
+            // 3. Count individual active star icons (e.g., SVG stars)
+            const activeStars = tileEl.querySelectorAll('.icon-star--active, .star--active, .star-active, [class*="star_active"], [class*="star--active"], [class*="star-fill"], svg[fill="#ffa900"], svg[fill="#f8a700"], svg[fill="#ffb800"]');
+            let starCount = 0;
+            for (const s of activeStars) {
+                let skip = false;
+                for (const sc of sellerContainers) {
+                    if (sc.contains(s)) { skip = true; break; }
+                }
+                if (!skip) starCount++;
+            }
+            if (starCount > 0 && starCount <= 5) {
+                return parseFloat(starCount.toFixed(1));
             }
         } catch (_) {}
         return 0;
@@ -817,44 +715,7 @@
                 } catch (_) {}
             }
 
-            // 2. JSON-LD scripts
-            const ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
-            for (const script of ldScripts) {
-                try {
-                    const ld = JSON.parse(script.textContent || '{}');
-                    const processLd = (node) => {
-                        if (!node || typeof node !== 'object') return;
-                        if (Array.isArray(node)) {
-                            for (const n of node) processLd(n);
-                            return;
-                        }
-                        if (node['@graph']) processLd(node['@graph']);
-                        if (node.itemListElement) processLd(node.itemListElement);
-                        if (node.item) processLd(node.item);
-                        
-                        if (node.aggregateRating) {
-                            const rawId = node.sku || node.productID || node.mpn || node.identifier || '';
-                            const m = String(rawId).match(/^(\d{5,})$/) || (node.url || node.name || script.textContent).match(/\/p(\d+)/i) || (node.url || '').match(/\/(\d{5,})\//) || window.location.href.match(/\/p(\d+)/i) || window.location.href.match(/\/(\d{5,})\//);
-                            const ratingVal = typeof node.aggregateRating.ratingValue === 'number' 
-                                ? node.aggregateRating.ratingValue 
-                                : parseFloat(String(node.aggregateRating.ratingValue || '').replace(',', '.'));
-                            const revCount = parseInt(String(node.aggregateRating.reviewCount || node.aggregateRating.ratingCount || 0), 10);
-                            const pId = m ? String(m[1]) : (rawId ? String(rawId) : '');
-                            if (pId && ratingVal > 0 && ratingVal <= 5) {
-                                const prev = goodsMap.get(pId) || {};
-                                goodsMap.set(pId, {
-                                    ...prev,
-                                    id: pId,
-                                    stars_rating: ratingVal,
-                                    rating: ratingVal,
-                                    comments_amount: revCount || prev.comments_amount
-                                });
-                            }
-                        }
-                    };
-                    processLd(ld);
-                } catch (_) {}
-            }
+
 
             // 3. Direct DOM User Comments Marks & Rating on Product Page (e.g. "Оцінка користувачів 4.6/5 ★" or seller "4.6/5 ★ 84 оцінок")
             try {
@@ -946,24 +807,11 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // 1. Extract embedded goods state from page
+        // 1. Extract embedded goods state from page (Angular SSR)
         const pageGoodsMap = extractPageGoodsState();
 
-        // 2. Batch fetch official Rozetka product details & exact ratings
+        // 2. Batch fetch official Rozetka product details (seller, price, stock) - zero rate-limit risk
         const apiProductMap = new Map();
-        const exactRatingMap = new Map();
-
-        // Check if pageGoodsMap already has exact ratings/marks
-        for (const { link } of distinctTiles) {
-            const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
-            if (m && m[1]) {
-                const prodId = m[1];
-                const pg = pageGoodsMap.get(prodId);
-                if (pg && pg.rating && pg.rating > 0) {
-                    exactRatingMap.set(prodId, pg.rating);
-                }
-            }
-        }
 
         try {
             const productIds = [];
@@ -993,35 +841,7 @@
                     }
                 }
 
-                // Fetch genuine ratings from Schema.org microdata & Comments API for all items with reviews
-                const prodsNeedingRating = [];
-                for (const { item, link } of distinctTiles) {
-                    const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
-                    if (m && m[1]) {
-                        const prodId = m[1];
-                        const apiItem = apiProductMap.get(prodId);
-                        const domRev = extractReviewsFromDomTile(item);
-                        const revCount = (apiItem && apiItem.comments_amount !== undefined) ? parseInt(String(apiItem.comments_amount), 10) : domRev;
-                        if (revCount > 0 && !exactRatingMap.has(prodId)) {
-                            prodsNeedingRating.push({ link, prodId, revCount });
-                        }
-                    }
-                }
 
-                if (prodsNeedingRating.length > 0) {
-                    const fetchChunks = [];
-                    for (let i = 0; i < prodsNeedingRating.length; i += 8) {
-                        fetchChunks.push(prodsNeedingRating.slice(i, i + 8));
-                    }
-                    for (const chunk of fetchChunks) {
-                        await Promise.allSettled(chunk.map(async ({ link, prodId }) => {
-                            const exact = await fetchProductSchemaRating(link, prodId);
-                            if (exact > 0) {
-                                exactRatingMap.set(prodId, exact);
-                            }
-                        }));
-                    }
-                }
             }
         } catch (_) {}
 
@@ -1137,7 +957,7 @@
                     reviews = parseInt(String(apiDetails.comments_amount), 10) || 0;
                 }
 
-                // 4. Rating (1.0 to 5.0) - Exact Math Marks / Comments Stats + DOM Active Stars
+                // 4. Rating (1.0 to 5.0) - Exclusively Visual Star Geometry (Computer Vision) & Exact SSR Math Marks
                 let rating = 0;
 
                 if (reviews === 0) {
@@ -1148,7 +968,7 @@
                         rating = liveVisualRatingMap.get(prodId);
                     }
 
-                    // Priority 1: Visual star-fill geometry measured directly on the tile element (Canvas / Pixel Geometry)
+                    // Priority 1: Visual star-fill geometry measured directly on the tile element (DOM Pixel Geometry)
                     if (rating === 0) {
                         const visualScore = measureVisualStarFill(item);
                         if (visualScore > 0 && visualScore <= 5) {
@@ -1156,9 +976,12 @@
                         }
                     }
 
-                    // Priority 2: Schema.org aggregateRating JSON-LD directly for single product pages
-                    if (rating === 0 && prodId && exactRatingMap.has(prodId) && exactRatingMap.get(prodId) > 0) {
-                        rating = exactRatingMap.get(prodId);
+                    // Priority 2: Genuine mathematical marks breakdown from Angular SSR if available for this specific product ID
+                    if (rating === 0 && prodId && pageGoodsMap.has(prodId)) {
+                        const pg = pageGoodsMap.get(prodId);
+                        if (pg && pg.rating && pg.rating > 0 && pg.rating <= 5) {
+                            rating = pg.rating;
+                        }
                     }
                 }
 
@@ -1327,25 +1150,25 @@
         let consecutiveNoNewRounds = 0;
         let lastItemCount = pageNewProducts.length;
 
-        for (let round = 0; round < 30 && pageNewProducts.length < targetForThisPage; round++) {
+        for (let round = 0; round < 15 && pageNewProducts.length < targetForThisPage; round++) {
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
 
-            // 1. Scroll directly to the bottom-most product tile in the current catalog
-            const currentTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
-            if (currentTiles.length > 0) {
-                const lastTile = currentTiles[currentTiles.length - 1];
-                lastTile.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            } else {
-                const scrollY = Math.min(document.body.scrollHeight, (round + 1) * 750);
-                window.scrollTo({ top: scrollY, behavior: 'smooth' });
-            }
-            window.dispatchEvent(new Event('scroll'));
-            document.dispatchEvent(new Event('scroll'));
+            // 1. Paced, progressive step-by-step downward scroll across catalog
+            const catalogScrollHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            const scrollStep = 380;
+            const startY = window.scrollY || 0;
+            
+            for (let curY = startY; curY <= catalogScrollHeight && pageNewProducts.length < targetForThisPage; curY += scrollStep) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+                window.scrollTo({ top: curY, behavior: 'smooth' });
+                window.dispatchEvent(new Event('scroll'));
+                document.dispatchEvent(new Event('scroll'));
 
-            // Allow DOM render and capture visual star fills
-            await new Promise(r => setTimeout(r, 350));
-            captureVisualRatingsInViewport();
-            await harvestBatch();
+                // Paced pause allowing DOM render and real-time star inspection
+                await new Promise(r => setTimeout(r, 200));
+                captureVisualRatingsInViewport();
+                await harvestBatch();
+            }
 
             if (pageNewProducts.length >= targetForThisPage) break;
 
@@ -1355,6 +1178,7 @@
                 // When clicked, sample every 300ms for up to 1.5s for Rozetka AJAX chunks to attach
                 for (let w = 0; w < 5; w++) {
                     await new Promise(r => setTimeout(r, 300));
+                    captureVisualRatingsInViewport();
                     await harvestBatch();
                     if (pageNewProducts.length >= targetForThisPage) break;
                 }
@@ -1365,7 +1189,8 @@
                     paginator.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     window.dispatchEvent(new Event('scroll'));
                     document.dispatchEvent(new Event('scroll'));
-                    await new Promise(r => setTimeout(r, 400));
+                    await new Promise(r => setTimeout(r, 350));
+                    captureVisualRatingsInViewport();
                     await harvestBatch();
                 }
             }
@@ -1375,8 +1200,8 @@
                 lastItemCount = pageNewProducts.length;
             } else {
                 consecutiveNoNewRounds++;
-                // If 5 full attempts produced no new items and we are past round 8, catalog on page is exhausted
-                if (consecutiveNoNewRounds >= 5 && round >= 8) {
+                // If 3 full attempts produced no new items and we are past round 4, catalog on page is exhausted
+                if (consecutiveNoNewRounds >= 3 && round >= 4) {
                     break;
                 }
             }
