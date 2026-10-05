@@ -457,26 +457,64 @@
         });
     }
 
+    function extractProductId(item, link) {
+        if (item && item instanceof Element) {
+            const attrId = item.getAttribute('data-goods-id') || item.getAttribute('data-id') || item.getAttribute('goods-id') || item.getAttribute('data-product-id');
+            if (attrId && /^\d+$/.test(attrId.trim())) return attrId.trim();
+            
+            const gIdEl = item.querySelector('.g-id, [class*="goods-id"], [data-goods-id], [class*="product-id"]');
+            if (gIdEl) {
+                const gIdText = (gIdEl.getAttribute('data-goods-id') || gIdEl.innerText || gIdEl.textContent || '').trim();
+                if (/^\d+$/.test(gIdText)) return gIdText;
+            }
+            
+            const elId = item.id || '';
+            if (elId && /^\d+$/.test(elId)) return elId;
+        }
+        if (link) {
+            const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})(?:\/|$|\?)/);
+            if (m && m[1]) return m[1];
+        }
+        return '';
+    }
+
     function cleanSellerName(raw) {
         if (!raw) return '';
         let text = String(raw).trim();
-        text = text.replace(/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|merchant|від\s+продавця|от\s+продавца|доставка\s+від(?:\s+продавця)?|доставка\s+от(?:\s+продавца)?|відправник|отправитель)\s*:?\s*/i, '');
-        const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0 && !/^(?:продавець(?:\s+товару)?|продавец|seller|магазин|merchant|від\s+продавця|от\s+продавца)\s*:?$/i.test(l));
+        text = text
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'")
+            .replace(/&#39;/g, "'")
+            .replace(/&#34;/g, '"')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/\u00A0/g, ' ')
+            .replace(/\u202F/g, ' ');
+
+        text = text.replace(/^(?:інтернет-магазин|магазин|продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|merchant|від\s+продавця|от\s+продавца|доставка\s+від(?:\s+продавця)?|доставка\s+от(?:\s+продавца)?|відправник|отправитель)\s*:?\s*/i, '');
+        const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0 && !/^(?:інтернет-магазин|магазин|продавець(?:\s+товару)?|продавец|seller|merchant|від\s+продавця|от\s+продавца)\s*:?$/i.test(l));
         if (lines.length === 0) return '';
         let name = lines[0];
+
         // Strip any parentheses content e.g. " (24)", " (24 товари)", " (95%)", " (офіційний дистриб'ютор)"
         name = name.replace(/\s*\([^)]*\).*$/, '');
         name = name.replace(/\s*\b\d+(?:[.,]\d+)?\s*(?:★|\%|\bтовар\w*|\bтов\w*).*$/, '');
         name = name.replace(/\s+\d+\s*$/, '');
-        name = name.replace(/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|merchant|від\s+продавця|от\s+продавца|доставка\s+від(?:\s+продавця)?|доставка\s+от(?:\s+продавца)?|відправник|отправитель)\s*:?\s*/i, '');
-        name = name.replace(/[>›»\s]+$/, '').trim();
+        name = name.replace(/^(?:інтернет-магазин|магазин|продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|merchant|від\s+продавця|от\s+продавца|доставка\s+від(?:\s+продавця)?|доставка\s+от(?:\s+продавца)?|відправник|отправитель)\s*:?\s*/i, '');
+        name = name.replace(/^[>›»\s—–:-]+|[>›»\s—–:-]+$/, '').trim();
 
-        // Normalize all-caps names e.g. "QINETIQ" -> "Qinetiq"
-        if (name.length > 3 && name === name.toUpperCase() && !/^\d+$/.test(name)) {
+        // Normalize English all-caps names e.g. "QINETIQ" -> "Qinetiq", "THANOS" -> "Thanos"
+        if (name.length > 3 && name === name.toUpperCase() && /^[A-Z0-9\s_-]+$/.test(name)) {
             name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
         }
 
-        if (name.length >= 2 && name.length <= 80 && !/^\d+$/.test(name) && !/^(?:відгук|отзыв|купити|купить|додати|в кошик|немає|в наявності|новинка|акція|топ|скидка|знижка|уточнюйте|офіційний|официальный|інші продавці|другие продавцы)/i.test(name)) {
+        if (/^rozetka\b/i.test(name) || /^розетка\b/i.test(name)) {
+            return 'Rozetka';
+        }
+
+        if (name.length >= 2 && name.length <= 80 && !/^\d+$/.test(name) && !/^(?:відгук|отзыв|купити|купить|додати|в кошик|немає|в наявності|новинка|акція|топ|скидка|знижка|уточнюйте|офіційний|официальный|інші продавці|другие продавцы|всі продавці|все продавцы)/i.test(name)) {
             return name;
         }
         return '';
@@ -487,20 +525,40 @@
         return str
             .replace(/&q;/g, '"')
             .replace(/&quot;/g, '"')
+            .replace(/&#34;/g, '"')
             .replace(/&amp;/g, '&')
             .replace(/&a;/g, '&')
             .replace(/&lt;/g, '<')
             .replace(/&l;/g, '<')
             .replace(/&gt;/g, '>')
             .replace(/&g;/g, '>')
-            .replace(/&s;/g, "'");
+            .replace(/&s;/g, "'")
+            .replace(/&apos;/g, "'")
+            .replace(/&#39;/g, "'")
+            .replace(/&nbsp;/g, ' ')
+            .replace(/\u00A0/g, ' ')
+            .replace(/\u202F/g, ' ');
     }
 
     const pageSellerMap = new Map();
     const pageSellersCountMap = new Map();
 
     function parseSellersFromAnyJson(obj, sellersMap, sellersCountMap) {
-        if (!obj || typeof obj !== 'object') return;
+        if (!obj) return;
+
+        // If string, try to parse JSON
+        if (typeof obj === 'string') {
+            const trimmed = obj.trim();
+            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    parseSellersFromAnyJson(parsed, sellersMap, sellersCountMap);
+                } catch (_) {}
+            }
+            return;
+        }
+
+        if (typeof obj !== 'object') return;
 
         // Build seller lookup table if present (e.g. obj.sellers = { "123": { "title": "Mini Shop" } })
         const sellerLookup = new Map();
@@ -516,6 +574,13 @@
                     }
                 }
             }
+            if (Array.isArray(node.filter_sellers)) {
+                for (const sItem of node.filter_sellers) {
+                    if (sItem && sItem.id && sItem.title) {
+                        sellerLookup.set(String(sItem.id), String(sItem.title).trim());
+                    }
+                }
+            }
             for (const k of Object.keys(node)) {
                 if (typeof node[k] === 'object') findSellerLookups(node[k]);
             }
@@ -523,26 +588,43 @@
         try { findSellerLookups(obj); } catch (_) {}
 
         function traverse(node) {
-            if (!node || typeof node !== 'object') return;
+            if (!node) return;
+
+            if (typeof node === 'string') {
+                const trimmed = node.trim();
+                if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        traverse(parsed);
+                    } catch (_) {}
+                }
+                return;
+            }
+
+            if (typeof node !== 'object') return;
 
             if (Array.isArray(node)) {
                 for (const item of node) traverse(item);
                 return;
             }
 
-            const id = node.id || node.goods_id || node.goodsId || node.productId || node.sku;
-            const prodId = id ? String(id) : '';
+            const id = node.id || node.goods_id || node.goodsId || node.productId || node.sku || node.goods_id_str;
+            const prodId = id ? String(id).trim() : '';
             const href = node.href || node.url || node.link || '';
 
             let sellerName = '';
             if (node.seller) {
                 if (typeof node.seller === 'string') sellerName = node.seller;
                 else if (typeof node.seller === 'object') {
-                    sellerName = node.seller.title || node.seller.name || node.seller.title_translit || node.seller.seller_name || '';
+                    sellerName = node.seller.title || node.seller.name || node.seller.title_translit || node.seller.seller_name || node.seller.shop_name || node.seller.seller_title || '';
                 }
             }
             if (!sellerName) {
                 sellerName = node.seller_title || node.sellerName || node.seller_name || node.merchant_name || node.merchant || node.shop_name || node.shopName || '';
+            }
+            if (!sellerName && Array.isArray(node.sellers) && node.sellers.length > 0) {
+                const firstS = node.sellers[0];
+                sellerName = typeof firstS === 'string' ? firstS : (firstS.title || firstS.name || firstS.seller_title || '');
             }
             if (!sellerName && node.seller_id && sellerLookup.has(String(node.seller_id))) {
                 sellerName = sellerLookup.get(String(node.seller_id));
@@ -552,17 +634,28 @@
                 const cleaned = cleanSellerName(sellerName);
                 if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
                     if (prodId) sellersMap.set(prodId, cleaned);
-                    if (href) sellersMap.set(href.split('?')[0].replace(/\/+$/, ''), cleaned);
+                    if (href) {
+                        const rawHref = href.split('?')[0].replace(/\/+$/, '');
+                        sellersMap.set(rawHref, cleaned);
+                        sellersMap.set(rawHref.replace('rozetka.com.ua/ua/', 'rozetka.com.ua/'), cleaned);
+                    }
                 }
             }
 
-            const sCount = node.sellers_count || node.sellersCount || node.other_sellers_count;
+            let sCount = node.sellers_count || node.sellersCount || node.sellers_amount || node.all_sellers_count;
+            if (typeof sCount !== 'number' && (node.other_sellers_count || node.otherSellersCount)) {
+                const oCount = node.other_sellers_count || node.otherSellersCount;
+                if (typeof oCount === 'number') sCount = oCount + 1;
+            }
+            if (typeof sCount !== 'number' && Array.isArray(node.sellers) && node.sellers.length > 1) {
+                sCount = node.sellers.length;
+            }
             if (typeof sCount === 'number' && sCount > 0 && prodId && sellersCountMap) {
                 sellersCountMap.set(prodId, sCount);
             }
 
             for (const k of Object.keys(node)) {
-                if (typeof node[k] === 'object') traverse(node[k]);
+                if (typeof node[k] === 'object' || typeof node[k] === 'string') traverse(node[k]);
             }
         }
 
@@ -571,7 +664,30 @@
 
     function buildPageSellerMap() {
         try {
-            // 1. Scan JSON-LD scripts on the page
+            // 1. Scan Page Title and Meta Tags for SSR Seller Signature (e.g. "... від продавця: Berem&Store")
+            const pageTexts = [
+                document.title || '',
+                document.querySelector('meta[name="description"]')?.content || '',
+                document.querySelector('meta[property="og:description"]')?.content || '',
+                document.querySelector('meta[property="og:title"]')?.content || ''
+            ];
+            for (const pt of pageTexts) {
+                if (!pt) continue;
+                const decoded = unescapeAngularState(pt);
+                const m = decoded.match(/(?:від\s+продавця|от\s+продавца|продавець|продавец|seller)\s*:\s*([^|–—<\r\n]+)/i);
+                if (m && m[1]) {
+                    const sName = cleanSellerName(m[1]);
+                    if (sName && sName.toLowerCase() !== 'rozetka') {
+                        const currentUrl = window.location.href;
+                        const pageProdId = extractProductId(document.body, currentUrl);
+                        if (pageProdId) pageSellerMap.set(pageProdId, sName);
+                        pageSellerMap.set(currentUrl.split('?')[0].replace(/\/+$/, ''), sName);
+                        pageSellerMap.set(currentUrl.split('?')[0].replace('rozetka.com.ua/ua/', 'rozetka.com.ua/').replace(/\/+$/, ''), sName);
+                    }
+                }
+            }
+
+            // 2. Scan JSON-LD scripts on the page
             const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
             for (const script of jsonLdScripts) {
                 try {
@@ -583,7 +699,7 @@
                 } catch (_) {}
             }
 
-            // 2. Scan JSON / state scripts (including serverApp-state with unescaped Angular TransferState)
+            // 3. Scan JSON / state scripts (including serverApp-state with unescaped Angular TransferState)
             const jsonScripts = document.querySelectorAll('script[type="application/json"], script#serverApp-state, script:not([src])');
             for (const s of jsonScripts) {
                 const raw = s.textContent || s.innerText || '';
@@ -608,27 +724,30 @@
                 }
             }
 
-            // 3. Scan DOM on product page: Main Seller Carriage & links
+            // 4. Scan DOM on product page: Main Seller Carriage & links
             const mainSellerLinks = document.querySelectorAll('rz-seller-carriage a[href*="/seller/"], .product-seller a[href*="/seller/"], rz-seller-title a, rz-seller-title-feedback a, [class*="product-seller"] a[href*="/seller/"], a[apprzroute][href*="/seller/"], a[href*="/seller/"]');
             for (const a of mainSellerLinks) {
                 const spanText = a.querySelector('.text-inline, [class*="title"], [class*="name"], span, p, b, strong')?.innerText || a.innerText || a.textContent || '';
                 const sName = cleanSellerName(spanText);
                 const currentUrl = window.location.href;
-                const idMatch = currentUrl.match(/\/p(\d+)/i) || currentUrl.match(/\/(\d{5,})\//);
-                if (idMatch && sName && sName.toLowerCase() !== 'rozetka') {
-                    pageSellerMap.set(idMatch[1], sName);
+                const pageProdId = extractProductId(document.body, currentUrl);
+                if (pageProdId && sName && sName.toLowerCase() !== 'rozetka') {
+                    pageSellerMap.set(pageProdId, sName);
+                }
+                if (sName && sName.toLowerCase() !== 'rozetka') {
+                    pageSellerMap.set(currentUrl.split('?')[0].replace(/\/+$/, ''), sName);
+                    pageSellerMap.set(currentUrl.split('?')[0].replace('rozetka.com.ua/ua/', 'rozetka.com.ua/').replace(/\/+$/, ''), sName);
                 }
             }
 
-            // 4. Scan DOM on product page: Other Sellers carousel (rz-other-sellers)
+            // 5. Scan DOM on product page: Other Sellers carousel (rz-other-sellers)
             const otherSellerItems = document.querySelectorAll('rz-other-sellers li, [data-testid="all_sellers"] li, .other-sellers li, rz-scroll-slider li');
             for (const item of otherSellerItems) {
                 const a = item.querySelector('a[href*="/p"], a[href*="/ua/"]');
                 if (!a) continue;
                 const href = a.getAttribute('href') || '';
-                const idMatch = href.match(/\/p(\d+)/i) || href.match(/\/(\d{5,})\//);
-                if (!idMatch) continue;
-                const prodId = idMatch[1];
+                const prodId = extractProductId(item, href);
+                if (!prodId) continue;
                 
                 let sName = '';
                 const sellerA = item.querySelector('a[href*="/seller/"]');
@@ -711,17 +830,21 @@
     function extractSeller(item, link, name) {
         if (!item || !(item instanceof Element)) return 'Rozetka';
         
-        const idMatch = link ? (link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//)) : null;
-        const prodId = idMatch ? String(idMatch[1]) : '';
+        const prodId = extractProductId(item, link);
         const normLink = link ? link.split('?')[0].replace(/\/+$/, '') : '';
+        const normLinkUa = link ? link.split('?')[0].replace('rozetka.com.ua/ua/', 'rozetka.com.ua/').replace(/\/+$/, '') : '';
 
-        // Priority 1: Check Page-level Preloaded Seller Map (from JSON-LD / Page Scripts)
+        // Priority 1: Check Page-level Preloaded Seller Map (from SSR TransferState / JSON-LD / Page Scripts / Title / Meta)
         if (prodId && pageSellerMap.has(prodId)) {
             const s = pageSellerMap.get(prodId);
             if (s && s.toLowerCase() !== 'rozetka') return s;
         }
         if (normLink && pageSellerMap.has(normLink)) {
             const s = pageSellerMap.get(normLink);
+            if (s && s.toLowerCase() !== 'rozetka') return s;
+        }
+        if (normLinkUa && pageSellerMap.has(normLinkUa)) {
+            const s = pageSellerMap.get(normLinkUa);
             if (s && s.toLowerCase() !== 'rozetka') return s;
         }
 
@@ -1259,39 +1382,11 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // Batch fetch official Rozetka product details (seller title, other sellers count, old price) for all tiles on this page
-        const apiProductDetailsMap = new Map();
-        try {
-            const productIds = [];
-            for (const { link } of distinctTiles) {
-                const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
-                if (m && m[1]) productIds.push(m[1]);
-            }
-            if (productIds.length > 0) {
-                const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productIds.join(',')}`;
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2200);
-                const res = await fetch(apiUrl, { signal: controller.signal, credentials: 'omit' }).catch(() => null);
-                clearTimeout(timeoutId);
-                if (res && res.ok) {
-                    const json = await res.json().catch(() => null);
-                    if (json && Array.isArray(json.data)) {
-                        for (const apiProd of json.data) {
-                            if (apiProd && apiProd.id) {
-                                apiProductDetailsMap.set(String(apiProd.id), apiProd);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (_) {}
-
         const newItems = [];
 
         for (const { item, link, name } of distinctTiles) {
             try {
-                const idMatch = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
-                const prodId = idMatch ? String(idMatch[1]) : '';
+                const prodId = extractProductId(item, link);
 
                 // 1. Current Price (100% DOM-based resolution)
                 let price = 0;
@@ -1454,22 +1549,22 @@
 
                 const specs = Object.entries(detailedSpecsMap).map(([k, v]) => `${k}: ${v}`).join('; ') || (capacityMatch ? `${capacityMatch[1]} mAh` : 'Стандартні');
                 
-                const apiProd = prodId ? apiProductDetailsMap.get(prodId) : null;
-                let apiSeller = '';
-                if (apiProd && apiProd.seller) {
-                    apiSeller = cleanSellerName(apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || '');
-                }
-                const seller = (apiSeller && apiSeller.toLowerCase() !== 'rozetka') ? apiSeller : (extractSeller(item, link, name) || 'Rozetka');
-                const sellersCount = (apiProd && typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0)
-                    ? apiProd.sellers_count
-                    : (prodId && pageSellersCountMap.has(prodId) ? pageSellersCountMap.get(prodId) : 1);
-
-                if ((!oldPrice || oldPrice <= price) && apiProd && apiProd.old_price && apiProd.old_price > price) {
-                    oldPrice = apiProd.old_price;
-                    if (discount === 0) discount = Math.round(((oldPrice - price) / oldPrice) * 100);
-                }
-                if (discount === 0 && apiProd && apiProd.discount && apiProd.discount > 0) {
-                    discount = apiProd.discount;
+                const seller = extractSeller(item, link, name) || 'Rozetka';
+                let sellersCount = (prodId && pageSellersCountMap.has(prodId)) ? pageSellersCountMap.get(prodId) : 1;
+                if (sellersCount <= 1) {
+                    const otherSellersEl = item.querySelector('rz-other-sellers, .goods-tile__other-sellers, [class*="other-seller"], [class*="other_seller"], [data-testid*="other_seller"]');
+                    const otherText = (otherSellersEl ? otherSellersEl.innerText : '') || item.innerText || '';
+                    const mOther = otherText.match(/(?:ще|еще)\s+(\d+)\s+(?:продавец|продавц|пропозиц|предложен)/i);
+                    if (mOther && mOther[1]) {
+                        const numOther = parseInt(mOther[1], 10);
+                        if (numOther > 0) sellersCount = numOther + 1;
+                    } else {
+                        const mTotal = otherText.match(/(\d+)\s+(?:продавців|продавцов|пропозицій|предложений)/i);
+                        if (mTotal && mTotal[1]) {
+                            const numTotal = parseInt(mTotal[1], 10);
+                            if (numTotal > 1) sellersCount = numTotal;
+                        }
+                    }
                 }
 
                 const sellerRating = 0;
