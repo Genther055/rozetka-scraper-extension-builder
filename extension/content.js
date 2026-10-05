@@ -460,22 +460,94 @@
     function cleanSellerName(raw) {
         if (!raw) return '';
         let text = String(raw).trim();
-        text = text.replace(/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца|доставка\s+від|доставка\s+от)\s*:?\s*/i, '');
-        const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0 && !/^(?:продавець(?:\s+товару)?|продавец|seller|магазин|від\s+продавця|от\s+продавца)\s*:?$/i.test(l));
+        text = text.replace(/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|merchant|від\s+продавця|от\s+продавца|доставка\s+від(?:\s+продавця)?|доставка\s+от(?:\s+продавца)?|відправник|отправитель)\s*:?\s*/i, '');
+        const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0 && !/^(?:продавець(?:\s+товару)?|продавец|seller|магазин|merchant|від\s+продавця|от\s+продавца)\s*:?$/i.test(l));
         if (lines.length === 0) return '';
         let name = lines[0];
-        name = name.replace(/\s*\b\d(?:[.,]\d)?\s*\(\s*\d+%\s*\).*$/, '');
-        name = name.replace(/\s*\(\s*\d+%\s*\).*$/, '');
-        name = name.replace(/\s+\d(?:[.,]\d)?\s*★.*$/, '');
-        name = name.replace(/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца)\s*:?\s*/i, '');
+        // Strip any parentheses content e.g. " (24)", " (24 товари)", " (95%)", " (офіційний дистриб'ютор)"
+        name = name.replace(/\s*\([^)]*\).*$/, '');
+        name = name.replace(/\s*\b\d+(?:[.,]\d+)?\s*(?:★|\%|\bтовар\w*|\bтов\w*).*$/, '');
+        name = name.replace(/\s+\d+\s*$/, '');
+        name = name.replace(/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|merchant|від\s+продавця|от\s+продавца|доставка\s+від(?:\s+продавця)?|доставка\s+от(?:\s+продавца)?|відправник|отправитель)\s*:?\s*/i, '');
         name = name.replace(/[>›»\s]+$/, '').trim();
-        if (name.length >= 2 && name.length <= 80 && !/^\d+$/.test(name) && !/^(?:відгук|отзыв|купити|купить|додати|в кошик|немає|в наявності|новинка|акція|топ|скидка|знижка|уточнюйте)/i.test(name)) {
+
+        // Normalize all-caps names e.g. "QINETIQ" -> "Qinetiq"
+        if (name.length > 3 && name === name.toUpperCase() && !/^\d+$/.test(name)) {
+            name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+        }
+
+        if (name.length >= 2 && name.length <= 80 && !/^\d+$/.test(name) && !/^(?:відгук|отзыв|купити|купить|додати|в кошик|немає|в наявності|новинка|акція|топ|скидка|знижка|уточнюйте|офіційний|официальный|інші продавці|другие продавцы)/i.test(name)) {
             return name;
         }
         return '';
     }
 
     const pageSellerMap = new Map();
+
+    function parseSellersFromAnyJson(obj, sellersMap) {
+        if (!obj || typeof obj !== 'object') return;
+
+        // Build seller lookup table if present (e.g. obj.sellers = { "123": { "title": "Mini Shop" } })
+        const sellerLookup = new Map();
+        function findSellerLookups(node) {
+            if (!node || typeof node !== 'object') return;
+            if (node.sellers && typeof node.sellers === 'object') {
+                for (const [sId, sObj] of Object.entries(node.sellers)) {
+                    if (sObj && typeof sObj === 'object') {
+                        const sName = sObj.title || sObj.name || sObj.seller_title || sObj.seller_name;
+                        if (sName) sellerLookup.set(String(sId), String(sName).trim());
+                    } else if (typeof sObj === 'string') {
+                        sellerLookup.set(String(sId), sObj.trim());
+                    }
+                }
+            }
+            for (const k of Object.keys(node)) {
+                if (typeof node[k] === 'object') findSellerLookups(node[k]);
+            }
+        }
+        try { findSellerLookups(obj); } catch (_) {}
+
+        function traverse(node) {
+            if (!node || typeof node !== 'object') return;
+
+            if (Array.isArray(node)) {
+                for (const item of node) traverse(item);
+                return;
+            }
+
+            const id = node.id || node.goods_id || node.goodsId || node.productId || node.sku;
+            const prodId = id ? String(id) : '';
+            const href = node.href || node.url || node.link || '';
+
+            let sellerName = '';
+            if (node.seller) {
+                if (typeof node.seller === 'string') sellerName = node.seller;
+                else if (typeof node.seller === 'object') {
+                    sellerName = node.seller.title || node.seller.name || node.seller.title_translit || node.seller.seller_name || '';
+                }
+            }
+            if (!sellerName) {
+                sellerName = node.seller_title || node.sellerName || node.seller_name || node.merchant_name || node.merchant || node.shop_name || node.shopName || '';
+            }
+            if (!sellerName && node.seller_id && sellerLookup.has(String(node.seller_id))) {
+                sellerName = sellerLookup.get(String(node.seller_id));
+            }
+
+            if (sellerName && typeof sellerName === 'string') {
+                const cleaned = cleanSellerName(sellerName);
+                if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                    if (prodId) sellersMap.set(prodId, cleaned);
+                    if (href) sellersMap.set(href.split('?')[0].replace(/\/+$/, ''), cleaned);
+                }
+            }
+
+            for (const k of Object.keys(node)) {
+                if (typeof node[k] === 'object') traverse(node[k]);
+            }
+        }
+
+        try { traverse(obj); } catch (_) {}
+    }
 
     function buildPageSellerMap() {
         try {
@@ -486,44 +558,28 @@
                     const jsonText = script.textContent || script.innerText || '';
                     if (!jsonText) continue;
                     const data = JSON.parse(jsonText);
-                    const items = Array.isArray(data) ? data : [data];
-                    for (const item of items) {
-                        const processProductObj = (obj) => {
-                            if (!obj) return;
-                            const url = obj.url || obj['@id'] || '';
-                            const idMatch = url.match(/\/p(\d+)/i) || (obj.sku ? [null, String(obj.sku)] : null);
-                            const prodId = idMatch ? String(idMatch[1]) : '';
-                            const sellerName = obj.offers?.seller?.name || obj.offers?.seller?.title || obj.seller?.name || obj.seller?.title || '';
-                            const cleaned = cleanSellerName(sellerName);
-                            if (cleaned) {
-                                if (prodId) pageSellerMap.set(prodId, cleaned);
-                                if (url) pageSellerMap.set(url.split('?')[0].replace(/\/+$/, ''), cleaned);
-                            }
-                        };
-
-                        if (item['@type'] === 'Product') {
-                            processProductObj(item);
-                        } else if (item.itemListElement && Array.isArray(item.itemListElement)) {
-                            for (const el of item.itemListElement) {
-                                processProductObj(el.item || el);
-                            }
-                        }
-                    }
+                    parseSellersFromAnyJson(data, pageSellerMap);
                 } catch (_) {}
             }
 
-            // 2. Scan inline scripts for SSR state containing seller objects
-            const inlineScripts = document.querySelectorAll('script:not([src])');
-            for (const s of inlineScripts) {
+            // 2. Scan JSON / state scripts
+            const jsonScripts = document.querySelectorAll('script[type="application/json"], script#serverApp-state, script:not([src])');
+            for (const s of jsonScripts) {
                 const txt = s.textContent || s.innerText || '';
-                if (txt.includes('"seller"') || txt.includes('"seller_title"') || txt.includes('"merchant"')) {
-                    const regex = /"id"\s*:\s*(\d{5,})[\s\S]{1,600}?"(?:seller_title|sellerName|seller)"\s*:\s*(?:\{[^}]*?"title"\s*:\s*"([^"]+)"|"([^"]+)")/g;
-                    let m;
-                    while ((m = regex.exec(txt)) !== null) {
-                        const prodId = m[1];
-                        const sName = cleanSellerName(m[2] || m[3]);
-                        if (prodId && sName && sName.toLowerCase() !== 'rozetka') {
-                            pageSellerMap.set(prodId, sName);
+                if (txt.includes('{') && (txt.includes('seller') || txt.includes('goods') || txt.includes('merchant'))) {
+                    try {
+                        const parsed = JSON.parse(txt);
+                        parseSellersFromAnyJson(parsed, pageSellerMap);
+                    } catch (_) {
+                        // Regex fallback for non-standard serialized chunks
+                        const regex = /"id"\s*:\s*(\d{5,})[\s\S]{1,800}?"(?:seller_title|sellerName|seller)"\s*:\s*(?:\{[^}]*?"title"\s*:\s*"([^"]+)"|"([^"]+)")/g;
+                        let m;
+                        while ((m = regex.exec(txt)) !== null) {
+                            const prodId = m[1];
+                            const sName = cleanSellerName(m[2] || m[3]);
+                            if (prodId && sName && sName.toLowerCase() !== 'rozetka') {
+                                pageSellerMap.set(prodId, sName);
+                            }
                         }
                     }
                 }
@@ -534,12 +590,18 @@
     function getKnownSellersFromSidebar() {
         const sellers = new Set();
         try {
-            const filterBlocks = document.querySelectorAll('rz-filter-stack, aside.sidebar, .sidebar-block, [data-filter-name*="seller"], [data-filter-name*="producer"], [class*="filter-section"]');
+            const filterBlocks = document.querySelectorAll(`
+                rz-filter-stack, aside.sidebar, .sidebar-block, rz-sidebar, .catalog-filters,
+                [data-filter-name*="seller"], [data-filter-name*="producer"], [data-filter-name*="merchant"], [class*="filter-section"],
+                rz-filter-section, [class*="filter_type_seller"], [class*="filter_type_producer"]
+            `);
             for (const block of filterBlocks) {
-                const heading = block.querySelector('[class*="heading"], [class*="title"], h3, h4, p');
-                const headingText = (heading?.innerText || '').toLowerCase();
-                if (headingText.includes('продавець') || headingText.includes('продавец') || headingText.includes('seller') || headingText.includes('магазин')) {
-                    const labels = block.querySelectorAll('li, label, a, .checkbox-filter__link, [class*="filter-link"], [class*="checkbox"]');
+                const heading = block.querySelector('[class*="heading"], [class*="title"], h3, h4, p, [class*="filter-name"]');
+                const headingText = (heading?.innerText || heading?.textContent || '').toLowerCase();
+                const isSellerBlock = headingText.includes('продавець') || headingText.includes('продавец') || headingText.includes('seller') || headingText.includes('магазин') || headingText.includes('продавці') || headingText.includes('продавцы');
+                
+                if (isSellerBlock || block.getAttribute('data-filter-name') === 'seller' || block.classList.contains('filter_type_seller')) {
+                    const labels = block.querySelectorAll('li, label, a, .checkbox-filter__link, [class*="filter-link"], [class*="checkbox"], [class*="filter-item"]');
                     labels.forEach(l => {
                         const txt = (l.innerText || l.textContent || '').trim();
                         const cleaned = cleanSellerName(txt);
@@ -551,6 +613,37 @@
             }
         } catch (_) {}
         return Array.from(sellers);
+    }
+
+    function extractSellerFromAngularDom(tile) {
+        if (!tile) return '';
+        try {
+            const elementsToCheck = [tile, tile.parentElement, tile.querySelector('rz-goods-seller'), tile.querySelector('article'), tile.querySelector('rz-catalog-tile')].filter(Boolean);
+            
+            for (const el of elementsToCheck) {
+                const directObj = el.goods || el.item || el.product || el.data || el.dataGoods;
+                if (directObj) {
+                    const s = directObj.seller?.title || directObj.seller?.name || directObj.seller_title || directObj.sellerName || (typeof directObj.seller === 'string' ? directObj.seller : '');
+                    if (s) {
+                        const cleaned = cleanSellerName(s);
+                        if (cleaned && cleaned.toLowerCase() !== 'rozetka') return cleaned;
+                    }
+                }
+
+                if (el.__ngContext__ && Array.isArray(el.__ngContext__)) {
+                    for (const item of el.__ngContext__) {
+                        if (item && typeof item === 'object') {
+                            const s = item.seller?.title || item.seller?.name || item.seller_title || item.sellerName || (typeof item.seller === 'string' ? item.seller : '') || item.goods?.seller?.title || item.goods?.seller_title || item.product?.seller?.title;
+                            if (s) {
+                                const cleaned = cleanSellerName(s);
+                                if (cleaned && cleaned.toLowerCase() !== 'rozetka') return cleaned;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_) {}
+        return '';
     }
 
     function extractSeller(item, link, name) {
@@ -570,7 +663,13 @@
             if (s && s.toLowerCase() !== 'rozetka') return s;
         }
 
-        // Priority 2: Build comprehensive hierarchy scopes (from the item itself up to the top-level catalog grid cell)
+        // Priority 2: Direct Angular DOM context inspection
+        const angularSeller = extractSellerFromAngularDom(item);
+        if (angularSeller && angularSeller.toLowerCase() !== 'rozetka') {
+            return angularSeller;
+        }
+
+        // Priority 3: Build comprehensive hierarchy scopes (from item up to catalog grid cell)
         const scopes = [];
         scopes.push(item);
         
@@ -582,7 +681,7 @@
             }
         }
 
-        // 1. Direct seller links across all scopes
+        // Direct seller links across all scopes
         const sellerLinkSelectors = [
             'a[href*="/seller/"]',
             'a[href*="/merchant/"]',
@@ -612,26 +711,24 @@
                         const s = cleanSellerName(txt);
                         if (s && s.toLowerCase() !== 'rozetka') return s;
 
-                        // Check child img alt inside seller link
                         const img = a.querySelector('img[alt], img[title]');
                         if (img) {
                             const imgName = cleanSellerName(img.getAttribute('alt') || img.getAttribute('title'));
                             if (imgName && imgName.toLowerCase() !== 'rozetka') return imgName;
                         }
 
-                        // Fallback to URL slug if text was empty or just an icon
                         const href = a.getAttribute('href') || '';
                         const m = href.match(/\/(?:seller|merchant)\/([^\/?#]+)/i) || href.match(/[?&](?:seller|merchant|seller_id)=([^&#]+)/i);
                         if (m && m[1] && m[1].toLowerCase() !== 'rozetka' && !/^\d+$/.test(m[1])) {
                             const slugName = decodeURIComponent(m[1]).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
-                            if (slugName.length >= 2) return slugName;
+                            if (slugName.length >= 2) return cleanSellerName(slugName);
                         }
                     }
                 } catch (_) {}
             }
         }
 
-        // 2. Dedicated seller DOM tags and classes across all scopes
+        // Dedicated seller DOM tags and classes across all scopes
         const sellerContainerSelectors = [
             'rz-goods-seller',
             'rz-product-seller',
@@ -646,6 +743,8 @@
             '.goods-tile__seller-link',
             '.goods-tile__shop',
             '.goods-tile__merchant',
+            '.goods-tile__availability',
+            '.goods-tile__delivery',
             '[class*="goods-tile__seller"]',
             '[class*="product-seller"]',
             '[class*="product__seller"]',
@@ -678,7 +777,7 @@
             }
         }
 
-        // 3. Container data attributes
+        // Container data attributes
         for (const scope of scopes) {
             const attrSeller = scope.getAttribute('data-seller') || scope.getAttribute('data-seller-name') || scope.getAttribute('data-merchant') || scope.getAttribute('data-goods-seller');
             if (attrSeller) {
@@ -687,31 +786,28 @@
             }
         }
 
-        // 4. Deep multiline text scan across all scopes
+        // Deep multiline text scan across all scopes
         for (const scope of scopes) {
             try {
                 const fullText = scope.innerText || scope.textContent || '';
                 if (!fullText) continue;
 
-                // Match single line: "Продавець: Mini Shop"
-                const m1 = fullText.match(/(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца)\s*:?\s*([^\n\r\t,;]+)/i);
+                const m1 = fullText.match(/(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца|доставка\s+від|доставка\s+от|відправник|отправитель)\s*:?\s*([^\n\r\t,;]+)/i);
                 if (m1 && m1[1]) {
                     const s = cleanSellerName(m1[1]);
                     if (s && s.toLowerCase() !== 'rozetka') return s;
                 }
 
-                // Match multi line: "Продавець:\nMini Shop" or "Продавец\nMini Shop"
-                const m2 = fullText.match(/(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца)\s*:?\s*[\r\n]+\s*([^\r\n\t,;]+)/i);
+                const m2 = fullText.match(/(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца|відправник|отправитель)\s*:?\s*[\r\n]+\s*([^\r\n\t,;]+)/i);
                 if (m2 && m2[1]) {
                     const s = cleanSellerName(m2[1]);
                     if (s && s.toLowerCase() !== 'rozetka') return s;
                 }
 
-                // Scan line by line for seller labels
                 const lines = fullText.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
                 for (let i = 0; i < lines.length; i++) {
                     const l = lines[i];
-                    if (/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца)\s*:?$/i.test(l)) {
+                    if (/^(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца|відправник|отправитель)\s*:?$/i.test(l)) {
                         if (i + 1 < lines.length) {
                             const nextLineSeller = cleanSellerName(lines[i + 1]);
                             if (nextLineSeller && nextLineSeller.toLowerCase() !== 'rozetka') return nextLineSeller;
@@ -721,7 +817,7 @@
             } catch (_) {}
         }
 
-        // 5. Match against known sidebar sellers list
+        // Priority 4: Match against known sidebar sellers list
         const sidebarSellers = getKnownSellersFromSidebar();
         if (sidebarSellers.length > 0) {
             const tileContent = (item.innerText || '') + ' ' + (name || '');
@@ -732,11 +828,11 @@
             }
         }
 
-        // 6. Known 3P Brand/Merchant signature detection from title (e.g. Qinetiq, Remzona)
+        // Priority 5: Known 3P Brand/Merchant signature detection from title (e.g. Qinetiq, Remzona, Mini Shop, Smart Hub)
         if (name) {
             const brandMatch = name.match(/\b(Qinetiq|Remzona|Mini Shop|Smart Hub|Tech Store|PowerStore|Gadget Shop)\b/i);
             if (brandMatch && brandMatch[1] && brandMatch[1].toLowerCase() !== 'rozetka') {
-                return brandMatch[1];
+                return cleanSellerName(brandMatch[1]);
             }
         }
 
