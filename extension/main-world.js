@@ -264,36 +264,57 @@
     // Direct Batch Fetch in Main World (100% same context as DevTools Console)
     window.addEventListener('tradescout_batch_fetch_sellers', async (e) => {
         const ids = e.detail?.productIds;
-        if (!Array.isArray(ids) || ids.length === 0) return;
+        const reqId = e.detail?.requestId || '';
+        if (!Array.isArray(ids) || ids.length === 0) {
+            window.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', { detail: { requestId: reqId, results: [] } }));
+            return;
+        }
+        const collectedResults = [];
         try {
-            const idsChunk = ids.slice(0, 80).join(',');
-            const res = await fetch(`https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`, {
-                credentials: 'include'
-            });
-            if (res.ok) {
-                const json = await res.json();
-                if (Array.isArray(json?.data)) {
-                    for (const item of json.data) {
-                        if (item && item.id) {
-                            const sTitle = item.seller?.title || item.seller?.name || item.seller_title || (typeof item.seller === 'string' ? item.seller : '');
-                            const cleaned = cleanSeller(sTitle);
-                            const finalSeller = cleaned || (item.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
-                            const sCount = item.sellers_count || (item.same_offers?.count ? item.same_offers.count + 1 : 1);
-                            goodsMap[String(item.id)] = {
-                                id: String(item.id),
-                                seller: finalSeller,
-                                sellersCount: sCount
-                            };
+            for (let i = 0; i < ids.length; i += 60) {
+                const chunk = ids.slice(i, i + 60);
+                const idsChunk = chunk.join(',');
+                try {
+                    const res = await fetch(`https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`, {
+                        credentials: 'include'
+                    });
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (Array.isArray(json?.data)) {
+                            for (const item of json.data) {
+                                if (item && item.id) {
+                                    collectedResults.push(item);
+                                    const sTitle = item.seller?.title || item.seller?.name || item.seller_title || (typeof item.seller === 'string' ? item.seller : '');
+                                    const cleaned = cleanSeller(sTitle);
+                                    const finalSeller = cleaned || (item.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
+                                    const sCount = item.sellers_count || (item.same_offers?.count ? item.same_offers.count + 1 : 1);
+                                    goodsMap[String(item.id)] = {
+                                        id: String(item.id),
+                                        seller: finalSeller,
+                                        sellersCount: sCount
+                                    };
+                                }
+                            }
                         }
                     }
-                    dispatchUpdate();
-                    window.postMessage({
-                        type: 'TRADESCOUT_BATCH_SELLERS_RESULT',
-                        data: json.data
-                    }, '*');
-                }
+                } catch (_) {}
             }
-        } catch (_) {}
+            if (collectedResults.length > 0) {
+                dispatchUpdate();
+                window.postMessage({
+                    type: 'TRADESCOUT_BATCH_SELLERS_RESULT',
+                    requestId: reqId,
+                    data: collectedResults
+                }, '*');
+            }
+            window.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', {
+                detail: { requestId: reqId, results: collectedResults }
+            }));
+        } catch (_) {
+            window.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', {
+                detail: { requestId: reqId, results: collectedResults }
+            }));
+        }
     });
 
     setInterval(harvestAll, 1000);

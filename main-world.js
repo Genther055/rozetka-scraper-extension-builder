@@ -12,8 +12,14 @@
         if (!raw) return '';
         let s = String(raw).trim();
         s = s.replace(/^(?:інтернет-магазин|магазин|продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|merchant|від\s+продавця|от\s+продавца|доставка\s+від(?:\s+продавця)?|доставка\s+от(?:\s+продавца)?|відправник|отправитель)\s*:?\s*/i, '');
+        s = s.replace(/\b(?:запитати\s+про\s+товар|спросить\s+о\s+товаре|усі\s+товари\s+продавця|все\s+товары\s+продавца|товари\s+продавця|товары\s+продавца|написати\s+продавцю|написать\s+продавцу|повідомити|сообщить|немає\s+в\s+наявності|нет\s+в\s+наличии|в\s+наявності|в\s+наличии|код:\s*\d+|арт(?:икул)?:\s*\d+)\b.*$/i, '');
+
+        const lines = s.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0 && !/^(?:інтернет-магазин|магазин|продавець(?:\s+товару)?|продавец|seller|merchant|від\s+продавця|от\s+продавца)\s*:?$/i.test(l));
+        if (lines.length === 0) return '';
+        s = lines[0];
+
+        s = s.replace(/\s*\b\d+(?:[.,]\d+)?\s*(?:\/\s*5|\s*★|\%|\bоцін\w*|\bоцен\w*|\bвідгук\w*|\bотзыв\w*|\bтовар\w*|\bтов\w*).*$/i, '');
         s = s.replace(/\s*\([^)]*\).*$/, '');
-        s = s.replace(/\s*\b\d+(?:[.,]\d+)?\s*(?:★|\%|\bтовар\w*|\bтов\w*).*$/, '');
         s = s.replace(/\s+\d+\s*$/, '');
         s = s.replace(/^[>›»\s—–:-]+|[>›»\s—–:-]+$/, '').trim();
 
@@ -162,6 +168,37 @@
             }
         } catch (_) {}
 
+        // 3. Scan DOM on-page seller carriage & anchors
+        try {
+            const sellerAnchors = document.querySelectorAll(`
+                rz-marketplace-link a, .seller-market-link a, [class*="seller-market-link"] a,
+                rz-seller-carriage a[href*="/seller/"], .product-seller a[href*="/seller/"], rz-seller-title a, rz-seller-title-feedback a,
+                rz-goods-seller a, [class*="product-seller"] a, a[href*="/seller/"], a[apprzroute][href*="/seller/"]
+            `);
+            for (const a of sellerAnchors) {
+                let sName = cleanSeller(a.querySelector('.text-inline, span')?.innerText || a.innerText || a.textContent || '');
+                if (!sName || sName.toLowerCase() === 'rozetka') {
+                    const href = a.getAttribute('href') || '';
+                    const m = href.match(/\/(?:seller|merchant)\/([^\/?#]+)/i);
+                    if (m && m[1] && !/^\d+$/.test(m[1])) {
+                        const slug = decodeURIComponent(m[1]).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+                        if (slug.length >= 2) sName = cleanSeller(slug);
+                    }
+                }
+                if (sName && sName.toLowerCase() !== 'rozetka') {
+                    const pContainer = a.closest('rz-product, .product-about, rz-catalog-tile, rz-product-tile, .goods-tile, main, body');
+                    const gIdEl = pContainer ? pContainer.querySelector('.g-id, [data-goods-id], [class*="goods-id"]') : null;
+                    const rawGId = gIdEl?.getAttribute('data-goods-id') || gIdEl?.innerText?.trim();
+                    const urlGId = window.location.href.match(/\/p(\d+)/i)?.[1];
+                    const targetId = rawGId || urlGId;
+                    if (targetId) {
+                        if (!goodsMap[targetId]) goodsMap[targetId] = { id: targetId, seller: '', sellersCount: 1 };
+                        goodsMap[targetId].seller = sName;
+                    }
+                }
+            }
+        } catch (_) {}
+
         dispatchUpdate();
     }
 
@@ -223,6 +260,63 @@
 
     // Event-driven & periodic harvesting
     window.addEventListener('tradescout_request_main_harvest', harvestAll);
+
+    // Direct Batch Fetch in Main World (100% same context as DevTools Console)
+    window.addEventListener('tradescout_batch_fetch_sellers', async (e) => {
+        const ids = e.detail?.productIds;
+        const reqId = e.detail?.requestId || '';
+        if (!Array.isArray(ids) || ids.length === 0) {
+            window.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', { detail: { requestId: reqId, results: [] } }));
+            return;
+        }
+        const collectedResults = [];
+        try {
+            for (let i = 0; i < ids.length; i += 60) {
+                const chunk = ids.slice(i, i + 60);
+                const idsChunk = chunk.join(',');
+                try {
+                    const res = await fetch(`https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`, {
+                        credentials: 'include'
+                    });
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (Array.isArray(json?.data)) {
+                            for (const item of json.data) {
+                                if (item && item.id) {
+                                    collectedResults.push(item);
+                                    const sTitle = item.seller?.title || item.seller?.name || item.seller_title || (typeof item.seller === 'string' ? item.seller : '');
+                                    const cleaned = cleanSeller(sTitle);
+                                    const finalSeller = cleaned || (item.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
+                                    const sCount = item.sellers_count || (item.same_offers?.count ? item.same_offers.count + 1 : 1);
+                                    goodsMap[String(item.id)] = {
+                                        id: String(item.id),
+                                        seller: finalSeller,
+                                        sellersCount: sCount
+                                    };
+                                }
+                            }
+                        }
+                    }
+                } catch (_) {}
+            }
+            if (collectedResults.length > 0) {
+                dispatchUpdate();
+                window.postMessage({
+                    type: 'TRADESCOUT_BATCH_SELLERS_RESULT',
+                    requestId: reqId,
+                    data: collectedResults
+                }, '*');
+            }
+            window.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', {
+                detail: { requestId: reqId, results: collectedResults }
+            }));
+        } catch (_) {
+            window.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', {
+                detail: { requestId: reqId, results: collectedResults }
+            }));
+        }
+    });
+
     setInterval(harvestAll, 1000);
 
     if (document.readyState === 'loading') {

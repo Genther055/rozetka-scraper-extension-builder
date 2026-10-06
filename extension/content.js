@@ -760,6 +760,20 @@
                 }
             }
         }
+        if (event.data.type === 'TRADESCOUT_BATCH_SELLERS_RESULT' && Array.isArray(event.data.data)) {
+            for (const item of event.data.data) {
+                if (item && item.id) {
+                    const sTitle = item.seller?.title || item.seller?.name || item.seller_title || (typeof item.seller === 'string' ? item.seller : '');
+                    const cleaned = cleanSellerName(sTitle);
+                    if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                        pageSellerMap.set(String(item.id).trim(), cleaned);
+                    }
+                    if (typeof item.sellers_count === 'number' && item.sellers_count > 0) {
+                        pageSellersCountMap.set(String(item.id).trim(), item.sellers_count);
+                    }
+                }
+            }
+        }
         if (event.data.type === 'TRADESCOUT_NETWORK_DATA' && event.data.data) {
             parseSellersFromAnyJson(event.data.data, pageSellerMap, pageSellersCountMap);
         }
@@ -1841,16 +1855,89 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // Batch fetch official Rozetka product details via Background Service Worker (Zero-CORS)
+        // Batch fetch official Rozetka product details (Direct Tab Fetch + Main World Bridge + Service Worker Fallback)
         const apiProductDetailsMap = new Map();
         try {
             const productIds = [];
-            for (const { link } of distinctTiles) {
-                const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
-                if (m && m[1]) productIds.push(m[1]);
+            for (const { item, link } of distinctTiles) {
+                const prodId = extractProductId(item, link);
+                if (prodId && !productIds.includes(prodId)) productIds.push(prodId);
             }
+
             if (productIds.length > 0) {
-                const bgDetails = await new Promise(resolve => {
+                let fetchedProducts = [];
+                const reqId = 'ts_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+                // Tier 1: Main World Bridge Promise (Zero-CORS, direct browser session)
+                const mainWorldPromise = new Promise((resolve) => {
+                    let handled = false;
+                    const cleanup = () => {
+                        window.removeEventListener('tradescout_batch_sellers_done', onBatchDone);
+                        window.removeEventListener('message', onMsg);
+                    };
+                    const onBatchDone = (e) => {
+                        if (e.detail?.requestId === reqId || !e.detail?.requestId) {
+                            if (!handled) {
+                                handled = true;
+                                cleanup();
+                                resolve(e.detail?.results || []);
+                            }
+                        }
+                    };
+                    const onMsg = (event) => {
+                        if (event.data?.type === 'TRADESCOUT_BATCH_SELLERS_RESULT' && (event.data?.requestId === reqId || !event.data?.requestId)) {
+                            if (!handled && Array.isArray(event.data?.data)) {
+                                handled = true;
+                                cleanup();
+                                resolve(event.data.data);
+                            }
+                        }
+                    };
+                    window.addEventListener('tradescout_batch_sellers_done', onBatchDone);
+                    window.addEventListener('message', onMsg);
+
+                    window.dispatchEvent(new CustomEvent('tradescout_batch_fetch_sellers', {
+                        detail: { productIds, requestId: reqId }
+                    }));
+
+                    // Safety timeout for bridge
+                    setTimeout(() => {
+                        if (!handled) {
+                            handled = true;
+                            cleanup();
+                            resolve([]);
+                        }
+                    }, 2200);
+                });
+
+                // Tier 2: Direct Tab Fetch (chunks of 60)
+                const directFetchPromise = (async () => {
+                    const directResults = [];
+                    for (let i = 0; i < productIds.length; i += 60) {
+                        const chunk = productIds.slice(i, i + 60);
+                        const idsChunk = chunk.join(',');
+                        const tabApiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`;
+                        try {
+                            const tabRes = await fetch(tabApiUrl, {
+                                headers: {
+                                    'Accept': 'application/json, text/plain, */*',
+                                    'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
+                                },
+                                credentials: 'include'
+                            });
+                            if (tabRes.ok) {
+                                const tabJson = await tabRes.json();
+                                if (Array.isArray(tabJson?.data)) {
+                                    directResults.push(...tabJson.data);
+                                }
+                            }
+                        } catch (_) {}
+                    }
+                    return directResults;
+                })();
+
+                // Tier 3: Background service worker fallback
+                const swPromise = new Promise(resolve => {
                     try {
                         chrome.runtime.sendMessage({
                             action: 'FETCH_PRODUCT_DETAILS',
@@ -1867,19 +1954,40 @@
                     }
                 });
 
-                if (Array.isArray(bgDetails) && bgDetails.length > 0) {
-                    for (const apiProd of bgDetails) {
+                // Race bridge with direct fetch
+                const bridgeResults = await mainWorldPromise;
+                if (Array.isArray(bridgeResults) && bridgeResults.length > 0) {
+                    fetchedProducts = bridgeResults;
+                } else {
+                    const directRes = await directFetchPromise;
+                    if (Array.isArray(directRes) && directRes.length > 0) {
+                        fetchedProducts = directRes;
+                    } else {
+                        const swRes = await swPromise;
+                        if (Array.isArray(swRes) && swRes.length > 0) {
+                            fetchedProducts = swRes;
+                        }
+                    }
+                }
+
+                console.log(`[TradeScout Batch] Received ${fetchedProducts.length} product details from Rozetka API for ${productIds.length} IDs.`);
+
+                if (Array.isArray(fetchedProducts) && fetchedProducts.length > 0) {
+                    for (const apiProd of fetchedProducts) {
                         if (apiProd && apiProd.id) {
                             apiProductDetailsMap.set(String(apiProd.id), apiProd);
                             if (apiProd.seller) {
-                                const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || '';
+                                const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || (typeof apiProd.seller === 'string' ? apiProd.seller : '');
                                 const cleaned = cleanSellerName(sTitle);
-                                if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
-                                    pageSellerMap.set(String(apiProd.id), cleaned);
-                                }
+                                const finalSeller = cleaned || (apiProd.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
+                                pageSellerMap.set(String(apiProd.id), finalSeller);
                             }
-                            if (typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0) {
-                                pageSellersCountMap.set(String(apiProd.id), apiProd.sellers_count);
+                            let sCount = apiProd.sellers_count;
+                            if (typeof sCount !== 'number' && apiProd.same_offers && typeof apiProd.same_offers.count === 'number' && apiProd.same_offers.count > 0) {
+                                sCount = apiProd.same_offers.count + 1;
+                            }
+                            if (typeof sCount === 'number' && sCount > 0) {
+                                pageSellersCountMap.set(String(apiProd.id), sCount);
                             }
                         }
                     }
@@ -2057,9 +2165,13 @@
                 const apiProd = prodId ? apiProductDetailsMap.get(prodId) : null;
                 let apiSeller = '';
                 if (apiProd && apiProd.seller) {
-                    apiSeller = cleanSellerName(apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || '');
+                    const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || (typeof apiProd.seller === 'string' ? apiProd.seller : '');
+                    const cleaned = cleanSellerName(sTitle);
+                    apiSeller = cleaned || (apiProd.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
+                } else if (prodId && pageSellerMap.has(prodId)) {
+                    apiSeller = pageSellerMap.get(prodId);
                 }
-                const seller = (apiSeller && apiSeller.toLowerCase() !== 'rozetka') ? apiSeller : (extractSeller(item, link, name) || 'Rozetka');
+                const seller = apiSeller || (extractSeller(item, link, name) || 'Rozetka');
                 let sellersCount = (apiProd && typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0) 
                     ? apiProd.sellers_count 
                     : ((prodId && pageSellersCountMap.has(prodId)) ? pageSellersCountMap.get(prodId) : 1);

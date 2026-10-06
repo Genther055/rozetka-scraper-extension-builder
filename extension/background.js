@@ -469,29 +469,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return true;
         }
 
-        const idsChunk = productIds.slice(0, 80).join(',');
-        const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`;
-
-        fetch(apiUrl, {
-            headers: {
-                'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8',
-                'Origin': 'https://rozetka.com.ua',
-                'Referer': 'https://rozetka.com.ua/'
-            },
-            credentials: 'include'
-        })
-        .then(res => {
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return res.json();
-        })
-        .then(json => {
-            const data = Array.isArray(json?.data) ? json.data : [];
-            sendResponse({ success: true, data });
-        })
-        .catch(err => {
-            sendResponse({ success: false, error: err.message, data: [] });
-        });
+        (async () => {
+            const allResults = [];
+            for (let i = 0; i < productIds.length; i += 60) {
+                const chunk = productIds.slice(i, i + 60);
+                const idsChunk = chunk.join(',');
+                const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`;
+                try {
+                    const res = await fetch(apiUrl, {
+                        headers: {
+                            'Accept': 'application/json, text/plain, */*',
+                            'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8',
+                            'Origin': 'https://rozetka.com.ua',
+                            'Referer': 'https://rozetka.com.ua/'
+                        },
+                        credentials: 'include'
+                    });
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (Array.isArray(json?.data)) {
+                            allResults.push(...json.data);
+                        }
+                    }
+                } catch (_) {}
+            }
+            sendResponse({ success: true, data: allResults });
+        })();
 
         return true;
     }
