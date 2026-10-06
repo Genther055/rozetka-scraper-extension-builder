@@ -2387,6 +2387,23 @@ export class DashboardComponent implements OnInit {
     }));
   }
 
+  getSweetSpotBin(): any {
+    const bins = this.analyticsSummary?.priceDistribution || [];
+    return bins.find(b => b.isSweetSpot) || bins[0] || null;
+  }
+
+  getMassDemandBin(): any {
+    const bins = this.analyticsSummary?.priceDistribution || [];
+    if (!bins || bins.length === 0) return null;
+    return [...bins].sort((a, b) => (b.reviewsSum || 0) - (a.reviewsSum || 0))[0] || null;
+  }
+
+  getHighMarginBin(): any {
+    const bins = this.analyticsSummary?.priceDistribution || [];
+    if (!bins || bins.length === 0) return null;
+    return bins[bins.length - 1] || null;
+  }
+
   // --- History Tab Time-Series Chart Engine ---
   getHistoryChartPoints(): Array<{ x: number; y: number; snapshot: ScrapingSnapshot; dateLabel: string; avgPrice: number; productsCount: number }> {
     if (!this.snapshots || this.snapshots.length === 0) return [];

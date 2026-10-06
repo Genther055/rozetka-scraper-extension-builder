@@ -2192,6 +2192,118 @@
               </div>
             </div>
 
+            <!-- Segment Performance & Market Vectors (Заповнення та деталізація структури ніші) -->
+            <div class="space-y-2 mt-1">
+              <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                <span>Анатомія попиту та точки тяжіння сегментів</span>
+                <span class="text-[10px] font-mono text-indigo-400">Векторний аналіз ніші</span>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <!-- Vector 1: Sweet Spot (Точка максимуму віддачі) -->
+                <div 
+                  *ngIf="getSweetSpotBin() as sBin"
+                  (click)="openPriceBinProductsModal(sBin)"
+                  class="p-3.5 bg-slate-950/80 hover:bg-slate-900/90 border border-amber-500/40 hover:border-amber-400/80 rounded-2xl flex flex-col justify-between space-y-2.5 transition-all cursor-pointer group shadow-md"
+                  [title]="'Переглянути товари в діапазоні Sweet Spot ' + sBin.rangeLabel"
+                >
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1">
+                      <span class="material-icons text-sm text-amber-400">stars</span>
+                      Sweet Spot
+                    </span>
+                    <span class="text-[10px] font-mono text-amber-400 font-bold bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/50">
+                      {{ sBin.demandSupplyRatio }} в/SKU
+                    </span>
+                  </div>
+
+                  <div>
+                    <div class="text-lg font-black text-white font-mono group-hover:text-amber-300 transition-colors">
+                      {{ sBin.rangeLabel }}
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-tight mt-1">
+                      Максимальна віддача на кожну картку товару в ніші.
+                    </p>
+                  </div>
+
+                  <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                    <span>Попит: <b class="text-emerald-400">{{ sBin.reviewsShare }}%</b></span>
+                    <span class="text-amber-300 font-bold group-hover:underline flex items-center gap-0.5">
+                      Товари <span class="material-icons text-[11px]">arrow_forward</span>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Vector 2: Ядро масового попиту -->
+                <div 
+                  *ngIf="getMassDemandBin() as mBin"
+                  (click)="openPriceBinProductsModal(mBin)"
+                  class="p-3.5 bg-slate-950/80 hover:bg-slate-900/90 border border-purple-500/40 hover:border-purple-400/80 rounded-2xl flex flex-col justify-between space-y-2.5 transition-all cursor-pointer group shadow-md"
+                  [title]="'Переглянути товари масового сегмента ' + mBin.rangeLabel"
+                >
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-purple-300 uppercase tracking-wider flex items-center gap-1">
+                      <span class="material-icons text-sm text-purple-400">groups</span>
+                      Ядро попиту
+                    </span>
+                    <span class="text-[10px] font-mono text-purple-300 font-bold bg-purple-950/80 px-2 py-0.5 rounded border border-purple-800/50">
+                      {{ mBin.reviewsSum | number }} відгуків
+                    </span>
+                  </div>
+
+                  <div>
+                    <div class="text-lg font-black text-white font-mono group-hover:text-purple-300 transition-colors">
+                      {{ mBin.rangeLabel }}
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-tight mt-1">
+                      Основний потік замовлень та найбільша кількість покупців.
+                    </p>
+                  </div>
+
+                  <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                    <span>Частка: <b class="text-purple-300">{{ mBin.reviewsShare }}% ринку</b></span>
+                    <span class="text-purple-300 font-bold group-hover:underline flex items-center gap-0.5">
+                      Товари <span class="material-icons text-[11px]">arrow_forward</span>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Vector 3: Маржинальний сегмент -->
+                <div 
+                  *ngIf="getHighMarginBin() as hBin"
+                  (click)="openPriceBinProductsModal(hBin)"
+                  class="p-3.5 bg-slate-950/80 hover:bg-slate-900/90 border border-indigo-500/40 hover:border-indigo-400/80 rounded-2xl flex flex-col justify-between space-y-2.5 transition-all cursor-pointer group shadow-md"
+                  [title]="'Переглянути преміум товари ' + hBin.rangeLabel"
+                >
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-indigo-300 uppercase tracking-wider flex items-center gap-1">
+                      <span class="material-icons text-sm text-indigo-400">diamond</span>
+                      Високий чек
+                    </span>
+                    <span class="text-[10px] font-mono text-indigo-300 font-bold bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/50">
+                      {{ hBin.productsCount }} товарів
+                    </span>
+                  </div>
+
+                  <div>
+                    <div class="text-lg font-black text-white font-mono group-hover:text-indigo-300 transition-colors">
+                      {{ hBin.rangeLabel }}
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-tight mt-1">
+                      Мінімальна пряма конкуренція та підвищена націнка.
+                    </p>
+                  </div>
+
+                  <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                    <span>Полиця: <b class="text-indigo-300">{{ hBin.productsShare }}% SKU</b></span>
+                    <span class="text-indigo-300 font-bold group-hover:underline flex items-center gap-0.5">
+                      Товари <span class="material-icons text-[11px]">arrow_forward</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
 
           <!-- Right (4 cols): СТРУКТУРА ТА ОРІЄНТИРИ НІШІ -->
