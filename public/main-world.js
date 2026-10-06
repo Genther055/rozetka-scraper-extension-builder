@@ -175,7 +175,15 @@
                 rz-goods-seller a, [class*="product-seller"] a, a[href*="/seller/"], a[apprzroute][href*="/seller/"]
             `);
             for (const a of sellerAnchors) {
-                const sName = cleanSeller(a.querySelector('.text-inline, span')?.innerText || a.innerText || a.textContent || '');
+                let sName = cleanSeller(a.querySelector('.text-inline, span')?.innerText || a.innerText || a.textContent || '');
+                if (!sName || sName.toLowerCase() === 'rozetka') {
+                    const href = a.getAttribute('href') || '';
+                    const m = href.match(/\/(?:seller|merchant)\/([^\/?#]+)/i);
+                    if (m && m[1] && !/^\d+$/.test(m[1])) {
+                        const slug = decodeURIComponent(m[1]).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+                        if (slug.length >= 2) sName = cleanSeller(slug);
+                    }
+                }
                 if (sName && sName.toLowerCase() !== 'rozetka') {
                     const pContainer = a.closest('rz-product, .product-about, rz-catalog-tile, rz-product-tile, .goods-tile, main, body');
                     const gIdEl = pContainer ? pContainer.querySelector('.g-id, [data-goods-id], [class*="goods-id"]') : null;

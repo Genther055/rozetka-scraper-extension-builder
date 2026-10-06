@@ -1020,7 +1020,26 @@
             const found = [];
             if (!root || !(root instanceof Element)) return found;
             try {
-                // Method A: Direct seller title / carriage / block elements
+                // Method A: Direct seller links across the root
+                const directSellerLinks = root.querySelectorAll('a[href*="/seller/"], a[href*="/merchant/"], a[apprzroute][href*="/seller/"]');
+                for (const a of directSellerLinks) {
+                    const txt = (a.querySelector('.text-inline, [class*="name"], [class*="title"], span')?.innerText || a.innerText || a.textContent || '').trim();
+                    let cleaned = cleanSellerName(txt);
+                    if (!cleaned || cleaned.toLowerCase() === 'rozetka') {
+                        // Fallback to URL slug e.g. /seller/missis-sleep/ -> Missis Sleep
+                        const href = a.getAttribute('href') || '';
+                        const m = href.match(/\/(?:seller|merchant)\/([^\/?#]+)/i);
+                        if (m && m[1] && !/^\d+$/.test(m[1])) {
+                            const slug = decodeURIComponent(m[1]).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+                            if (slug.length >= 2) cleaned = cleanSellerName(slug);
+                        }
+                    }
+                    if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                        found.push({ seller: cleaned, element: a });
+                    }
+                }
+
+                // Method B: Direct seller title / carriage / block elements
                 const containers = root.querySelectorAll(`
                     rz-seller-carriage, rz-seller-title, rz-seller-title-feedback,
                     .product-seller, rz-goods-seller, rz-product-seller, rz-seller,
@@ -1031,7 +1050,15 @@
                     const link = c.querySelector('a[href*="/seller/"], a[href*="/merchant/"], a[apprzroute][href*="/seller/"], a');
                     if (link) {
                         const txt = (link.querySelector('.text-inline, [class*="name"], [class*="title"], span')?.innerText || link.innerText || link.textContent || '').trim();
-                        const cleaned = cleanSellerName(txt);
+                        let cleaned = cleanSellerName(txt);
+                        if (!cleaned || cleaned.toLowerCase() === 'rozetka') {
+                            const href = link.getAttribute('href') || '';
+                            const m = href.match(/\/(?:seller|merchant)\/([^\/?#]+)/i);
+                            if (m && m[1] && !/^\d+$/.test(m[1])) {
+                                const slug = decodeURIComponent(m[1]).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+                                if (slug.length >= 2) cleaned = cleanSellerName(slug);
+                            }
+                        }
                         if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
                             found.push({ seller: cleaned, element: link });
                             continue;
@@ -1049,7 +1076,7 @@
                     }
                 }
 
-                // Method B: TreeWalker search for literal "Продавець" text nodes and proximity inspection
+                // Method C: TreeWalker search for literal "Продавець" text nodes and proximity inspection
                 const walker = document.createTreeWalker(
                     root,
                     NodeFilter.SHOW_TEXT,
@@ -1075,6 +1102,25 @@
                     const parent = textNode.parentElement;
                     if (!parent || parent.closest('header, footer, aside, rz-filter-stack, rz-viewed-goods')) continue;
 
+                    // Check if parent or parent's container has a link
+                    const nearbyLink = parent.querySelector('a') || parent.parentElement?.querySelector('a');
+                    if (nearbyLink) {
+                        const linkTxt = (nearbyLink.querySelector('.text-inline, span')?.innerText || nearbyLink.innerText || nearbyLink.textContent || '').trim();
+                        let cleaned = cleanSellerName(linkTxt);
+                        if (!cleaned || cleaned.toLowerCase() === 'rozetka') {
+                            const href = nearbyLink.getAttribute('href') || '';
+                            const m = href.match(/\/(?:seller|merchant)\/([^\/?#]+)/i);
+                            if (m && m[1] && !/^\d+$/.test(m[1])) {
+                                const slug = decodeURIComponent(m[1]).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+                                if (slug.length >= 2) cleaned = cleanSellerName(slug);
+                            }
+                        }
+                        if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                            found.push({ seller: cleaned, element: nearbyLink });
+                            continue;
+                        }
+                    }
+
                     // Proximity 1: Match right after "Продавець:" in parent text
                     const parentText = (parent.innerText || parent.textContent || '').trim();
                     const directMatch = parentText.match(/(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца)\s*:?\s*([^\n\r\t,;★|–—<>]+)/i);
@@ -1087,7 +1133,7 @@
                     }
 
                     // Proximity 2: Adjacent sibling element (e.g. <span>Продавець:</span> <a href="...">Missis Sleep</a>)
-                    let nextEl = parent.nextElementSibling;
+                    let nextEl = parent.nextElementSibling || parent.parentElement?.nextElementSibling;
                     if (nextEl) {
                         const nextText = (nextEl.innerText || nextEl.textContent || '').trim();
                         const cleaned = cleanSellerName(nextText);
@@ -1105,8 +1151,8 @@
                             for (const sib of siblings) {
                                 if (sib === parent) continue;
                                 const sRect = sib.getBoundingClientRect();
-                                const isHorizNear = (sRect.left >= pRect.left + 10) && (sRect.left <= pRect.right + 350) && (Math.abs(sRect.top - pRect.top) <= 40);
-                                const isVertNear = (sRect.top >= pRect.bottom - 5) && (sRect.top <= pRect.bottom + 50) && (Math.abs(sRect.left - pRect.left) <= 150);
+                                const isHorizNear = (sRect.left >= pRect.left + 5) && (sRect.left <= pRect.right + 400) && (Math.abs(sRect.top - pRect.top) <= 45);
+                                const isVertNear = (sRect.top >= pRect.bottom - 5) && (sRect.top <= pRect.bottom + 60) && (Math.abs(sRect.left - pRect.left) <= 200);
 
                                 if (isHorizNear || isVertNear) {
                                     const sibText = (sib.innerText || sib.textContent || '').trim();
@@ -1781,6 +1827,43 @@
 
         if (distinctTiles.length === 0) return [];
 
+        // Batch in-tab fetch official Rozetka product details (seller title, other sellers count, old price) for all tiles on this page
+        const apiProductDetailsMap = new Map();
+        try {
+            const productIds = [];
+            for (const { link } of distinctTiles) {
+                const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
+                if (m && m[1]) productIds.push(m[1]);
+            }
+            if (productIds.length > 0) {
+                const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productIds.join(',')}`;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2500);
+                const res = await fetch(apiUrl, { signal: controller.signal, credentials: 'omit' }).catch(() => null);
+                clearTimeout(timeoutId);
+                if (res && res.ok) {
+                    const json = await res.json().catch(() => null);
+                    if (json && Array.isArray(json.data)) {
+                        for (const apiProd of json.data) {
+                            if (apiProd && apiProd.id) {
+                                apiProductDetailsMap.set(String(apiProd.id), apiProd);
+                                if (apiProd.seller) {
+                                    const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || '';
+                                    const cleaned = cleanSellerName(sTitle);
+                                    if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                                        pageSellerMap.set(String(apiProd.id), cleaned);
+                                    }
+                                }
+                                if (typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0) {
+                                    pageSellersCountMap.set(String(apiProd.id), apiProd.sellers_count);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_) {}
+
         const newItems = [];
 
         for (const { item, link, name } of distinctTiles) {
@@ -1948,8 +2031,15 @@
 
                 const specs = Object.entries(detailedSpecsMap).map(([k, v]) => `${k}: ${v}`).join('; ') || (capacityMatch ? `${capacityMatch[1]} mAh` : 'Стандартні');
                 
-                const seller = extractSeller(item, link, name) || 'Rozetka';
-                let sellersCount = (prodId && pageSellersCountMap.has(prodId)) ? pageSellersCountMap.get(prodId) : 1;
+                const apiProd = prodId ? apiProductDetailsMap.get(prodId) : null;
+                let apiSeller = '';
+                if (apiProd && apiProd.seller) {
+                    apiSeller = cleanSellerName(apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || '');
+                }
+                const seller = (apiSeller && apiSeller.toLowerCase() !== 'rozetka') ? apiSeller : (extractSeller(item, link, name) || 'Rozetka');
+                let sellersCount = (apiProd && typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0) 
+                    ? apiProd.sellers_count 
+                    : ((prodId && pageSellersCountMap.has(prodId)) ? pageSellersCountMap.get(prodId) : 1);
                 if (sellersCount <= 1) {
                     const otherSellersEl = item.querySelector('rz-other-sellers, .goods-tile__other-sellers, [class*="other-seller"], [class*="other_seller"], [data-testid*="other_seller"]');
                     const otherText = (otherSellersEl ? otherSellersEl.innerText : '') || item.innerText || '';
