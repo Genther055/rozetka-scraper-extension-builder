@@ -1873,6 +1873,7 @@
                     let handled = false;
                     const cleanup = () => {
                         window.removeEventListener('tradescout_batch_sellers_done', onBatchDone);
+                        document.removeEventListener('tradescout_batch_sellers_done', onBatchDone);
                         window.removeEventListener('message', onMsg);
                     };
                     const onBatchDone = (e) => {
@@ -1894,8 +1895,20 @@
                         }
                     };
                     window.addEventListener('tradescout_batch_sellers_done', onBatchDone);
+                    document.addEventListener('tradescout_batch_sellers_done', onBatchDone);
                     window.addEventListener('message', onMsg);
 
+                    // 1. PostMessage bridge (Official Isolated <-> Main World bridge)
+                    window.postMessage({
+                        type: 'TRADESCOUT_REQUEST_BATCH_SELLERS',
+                        requestId: reqId,
+                        productIds: productIds
+                    }, '*');
+
+                    // 2. Document & Window CustomEvent fallback
+                    document.dispatchEvent(new CustomEvent('tradescout_request_batch_sellers', {
+                        detail: { productIds, requestId: reqId }
+                    }));
                     window.dispatchEvent(new CustomEvent('tradescout_batch_fetch_sellers', {
                         detail: { productIds, requestId: reqId }
                     }));
@@ -1907,7 +1920,7 @@
                             cleanup();
                             resolve([]);
                         }
-                    }, 2200);
+                    }, 2500);
                 });
 
                 // Tier 2: Direct Tab Fetch (chunks of 60)

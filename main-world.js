@@ -262,17 +262,16 @@
     window.addEventListener('tradescout_request_main_harvest', harvestAll);
 
     // Direct Batch Fetch in Main World (100% same context as DevTools Console)
-    window.addEventListener('tradescout_batch_fetch_sellers', async (e) => {
-        const ids = e.detail?.productIds;
-        const reqId = e.detail?.requestId || '';
+    async function handleBatchFetch(ids, reqId) {
         if (!Array.isArray(ids) || ids.length === 0) {
-            window.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', { detail: { requestId: reqId, results: [] } }));
+            window.postMessage({ type: 'TRADESCOUT_BATCH_SELLERS_RESULT', requestId: reqId, data: [] }, '*');
+            document.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', { detail: { requestId: reqId, results: [] } }));
             return;
         }
         const collectedResults = [];
         try {
-            for (let i = 0; i < ids.length; i += 60) {
-                const chunk = ids.slice(i, i + 60);
+            for (let i = 0; i < ids.length; i += 50) {
+                const chunk = ids.slice(i, i + 50);
                 const idsChunk = chunk.join(',');
                 try {
                     const res = await fetch(`https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`, {
@@ -301,20 +300,40 @@
             }
             if (collectedResults.length > 0) {
                 dispatchUpdate();
-                window.postMessage({
-                    type: 'TRADESCOUT_BATCH_SELLERS_RESULT',
-                    requestId: reqId,
-                    data: collectedResults
-                }, '*');
             }
-            window.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', {
+            window.postMessage({
+                type: 'TRADESCOUT_BATCH_SELLERS_RESULT',
+                requestId: reqId,
+                data: collectedResults
+            }, '*');
+            document.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', {
                 detail: { requestId: reqId, results: collectedResults }
             }));
         } catch (_) {
-            window.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', {
+            window.postMessage({
+                type: 'TRADESCOUT_BATCH_SELLERS_RESULT',
+                requestId: reqId,
+                data: collectedResults
+            }, '*');
+            document.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', {
                 detail: { requestId: reqId, results: collectedResults }
             }));
         }
+    }
+
+    // Multi-channel listeners to ensure 100% reception across isolated and main worlds
+    window.addEventListener('message', (event) => {
+        if (event.data?.type === 'TRADESCOUT_REQUEST_BATCH_SELLERS') {
+            handleBatchFetch(event.data.productIds, event.data.requestId);
+        }
+    });
+
+    document.addEventListener('tradescout_request_batch_sellers', (e) => {
+        handleBatchFetch(e.detail?.productIds, e.detail?.requestId);
+    });
+
+    window.addEventListener('tradescout_batch_fetch_sellers', (e) => {
+        handleBatchFetch(e.detail?.productIds, e.detail?.requestId);
     });
 
     setInterval(harvestAll, 1000);
