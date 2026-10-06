@@ -1841,7 +1841,7 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // Batch fetch official Rozetka product details via Background Service Worker (Zero-CORS)
+        // Batch fetch official Rozetka product details (Direct Tab Fetch + Service Worker Fallback)
         const apiProductDetailsMap = new Map();
         try {
             const productIds = [];
@@ -1850,29 +1850,53 @@
                 if (m && m[1]) productIds.push(m[1]);
             }
             if (productIds.length > 0) {
-                const bgDetails = await new Promise(resolve => {
-                    try {
-                        chrome.runtime.sendMessage({
-                            action: 'FETCH_PRODUCT_DETAILS',
-                            productIds: productIds
-                        }, (res) => {
-                            if (chrome.runtime.lastError || !res || !res.success) {
-                                resolve([]);
-                            } else {
-                                resolve(res.data || []);
-                            }
-                        });
-                    } catch (_) {
-                        resolve([]);
+                let fetchedProducts = [];
+                
+                // Tier 1: Direct fetch in active tab (carries live Cloudflare clearance & session cookies)
+                try {
+                    const idsChunk = productIds.slice(0, 80).join(',');
+                    const tabApiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`;
+                    const tabRes = await fetch(tabApiUrl, {
+                        headers: {
+                            'Accept': 'application/json, text/plain, */*',
+                            'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
+                        },
+                        credentials: 'include'
+                    });
+                    if (tabRes.ok) {
+                        const tabJson = await tabRes.json();
+                        if (Array.isArray(tabJson?.data) && tabJson.data.length > 0) {
+                            fetchedProducts = tabJson.data;
+                        }
                     }
-                });
+                } catch (_) {}
 
-                if (Array.isArray(bgDetails) && bgDetails.length > 0) {
-                    for (const apiProd of bgDetails) {
+                // Tier 2: Background service worker fallback
+                if (fetchedProducts.length === 0) {
+                    fetchedProducts = await new Promise(resolve => {
+                        try {
+                            chrome.runtime.sendMessage({
+                                action: 'FETCH_PRODUCT_DETAILS',
+                                productIds: productIds
+                            }, (res) => {
+                                if (chrome.runtime.lastError || !res || !res.success) {
+                                    resolve([]);
+                                } else {
+                                    resolve(res.data || []);
+                                }
+                            });
+                        } catch (_) {
+                            resolve([]);
+                        }
+                    });
+                }
+
+                if (Array.isArray(fetchedProducts) && fetchedProducts.length > 0) {
+                    for (const apiProd of fetchedProducts) {
                         if (apiProd && apiProd.id) {
                             apiProductDetailsMap.set(String(apiProd.id), apiProd);
                             if (apiProd.seller) {
-                                const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || '';
+                                const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || (typeof apiProd.seller === 'string' ? apiProd.seller : '');
                                 const cleaned = cleanSellerName(sTitle);
                                 if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
                                     pageSellerMap.set(String(apiProd.id), cleaned);

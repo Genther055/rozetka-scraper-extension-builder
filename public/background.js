@@ -475,10 +475,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         fetch(apiUrl, {
             headers: {
                 'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'uk-UA,uk;q=0.9'
-            }
+                'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8',
+                'Origin': 'https://rozetka.com.ua',
+                'Referer': 'https://rozetka.com.ua/'
+            },
+            credentials: 'include'
         })
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        })
         .then(json => {
             const data = Array.isArray(json?.data) ? json.data : [];
             sendResponse({ success: true, data });
