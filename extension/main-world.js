@@ -12,8 +12,14 @@
         if (!raw) return '';
         let s = String(raw).trim();
         s = s.replace(/^(?:інтернет-магазин|магазин|продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|merchant|від\s+продавця|от\s+продавца|доставка\s+від(?:\s+продавця)?|доставка\s+от(?:\s+продавца)?|відправник|отправитель)\s*:?\s*/i, '');
+        s = s.replace(/\b(?:запитати\s+про\s+товар|спросить\s+о\s+товаре|усі\s+товари\s+продавця|все\s+товары\s+продавца|товари\s+продавця|товары\s+продавца|написати\s+продавцю|написать\s+продавцу|повідомити|сообщить|немає\s+в\s+наявності|нет\s+в\s+наличии|в\s+наявності|в\s+наличии|код:\s*\d+|арт(?:икул)?:\s*\d+)\b.*$/i, '');
+
+        const lines = s.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0 && !/^(?:інтернет-магазин|магазин|продавець(?:\s+товару)?|продавец|seller|merchant|від\s+продавця|от\s+продавца)\s*:?$/i.test(l));
+        if (lines.length === 0) return '';
+        s = lines[0];
+
+        s = s.replace(/\s*\b\d+(?:[.,]\d+)?\s*(?:\/\s*5|\s*★|\%|\bоцін\w*|\bоцен\w*|\bвідгук\w*|\bотзыв\w*|\bтовар\w*|\bтов\w*).*$/i, '');
         s = s.replace(/\s*\([^)]*\).*$/, '');
-        s = s.replace(/\s*\b\d+(?:[.,]\d+)?\s*(?:★|\%|\bтовар\w*|\bтов\w*).*$/, '');
         s = s.replace(/\s+\d+\s*$/, '');
         s = s.replace(/^[>›»\s—–:-]+|[>›»\s—–:-]+$/, '').trim();
 
@@ -158,6 +164,28 @@
                         const comp = window.ng.getComponent(tile);
                         if (comp) scanObject(comp, 0);
                     } catch (_) {}
+                }
+            }
+        } catch (_) {}
+
+        // 3. Scan DOM on-page seller carriage & anchors
+        try {
+            const sellerAnchors = document.querySelectorAll(`
+                rz-seller-carriage a[href*="/seller/"], .product-seller a[href*="/seller/"], rz-seller-title a, rz-seller-title-feedback a,
+                rz-goods-seller a, [class*="product-seller"] a, a[href*="/seller/"], a[apprzroute][href*="/seller/"]
+            `);
+            for (const a of sellerAnchors) {
+                const sName = cleanSeller(a.querySelector('.text-inline, span')?.innerText || a.innerText || a.textContent || '');
+                if (sName && sName.toLowerCase() !== 'rozetka') {
+                    const pContainer = a.closest('rz-product, .product-about, rz-catalog-tile, rz-product-tile, .goods-tile, main, body');
+                    const gIdEl = pContainer ? pContainer.querySelector('.g-id, [data-goods-id], [class*="goods-id"]') : null;
+                    const rawGId = gIdEl?.getAttribute('data-goods-id') || gIdEl?.innerText?.trim();
+                    const urlGId = window.location.href.match(/\/p(\d+)/i)?.[1];
+                    const targetId = rawGId || urlGId;
+                    if (targetId) {
+                        if (!goodsMap[targetId]) goodsMap[targetId] = { id: targetId, seller: '', sellersCount: 1 };
+                        goodsMap[targetId].seller = sName;
+                    }
                 }
             }
         } catch (_) {}

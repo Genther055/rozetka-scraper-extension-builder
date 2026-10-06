@@ -493,14 +493,21 @@
             .replace(/\u00A0/g, ' ')
             .replace(/\u202F/g, ' ');
 
+        // Strip leading anchor labels
         text = text.replace(/^(?:інтернет-магазин|магазин|продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|merchant|від\s+продавця|от\s+продавца|доставка\s+від(?:\s+продавця)?|доставка\s+от(?:\s+продавца)?|відправник|отправитель)\s*:?\s*/i, '');
+        
+        // Strip trailing actions, ratings, availability & sub-badges
+        text = text.replace(/\b(?:запитати\s+про\s+товар|спросить\s+о\s+товаре|усі\s+товари\s+продавця|все\s+товары\s+продавца|товари\s+продавця|товары\s+продавца|написати\s+продавцю|написать\s+продавцу|повідомити|сообщить|немає\s+в\s+наявності|нет\s+в\s+наличии|в\s+наявності|в\s+наличии|код:\s*\d+|арт(?:икул)?:\s*\d+)\b.*$/i, '');
+
         const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0 && !/^(?:інтернет-магазин|магазин|продавець(?:\s+товару)?|продавец|seller|merchant|від\s+продавця|от\s+продавца)\s*:?$/i.test(l));
         if (lines.length === 0) return '';
         let name = lines[0];
 
+        // Strip rating suffix e.g. "Missis Sleep 4.8/5 ★ 231 оцінок" -> "Missis Sleep"
+        name = name.replace(/\s*\b\d+(?:[.,]\d+)?\s*(?:\/\s*5|\s*★|\%|\bоцін\w*|\bоцен\w*|\bвідгук\w*|\bотзыв\w*|\bтовар\w*|\bтов\w*).*$/i, '');
+        
         // Strip any parentheses content e.g. " (24)", " (24 товари)", " (95%)", " (офіційний дистриб'ютор)"
         name = name.replace(/\s*\([^)]*\).*$/, '');
-        name = name.replace(/\s*\b\d+(?:[.,]\d+)?\s*(?:★|\%|\bтовар\w*|\bтов\w*).*$/, '');
         name = name.replace(/\s+\d+\s*$/, '');
         name = name.replace(/^(?:інтернет-магазин|магазин|продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|merchant|від\s+продавця|от\s+продавца|доставка\s+від(?:\s+продавця)?|доставка\s+от(?:\s+продавца)?|відправник|отправитель)\s*:?\s*/i, '');
         name = name.replace(/^[>›»\s—–:-]+|[>›»\s—–:-]+$/, '').trim();
@@ -958,7 +965,21 @@
                 }
             }
 
-            // 5. Scan DOM on product page: Other Sellers carousel (rz-other-sellers)
+            // 5. Machine Learning / Spatial Vision Anchor scan for "Продавець:" on page
+            if (typeof sellerSpatialVisionModel !== 'undefined' && sellerSpatialVisionModel) {
+                const spatialHits = sellerSpatialVisionModel.scanSpatialAnchors(document.body);
+                for (const hit of spatialHits) {
+                    if (hit && hit.seller) {
+                        const currentUrl = window.location.href;
+                        const pageProdId = extractProductId(hit.element || document.body, currentUrl);
+                        if (pageProdId) pageSellerMap.set(pageProdId, hit.seller);
+                        pageSellerMap.set(currentUrl.split('?')[0].replace(/\/+$/, ''), hit.seller);
+                        pageSellerMap.set(currentUrl.split('?')[0].replace('rozetka.com.ua/ua/', 'rozetka.com.ua/').replace(/\/+$/, ''), hit.seller);
+                    }
+                }
+            }
+
+            // 6. Scan DOM on product page: Other Sellers carousel (rz-other-sellers)
             const otherSellerItems = document.querySelectorAll('rz-other-sellers li, [data-testid="all_sellers"] li, .other-sellers li, rz-scroll-slider li');
             for (const item of otherSellerItems) {
                 const a = item.querySelector('a[href*="/p"], a[href*="/ua/"]');
@@ -985,6 +1006,148 @@
             }
         } catch (_) {}
     }
+
+    // =========================================================================
+    // Machine Learning / Spatial Vision Anchor Seller Model (ML Seller Vision)
+    // =========================================================================
+    class SellerSpatialVisionEngine {
+        constructor() {
+            this.inferredCount = 0;
+        }
+
+        // 1. Scan DOM elements and text nodes for "Продавець:" visual text anchors
+        scanSpatialAnchors(root = document.body) {
+            const found = [];
+            if (!root || !(root instanceof Element)) return found;
+            try {
+                // Method A: Direct seller title / carriage / block elements
+                const containers = root.querySelectorAll(`
+                    rz-seller-carriage, rz-seller-title, rz-seller-title-feedback,
+                    .product-seller, rz-goods-seller, rz-product-seller, rz-seller,
+                    [class*="product-seller"], [class*="product__seller"], [class*="goods-tile__seller"],
+                    [class*="seller-carriage"], [data-testid*="seller"], [data-testid*="merchant"]
+                `);
+                for (const c of containers) {
+                    const link = c.querySelector('a[href*="/seller/"], a[href*="/merchant/"], a[apprzroute][href*="/seller/"], a');
+                    if (link) {
+                        const txt = (link.querySelector('.text-inline, [class*="name"], [class*="title"], span')?.innerText || link.innerText || link.textContent || '').trim();
+                        const cleaned = cleanSellerName(txt);
+                        if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                            found.push({ seller: cleaned, element: link });
+                            continue;
+                        }
+                    }
+
+                    const cText = (c.innerText || c.textContent || '').trim();
+                    const m = cText.match(/(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца)\s*:?\s*([^\n\r\t,;★|–—<>]+)/i);
+                    if (m && m[1]) {
+                        const cleaned = cleanSellerName(m[1]);
+                        if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                            found.push({ seller: cleaned, element: c });
+                            continue;
+                        }
+                    }
+                }
+
+                // Method B: TreeWalker search for literal "Продавець" text nodes and proximity inspection
+                const walker = document.createTreeWalker(
+                    root,
+                    NodeFilter.SHOW_TEXT,
+                    {
+                        acceptNode: (node) => {
+                            const txt = node.textContent || '';
+                            if (!txt) return NodeFilter.FILTER_REJECT;
+                            if (/(?:продавець|продавец|seller|від\s+продавця|от\s+продавца)/i.test(txt)) {
+                                return NodeFilter.FILTER_ACCEPT;
+                            }
+                            return NodeFilter.FILTER_SKIP;
+                        }
+                    }
+                );
+
+                const anchorNodes = [];
+                let curr;
+                while ((curr = walker.nextNode())) {
+                    anchorNodes.push(curr);
+                }
+
+                for (const textNode of anchorNodes) {
+                    const parent = textNode.parentElement;
+                    if (!parent || parent.closest('header, footer, aside, rz-filter-stack, rz-viewed-goods')) continue;
+
+                    // Proximity 1: Match right after "Продавець:" in parent text
+                    const parentText = (parent.innerText || parent.textContent || '').trim();
+                    const directMatch = parentText.match(/(?:продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|магазин|від\s+продавця|от\s+продавца)\s*:?\s*([^\n\r\t,;★|–—<>]+)/i);
+                    if (directMatch && directMatch[1]) {
+                        const cleaned = cleanSellerName(directMatch[1]);
+                        if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                            found.push({ seller: cleaned, element: parent });
+                            continue;
+                        }
+                    }
+
+                    // Proximity 2: Adjacent sibling element (e.g. <span>Продавець:</span> <a href="...">Missis Sleep</a>)
+                    let nextEl = parent.nextElementSibling;
+                    if (nextEl) {
+                        const nextText = (nextEl.innerText || nextEl.textContent || '').trim();
+                        const cleaned = cleanSellerName(nextText);
+                        if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                            found.push({ seller: cleaned, element: nextEl });
+                            continue;
+                        }
+                    }
+
+                    // Proximity 3: Spatial Bounding Box Geometrical Inspection
+                    try {
+                        const pRect = parent.getBoundingClientRect();
+                        if (pRect.width > 0 && pRect.height > 0) {
+                            const siblings = parent.parentElement ? Array.from(parent.parentElement.children) : [];
+                            for (const sib of siblings) {
+                                if (sib === parent) continue;
+                                const sRect = sib.getBoundingClientRect();
+                                const isHorizNear = (sRect.left >= pRect.left + 10) && (sRect.left <= pRect.right + 350) && (Math.abs(sRect.top - pRect.top) <= 40);
+                                const isVertNear = (sRect.top >= pRect.bottom - 5) && (sRect.top <= pRect.bottom + 50) && (Math.abs(sRect.left - pRect.left) <= 150);
+
+                                if (isHorizNear || isVertNear) {
+                                    const sibText = (sib.innerText || sib.textContent || '').trim();
+                                    const cleaned = cleanSellerName(sibText);
+                                    if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                                        found.push({ seller: cleaned, element: sib });
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (_) {}
+                }
+            } catch (_) {}
+            return found;
+        }
+
+        // Infer seller for a specific product tile or page container
+        inferSeller(container, link = '', name = '') {
+            if (!container || !(container instanceof Element)) return '';
+
+            // 1. Try local spatial scan inside container / tile
+            const localHits = this.scanSpatialAnchors(container);
+            if (localHits.length > 0 && localHits[0].seller) {
+                this.inferredCount++;
+                return localHits[0].seller;
+            }
+
+            // 2. Try nearby carrier / header scan (for product pages)
+            const parentScope = container.closest('rz-product, .product-about, main, body') || document.body;
+            const scopeHits = this.scanSpatialAnchors(parentScope);
+            if (scopeHits.length > 0 && scopeHits[0].seller) {
+                this.inferredCount++;
+                return scopeHits[0].seller;
+            }
+
+            return '';
+        }
+    }
+
+    const sellerSpatialVisionModel = new SellerSpatialVisionEngine();
 
     function getKnownSellersFromSidebar() {
         const sellers = new Set();
@@ -1066,13 +1229,22 @@
             if (s && s.toLowerCase() !== 'rozetka') return s;
         }
 
-        // Priority 2: Direct Angular DOM context inspection
+        // Priority 2: Machine Learning & Spatial Vision Proximity Anchor Engine (Detects text next to "Продавець:")
+        if (typeof sellerSpatialVisionModel !== 'undefined' && sellerSpatialVisionModel) {
+            const visionSeller = sellerSpatialVisionModel.inferSeller(item, link, name);
+            if (visionSeller && visionSeller.toLowerCase() !== 'rozetka') {
+                if (prodId) pageSellerMap.set(prodId, visionSeller);
+                return visionSeller;
+            }
+        }
+
+        // Priority 3: Direct Angular DOM context inspection
         const angularSeller = extractSellerFromAngularDom(item);
         if (angularSeller && angularSeller.toLowerCase() !== 'rozetka') {
             return angularSeller;
         }
 
-        // Priority 3: Build comprehensive hierarchy scopes (from item up to catalog grid cell)
+        // Priority 4: Build comprehensive hierarchy scopes (from item up to catalog grid cell)
         const scopes = [];
         scopes.push(item);
         
@@ -1530,6 +1702,18 @@
                     liveVisualRatingMap.set(prodId, visualScore);
                 }
             }
+
+            // Live Spatial Vision Anchor harvesting for sellers in viewport
+            if (typeof sellerSpatialVisionModel !== 'undefined' && sellerSpatialVisionModel) {
+                const hits = sellerSpatialVisionModel.scanSpatialAnchors(document.body);
+                for (const hit of hits) {
+                    if (hit && hit.seller) {
+                        const targetId = extractProductId(hit.element || document.body, window.location.href);
+                        if (targetId) pageSellerMap.set(targetId, hit.seller);
+                    }
+                }
+            }
+
             if (liveVisualRatingMap.size > 0) {
                 updateVisionHud(`Оброблено комп'ютерним зором: ${liveVisualRatingMap.size} товарів`);
             }
