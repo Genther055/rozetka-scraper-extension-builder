@@ -571,6 +571,9 @@ function performAlgorithmicAudit(name: string, htmlContent: string, productItem:
   const inStock = productItem?.inStock !== false;
   const seller = productItem?.seller || 'Rozetka';
 
+  //comment: Adjusted thresholds for rating and reviews to provide more nuanced feedback
+
+
   if (rating > 0 && rating < 4.0) {
     status = 'warning';
     verdicts.push(`Увага: низький рейтинг товару (${rating}/5.0). Покупці вказують на технічні недоліки.`);
@@ -600,6 +603,7 @@ function performAlgorithmicAudit(name: string, htmlContent: string, productItem:
   return { status, verdict, specs, realSalesCount };
 }
 
+
 app.post('/api/products/analyze', async (req, res) => {
   const { link, name } = req.body;
   if (!link) {
@@ -616,6 +620,8 @@ app.post('/api/products/analyze', async (req, res) => {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       }
     });
+
+    //get the HTML content and clean it up for analysis
     if (fetchResponse.ok) {
       const fullHtml = await fetchResponse.text();
       htmlContent = fullHtml

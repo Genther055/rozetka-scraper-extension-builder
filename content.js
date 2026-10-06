@@ -2483,6 +2483,7 @@
             clearPersistedSession();
             console.log(`TradeScout Tab ${currentTabId}: Scrape completed with ${sentLinks.size} items.`);
 
+            // Final webhook payload for completion
             sendTabMessage({
                 action: 'tabFinished',
                 total: sentLinks.size,

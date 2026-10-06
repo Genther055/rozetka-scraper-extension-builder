@@ -414,6 +414,12 @@ export class DashboardComponent implements OnInit {
   myPasswordError = '';
   myPasswordSuccess = false;
 
+  // Platform Version & Build Timestamp
+  readonly appVersion: string = 'v4.2.0';
+  readonly buildTimestamp: string = '06.10 18:00';
+  isForceRefreshing: boolean = false;
+  refreshSuccessToast: string | null = null;
+
   // User & System Settings State
   readonly STORAGE_PRODUCTS_KEY = 'tradescout_cached_products';
   readonly STORAGE_CACHED_TEAM_USERS_KEY = 'tradescout_cached_team_users';
@@ -3475,6 +3481,56 @@ export class DashboardComponent implements OnInit {
     };
 
     tryFetch(`${this.apiUrl}/api/products`);
+  }
+
+  forceRefreshData() {
+    this.isForceRefreshing = true;
+    const cacheBuster = Date.now();
+    const tryUrl = `${this.apiUrl}/api/products?_cb=${cacheBuster}`;
+    
+    this.http.get<{ success: boolean, products: Product[] }>(tryUrl).subscribe({
+      next: (res) => {
+        if (res.success) {
+          const newProds = res.products || [];
+          this.products = this.sanitizeProducts(newProds);
+          this.applyFilters();
+          this.calculateMetrics();
+          this.refreshSuccessToast = `Синхронізовано з сервером: ${this.products.length} товарів`;
+          setTimeout(() => {
+            this.refreshSuccessToast = null;
+            this.cdr.markForCheck();
+          }, 4000);
+        }
+        this.isForceRefreshing = false;
+        this.loading = false;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.http.get<{ success: boolean, products: Product[] }>(`/api/products?_cb=${cacheBuster}`).subscribe({
+          next: (res) => {
+            if (res.success) {
+              const newProds = res.products || [];
+              this.products = this.sanitizeProducts(newProds);
+              this.applyFilters();
+              this.calculateMetrics();
+              this.refreshSuccessToast = `Синхронізовано: ${this.products.length} товарів`;
+              setTimeout(() => {
+                this.refreshSuccessToast = null;
+                this.cdr.markForCheck();
+              }, 4000);
+            }
+            this.isForceRefreshing = false;
+            this.loading = false;
+            this.cdr.markForCheck();
+          },
+          error: () => {
+            this.isForceRefreshing = false;
+            this.loading = false;
+            this.cdr.markForCheck();
+          }
+        });
+      }
+    });
   }
 
   clearAllCachedData() {
