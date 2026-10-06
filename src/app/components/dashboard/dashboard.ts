@@ -542,29 +542,99 @@ export class DashboardComponent implements OnInit {
 
   normalizeSessionTitle(title: string): string {
     if (!title) return 'Загальна';
-    let t = title.replace(/\uFFFD/g, '').trim();
-    // Normalize Rozetka variations such as "Повербанки та УМБ Brand" -> "Повербанки Brand"
-    t = t.replace(/^Повербанки\s+та\s+УМБ\s+/i, 'Повербанки ');
-    t = t.replace(/^Power\s*banks?\s+and\s+UMB\s+/i, 'Повербанки ');
-    t = t.replace(/Повербан[^\s]*\s+/i, 'Повербанки ');
-    return t.trim() || 'Повербанки Xiaomi';
+    return this.getCleanCategory({ category: title } as any);
+  }
+
+  getProductBrand(p: Product): string {
+    return detectProductBrand(p);
+  }
+
+  getCleanCategory(p: Product): string {
+    if (!p) return 'Повербанки та УМБ';
+    let raw = (p.category || p.sessionTitle || 'Повербанки та УМБ').trim();
+    // Strip brand suffixes appended by Rozetka filters
+    const brandSuffixes = [
+      'Sigma mobile', 'Sigma', 'Xiaomi', 'Redmi', 'Ugreen', 'Baseus', 'Apple', 'Samsung',
+      'Anker', 'Hoco', 'Borofone', 'Romoss', 'Remax', 'Joyroom', 'ColorWay', 'Proove',
+      'HOPECOM', 'Qinetiq', 'Remzona', '2E', 'Gelius', 'ZMI', 'Belkin', 'Choetech', 'BLUETTI', 'EcoFlow'
+    ];
+    for (const b of brandSuffixes) {
+      const re = new RegExp('\\s*[-–—|,]?\\s*' + b + '\\b.*$', 'i');
+      raw = raw.replace(re, '');
+    }
+    raw = raw.trim();
+    return raw || 'Повербанки та УМБ';
   }
 
   getAvailableSessions(): Array<{ title: string, count: number }> {
+    return this.getAvailableCategoryAndBrandPills().map(p => ({ title: p.id, count: p.count }));
+  }
+
+  getAvailableCategoryAndBrandPills(): Array<{ id: string; title: string; count: number; type: 'category' | 'brand'; color: string }> {
     if (!this.products || this.products.length === 0) return [];
-    const map = new Map<string, number>();
+
+    const categoriesMap = new Map<string, number>();
+    const brandsMap = new Map<string, number>();
+
     for (const p of this.products) {
-      const raw = (p.sessionTitle || p.category || 'Загальна').trim();
-      const t = this.normalizeSessionTitle(raw);
-      if (t) {
-        map.set(t, (map.get(t) || 0) + 1);
+      const cat = this.getCleanCategory(p);
+      categoriesMap.set(cat, (categoriesMap.get(cat) || 0) + 1);
+
+      const brand = this.getProductBrand(p);
+      if (brand && brand !== 'Інші') {
+        brandsMap.set(brand, (brandsMap.get(brand) || 0) + 1);
       }
     }
-    const result: Array<{ title: string, count: number }> = [];
-    map.forEach((count, title) => {
-      result.push({ title, count });
-    });
-    return result.sort((a, b) => b.count - a.count);
+
+    const pills: Array<{ id: string; title: string; count: number; type: 'category' | 'brand'; color: string }> = [];
+
+    const brandColors: { [k: string]: string } = {
+      'Xiaomi': '#ff6700',
+      'Ugreen': '#10b981',
+      'Sigma mobile': '#06b6d4',
+      'Apple': '#94a3b8',
+      'Samsung': '#3b82f6',
+      'Baseus': '#eab308',
+      'Anker': '#38bdf8',
+      'Hoco': '#ec4899',
+      'Qinetiq': '#a855f7',
+      'Remzona': '#f43f5e'
+    };
+
+    // If multiple distinct categories exist, show category pills
+    if (categoriesMap.size > 1) {
+      categoriesMap.forEach((count, cat) => {
+        pills.push({
+          id: 'cat:' + cat,
+          title: cat,
+          count,
+          type: 'category',
+          color: '#6366f1'
+        });
+      });
+    }
+
+    // Add brands sorted by item count
+    const sortedBrands = Array.from(brandsMap.entries())
+      .filter(([_, count]) => count >= 2)
+      .sort((a, b) => b[1] - a[1]);
+
+    for (const [brand, count] of sortedBrands) {
+      pills.push({
+        id: 'brand:' + brand,
+        title: brand,
+        count,
+        type: 'brand',
+        color: brandColors[brand] || '#818cf8'
+      });
+    }
+
+    return pills;
+  }
+
+  getSelectedSessionDisplayTitle(): string {
+    if (this.selectedSessionTitle === 'all') return 'Всі зібрані товари';
+    return this.selectedSessionTitle.replace(/^(?:brand|cat):/, '');
   }
 
   selectSession(title: string) {
@@ -584,13 +654,15 @@ export class DashboardComponent implements OnInit {
 
   getCategoryPageBreakdowns(): CategoryPageBreakdown[] {
     if (!this.products || this.products.length === 0) return [];
-    const sessions = this.getAvailableSessions();
+    const sessions = this.getAvailableCategoryAndBrandPills();
     const list: CategoryPageBreakdown[] = [];
 
     for (const s of sessions) {
       const prods = this.products.filter(p => {
-        const raw = (p.sessionTitle || p.category || 'Загальна').trim();
-        return this.normalizeSessionTitle(raw) === s.title || raw === s.title;
+        if (s.type === 'category') {
+          return this.getCleanCategory(p).toLowerCase() === s.title.toLowerCase();
+        }
+        return this.getProductBrand(p).toLowerCase() === s.title.toLowerCase();
       });
 
       const totalPages = Math.max(1, Math.ceil(prods.length / 60));
@@ -660,13 +732,24 @@ export class DashboardComponent implements OnInit {
 
   getActiveSessionProducts(): Product[] {
     if (!this.products || this.products.length === 0) return [];
-    const list = this.selectedSessionTitle === 'all' 
-      ? this.products 
-      : this.products.filter(p => {
-          const raw = (p.sessionTitle || p.category || 'Загальна').trim();
-          const clean = this.normalizeSessionTitle(raw);
-          return clean === this.selectedSessionTitle || raw === this.selectedSessionTitle;
-        });
+    if (this.selectedSessionTitle === 'all') return this.sanitizeProducts(this.products);
+
+    const sel = this.selectedSessionTitle;
+    const target = sel.replace(/^(?:brand|cat):/, '').trim().toLowerCase();
+
+    const list = this.products.filter(p => {
+      if (sel.startsWith('cat:')) {
+        return this.getCleanCategory(p).toLowerCase() === target;
+      }
+      if (sel.startsWith('brand:')) {
+        return this.getProductBrand(p).toLowerCase() === target;
+      }
+      const brand = this.getProductBrand(p).toLowerCase();
+      const cat = this.getCleanCategory(p).toLowerCase();
+      const raw = (p.sessionTitle || p.category || '').toLowerCase();
+      return brand === target || cat === target || raw === target;
+    });
+
     return this.sanitizeProducts(list);
   }
 
@@ -1871,13 +1954,9 @@ export class DashboardComponent implements OnInit {
     if (this.selectedBrandFilter && this.selectedBrandFilter !== 'all') {
       const targetB = this.selectedBrandFilter.trim().toLowerCase();
       list = list.filter(p => {
+        const brand = this.getProductBrand(p).toLowerCase();
         const nameLower = (p.name || '').toLowerCase();
-        let specB = '';
-        const rawMap = (p as any).detailedSpecsMap;
-        if (rawMap && (rawMap['Бренд'] || rawMap['Виробник'])) {
-          specB = String(rawMap['Бренд'] || rawMap['Виробник']).toLowerCase();
-        }
-        return specB.includes(targetB) || nameLower.includes(targetB);
+        return brand === targetB || brand.includes(targetB) || nameLower.includes(targetB);
       });
     }
 
@@ -1911,7 +1990,7 @@ export class DashboardComponent implements OnInit {
 
     const map = new Map<string, number>();
     for (const p of list) {
-      const raw = (p.category || p.sessionTitle || 'Загальна').trim();
+      const raw = this.getCleanCategory(p);
       if (raw) {
         map.set(raw, (map.get(raw) || 0) + 1);
       }
@@ -1940,27 +2019,9 @@ export class DashboardComponent implements OnInit {
 
     const brandCounts = new Map<string, number>();
     for (const p of list) {
-      let b = '';
-      const rawMap = (p as any).detailedSpecsMap;
-      if (rawMap && (rawMap['Бренд'] || rawMap['Виробник'])) {
-        b = String(rawMap['Бренд'] || rawMap['Виробник']).trim();
-      } else if (p.specs && p.specs.includes('Бренд:')) {
-        const m = p.specs.match(/Бренд:\s*([^,;]+)/i);
-        if (m) b = m[1].trim();
-      }
-      if (!b && p.name) {
-        const tokens = p.name.split(/[\s,]+/);
-        if (tokens.length > 1) {
-          if (['повербанк', 'бездротовий', 'зарядний', 'акумулятор', 'кабель', 'чохол', 'навушники', 'портативний'].some(w => tokens[0].toLowerCase().startsWith(w))) {
-            b = tokens[1];
-          } else {
-            b = tokens[0];
-          }
-        }
-      }
-      if (b && b.length >= 2 && !/^\d+$/.test(b)) {
-        const cleanB = b.charAt(0).toUpperCase() + b.slice(1);
-        brandCounts.set(cleanB, (brandCounts.get(cleanB) || 0) + 1);
+      const brand = this.getProductBrand(p);
+      if (brand && brand !== 'Інші') {
+        brandCounts.set(brand, (brandCounts.get(brand) || 0) + 1);
       }
     }
 
@@ -1973,7 +2034,7 @@ export class DashboardComponent implements OnInit {
         share: Math.round((count / total) * 1000) / 10
       }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
+      .slice(0, 10);
 
     return sorted.length >= 2 ? sorted : [];
   }
@@ -6308,6 +6369,67 @@ export class DashboardComponent implements OnInit {
   }
 }
 
+export function detectProductBrand(p: any): string {
+  if (!p) return 'Інші';
+  const rawMap = p.detailedSpecsMap;
+  let b = '';
+  if (rawMap && (rawMap['Бренд'] || rawMap['Виробник'])) {
+    b = String(rawMap['Бренд'] || rawMap['Виробник']).trim();
+  } else if (p.specs && typeof p.specs === 'string' && p.specs.includes('Бренд:')) {
+    const m = p.specs.match(/Бренд:\s*([^,;]+)/i);
+    if (m) b = m[1].trim();
+  }
+
+  const name = p.name || '';
+  if (!b || /^(?:універсальна|умб|батарея|портативна|павербанк|повербанк|зовнішній|power|зарядний|standard|інші)$/i.test(b) || (b === 'Apple' && /\b(?:для\s+(?:apple|iphone)|qinetiq|remzona)\b/i.test(name))) {
+    const knownBrands = [
+      { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power)\b/i },
+      { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco)\b/i },
+      { name: 'Ugreen', regex: /\bUgreen\b/i },
+      { name: 'Baseus', regex: /\b(?:Baseus|Adaman)\b/i },
+      { name: 'Qinetiq', regex: /\bQinetiq\b/i },
+      { name: 'Remzona', regex: /\bRemzona\b/i },
+      { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для\s+(?:apple|iphone)|айфона)\b/i },
+      { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для\s+samsung|самсунг)\b/i },
+      { name: 'Anker', regex: /\bAnker\b/i },
+      { name: 'Hoco', regex: /\bHoco\b/i },
+      { name: 'Borofone', regex: /\bBorofone\b/i },
+      { name: 'Romoss', regex: /\bRomoss\b/i },
+      { name: 'Remax', regex: /\bRemax\b/i },
+      { name: 'Joyroom', regex: /\bJoyroom\b/i },
+      { name: 'ColorWay', regex: /\bColorWay\b/i },
+      { name: 'Proove', regex: /\bProove\b/i },
+      { name: 'HOPECOM', regex: /\bHOPECOM\b/i },
+      { name: 'ZMI', regex: /\bZMI\b/i },
+      { name: '2E', regex: /\b2E\b/i },
+      { name: 'Gelius', regex: /\bGelius\b/i },
+      { name: 'Platinet', regex: /\bPlatinet\b/i },
+      { name: 'Dudao', regex: /\bDudao\b/i },
+      { name: 'Pisen', regex: /\bPisen\b/i },
+      { name: 'Wekome', regex: /\bWekome\b/i },
+      { name: 'Proda', regex: /\bProda\b/i },
+      { name: 'XO', regex: /\bXO\b/i },
+      { name: 'Vention', regex: /\bVention\b/i },
+      { name: 'Essager', regex: /\bEssager\b/i },
+      { name: 'BLUETTI', regex: /\bBLUETTI\b/i },
+      { name: 'EcoFlow', regex: /\bEcoFlow\b/i },
+      { name: 'Jackery', regex: /\bJackery\b/i }
+    ];
+    for (const rule of knownBrands) {
+      if (rule.excludeIf && rule.excludeIf.test(name)) continue;
+      if (rule.regex.test(name)) {
+        return rule.name;
+      }
+    }
+    let cleanName = name.replace(/^(?:портативна\s+батарея|зовнішній\s+акумулятор|універсальна\s+батарея|батарея\s+універсальна|павербанк|повербанк|зарядний\s+пристрій|бездротова\s+зарядка|power\s*bank|умб)\s+/i, '').trim();
+    const token = cleanName.split(/[\s,]+/)[0];
+    if (token && token.length >= 2 && !/^\d+$/.test(token) && !/^(?:для|з|на|та|fast|pro|mini|led|black|white|grey|gray|red|blue)$/i.test(token)) {
+      return token.charAt(0).toUpperCase() + token.slice(1);
+    }
+  }
+  return b || 'Інші';
+}
+
 export function extractProductSpecsMap(p: any): Record<string, string> {
   if (!p) return {};
   const map: Record<string, string> = {};
@@ -6339,24 +6461,10 @@ export function extractProductSpecsMap(p: any): Record<string, string> {
 
   // 3. Бренд / Виробник
   if (!map['Бренд'] && !map['Виробник']) {
-    const brands = [
-      'Xiaomi', 'Redmi', 'Baseus', 'Apple', 'Samsung', 'Anker', 'Hoco', 'Borofone',
-      'Romoss', 'Remax', 'Joyroom', 'ColorWay', '2E', 'Gelius', 'Ugreen', 'ZMI',
-      'Belkin', 'Choetech', 'Promate', 'Vinga', 'Defender', 'Canyon', 'Esperanza',
-      'Real-El', 'Sigma', 'PowerPlant', 'BLUETTI', 'EcoFlow', 'Jackery', 'Sandberg',
-      'Trust', 'Dudao', 'Aukey', 'XO', 'Usams', 'Pisen', 'Intenso', 'Silicon Power',
-      'Tronsmart', 'Wopow', 'Energizer', 'Duracell', 'Philips', 'Sony', 'Huawei',
-      'Honor', 'Motorola', 'Asus', 'Lenovo', 'Dell', 'HP', 'Acer', 'Logitech',
-      'Razer', 'HyperX', 'SteelSeries', 'JBL', 'Marshall', 'Sennheiser', 'Canon', 'Nikon', 'DJI'
-    ];
-    for (const b of brands) {
-      const regex = new RegExp(`\\b${b}\\b`, 'i');
-      if (regex.test(name) || regex.test(category)) {
-        map['Бренд'] = b;
-        break;
-      }
-    }
-    if (!map['Бренд']) {
+    const detectedBrand = detectProductBrand(p);
+    if (detectedBrand && detectedBrand !== 'Інші') {
+      map['Бренд'] = detectedBrand;
+    } else {
       const words = name.split(/\s+/).filter(w => w.length > 2);
       const skipWords = ['повербанк', 'powerbank', 'power', 'bank', 'умб', 'зовнішній', 'акумулятор', 'портативний', 'зарядна', 'станція', 'кабель', 'блок', 'адаптер'];
       for (const w of words) {

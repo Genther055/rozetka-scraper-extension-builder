@@ -507,6 +507,7 @@
       </section>
 
       <!-- Multi-Session & Category Page Breakdown Bar -->
+      <!-- Multi-Session & Category Page Breakdown Bar -->
       <section *ngIf="products.length > 0 && activeTab !== 'settings' && activeTab !== 'history'" class="bg-[#111827]/90 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-3.5 shadow-xl shadow-black/30">
         
         <!-- Category Selector Header -->
@@ -530,26 +531,30 @@
               [class.text-slate-300]="selectedSessionTitle !== 'all'"
               [class.border-slate-700]="selectedSessionTitle !== 'all'"
               class="px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 shrink-0 hover:border-indigo-400/80"
+              title="Показати повну вибірку всіх зібраних товарів"
             >
               <span>Всі зібрані товари</span>
               <span class="bg-black/40 px-2 py-0.5 rounded-md text-[11px] font-mono">{{ products.length }}</span>
             </button>
 
-            <!-- Individual Session Pills -->
+            <!-- Individual Category & Brand Pills -->
             <button 
-              *ngFor="let s of getAvailableSessions()"
-              (click)="selectSession(s.title)"
-              [class.bg-gradient-to-r]="selectedSessionTitle === s.title"
-              [class.from-indigo-600]="selectedSessionTitle === s.title"
-              [class.to-purple-600]="selectedSessionTitle === s.title"
-              [class.text-white]="selectedSessionTitle === s.title"
-              [class.border-indigo-400]="selectedSessionTitle === s.title"
-              [class.shadow-md]="selectedSessionTitle === s.title"
-              [class.bg-slate-900]="selectedSessionTitle !== s.title"
-              [class.text-slate-300]="selectedSessionTitle !== s.title"
-              [class.border-slate-700]="selectedSessionTitle !== s.title"
+              *ngFor="let s of getAvailableCategoryAndBrandPills()"
+              (click)="selectSession(s.id)"
+              [class.bg-gradient-to-r]="selectedSessionTitle === s.id"
+              [class.from-indigo-600]="selectedSessionTitle === s.id"
+              [class.to-purple-600]="selectedSessionTitle === s.id"
+              [class.text-white]="selectedSessionTitle === s.id"
+              [class.border-indigo-400]="selectedSessionTitle === s.id"
+              [class.shadow-md]="selectedSessionTitle === s.id"
+              [class.bg-slate-900]="selectedSessionTitle !== s.id"
+              [class.text-slate-300]="selectedSessionTitle !== s.id"
+              [class.border-slate-700]="selectedSessionTitle !== s.id"
               class="px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 shrink-0 hover:border-indigo-400/80"
+              [title]="(s.type === 'brand' ? 'Фільтрувати за брендом: ' : 'Фільтрувати за категорією: ') + s.title + ' (' + s.count + ' тов.)'"
             >
+              <span *ngIf="s.type === 'brand'" class="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" [style.backgroundColor]="s.color"></span>
+              <span *ngIf="s.type === 'category'" class="material-icons text-xs text-indigo-400 shrink-0">category</span>
               <span>{{ s.title }}</span>
               <span class="bg-black/40 px-2 py-0.5 rounded-md text-[11px] font-mono">{{ s.count }}</span>
             </button>
@@ -557,18 +562,16 @@
 
           <div *ngIf="selectedSessionTitle !== 'all'" class="text-xs text-indigo-300/90 font-medium flex items-center gap-1.5 shrink-0">
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>Вибрано: <strong>{{ selectedSessionTitle }}</strong></span>
+            <span>Вибрано: <strong>{{ getSelectedSessionDisplayTitle() }}</strong></span>
             <button (click)="selectSession('all')" class="ml-1 text-slate-400 hover:text-white underline cursor-pointer text-[11px]">Показати всі</button>
           </div>
         </div>
 
-
-
-        <!-- 2. When a SPECIFIC Category is selected: Show its exact Pages -->
+        <!-- 2. When a SPECIFIC Category / Brand is selected: Show its exact Pages -->
         <div *ngIf="selectedSessionTitle !== 'all' && getAvailablePagesForActiveSession().length > 1" class="flex items-center gap-2 pt-1 overflow-x-auto custom-scrollbar">
           <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
             <span class="material-icons text-xs text-cyan-400">auto_stories</span>
-            <span>Сторінки категорії «{{ selectedSessionTitle }}»:</span>
+            <span>Сторінки «{{ getSelectedSessionDisplayTitle() }}»:</span>
           </span>
           <button 
             (click)="selectPageFilter('all')"

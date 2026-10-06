@@ -59,6 +59,21 @@
         } catch (_) {}
     }
 
+    function cleanCategoryName(c) {
+        if (!c) return 'Повербанки та УМБ';
+        let s = c.trim();
+        const brandSuffixes = [
+            'Sigma mobile', 'Sigma', 'Xiaomi', 'Redmi', 'Ugreen', 'Baseus', 'Apple', 'Samsung',
+            'Anker', 'Hoco', 'Borofone', 'Romoss', 'Remax', 'Joyroom', 'ColorWay', 'Proove',
+            'HOPECOM', 'Qinetiq', 'Remzona', '2E', 'Gelius', 'ZMI', 'Belkin', 'Choetech', 'BLUETTI', 'EcoFlow', 'Jackery'
+        ];
+        for (const b of brandSuffixes) {
+            const re = new RegExp('\\s*[-–—|,]?\\s*' + b + '\\b.*$', 'i');
+            s = s.replace(re, '');
+        }
+        return s.trim() || 'Повербанки та УМБ';
+    }
+
     // Extract human-readable category & session title from page
     function getPageMetadata() {
         let title = '';
@@ -78,6 +93,8 @@
         } else if (title) {
             category = title;
         }
+
+        category = cleanCategoryName(category);
 
         return { title, category };
     }
@@ -2165,10 +2182,43 @@
                 }
 
                 // Brand detection
-                const knownBrands = ['Xiaomi', 'Redmi', 'Baseus', 'Apple', 'Samsung', 'Anker', 'Hoco', 'Borofone', 'Romoss', 'Remax', 'Joyroom', 'ColorWay', '2E', 'Gelius', 'Ugreen', 'ZMI', 'Belkin', 'Choetech', 'Promate', 'Vinga', 'Defender', 'Canyon', 'BLUETTI', 'EcoFlow', 'Jackery'];
-                for (const b of knownBrands) {
-                    if (new RegExp(`\\b${b}\\b`, 'i').test(name)) {
-                        detailedSpecsMap['Бренд'] = b;
+                const knownBrandRules = [
+                    { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power)\b/i },
+                    { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco)\b/i },
+                    { name: 'Ugreen', regex: /\bUgreen\b/i },
+                    { name: 'Baseus', regex: /\b(?:Baseus|Adaman)\b/i },
+                    { name: 'Qinetiq', regex: /\bQinetiq\b/i },
+                    { name: 'Remzona', regex: /\bRemzona\b/i },
+                    { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для\s+(?:apple|iphone)|айфона)\b/i },
+                    { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для\s+samsung|самсунг)\b/i },
+                    { name: 'Anker', regex: /\bAnker\b/i },
+                    { name: 'Hoco', regex: /\bHoco\b/i },
+                    { name: 'Borofone', regex: /\bBorofone\b/i },
+                    { name: 'Romoss', regex: /\bRomoss\b/i },
+                    { name: 'Remax', regex: /\bRemax\b/i },
+                    { name: 'Joyroom', regex: /\bJoyroom\b/i },
+                    { name: 'ColorWay', regex: /\bColorWay\b/i },
+                    { name: 'Proove', regex: /\bProove\b/i },
+                    { name: 'HOPECOM', regex: /\bHOPECOM\b/i },
+                    { name: 'ZMI', regex: /\bZMI\b/i },
+                    { name: '2E', regex: /\b2E\b/i },
+                    { name: 'Gelius', regex: /\bGelius\b/i },
+                    { name: 'Platinet', regex: /\bPlatinet\b/i },
+                    { name: 'Dudao', regex: /\bDudao\b/i },
+                    { name: 'Pisen', regex: /\bPisen\b/i },
+                    { name: 'Wekome', regex: /\bWekome\b/i },
+                    { name: 'Proda', regex: /\bProda\b/i },
+                    { name: 'XO', regex: /\bXO\b/i },
+                    { name: 'Vention', regex: /\bVention\b/i },
+                    { name: 'Essager', regex: /\bEssager\b/i },
+                    { name: 'BLUETTI', regex: /\bBLUETTI\b/i },
+                    { name: 'EcoFlow', regex: /\bEcoFlow\b/i },
+                    { name: 'Jackery', regex: /\bJackery\b/i }
+                ];
+                for (const rule of knownBrandRules) {
+                    if (rule.excludeIf && rule.excludeIf.test(name)) continue;
+                    if (rule.regex.test(name)) {
+                        detailedSpecsMap['Бренд'] = rule.name;
                         break;
                     }
                 }
