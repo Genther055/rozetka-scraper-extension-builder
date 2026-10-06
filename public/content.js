@@ -1500,21 +1500,11 @@
         return 0;
     }
 
-    // Floating ML Vision Live HUD overlay
+    // Floating ML Vision Live HUD overlay (disabled for clean UI)
     function updateVisionHud(statusText) {
         try {
-            let hud = document.getElementById('tradescout-ml-vision-hud');
-            if (!hud) {
-                hud = document.createElement('div');
-                hud.id = 'tradescout-ml-vision-hud';
-                hud.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999999;background:rgba(15,23,42,0.92);backdrop-filter:blur(8px);border:1px solid rgba(16,185,129,0.4);border-radius:10px;padding:8px 12px;color:#fff;font-family:sans-serif;font-size:11px;box-shadow:0 6px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:8px;pointer-events:none;transition:all 0.3s;';
-                document.body.appendChild(hud);
-            }
-            hud.innerHTML = `
-                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;animation:pulse 1.5s infinite;"></span>
-                <span style="font-weight:700;color:#34d399;">ML Vision v4.0:</span>
-                <span style="color:#e2e8f0;">${statusText || 'Сканування зірок активне'}</span>
-            `;
+            const hud = document.getElementById('tradescout-ml-vision-hud');
+            if (hud) hud.remove();
         } catch (_) {}
     }
 
