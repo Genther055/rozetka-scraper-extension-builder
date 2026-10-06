@@ -1827,7 +1827,7 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // Batch in-tab fetch official Rozetka product details (seller title, other sellers count, old price) for all tiles on this page
+        // Batch fetch official Rozetka product details via Background Service Worker (Zero-CORS)
         const apiProductDetailsMap = new Map();
         try {
             const productIds = [];
@@ -1836,27 +1836,36 @@
                 if (m && m[1]) productIds.push(m[1]);
             }
             if (productIds.length > 0) {
-                const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${productIds.join(',')}`;
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2500);
-                const res = await fetch(apiUrl, { signal: controller.signal, credentials: 'omit' }).catch(() => null);
-                clearTimeout(timeoutId);
-                if (res && res.ok) {
-                    const json = await res.json().catch(() => null);
-                    if (json && Array.isArray(json.data)) {
-                        for (const apiProd of json.data) {
-                            if (apiProd && apiProd.id) {
-                                apiProductDetailsMap.set(String(apiProd.id), apiProd);
-                                if (apiProd.seller) {
-                                    const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || '';
-                                    const cleaned = cleanSellerName(sTitle);
-                                    if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
-                                        pageSellerMap.set(String(apiProd.id), cleaned);
-                                    }
+                const bgDetails = await new Promise(resolve => {
+                    try {
+                        chrome.runtime.sendMessage({
+                            action: 'FETCH_PRODUCT_DETAILS',
+                            productIds: productIds
+                        }, (res) => {
+                            if (chrome.runtime.lastError || !res || !res.success) {
+                                resolve([]);
+                            } else {
+                                resolve(res.data || []);
+                            }
+                        });
+                    } catch (_) {
+                        resolve([]);
+                    }
+                });
+
+                if (Array.isArray(bgDetails) && bgDetails.length > 0) {
+                    for (const apiProd of bgDetails) {
+                        if (apiProd && apiProd.id) {
+                            apiProductDetailsMap.set(String(apiProd.id), apiProd);
+                            if (apiProd.seller) {
+                                const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || '';
+                                const cleaned = cleanSellerName(sTitle);
+                                if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                                    pageSellerMap.set(String(apiProd.id), cleaned);
                                 }
-                                if (typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0) {
-                                    pageSellersCountMap.set(String(apiProd.id), apiProd.sellers_count);
-                                }
+                            }
+                            if (typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0) {
+                                pageSellersCountMap.set(String(apiProd.id), apiProd.sellers_count);
                             }
                         }
                     }

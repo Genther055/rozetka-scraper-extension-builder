@@ -461,7 +461,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    // 5.1 Batch Fetch Product Details from Rozetka Common API (Zero-CORS in Service Worker)
+    if (message.action === 'FETCH_PRODUCT_DETAILS') {
+        const { productIds } = message;
+        if (!Array.isArray(productIds) || productIds.length === 0) {
+            sendResponse({ success: false, data: [] });
+            return true;
+        }
 
+        const idsChunk = productIds.slice(0, 80).join(',');
+        const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`;
+
+        fetch(apiUrl, {
+            headers: {
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'uk-UA,uk;q=0.9'
+            }
+        })
+        .then(res => res.json())
+        .then(json => {
+            const data = Array.isArray(json?.data) ? json.data : [];
+            sendResponse({ success: true, data });
+        })
+        .catch(err => {
+            sendResponse({ success: false, error: err.message, data: [] });
+        });
+
+        return true;
+    }
 
     // 6. Query all open Rozetka tabs
     if (message.action === 'GET_ALL_ROZETKA_TABS') {
