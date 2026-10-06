@@ -753,6 +753,41 @@
                 } catch (_) {}
 
                 window.addEventListener('tradescout_request_main_harvest', harvestFromAngularContext);
+                
+                // Handle isolated world requests for batch seller details directly inside the page's main context
+                window.addEventListener('message', async function(e) {
+                    if (!e.data || e.data.type !== 'TRADESCOUT_REQUEST_BATCH_SELLERS') return;
+                    const reqId = e.data.requestId;
+                    const productIds = e.data.productIds;
+                    if (!Array.isArray(productIds) || productIds.length === 0) return;
+                    const results = [];
+                    for (let i = 0; i < productIds.length; i += 60) {
+                        const chunk = productIds.slice(i, i + 60);
+                        const idsChunk = chunk.join(',');
+                        const tabApiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`;
+                        try {
+                            const tabRes = await fetch(tabApiUrl, {
+                                headers: {
+                                    'Accept': 'application/json, text/plain, */*',
+                                    'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
+                                },
+                                credentials: 'include'
+                            });
+                            if (tabRes.ok) {
+                                const tabJson = await tabRes.json();
+                                if (Array.isArray(tabJson?.data)) {
+                                    results.push(...tabJson.data);
+                                }
+                            }
+                        } catch (_) {}
+                    }
+                    window.postMessage({
+                        type: 'TRADESCOUT_BATCH_SELLERS_RESULT',
+                        requestId: reqId,
+                        data: results
+                    }, '*');
+                });
+
                 harvestFromAngularContext();
                 setInterval(harvestFromAngularContext, 1200);
             })();
@@ -1984,23 +2019,23 @@
                     }
                 });
 
-                // Race bridge with direct fetch
-                const bridgeResults = await mainWorldPromise;
-                if (Array.isArray(bridgeResults) && bridgeResults.length > 0) {
-                    fetchedProducts = bridgeResults;
-                } else {
-                    const directRes = await directFetchPromise;
-                    if (Array.isArray(directRes) && directRes.length > 0) {
-                        fetchedProducts = directRes;
-                    } else {
+                // Race bridge with direct fetch and service worker for maximum speed and 0 delay
+                try {
+                    fetchedProducts = await Promise.race([
+                        mainWorldPromise.then(res => (Array.isArray(res) && res.length > 0) ? res : new Promise(() => {})),
+                        directFetchPromise.then(res => (Array.isArray(res) && res.length > 0) ? res : new Promise(() => {})),
+                        new Promise(r => setTimeout(() => r([]), 1500))
+                    ]);
+                } catch (_) {}
+
+                if (!fetchedProducts || fetchedProducts.length === 0) {
+                    try {
                         const swRes = await swPromise;
-                        if (Array.isArray(swRes) && swRes.length > 0) {
-                            fetchedProducts = swRes;
-                        }
-                    }
+                        if (Array.isArray(swRes) && swRes.length > 0) fetchedProducts = swRes;
+                    } catch (_) {}
                 }
 
-                console.log(`[TradeScout Batch] Received ${fetchedProducts.length} product details from Rozetka API for ${productIds.length} IDs.`);
+                console.log(`[TradeScout Batch] Received ${fetchedProducts?.length || 0} product details from Rozetka API for ${productIds.length} IDs.`);
 
                 if (Array.isArray(fetchedProducts) && fetchedProducts.length > 0) {
                     for (const apiProd of fetchedProducts) {

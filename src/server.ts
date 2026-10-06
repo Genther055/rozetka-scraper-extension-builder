@@ -125,6 +125,82 @@ app.post('/api/scraping-status/clear', (req, res) => {
   res.json({ success: true });
 });
 
+function cleanCategoryNameServer(c: string): string {
+  if (!c) return 'Повербанки та УМБ';
+  let s = c.trim();
+  const brandSuffixes = [
+    'Sigma mobile', 'Sigma', 'Xiaomi', 'Redmi', 'Ugreen', 'Baseus', 'Apple', 'Samsung',
+    'Anker', 'Hoco', 'Borofone', 'Romoss', 'Remax', 'Joyroom', 'ColorWay', 'Proove',
+    'HOPECOM', 'Qinetiq', 'Remzona', '2E', 'Gelius', 'ZMI', 'Belkin', 'Choetech', 'BLUETTI', 'EcoFlow', 'Jackery'
+  ];
+  for (const b of brandSuffixes) {
+    const re = new RegExp('\\s*[-–—|,]?\\s*' + b + '\\b.*$', 'i');
+    s = s.replace(re, '');
+  }
+  return s.trim() || 'Повербанки та УМБ';
+}
+
+function detectBrandServer(p: any): string {
+  if (!p) return 'Інші';
+  const rawMap = p.detailedSpecsMap;
+  let b = '';
+  if (rawMap && (rawMap['Бренд'] || rawMap['Виробник'])) {
+    b = String(rawMap['Бренд'] || rawMap['Виробник']).trim();
+  } else if (p.specs && typeof p.specs === 'string' && p.specs.includes('Бренд:')) {
+    const m = p.specs.match(/Бренд:\s*([^,;]+)/i);
+    if (m) b = m[1].trim();
+  }
+
+  const name = p.name || '';
+  if (!b || /^(?:універсальна|умб|батарея|портативна|павербанк|повербанк|зовнішній|power|зарядний|standard|інші)$/i.test(b) || (b === 'Apple' && /\b(?:для\s+(?:apple|iphone)|qinetiq|remzona)\b/i.test(name))) {
+    const knownBrands = [
+      { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power)\b/i },
+      { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco)\b/i },
+      { name: 'Ugreen', regex: /\bUgreen\b/i },
+      { name: 'Baseus', regex: /\b(?:Baseus|Adaman)\b/i },
+      { name: 'Qinetiq', regex: /\bQinetiq\b/i },
+      { name: 'Remzona', regex: /\bRemzona\b/i },
+      { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для\s+(?:apple|iphone)|айфона)\b/i },
+      { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для\s+samsung|самсунг)\b/i },
+      { name: 'Anker', regex: /\bAnker\b/i },
+      { name: 'Hoco', regex: /\bHoco\b/i },
+      { name: 'Borofone', regex: /\bBorofone\b/i },
+      { name: 'Romoss', regex: /\bRomoss\b/i },
+      { name: 'Remax', regex: /\bRemax\b/i },
+      { name: 'Joyroom', regex: /\bJoyroom\b/i },
+      { name: 'ColorWay', regex: /\bColorWay\b/i },
+      { name: 'Proove', regex: /\bProove\b/i },
+      { name: 'HOPECOM', regex: /\bHOPECOM\b/i },
+      { name: 'ZMI', regex: /\bZMI\b/i },
+      { name: '2E', regex: /\b2E\b/i },
+      { name: 'Gelius', regex: /\bGelius\b/i },
+      { name: 'Platinet', regex: /\bPlatinet\b/i },
+      { name: 'Dudao', regex: /\bDudao\b/i },
+      { name: 'Pisen', regex: /\bPisen\b/i },
+      { name: 'Wekome', regex: /\bWekome\b/i },
+      { name: 'Proda', regex: /\bProda\b/i },
+      { name: 'XO', regex: /\bXO\b/i },
+      { name: 'Vention', regex: /\bVention\b/i },
+      { name: 'Essager', regex: /\bEssager\b/i },
+      { name: 'BLUETTI', regex: /\bBLUETTI\b/i },
+      { name: 'EcoFlow', regex: /\bEcoFlow\b/i },
+      { name: 'Jackery', regex: /\bJackery\b/i }
+    ];
+    for (const rule of knownBrands) {
+      if (rule.excludeIf && rule.excludeIf.test(name)) continue;
+      if (rule.regex.test(name)) {
+        return rule.name;
+      }
+    }
+    let cleanName = name.replace(/^(?:портативна\s+батарея|зовнішній\s+акумулятор|універсальна\s+батарея|батарея\s+універсальна|павербанк|повербанк|зарядний\s+пристрій|бездротова\s+зарядка|power\s*bank|умб)\s+/i, '').trim();
+    const token = cleanName.split(/[\s,]+/)[0];
+    if (token && token.length >= 2 && !/^\d+$/.test(token) && !/^(?:для|з|на|та|fast|pro|mini|led|black|white|grey|gray|red|blue)$/i.test(token)) {
+      return token.charAt(0).toUpperCase() + token.slice(1);
+    }
+  }
+  return b || 'Інші';
+}
+
 app.post('/api/products', async (req, res) => {
   try {
     let newItems = req.body ? (req.body.products || req.body) : [];
@@ -182,7 +258,19 @@ app.post('/api/products', async (req, res) => {
           itemOldPrice = itemPrice;
         }
 
-        const itemSessionTitle = item.sessionTitle || sessionTitle || '';
+        const cleanCat = cleanCategoryNameServer(item.category || sessionTitle || 'Повербанки та УМБ');
+        const detectedBrand = detectBrandServer(item);
+        const specsMap = item.detailedSpecsMap && typeof item.detailedSpecsMap === 'object' ? { ...item.detailedSpecsMap } : {};
+        if (!specsMap['Бренд'] || specsMap['Бренд'] === 'None' || specsMap['Бренд'] === 'Undefined') {
+          specsMap['Бренд'] = detectedBrand;
+        }
+
+        let itemSpecs = item.specs || '';
+        if (!itemSpecs.includes('Бренд:') && detectedBrand && detectedBrand !== 'Інші') {
+          itemSpecs = itemSpecs ? `${itemSpecs}; Бренд: ${detectedBrand}` : `Бренд: ${detectedBrand}`;
+        }
+
+        const itemSessionTitle = cleanCategoryNameServer(item.sessionTitle || sessionTitle || cleanCat);
         const itemSessionId = item.sessionId || sessionId || '';
 
         const itemKey = getItemKey({ ...item, link: normalizedLink });
@@ -197,12 +285,12 @@ app.post('/api/products', async (req, res) => {
             rating: itemRating,
             reviews: itemReviews,
             inStock: item.inStock !== false,
-            category: item.category || 'Загальна',
+            category: cleanCat,
             sessionTitle: itemSessionTitle,
             sessionId: itemSessionId,
-            specs: item.specs || '',
+            specs: itemSpecs,
             description: item.description || '',
-            detailedSpecsMap: item.detailedSpecsMap || {},
+            detailedSpecsMap: specsMap,
             seller: item.seller || 'Rozetka',
             sellersCount: item.sellersCount || 1,
             link: normalizedLink,
@@ -227,13 +315,13 @@ app.post('/api/products', async (req, res) => {
             products[index].name = item.name || products[index].name;
             products[index].inStock = item.inStock !== false;
             products[index].scrapedAt = new Date().toISOString();
-            if (item.category) products[index].category = item.category;
-            if (itemSessionTitle) products[index].sessionTitle = itemSessionTitle;
+            products[index].category = cleanCat;
+            products[index].sessionTitle = itemSessionTitle;
             if (itemSessionId) products[index].sessionId = itemSessionId;
-            if (item.specs) products[index].specs = item.specs;
+            products[index].specs = itemSpecs;
             if (item.description) products[index].description = item.description;
-            if (item.detailedSpecsMap) products[index].detailedSpecsMap = item.detailedSpecsMap;
-            if (item.seller) products[index].seller = item.seller;
+            products[index].detailedSpecsMap = specsMap;
+            if (item.seller && item.seller !== 'Rozetka') products[index].seller = item.seller;
             if (item.sellersCount) products[index].sellersCount = item.sellersCount;
           }
         }
