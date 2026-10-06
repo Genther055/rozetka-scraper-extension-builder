@@ -171,6 +171,7 @@
         // 3. Scan DOM on-page seller carriage & anchors
         try {
             const sellerAnchors = document.querySelectorAll(`
+                rz-marketplace-link a, .seller-market-link a, [class*="seller-market-link"] a,
                 rz-seller-carriage a[href*="/seller/"], .product-seller a[href*="/seller/"], rz-seller-title a, rz-seller-title-feedback a,
                 rz-goods-seller a, [class*="product-seller"] a, a[href*="/seller/"], a[apprzroute][href*="/seller/"]
             `);

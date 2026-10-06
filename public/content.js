@@ -949,11 +949,19 @@
                 }
             }
 
-            // 4. Scan DOM on product page: Main Seller Carriage & links
-            const mainSellerLinks = document.querySelectorAll('rz-seller-carriage a[href*="/seller/"], .product-seller a[href*="/seller/"], rz-seller-title a, rz-seller-title-feedback a, [class*="product-seller"] a[href*="/seller/"], a[apprzroute][href*="/seller/"], a[href*="/seller/"]');
+            // 4. Scan DOM on product page: Main Seller Carriage & marketplace links
+            const mainSellerLinks = document.querySelectorAll('rz-marketplace-link a, .seller-market-link a, [class*="seller-market-link"] a, rz-seller-carriage a[href*="/seller/"], .product-seller a[href*="/seller/"], rz-seller-title a, rz-seller-title-feedback a, [class*="product-seller"] a[href*="/seller/"], a[apprzroute][href*="/seller/"], a[href*="/seller/"]');
             for (const a of mainSellerLinks) {
                 const spanText = a.querySelector('.text-inline, [class*="title"], [class*="name"], span, p, b, strong')?.innerText || a.innerText || a.textContent || '';
-                const sName = cleanSellerName(spanText);
+                let sName = cleanSellerName(spanText);
+                if (!sName || sName.toLowerCase() === 'rozetka') {
+                    const href = a.getAttribute('href') || '';
+                    const m = href.match(/\/(?:seller|merchant)\/([^\/?#]+)/i);
+                    if (m && m[1] && !/^\d+$/.test(m[1])) {
+                        const slug = decodeURIComponent(m[1]).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+                        if (slug.length >= 2) sName = cleanSellerName(slug);
+                    }
+                }
                 const currentUrl = window.location.href;
                 const pageProdId = extractProductId(document.body, currentUrl);
                 if (pageProdId && sName && sName.toLowerCase() !== 'rozetka') {
@@ -1304,6 +1312,12 @@
 
         // Direct seller links across all scopes
         const sellerLinkSelectors = [
+            'rz-marketplace-link a',
+            '.seller-market-link a',
+            '[class*="seller-market-link"] a',
+            'rz-marketplace-link',
+            '.seller-market-link',
+            '[class*="seller-market-link"]',
             'a[href*="/seller/"]',
             'a[href*="/merchant/"]',
             'a[href*="seller="]',
