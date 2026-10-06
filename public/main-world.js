@@ -260,6 +260,42 @@
 
     // Event-driven & periodic harvesting
     window.addEventListener('tradescout_request_main_harvest', harvestAll);
+
+    // Direct Batch Fetch in Main World (100% same context as DevTools Console)
+    window.addEventListener('tradescout_batch_fetch_sellers', async (e) => {
+        const ids = e.detail?.productIds;
+        if (!Array.isArray(ids) || ids.length === 0) return;
+        try {
+            const idsChunk = ids.slice(0, 80).join(',');
+            const res = await fetch(`https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`, {
+                credentials: 'include'
+            });
+            if (res.ok) {
+                const json = await res.json();
+                if (Array.isArray(json?.data)) {
+                    for (const item of json.data) {
+                        if (item && item.id) {
+                            const sTitle = item.seller?.title || item.seller?.name || item.seller_title || (typeof item.seller === 'string' ? item.seller : '');
+                            const cleaned = cleanSeller(sTitle);
+                            const finalSeller = cleaned || (item.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
+                            const sCount = item.sellers_count || (item.same_offers?.count ? item.same_offers.count + 1 : 1);
+                            goodsMap[String(item.id)] = {
+                                id: String(item.id),
+                                seller: finalSeller,
+                                sellersCount: sCount
+                            };
+                        }
+                    }
+                    dispatchUpdate();
+                    window.postMessage({
+                        type: 'TRADESCOUT_BATCH_SELLERS_RESULT',
+                        data: json.data
+                    }, '*');
+                }
+            }
+        } catch (_) {}
+    });
+
     setInterval(harvestAll, 1000);
 
     if (document.readyState === 'loading') {

@@ -760,6 +760,20 @@
                 }
             }
         }
+        if (event.data.type === 'TRADESCOUT_BATCH_SELLERS_RESULT' && Array.isArray(event.data.data)) {
+            for (const item of event.data.data) {
+                if (item && item.id) {
+                    const sTitle = item.seller?.title || item.seller?.name || item.seller_title || (typeof item.seller === 'string' ? item.seller : '');
+                    const cleaned = cleanSellerName(sTitle);
+                    if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                        pageSellerMap.set(String(item.id).trim(), cleaned);
+                    }
+                    if (typeof item.sellers_count === 'number' && item.sellers_count > 0) {
+                        pageSellersCountMap.set(String(item.id).trim(), item.sellers_count);
+                    }
+                }
+            }
+        }
         if (event.data.type === 'TRADESCOUT_NETWORK_DATA' && event.data.data) {
             parseSellersFromAnyJson(event.data.data, pageSellerMap, pageSellersCountMap);
         }
@@ -1849,9 +1863,11 @@
                 const prodId = extractProductId(item, link);
                 if (prodId && !productIds.includes(prodId)) productIds.push(prodId);
             }
-            if (productIds.length > 0) {
-                let fetchedProducts = [];
-                
+                // Dispatch to Main World Bridge (Zero-CORS, shares active session)
+                window.dispatchEvent(new CustomEvent('tradescout_batch_fetch_sellers', {
+                    detail: { productIds }
+                }));
+
                 // Tier 1: Direct fetch in active tab (carries live Cloudflare clearance & session cookies)
                 try {
                     const idsChunk = productIds.slice(0, 80).join(',');
@@ -1891,6 +1907,8 @@
                     });
                 }
 
+                console.log(`[TradeScout Batch] Received ${fetchedProducts.length} product details from Rozetka API for ${productIds.length} IDs.`);
+
                 if (Array.isArray(fetchedProducts) && fetchedProducts.length > 0) {
                     for (const apiProd of fetchedProducts) {
                         if (apiProd && apiProd.id) {
@@ -1898,9 +1916,8 @@
                             if (apiProd.seller) {
                                 const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || (typeof apiProd.seller === 'string' ? apiProd.seller : '');
                                 const cleaned = cleanSellerName(sTitle);
-                                if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
-                                    pageSellerMap.set(String(apiProd.id), cleaned);
-                                }
+                                const finalSeller = cleaned || (apiProd.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
+                                pageSellerMap.set(String(apiProd.id), finalSeller);
                             }
                             let sCount = apiProd.sellers_count;
                             if (typeof sCount !== 'number' && apiProd.same_offers && typeof apiProd.same_offers.count === 'number' && apiProd.same_offers.count > 0) {
@@ -2085,9 +2102,11 @@
                 const apiProd = prodId ? apiProductDetailsMap.get(prodId) : null;
                 let apiSeller = '';
                 if (apiProd && apiProd.seller) {
-                    apiSeller = cleanSellerName(apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || '');
+                    const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || (typeof apiProd.seller === 'string' ? apiProd.seller : '');
+                    const cleaned = cleanSellerName(sTitle);
+                    apiSeller = cleaned || (apiProd.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
                 }
-                const seller = (apiSeller && apiSeller.toLowerCase() !== 'rozetka') ? apiSeller : (extractSeller(item, link, name) || 'Rozetka');
+                const seller = apiSeller || (extractSeller(item, link, name) || 'Rozetka');
                 let sellersCount = (apiProd && typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0) 
                     ? apiProd.sellers_count 
                     : ((prodId && pageSellersCountMap.has(prodId)) ? pageSellersCountMap.get(prodId) : 1);
