@@ -1845,9 +1845,9 @@
         const apiProductDetailsMap = new Map();
         try {
             const productIds = [];
-            for (const { link } of distinctTiles) {
-                const m = link.match(/\/p(\d+)/i) || link.match(/p(\d+)/i) || link.match(/\/(\d{5,})\//);
-                if (m && m[1]) productIds.push(m[1]);
+            for (const { item, link } of distinctTiles) {
+                const prodId = extractProductId(item, link);
+                if (prodId && !productIds.includes(prodId)) productIds.push(prodId);
             }
             if (productIds.length > 0) {
                 let fetchedProducts = [];
@@ -1902,8 +1902,12 @@
                                     pageSellerMap.set(String(apiProd.id), cleaned);
                                 }
                             }
-                            if (typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0) {
-                                pageSellersCountMap.set(String(apiProd.id), apiProd.sellers_count);
+                            let sCount = apiProd.sellers_count;
+                            if (typeof sCount !== 'number' && apiProd.same_offers && typeof apiProd.same_offers.count === 'number' && apiProd.same_offers.count > 0) {
+                                sCount = apiProd.same_offers.count + 1;
+                            }
+                            if (typeof sCount === 'number' && sCount > 0) {
+                                pageSellersCountMap.set(String(apiProd.id), sCount);
                             }
                         }
                     }
