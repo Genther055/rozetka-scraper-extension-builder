@@ -1425,6 +1425,54 @@ export class DashboardComponent implements OnInit {
     return `M 2 22 L 20 20 L 45 ${h2 + 3} L 75 ${h2} L 100 ${h1 + 2} L 118 ${h1}`;
   }
 
+  getDemandMedianDeltaAmount(): number {
+    if (!this.analyticsSummary?.kpi) return 0;
+    return (this.analyticsSummary.kpi.weightedMedianPrice || 0) - (this.analyticsSummary.kpi.medianPrice || 0);
+  }
+
+  getDemandAvgDeltaAmount(): number {
+    if (!this.analyticsSummary?.kpi) return 0;
+    return (this.analyticsSummary.kpi.weightedAvgPrice || 0) - (this.analyticsSummary.kpi.avgPrice || 0);
+  }
+
+  getNicheExecutiveSummary(): { status: string; badge: string; badgeClass: string; desc: string } {
+    const kpi = this.analyticsSummary?.kpi;
+    if (!kpi || kpi.totalProducts === 0) {
+      return {
+        status: 'Очікування даних',
+        badge: 'Немає вибірки',
+        badgeClass: 'bg-slate-800 text-slate-400 border-slate-700',
+        desc: 'Зберіть дані про товари розширенням для формування аналітичного висновку.'
+      };
+    }
+
+    const cr10 = kpi.cr10 || kpi.cr3 || 0;
+    const hhi = kpi.hhi || 0;
+
+    if (cr10 < 50 && hhi < 1000) {
+      return {
+        status: 'Вільна конкурентна ніша',
+        badge: 'Низька концентрація (HHI ' + hhi + ')',
+        badgeClass: 'bg-emerald-950/80 text-emerald-300 border-emerald-600/50',
+        desc: 'Ринок децентралізований: відсутня жорстка олігополія. ' + (100 - cr10).toFixed(1) + '% пропозиції розподілено між незалежними продавцями.'
+      };
+    } else if (cr10 <= 75) {
+      return {
+        status: 'Зрілий ринок із помірною концентрацією',
+        badge: 'Помірна олігополія (CR10 ' + cr10 + '%)',
+        badgeClass: 'bg-indigo-950/80 text-indigo-300 border-indigo-500/50',
+        desc: 'Топ-10 продавців контролюють ' + cr10 + '% ринку, водночас ' + (100 - cr10).toFixed(1) + '% залишається вільним простором для нових позицій.'
+      };
+    } else {
+      return {
+        status: 'Висококонцентрована ніша',
+        badge: 'Висока олігополія (CR10 ' + cr10 + '%)',
+        badgeClass: 'bg-rose-950/80 text-rose-300 border-rose-500/50',
+        desc: 'Топ-10 гравців акумулюють більшість попиту. Вхід вимагає відбудови та переваги за ціною або комплектацією.'
+      };
+    }
+  }
+
   // --- Price & Demand 2-Color Scatter Distribution Chart Engine ---
   scatterStoreFilter: 'all' | 'top3' | string = 'all';
   hoveredScatterPoint: {
