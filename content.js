@@ -2411,6 +2411,7 @@
         }
 
         // Upward sweep back to top to catch any unmounted items
+        // If still below target, scroll to top and trigger another harvest cycle
         if (pageNewProducts.length < targetForThisPage) {
             window.scrollTo({ top: 0, behavior: 'auto' });
             window.dispatchEvent(new Event('scroll'));

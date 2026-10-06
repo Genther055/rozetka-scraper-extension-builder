@@ -138,7 +138,13 @@ async function startScrapingTab(tabId, webhookUrl) {
         }, (res) => {
             const err = chrome.runtime.lastError;
             if (err) {
-                // If content script was not connected yet, inject and retry
+                // If content script was not connected yet, inject main-world bridge then content script and retry
+                chrome.scripting.executeScript({
+                    target: { tabId: tabId },
+                    files: ['main-world.js'],
+                    world: 'MAIN'
+                }).catch(() => {});
+
                 chrome.scripting.executeScript({
                     target: { tabId: tabId },
                     files: ['content.js']
