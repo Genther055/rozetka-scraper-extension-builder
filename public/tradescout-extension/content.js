@@ -2014,13 +2014,13 @@
 
                 // Brand detection
                 const knownBrandRules = [
+                    { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power)\b/i },
+                    { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco|70mai)\b/i, excludeIf: /\b(?:для|сумісн\w*|compatible\s+with|підходить\s+для)\s+[^,;]*(?:xiaomi|redmi|poco)\b/i },
                     { name: 'Ugreen', regex: /\bUgreen\b/i },
                     { name: 'Baseus', regex: /\b(?:Baseus|Adaman)\b/i },
+                    { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для|сумісн\w*|підходить\s+для|for|iphone|айфона|чохол|кабель|type-c|lightning)\b/i },
+                    { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для|сумісн\w*|підходить\s+для|for|самсунг|чохол|кабель|type-c)\b/i },
                     { name: 'Anker', regex: /\bAnker\b/i },
-                    { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power)\b/i },
-                    { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco)\b/i, excludeIf: /\b(?:для|сумісн\w*\s+(?:з|із)|compatible\s+with|підходить\s+для)\s+[^,;]*(?:xiaomi|redmi|poco)\b/i },
-                    { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для|сумісн\w*\s+(?:з|із)|айфона|iphone|apple)\b/i },
-                    { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для|сумісн\w*\s+(?:з|із)|samsung|самсунг)\b/i },
                     { name: 'Qinetiq', regex: /\bQinetiq\b/i },
                     { name: 'Remzona', regex: /\bRemzona\b/i },
                     { name: 'Hoco', regex: /\bHoco\b/i },
@@ -2081,7 +2081,7 @@
                     { name: 'GP', regex: /\bGP\b/i }
                 ];
                 for (const rule of knownBrandRules) {
-                    if (rule.excludeIf && rule.excludeIf.test(name) && !new RegExp(`^(?:.*?\\b${rule.name}\\b.*?)(?:для|сумісн)`, 'i').test(name)) continue;
+                    if (rule.excludeIf && rule.excludeIf.test(name)) continue;
                     if (rule.regex.test(name)) {
                         detailedSpecsMap['Бренд'] = rule.name;
                         break;

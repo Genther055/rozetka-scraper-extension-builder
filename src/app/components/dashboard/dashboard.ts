@@ -642,18 +642,33 @@ export class DashboardComponent implements OnInit {
       });
     }
 
-    // Add all brands sorted by item count
+    // Add all valid brands sorted by item count
     const sortedBrands = Array.from(brandsMap.entries())
-      .filter(([_, count]) => count >= 1)
+      .filter(([brand, count]) => count >= 1 && !/^(?:пауербанк|повербанк|павербанк|інші|акумулятор|power\s*bank|powerbank)$/i.test(brand))
       .sort((a, b) => b[1] - a[1]);
 
+    let otherBrandsCount = 0;
     for (const [brand, count] of sortedBrands) {
+      if (count < 2 && sortedBrands.length > 3) {
+        otherBrandsCount += count;
+        continue;
+      }
       pills.push({
         id: 'brand:' + brand,
         title: brand,
         count,
         type: 'brand',
         color: brandColors[brand] || '#818cf8'
+      });
+    }
+
+    if (otherBrandsCount > 0) {
+      pills.push({
+        id: 'brand:Інші',
+        title: 'Інші бренди',
+        count: otherBrandsCount,
+        type: 'brand',
+        color: '#64748b'
       });
     }
 
@@ -6549,7 +6564,8 @@ export function detectProductBrand(p: any, fallbackBrand?: string): string {
   const name = String(p.name || '');
 
   // 1. Clean extracted brand if it is a generic word
-  if (b && /^(?:універсальна|умб|батарея|портативна|павербанк|повербанк|зовнішній|power|зарядний|standard|інші|ліхтариком|потужний|швидка|комплект)$/i.test(b)) {
+  const genericWordsRegex = /^(?:універсальна|умб|батарея|портативна|павербанк|повербанк|пауербанк|зовнішній|power|powerbank|power\s*bank|зарядний|зарядка|standard|інші|ліхтариком|потужний|швидка|комплект|акумулятор|чохол|кабель|провід|магнітний|бездротовий)$/i;
+  if (b && genericWordsRegex.test(b)) {
     b = '';
   }
 
@@ -6559,9 +6575,9 @@ export function detectProductBrand(p: any, fallbackBrand?: string): string {
     { name: 'Baseus', regex: /\b(?:Baseus|Adaman)\b/i },
     { name: 'Anker', regex: /\bAnker\b/i },
     { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power)\b/i },
-    { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco)\b/i, excludeIf: /\b(?:для|сумісн\w*\s+(?:з|із)|compatible\s+with|підходить\s+для)\s+[^,;]*(?:xiaomi|redmi|poco)\b/i },
-    { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для|сумісн\w*\s+(?:з|із)|айфона|iphone|apple)\b/i },
-    { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для|сумісн\w*\s+(?:з|із)|samsung|самсунг)\b/i },
+    { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco|70mai)\b/i, excludeIf: /\b(?:для|сумісн\w*|compatible\s+with|підходить\s+для)\s+[^,;]*(?:xiaomi|redmi|poco)\b/i },
+    { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для|сумісн\w*|підходить\s+для|for|iphone|айфона|чохол|кабель|type-c|lightning)\b/i },
+    { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для|сумісн\w*|підходить\s+для|for|самсунг|чохол|кабель|type-c)\b/i },
     { name: 'Qinetiq', regex: /\bQinetiq\b/i },
     { name: 'Remzona', regex: /\bRemzona\b/i },
     { name: 'Hoco', regex: /\bHoco\b/i },
@@ -6623,7 +6639,7 @@ export function detectProductBrand(p: any, fallbackBrand?: string): string {
   ];
 
   for (const rule of knownBrands) {
-    if (rule.excludeIf && rule.excludeIf.test(name) && !new RegExp(`^(?:.*?\\b${rule.name}\\b.*?)(?:для|сумісн)`, 'i').test(name)) continue;
+    if (rule.excludeIf && rule.excludeIf.test(name)) continue;
     if (rule.regex.test(name)) {
       return rule.name;
     }
@@ -6637,7 +6653,7 @@ export function detectProductBrand(p: any, fallbackBrand?: string): string {
       }
     }
     const cleanB = b.replace(/[^a-zA-Zа-яА-ЯіІїЇєЄ0-9\s\.\-]/g, '').trim();
-    if (cleanB.length >= 2 && !/^(?:для|з|на|та|fast|pro|mini|led|black|white|grey|gray|red|blue|потужний|ліхтариком|зовнішній|універсальна)$/i.test(cleanB)) {
+    if (cleanB.length >= 2 && !genericWordsRegex.test(cleanB) && !/^(?:для|з|на|та|fast|pro|mini|led|black|white|grey|gray|red|blue)$/i.test(cleanB)) {
       return cleanB.charAt(0).toUpperCase() + cleanB.slice(1);
     }
   }
