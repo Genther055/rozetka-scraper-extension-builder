@@ -477,26 +477,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         (async () => {
             const allResults = [];
+            const chunkPromises = [];
+
             for (let i = 0; i < productIds.length; i += 60) {
                 const chunk = productIds.slice(i, i + 60);
                 const idsChunk = chunk.join(',');
-                const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`;
-                try {
-                    const res = await fetch(apiUrl, {
-                        headers: {
-                            'Accept': 'application/json, text/plain, */*',
-                            'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
-                        }
-                    });
-                    if (res.ok) {
-                        const json = await res.json();
-                        if (Array.isArray(json?.data)) {
-                            allResults.push(...json.data);
-                        }
+                const endpoints = [
+                    `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`,
+                    `https://rozetka.com.ua/ua/api/product/details?country=UA&lang=ua&ids=${idsChunk}`,
+                    `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ru&ids=${idsChunk}`
+                ];
+
+                chunkPromises.push((async () => {
+                    for (const apiUrl of endpoints) {
+                        try {
+                            const res = await fetch(apiUrl, {
+                                headers: {
+                                    'Accept': 'application/json, text/plain, */*',
+                                    'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
+                                }
+                            });
+                            if (res.ok) {
+                                const json = await res.json();
+                                if (Array.isArray(json?.data) && json.data.length > 0) {
+                                    return json.data;
+                                }
+                            }
+                        } catch (err) {}
                     }
-                } catch (err) {
-                    console.error('[TradeScout SW] fetch details error:', err);
-                }
+                    return [];
+                })());
+            }
+
+            const results = await Promise.all(chunkPromises);
+            for (const chunkData of results) {
+                if (Array.isArray(chunkData)) allResults.push(...chunkData);
             }
             sendResponse({ success: true, data: allResults });
         })();
