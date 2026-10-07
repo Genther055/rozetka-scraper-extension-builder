@@ -2007,10 +2007,10 @@
                     { name: 'Anker', regex: /\bAnker\b/i },
                     { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power)\b/i },
                     { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco)\b/i, excludeIf: /\b(?:для|сумісн\w*\s+(?:з|із)|compatible\s+with|підходить\s+для)\s+[^,;]*(?:xiaomi|redmi|poco)\b/i },
-                    { name: 'Qinetiq', regex: /\bQinetiq\b/i },
-                    { name: 'Remzona', regex: /\bRemzona\b/i },
                     { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для|сумісн\w*\s+(?:з|із)|айфона|iphone|apple)\b/i },
                     { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для|сумісн\w*\s+(?:з|із)|samsung|самсунг)\b/i },
+                    { name: 'Qinetiq', regex: /\bQinetiq\b/i },
+                    { name: 'Remzona', regex: /\bRemzona\b/i },
                     { name: 'Hoco', regex: /\bHoco\b/i },
                     { name: 'Borofone', regex: /\bBorofone\b/i },
                     { name: 'Romoss', regex: /\bRomoss\b/i },
@@ -2030,15 +2030,60 @@
                     { name: 'XO', regex: /\bXO\b/i },
                     { name: 'Vention', regex: /\bVention\b/i },
                     { name: 'Essager', regex: /\bEssager\b/i },
+                    { name: 'Belkin', regex: /\bBelkin\b/i },
+                    { name: 'Choetech', regex: /\bChoetech\b/i },
+                    { name: 'Sandberg', regex: /\bSandberg\b/i },
+                    { name: 'Usams', regex: /\bUsams\b/i },
+                    { name: 'Toocki', regex: /\bToocki\b/i },
+                    { name: 'Mcdodo', regex: /\bMcdodo\b/i },
+                    { name: 'Tronsmart', regex: /\bTronsmart\b/i },
                     { name: 'BLUETTI', regex: /\bBLUETTI\b/i },
                     { name: 'EcoFlow', regex: /\bEcoFlow\b/i },
-                    { name: 'Jackery', regex: /\bJackery\b/i }
+                    { name: 'Jackery', regex: /\bJackery\b/i },
+                    { name: 'Tellur', regex: /\bTellur\b/i },
+                    { name: 'Intenso', regex: /\bIntenso\b/i },
+                    { name: 'Canyon', regex: /\bCanyon\b/i },
+                    { name: 'Trust', regex: /\bTrust\b/i },
+                    { name: 'Esperanza', regex: /\bEsperanza\b/i },
+                    { name: 'Silicon Power', regex: /\bSilicon\s*Power\b/i },
+                    { name: 'Vinga', regex: /\bVinga\b/i },
+                    { name: 'Defender', regex: /\bDefender\b/i },
+                    { name: 'Energea', regex: /\bEnergea\b/i },
+                    { name: 'Aukey', regex: /\bAukey\b/i },
+                    { name: 'RAVPower', regex: /\bRAVPower\b/i },
+                    { name: 'Cuktech', regex: /\bCuktech\b/i },
+                    { name: 'Shargeek', regex: /\b(?:Shargeek|Sharge)\b/i },
+                    { name: 'Promate', regex: /\bPromate\b/i },
+                    { name: 'realme', regex: /\brealme\b/i },
+                    { name: 'Huawei', regex: /\bHuawei\b/i },
+                    { name: 'Motorola', regex: /\bMotorola\b/i },
+                    { name: 'Asus', regex: /\bAsus\b/i },
+                    { name: 'Lenovo', regex: /\bLenovo\b/i },
+                    { name: 'Dell', regex: /\bDell\b/i },
+                    { name: 'HP', regex: /\bHP\b/i },
+                    { name: 'Sony', regex: /\bSony\b/i },
+                    { name: 'Philips', regex: /\bPhilips\b/i },
+                    { name: 'Energizer', regex: /\bEnergizer\b/i },
+                    { name: 'Duracell', regex: /\bDuracell\b/i },
+                    { name: 'Varta', regex: /\bVarta\b/i },
+                    { name: 'GP', regex: /\bGP\b/i }
                 ];
                 for (const rule of knownBrandRules) {
                     if (rule.excludeIf && rule.excludeIf.test(name) && !new RegExp(`^(?:.*?\\b${rule.name}\\b.*?)(?:для|сумісн)`, 'i').test(name)) continue;
                     if (rule.regex.test(name)) {
                         detailedSpecsMap['Бренд'] = rule.name;
                         break;
+                    }
+                }
+
+                // If not matched, fallback to page/session brand if active
+                if (!detailedSpecsMap['Бренд']) {
+                    const sessionContext = (meta?.title || '') + ' ' + (meta?.category || '') + ' ' + (window.location.href || '');
+                    for (const rule of knownBrandRules) {
+                        if (rule.regex.test(sessionContext)) {
+                            detailedSpecsMap['Бренд'] = rule.name;
+                            break;
+                        }
                     }
                 }
 
