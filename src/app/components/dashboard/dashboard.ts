@@ -5340,10 +5340,14 @@ export class DashboardComponent implements OnInit {
   }
 
   async exportToExcel() {
-    const baseProducts = (this.filteredProducts && this.filteredProducts.length > 0) 
+    const rawProducts = (this.filteredProducts && this.filteredProducts.length > 0) 
       ? this.filteredProducts 
       : this.products;
-    if (!baseProducts || baseProducts.length === 0) return;
+    if (!rawProducts || rawProducts.length === 0) return;
+
+    // Filter strictly to IN-STOCK products (товари в наявності)
+    const inStockList = rawProducts.filter(p => p && p.inStock !== false);
+    const baseProducts = inStockList.length > 0 ? inStockList : rawProducts;
 
     // 1. Збираємо всі унікальні НАДІЙНО НОРМАЛІЗОВАНІ назви характеристик
     const dynamicSpecsSet = new Set<string>();
