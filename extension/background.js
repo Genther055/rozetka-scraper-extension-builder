@@ -284,6 +284,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    // 0.1 Check if tab is actively allowed to run/resume
+    if (message.action === 'CHECK_TAB_CAN_RUN' && tabId) {
+        if (stoppedTabs.has(tabId)) {
+            sendResponse({ canRun: false, reason: 'stopped' });
+            return true;
+        }
+        getTabSessions().then(sessions => {
+            const sess = sessions[tabId];
+            if (sess && sess.isRunning) {
+                sendResponse({ canRun: true, session: sess });
+            } else {
+                sendResponse({ canRun: false, reason: 'not_running' });
+            }
+        });
+        return true;
+    }
+
     // 1. Progress updates from a specific tab's content script
     if (message.action === 'tabProgress' && tabId) {
         if (stoppedTabs.has(tabId)) {
