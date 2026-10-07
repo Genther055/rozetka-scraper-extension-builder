@@ -1519,103 +1519,6 @@
                     <span class="text-[10px] text-slate-400 font-normal shrink-0">{{ s.share }}%</span>
                   </button>
                 </div>
-
-                <!-- Legend, Zoom & Shift Indicator -->
-                <div class="flex flex-wrap items-center gap-2">
-                  <!-- Cumulative Zoom Mode Toggle -->
-                  <div *ngIf="activePriceChartTab === 'cumulative'" class="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
-                    <button 
-                      (click)="setCumulativeZoomMode('full')"
-                      class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
-                      [class.bg-indigo-600]="cumulativeZoomMode === 'full'"
-                      [class.text-white]="cumulativeZoomMode === 'full'"
-                      [class.shadow]="cumulativeZoomMode === 'full'"
-                      [class.text-slate-400]="cumulativeZoomMode !== 'full'"
-                      [class.hover:text-white]="cumulativeZoomMode !== 'full'"
-                      title="Огляд усього цінового спектра ніші (100%)"
-                    >
-                      <span class="material-icons text-[12px]">zoom_out_map</span>
-                      <span>100% Ринок</span>
-                    </button>
-                    <button 
-                      (click)="setCumulativeZoomMode('focus')"
-                      class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
-                      [class.bg-amber-600]="cumulativeZoomMode === 'focus'"
-                      [class.text-white]="cumulativeZoomMode === 'focus'"
-                      [class.shadow]="cumulativeZoomMode === 'focus'"
-                      [class.text-slate-400]="cumulativeZoomMode !== 'focus'"
-                      [class.hover:text-white]="cumulativeZoomMode !== 'focus'"
-                      title="Приблизити графік: фокус на активній зоні попиту (85% замовлень)"
-                    >
-                      <span class="material-icons text-[12px]">zoom_in</span>
-                      <span>Фокус попиту (85%)</span>
-                    </button>
-                  </div>
-
-                  <!-- Horizontal Zoom Factor Selector (1x, 2x, 4x, 8x) -->
-                  <div *ngIf="activePriceChartTab === 'cumulative'" class="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
-                    <span class="text-[10px] text-slate-400 font-bold px-1.5 flex items-center gap-0.5 hidden sm:flex">
-                      <span class="material-icons text-[12px] text-indigo-400">swap_horiz</span>
-                      Вісь X:
-                    </span>
-                    <button 
-                      (click)="setCumulativeChartZoom(1)"
-                      [class.bg-indigo-600]="cumulativeChartZoom === 1"
-                      [class.text-white]="cumulativeChartZoom === 1"
-                      [class.text-slate-400]="cumulativeChartZoom !== 1"
-                      class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
-                      title="Стандартний масштаб (1x)"
-                    >1x</button>
-                    <button 
-                      (click)="setCumulativeChartZoom(2)"
-                      [class.bg-indigo-600]="cumulativeChartZoom === 2"
-                      [class.text-white]="cumulativeChartZoom === 2"
-                      [class.text-slate-400]="cumulativeChartZoom !== 2"
-                      class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
-                      title="Розширена вісь (2x) — горизонтальний скрол для точкового наведення"
-                    >2x</button>
-                    <button 
-                      (click)="setCumulativeChartZoom(4)"
-                      [class.bg-indigo-600]="cumulativeChartZoom === 4"
-                      [class.text-white]="cumulativeChartZoom === 4"
-                      [class.text-slate-400]="cumulativeChartZoom !== 4"
-                      class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
-                      title="Детальний масштаб (4x) — плавний рух курсору"
-                    >4x</button>
-                    <button 
-                      (click)="setCumulativeChartZoom(8)"
-                      [class.bg-indigo-600]="cumulativeChartZoom === 8"
-                      [class.text-white]="cumulativeChartZoom === 8"
-                      [class.text-slate-400]="cumulativeChartZoom !== 8"
-                      class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
-                      title="Точковий масштаб (8x) — поштучний аналіз кожного товару"
-                    >8x</button>
-                  </div>
-
-                  <!-- Fullscreen Modal Trigger Button -->
-                  <button 
-                    (click)="openExpandedChartModal('cumulative')"
-                    class="px-2.5 py-1 bg-slate-900 hover:bg-indigo-600 text-slate-300 hover:text-white rounded-xl border border-slate-800 hover:border-indigo-500 transition-all cursor-pointer shadow-sm flex items-center gap-1 text-[11px] font-bold"
-                    title="Відкрити графік у широкоформатному спливаючому вікні на весь екран"
-                  >
-                    <span class="material-icons text-[13px] text-indigo-400 group-hover:text-white">open_in_full</span>
-                    <span>Розгорнути</span>
-                  </button>
-
-                  <!-- Shift Indicator -->
-                  <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/90 border border-slate-800 text-[11px] font-mono text-slate-300">
-                    <span class="text-slate-400">Зсув:</span>
-                    <span 
-                      [class.text-amber-400]="analyticsSummary.kpi.demandPriceDiffPct < -3"
-                      [class.text-emerald-400]="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3"
-                      [class.text-purple-300]="analyticsSummary.kpi.demandPriceDiffPct > 3"
-                      class="font-bold flex items-center gap-0.5"
-                    >
-                      <span class="material-icons text-xs">{{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'trending_down' : (analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'trending_up' : 'trending_flat') }}</span>
-                      <span>{{ analyticsSummary.kpi.demandPriceDiffPct > 0 ? '+' : '' }}{{ analyticsSummary.kpi.demandPriceDiffPct }}%</span>
-                    </span>
-                  </div>
-                </div>
               </div>
 
               <!-- Active Filter Status & Reset Banner -->
@@ -2008,6 +1911,112 @@
               </div>
             </div>
           </div>
+
+          <!-- Interactive Chart Controls Toolbar (Positioned directly below the chart) -->
+                <div class="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 mr-1">
+                      <span class="material-icons text-sm text-indigo-400">tune</span>
+                      <span>Керування графіком:</span>
+                    </span>
+
+                    <!-- Cumulative Zoom Mode Toggle -->
+                    <div class="flex items-center bg-slate-950 p-0.5 rounded-xl border border-slate-800 text-xs shadow-inner">
+                      <button 
+                        (click)="setCumulativeZoomMode('full')"
+                        class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                        [class.bg-indigo-600]="cumulativeZoomMode === 'full'"
+                        [class.text-white]="cumulativeZoomMode === 'full'"
+                        [class.shadow]="cumulativeZoomMode === 'full'"
+                        [class.text-slate-400]="cumulativeZoomMode !== 'full'"
+                        [class.hover:text-white]="cumulativeZoomMode !== 'full'"
+                        title="Огляд усього цінового спектра ніші (100%)"
+                      >
+                        <span class="material-icons text-[12px]">zoom_out_map</span>
+                        <span>100% Ринок</span>
+                      </button>
+                      <button 
+                        (click)="setCumulativeZoomMode('focus')"
+                        class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                        [class.bg-amber-600]="cumulativeZoomMode === 'focus'"
+                        [class.text-white]="cumulativeZoomMode === 'focus'"
+                        [class.shadow]="cumulativeZoomMode === 'focus'"
+                        [class.text-slate-400]="cumulativeZoomMode !== 'focus'"
+                        [class.hover:text-white]="cumulativeZoomMode !== 'focus'"
+                        title="Приблизити графік: фокус на активній зоні попиту (85% замовлень)"
+                      >
+                        <span class="material-icons text-[12px]">zoom_in</span>
+                        <span>Фокус попиту (85%)</span>
+                      </button>
+                    </div>
+
+                    <!-- Horizontal Zoom Factor Selector (1x, 2x, 4x, 8x) -->
+                    <div class="flex items-center bg-slate-950 p-0.5 rounded-xl border border-slate-800 text-xs shadow-inner">
+                      <span class="text-[10px] text-slate-400 font-bold px-1.5 flex items-center gap-0.5 hidden sm:flex">
+                        <span class="material-icons text-[12px] text-indigo-400">swap_horiz</span>
+                        Вісь X:
+                      </span>
+                      <button 
+                        (click)="setCumulativeChartZoom(1)"
+                        [class.bg-indigo-600]="cumulativeChartZoom === 1"
+                        [class.text-white]="cumulativeChartZoom === 1"
+                        [class.text-slate-400]="cumulativeChartZoom !== 1"
+                        class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
+                        title="Стандартний масштаб (1x)"
+                      >1x</button>
+                      <button 
+                        (click)="setCumulativeChartZoom(2)"
+                        [class.bg-indigo-600]="cumulativeChartZoom === 2"
+                        [class.text-white]="cumulativeChartZoom === 2"
+                        [class.text-slate-400]="cumulativeChartZoom !== 2"
+                        class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
+                        title="Розширена вісь (2x) — горизонтальний скрол для точкового наведення"
+                      >2x</button>
+                      <button 
+                        (click)="setCumulativeChartZoom(4)"
+                        [class.bg-indigo-600]="cumulativeChartZoom === 4"
+                        [class.text-white]="cumulativeChartZoom === 4"
+                        [class.text-slate-400]="cumulativeChartZoom !== 4"
+                        class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
+                        title="Детальний масштаб (4x) — плавний рух курсору"
+                      >4x</button>
+                      <button 
+                        (click)="setCumulativeChartZoom(8)"
+                        [class.bg-indigo-600]="cumulativeChartZoom === 8"
+                        [class.text-white]="cumulativeChartZoom === 8"
+                        [class.text-slate-400]="cumulativeChartZoom !== 8"
+                        class="px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer hover:text-white"
+                        title="Точковий масштаб (8x) — поштучний аналіз кожного товару"
+                      >8x</button>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <!-- Fullscreen Modal Trigger Button -->
+                    <button 
+                      (click)="openExpandedChartModal('cumulative')"
+                      class="px-2.5 py-1 bg-slate-950 hover:bg-indigo-600 text-slate-300 hover:text-white rounded-xl border border-slate-800 hover:border-indigo-500 transition-all cursor-pointer shadow-sm flex items-center gap-1 text-[11px] font-bold"
+                      title="Відкрити графік у широкоформатному спливаючому вікні на весь екран"
+                    >
+                      <span class="material-icons text-[13px] text-indigo-400 group-hover:text-white">open_in_full</span>
+                      <span>Розгорнути</span>
+                    </button>
+
+                    <!-- Shift Indicator -->
+                    <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/90 border border-slate-800 text-[11px] font-mono text-slate-300">
+                      <span class="text-slate-400">Зсув:</span>
+                      <span 
+                        [class.text-amber-400]="analyticsSummary.kpi.demandPriceDiffPct < -3"
+                        [class.text-emerald-400]="analyticsSummary.kpi.demandPriceDiffPct >= -3 && analyticsSummary.kpi.demandPriceDiffPct <= 3"
+                        [class.text-purple-300]="analyticsSummary.kpi.demandPriceDiffPct > 3"
+                        class="font-bold flex items-center gap-0.5"
+                      >
+                        <span class="material-icons text-xs">{{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'trending_down' : (analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'trending_up' : 'trending_flat') }}</span>
+                        <span>{{ analyticsSummary.kpi.demandPriceDiffPct > 0 ? '+' : '' }}{{ analyticsSummary.kpi.demandPriceDiffPct }}%</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
               </div>
             </div>
