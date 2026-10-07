@@ -2007,7 +2007,7 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // Batch fetch official Rozetka product details (Direct Tab Fetch + Main World Bridge + Service Worker Fallback)
+        // Batch fetch official Rozetka product details (Service Worker -> Direct Tab Fetch -> Main World Bridge)
         const apiProductDetailsMap = new Map();
         try {
             const productIds = [];
@@ -2018,77 +2018,37 @@
 
             if (productIds.length > 0) {
                 let fetchedProducts = [];
-                const reqId = 'ts_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-
-                // Tier 1: Main World Bridge Promise (Zero-CORS, direct browser session)
-                const mainWorldPromise = new Promise((resolve) => {
-                    let handled = false;
-                    const cleanup = () => {
-                        window.removeEventListener('tradescout_batch_sellers_done', onBatchDone);
-                        document.removeEventListener('tradescout_batch_sellers_done', onBatchDone);
-                        window.removeEventListener('message', onMsg);
-                    };
-                    const onBatchDone = (e) => {
-                        if (e.detail?.requestId === reqId || !e.detail?.requestId) {
-                            if (!handled) {
-                                handled = true;
-                                cleanup();
-                                resolve(e.detail?.results || []);
+                
+                // 1. Service Worker Fetch (MV3 host permissions bypass CSP/CORS)
+                try {
+                    fetchedProducts = await new Promise((resolve) => {
+                        chrome.runtime.sendMessage({
+                            action: 'FETCH_PRODUCT_DETAILS',
+                            productIds: productIds
+                        }, (res) => {
+                            if (chrome.runtime.lastError || !res || !res.success || !Array.isArray(res.data) || res.data.length === 0) {
+                                resolve([]);
+                            } else {
+                                resolve(res.data);
                             }
-                        }
-                    };
-                    const onMsg = (event) => {
-                        if (event.data?.type === 'TRADESCOUT_BATCH_SELLERS_RESULT' && (event.data?.requestId === reqId || !event.data?.requestId)) {
-                            if (!handled && Array.isArray(event.data?.data)) {
-                                handled = true;
-                                cleanup();
-                                resolve(event.data.data);
-                            }
-                        }
-                    };
-                    window.addEventListener('tradescout_batch_sellers_done', onBatchDone);
-                    document.addEventListener('tradescout_batch_sellers_done', onBatchDone);
-                    window.addEventListener('message', onMsg);
+                        });
+                    });
+                } catch (_) {
+                    fetchedProducts = [];
+                }
 
-                    // 1. PostMessage bridge (Official Isolated <-> Main World bridge)
-                    window.postMessage({
-                        type: 'TRADESCOUT_REQUEST_BATCH_SELLERS',
-                        requestId: reqId,
-                        productIds: productIds
-                    }, '*');
-
-                    // 2. Document & Window CustomEvent fallback
-                    document.dispatchEvent(new CustomEvent('tradescout_request_batch_sellers', {
-                        detail: { productIds, requestId: reqId }
-                    }));
-                    window.dispatchEvent(new CustomEvent('tradescout_batch_fetch_sellers', {
-                        detail: { productIds, requestId: reqId }
-                    }));
-
-                    // Safety timeout for bridge
-                    setTimeout(() => {
-                        if (!handled) {
-                            handled = true;
-                            cleanup();
-                            resolve([]);
-                        }
-                    }, 2500);
-                });
-
-                // Tier 2: Direct Tab Fetch (chunks of 60)
-                const directFetchPromise = (async () => {
-                    const directResults = [];
-                    for (let i = 0; i < productIds.length; i += 60) {
-                        const chunk = productIds.slice(i, i + 60);
-                        const idsChunk = chunk.join(',');
-                        const tabApiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`;
-                        try {
+                // 2. Direct Tab Fetch Fallback (in chunks of 50)
+                if (!fetchedProducts || fetchedProducts.length === 0) {
+                    try {
+                        const directResults = [];
+                        for (let i = 0; i < productIds.length; i += 50) {
+                            const chunk = productIds.slice(i, i + 50);
+                            const tabApiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${chunk.join(',')}`;
                             const tabRes = await fetch(tabApiUrl, {
                                 headers: {
                                     'Accept': 'application/json, text/plain, */*',
                                     'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
-                                },
-                                credentials: 'include'
+                                }
                             });
                             if (tabRes.ok) {
                                 const tabJson = await tabRes.json();
@@ -2096,42 +2056,8 @@
                                     directResults.push(...tabJson.data);
                                 }
                             }
-                        } catch (_) {}
-                    }
-                    return directResults;
-                })();
-
-                // Tier 3: Background service worker fallback
-                const swPromise = new Promise(resolve => {
-                    try {
-                        chrome.runtime.sendMessage({
-                            action: 'FETCH_PRODUCT_DETAILS',
-                            productIds: productIds
-                        }, (res) => {
-                            if (chrome.runtime.lastError || !res || !res.success) {
-                                resolve([]);
-                            } else {
-                                resolve(res.data || []);
-                            }
-                        });
-                    } catch (_) {
-                        resolve([]);
-                    }
-                });
-
-                // Race bridge with direct fetch and service worker for maximum speed and 0 delay
-                try {
-                    fetchedProducts = await Promise.race([
-                        mainWorldPromise.then(res => (Array.isArray(res) && res.length > 0) ? res : new Promise(() => {})),
-                        directFetchPromise.then(res => (Array.isArray(res) && res.length > 0) ? res : new Promise(() => {})),
-                        new Promise(r => setTimeout(() => r([]), 1500))
-                    ]);
-                } catch (_) {}
-
-                if (!fetchedProducts || fetchedProducts.length === 0) {
-                    try {
-                        const swRes = await swPromise;
-                        if (Array.isArray(swRes) && swRes.length > 0) fetchedProducts = swRes;
+                        }
+                        if (directResults.length > 0) fetchedProducts = directResults;
                     } catch (_) {}
                 }
 
@@ -2140,19 +2066,20 @@
                 if (Array.isArray(fetchedProducts) && fetchedProducts.length > 0) {
                     for (const apiProd of fetchedProducts) {
                         if (apiProd && apiProd.id) {
-                            apiProductDetailsMap.set(String(apiProd.id), apiProd);
+                            const pIdStr = String(apiProd.id).trim();
+                            apiProductDetailsMap.set(pIdStr, apiProd);
                             if (apiProd.seller) {
                                 const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || (typeof apiProd.seller === 'string' ? apiProd.seller : '');
                                 const cleaned = cleanSellerName(sTitle);
-                                const finalSeller = cleaned || (apiProd.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
-                                pageSellerMap.set(String(apiProd.id), finalSeller);
+                                const finalSeller = (cleaned && cleaned.toLowerCase() !== 'rozetka') ? cleaned : (apiProd.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
+                                pageSellerMap.set(pIdStr, finalSeller);
                             }
                             let sCount = apiProd.sellers_count;
                             if (typeof sCount !== 'number' && apiProd.same_offers && typeof apiProd.same_offers.count === 'number' && apiProd.same_offers.count > 0) {
                                 sCount = apiProd.same_offers.count + 1;
                             }
                             if (typeof sCount === 'number' && sCount > 0) {
-                                pageSellersCountMap.set(String(apiProd.id), sCount);
+                                pageSellersCountMap.set(pIdStr, sCount);
                             }
                         }
                     }

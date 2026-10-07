@@ -485,11 +485,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     const res = await fetch(apiUrl, {
                         headers: {
                             'Accept': 'application/json, text/plain, */*',
-                            'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8',
-                            'Origin': 'https://rozetka.com.ua',
-                            'Referer': 'https://rozetka.com.ua/'
-                        },
-                        credentials: 'include'
+                            'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
+                        }
                     });
                     if (res.ok) {
                         const json = await res.json();
@@ -497,7 +494,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             allResults.push(...json.data);
                         }
                     }
-                } catch (_) {}
+                } catch (err) {
+                    console.error('[TradeScout SW] fetch details error:', err);
+                }
             }
             sendResponse({ success: true, data: allResults });
         })();

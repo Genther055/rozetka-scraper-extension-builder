@@ -274,9 +274,7 @@
                 const chunk = ids.slice(i, i + 50);
                 const idsChunk = chunk.join(',');
                 try {
-                    const res = await fetch(`https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`, {
-                        credentials: 'include'
-                    });
+                    const res = await fetch(`https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`);
                     if (res.ok) {
                         const json = await res.json();
                         if (Array.isArray(json?.data)) {
