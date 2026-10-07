@@ -1077,16 +1077,16 @@
                      [style.backgroundColor]="s.color || sellerColors[idx % sellerColors.length] || '#818cf8'"
                      [style.width.%]="s.share" 
                      [title]="'#' + (idx + 1) + ' ' + s.name + ': ' + s.share + '%'"></div>
-                <div class="bg-slate-800 flex-1" title="Інші 34 продавці (47.9%)"></div>
+                <div class="bg-slate-800 flex-1" [title]="'Інші продавці (' + (100 - (analyticsSummary.kpi.cr10 || analyticsSummary.kpi.cr3)) + '%)'"></div>
               </div>
               <div class="flex justify-between text-[9px] font-mono text-slate-400">
-                <span class="text-indigo-300 truncate max-w-[65%]">#1 {{ analyticsSummary.kpi.top3Sellers[0]?.name || 'Rozetka' }} ({{ analyticsSummary.kpi.top3Sellers[0]?.share || 10.2 }}%)</span>
-                <span>Інші: 47.9%</span>
+                <span class="text-indigo-300 truncate max-w-[65%]">#1 {{ (analyticsSummary.kpi.top10Sellers && analyticsSummary.kpi.top10Sellers[0]?.name) || analyticsSummary.kpi.top3Sellers[0]?.name || 'Rozetka' }} ({{ (analyticsSummary.kpi.top10Sellers && analyticsSummary.kpi.top10Sellers[0]?.share) || analyticsSummary.kpi.top3Sellers[0]?.share }}%)</span>
+                <span>Інші: {{ Math.max(0, 100 - (analyticsSummary.kpi.cr10 || analyticsSummary.kpi.cr3)) | number:'1.1-1' }}%</span>
               </div>
             </div>
 
             <!-- Hover Popover: Топ-10 продавців -->
-            <div class="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-80 sm:w-[420px] p-4 bg-[#0f172a] border border-violet-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/cr3:opacity-100 group-hover/cr3:pointer-events-auto transition-all duration-200 backdrop-blur-md ring-1 ring-slate-700/80">
+            <div class="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-80 sm:w-[440px] p-4 bg-[#0f172a] border border-violet-500/50 rounded-2xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/cr3:opacity-100 group-hover/cr3:pointer-events-auto transition-all duration-200 backdrop-blur-md ring-1 ring-slate-700/80">
               <div class="font-bold text-white border-b border-slate-800 pb-2 mb-2.5 flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
                   <span class="material-icons text-base text-violet-400">pie_chart</span>
@@ -1098,26 +1098,26 @@
               </div>
 
               <p class="text-[11px] text-slate-300 leading-relaxed mb-2.5">
-                <b>CR10 (52.1%)</b> — сумарна частка ринку 10 провідних магазинів. <b>Індекс HHI = 402</b> вказує на помірну конкуренцію без тотального монополіста.
+                <b>CR10 ({{ (analyticsSummary.kpi.cr10 || analyticsSummary.kpi.cr3) }}%)</b> — сумарна частка ринку 10 провідних магазинів. <b>Індекс HHI = {{ analyticsSummary.kpi.hhi }}</b> вказує на {{ analyticsSummary.kpi.hhi < 1500 ? 'високу конкуренцію' : analyticsSummary.kpi.hhi <= 2500 ? 'помірну концентрацію' : 'високу монополізацію' }} без тотального монополіста.
               </p>
 
               <!-- Breakdown table -->
-              <div class="space-y-1 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 mb-2.5 max-h-52 overflow-y-auto custom-scrollbar">
-                <div *ngFor="let s of (analyticsSummary.kpi.top10Sellers || analyticsSummary.kpi.top3Sellers); let i = index" class="flex justify-between items-center text-[11px] font-mono py-0.5 border-b border-slate-900/60 last:border-0">
-                  <div class="flex items-center gap-1.5 truncate max-w-[220px]">
-                    <span class="w-4 text-center font-bold text-slate-400">#{{ i + 1 }}</span>
-                    <span class="w-2 h-2 rounded-full shrink-0" [style.backgroundColor]="s.color || sellerColors[i % sellerColors.length]"></span>
+              <div class="space-y-1 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 mb-2.5 max-h-[360px] overflow-y-auto custom-scrollbar">
+                <div *ngFor="let s of (analyticsSummary.kpi.top10Sellers || analyticsSummary.kpi.top3Sellers); let i = index" class="flex justify-between items-center text-[11px] font-mono py-1 border-b border-slate-900/80 last:border-0">
+                  <div class="flex items-center gap-2 truncate max-w-[240px]">
+                    <span class="w-5 text-center font-bold text-slate-400 shrink-0">#{{ i + 1 }}</span>
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" [style.backgroundColor]="s.color || sellerColors[i % sellerColors.length]"></span>
                     <span class="text-white font-semibold truncate">{{ s.name }}</span>
-                    <span *ngIf="s.isRozetka" class="text-[9px] font-extrabold bg-emerald-950/90 text-emerald-300 border border-emerald-700/50 px-1 rounded">Rozetka</span>
+                    <span *ngIf="s.isRozetka" class="text-[9px] font-extrabold bg-emerald-950/90 text-emerald-300 border border-emerald-700/50 px-1 rounded shrink-0">Rozetka</span>
                   </div>
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-2 shrink-0">
                     <span class="text-slate-400">{{ s.count }} тов.</span>
                     <b class="text-violet-300">{{ s.share }}%</b>
                   </div>
                 </div>
               </div>
 
-              <div class="border-t border-slate-800 pt-1.5 flex justify-between text-xs font-mono font-extrabold text-white">
+              <div class="border-t border-slate-800 pt-2 flex justify-between text-xs font-mono font-extrabold text-white">
                 <span>Разом Топ-10:</span>
                 <span class="text-violet-400">{{ (analyticsSummary.kpi.cr10 || analyticsSummary.kpi.cr3) }}% ринку</span>
               </div>
