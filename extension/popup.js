@@ -291,6 +291,72 @@ btnMasterStop.addEventListener('click', async () => {
     });
 });
 
+// Test Sellers Diagnostic Button
+const btnTestSellers = document.getElementById('btn-test-sellers');
+const testResultsBox = document.getElementById('test-results-box');
+const testStatusBadge = document.getElementById('test-status-badge');
+const testSummaryText = document.getElementById('test-summary-text');
+const testSellersList = document.getElementById('test-sellers-list');
+
+if (btnTestSellers) {
+    btnTestSellers.addEventListener('click', () => {
+        if (!activeTabId) return;
+        btnTestSellers.disabled = true;
+        btnTestSellers.innerText = '⏳ Тестування продавців...';
+        if (testResultsBox) testResultsBox.style.display = 'block';
+        if (testSummaryText) testSummaryText.innerText = 'Зчитування карток та перевірка через API Rozetka...';
+        if (testStatusBadge) {
+            testStatusBadge.innerText = 'Тест триває...';
+            testStatusBadge.style.color = '#38bdf8';
+        }
+
+        chrome.tabs.sendMessage(activeTabId, { action: 'TEST_SELLER_RESOLUTION' }, (res) => {
+            btnTestSellers.disabled = false;
+            btnTestSellers.innerText = '🔬 Перевірити продавців на сторінці (Тест)';
+            const err = chrome.runtime.lastError;
+            if (err || !res || !res.success) {
+                if (testStatusBadge) {
+                    testStatusBadge.innerText = 'Помилка';
+                    testStatusBadge.style.color = '#f87171';
+                }
+                if (testSummaryText) {
+                    testSummaryText.innerText = 'Оновіть сторінку Rozetka (F5) та повторіть тест.';
+                }
+                return;
+            }
+
+            if (testStatusBadge) {
+                testStatusBadge.innerText = '✓ Успішно';
+                testStatusBadge.style.color = '#34d399';
+            }
+
+            const breakdown = res.sellersBreakdown || {};
+            const keys = Object.keys(breakdown);
+            const total3P = res.unique3PCount || 0;
+            const items3P = res.count3PItems || 0;
+            const totalChecked = res.totalChecked || 0;
+
+            if (testSummaryText) {
+                testSummaryText.innerHTML = `Перевірено <strong>${totalChecked} товарів</strong>. Виявлено <strong>${total3P} сторонніх магазинів</strong> (${items3P} товарів).`;
+            }
+
+            if (testSellersList) {
+                let html = '';
+                for (const [sName, cnt] of Object.entries(breakdown)) {
+                    const isRoz = sName.toLowerCase() === 'rozetka';
+                    const color = isRoz ? '#38bdf8' : '#34d399';
+                    const tag = isRoz ? 'Rozetka' : '3P Магазин';
+                    html += `<div style="display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <span style="color: ${color}; font-weight: 600;">${sName}</span>
+                        <span style="color: #94a3b8;">${cnt} шт (${tag})</span>
+                    </div>`;
+                }
+                testSellersList.innerHTML = html || 'Дані відсутні';
+            }
+        });
+    });
+}
+
 // Refresh Tabs list button
 if (btnRefreshTabs) {
     btnRefreshTabs.addEventListener('click', () => {

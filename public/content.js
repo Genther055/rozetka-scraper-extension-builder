@@ -585,10 +585,27 @@
                 }
                 window.__tradeScoutMainBridgeInjected = true;
 
-                function harvestFromAngularContext() {
-                    const goodsMap = {};
-                    const sellerLookup = new Map();
+                const goodsMap = {};
+                const sellerLookup = new Map();
 
+                function cleanSellerBridge(raw) {
+                    if (!raw) return '';
+                    let s = String(raw).trim();
+                    s = s.replace(/^(?:інтернет-магазин|магазин|продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|merchant|від\s+продавця|от\s+продавца|доставка\s+від(?:\s+продавця)?|доставка\s+от(?:\s+продавца)?|відправник|отправитель)\s*:?\s*/i, '');
+                    s = s.replace(/\b(?:запитати\s+про\s+товар|спросить\s+о\s+товаре|усі\s+товари\s+продавця|все\s+товары\s+продавца|товари\s+продавця|товары\s+продавца|написати\s+продавцю|написать\s+продавцу|повідомити|сообщить|немає\s+в\s+наявності|нет\s+в\s+наличии|в\s+наявності|в\s+наличии|код:\s*\d+|арт(?:икул)?:\s*\d+)\b.*$/i, '');
+                    const lines = s.split(/[\\r\\n]+/).map(l => l.trim()).filter(l => l.length > 0);
+                    if (lines.length === 0) return '';
+                    s = lines[0];
+                    s = s.replace(/\\s*\\b\\d+(?:[.,]\\d+)?\\s*(?:\\/\\s*5|\\s*★|\\%|\\bоцін\\w*|\\bоцен\\w*|\\bвідгук\\w*|\\bотзыв\\w*|\\bтовар\\w*|\\bтов\\w*).*$/i, '');
+                    s = s.replace(/\\s*\\([^)]*\\).*$/, '');
+                    s = s.replace(/\\s+\\d+\\s*$/, '');
+                    s = s.replace(/^[>›»\\s—–:-]+|[>›»\\s—–:-]+$/, '').trim();
+                    if (/^rozetka\\b/i.test(s) || /^розетка\\b/i.test(s)) return 'Rozetka';
+                    if (s.length >= 2 && s.length <= 80 && !/^\\d+$/.test(s)) return s;
+                    return '';
+                }
+
+                function harvestFromAngularContext() {
                     // 1. Scan window.dataLayer
                     try {
                         if (Array.isArray(window.dataLayer)) {
@@ -599,8 +616,9 @@
                                     if (it && (it.id || it.goods_id)) {
                                         const id = String(it.id || it.goods_id).trim();
                                         const seller = it.seller || it.affiliation || it.seller_title || it.brand || '';
-                                        if (seller) {
-                                            goodsMap[id] = { id, seller: String(seller).trim(), sellersCount: it.sellers_count || 1 };
+                                        const cleaned = cleanSellerBridge(seller);
+                                        if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                                            goodsMap[id] = { id, seller: cleaned, sellersCount: it.sellers_count || 1 };
                                         }
                                     }
                                 }
@@ -640,9 +658,15 @@
                                 }
 
                                 if (prodId && (sellerName || sCount)) {
-                                    if (!goodsMap[prodId]) goodsMap[prodId] = { id: prodId, seller: '', sellersCount: 1 };
-                                    if (sellerName) goodsMap[prodId].seller = String(sellerName).trim();
-                                    if (typeof sCount === 'number' && sCount > 0) goodsMap[prodId].sellersCount = sCount;
+                                    const cleaned = cleanSellerBridge(sellerName);
+                                    if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                                        if (!goodsMap[prodId]) goodsMap[prodId] = { id: prodId, seller: '', sellersCount: 1 };
+                                        goodsMap[prodId].seller = cleaned;
+                                    }
+                                    if (typeof sCount === 'number' && sCount > 0) {
+                                        if (!goodsMap[prodId]) goodsMap[prodId] = { id: prodId, seller: '', sellersCount: 1 };
+                                        goodsMap[prodId].sellersCount = sCount;
+                                    }
                                 }
                             }
 
@@ -650,9 +674,9 @@
                                 for (const [sId, sObj] of Object.entries(node.sellers)) {
                                     if (sObj && typeof sObj === 'object') {
                                         const sName = sObj.title || sObj.name || sObj.seller_title;
-                                        if (sName) sellerLookup.set(String(sId), String(sName).trim());
+                                        if (sName) sellerLookup.set(String(sId), cleanSellerBridge(sName));
                                     } else if (typeof sObj === 'string') {
-                                        sellerLookup.set(String(sId), sObj.trim());
+                                        sellerLookup.set(String(sId), cleanSellerBridge(sObj));
                                     }
                                 }
                             }
@@ -740,8 +764,8 @@
                                     if (text && (text.startsWith('{') || text.startsWith('['))) {
                                         const data = JSON.parse(text);
                                         window.postMessage({
-                                            type: 'TRADESCOUT_NETWORK_DATA',
-                                            data: data
+                                             type: 'TRADESCOUT_NETWORK_DATA',
+                                             data: data
                                         }, '*');
                                         harvestFromAngularContext();
                                     }
@@ -780,8 +804,9 @@
                                     for (const it of tabJson.data) {
                                         if (it && it.id) {
                                             const sTitle = it.seller?.title || it.seller?.name || it.seller_title || (typeof it.seller === 'string' ? it.seller : '');
-                                            if (sTitle) {
-                                                goodsMap[String(it.id)] = { id: String(it.id), seller: sTitle, sellersCount: it.sellers_count || 1 };
+                                            const cleaned = cleanSellerBridge(sTitle);
+                                            if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
+                                                goodsMap[String(it.id)] = { id: String(it.id), seller: cleaned, sellersCount: it.sellers_count || 1 };
                                             }
                                         }
                                     }
@@ -2833,10 +2858,121 @@
         sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
     }
 
+    async function runSellerResolutionTest() {
+        console.log('🧪 [TradeScout Test Suite] Запуск повної перевірки розпізнавання продавців...');
+        injectMainWorldBridge();
+        buildPageSellerMap();
+        
+        const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, rz-catalog-grid, rz-catalog, .catalog-grid') || document.querySelector('main') || document.body;
+        let rawTiles = Array.from(catalogContainer.querySelectorAll(TILE_SELECTORS));
+        if (rawTiles.length === 0) rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
+
+        const testedItems = [];
+        const seenLinks = new Set();
+
+        for (const item of rawTiles) {
+            if (isUnwantedTile(item)) continue;
+            const link = extractLink(item);
+            if (!link || seenLinks.has(link)) continue;
+            seenLinks.add(link);
+            const name = extractTitle(item, link);
+            const prodId = extractProductId(item, link);
+            testedItems.push({ item, link, name, prodId });
+            if (testedItems.length >= 60) break;
+        }
+
+        const productIds = testedItems.map(t => t.prodId).filter(Boolean);
+        
+        // Batch Fetch official Rozetka API details
+        const apiMap = new Map();
+        let fetchedData = [];
+        if (productIds.length > 0) {
+            for (let i = 0; i < productIds.length; i += 60) {
+                const chunk = productIds.slice(i, i + 60);
+                try {
+                    const res = await fetch(`https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${chunk.join(',')}`, {
+                        headers: {
+                            'Accept': 'application/json, text/plain, */*',
+                            'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
+                        }
+                    });
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (Array.isArray(json?.data)) {
+                            fetchedData.push(...json.data);
+                            for (const it of json.data) {
+                                if (it && it.id) apiMap.set(String(it.id), it);
+                            }
+                        }
+                    }
+                } catch (_) {}
+            }
+        }
+
+        const sellerCounts = {};
+        const breakdown = [];
+        let count3p = 0;
+
+        for (const t of testedItems) {
+            const apiProd = t.prodId ? apiMap.get(t.prodId) : null;
+            let finalSeller = '';
+            let source = 'DOM Fallback';
+
+            if (apiProd) {
+                const apiSeller = extractSellerFromApiObject(apiProd);
+                if (apiSeller) {
+                    finalSeller = apiSeller;
+                    source = 'Common API';
+                }
+            }
+
+            if (!finalSeller && t.prodId && pageSellerMap.has(t.prodId)) {
+                finalSeller = pageSellerMap.get(t.prodId);
+                source = 'SSR State / Meta';
+            }
+
+            if (!finalSeller) {
+                finalSeller = extractSeller(t.item, t.link, t.name) || 'Rozetka';
+                source = 'DOM / Vision';
+            }
+
+            sellerCounts[finalSeller] = (sellerCounts[finalSeller] || 0) + 1;
+            if (finalSeller.toLowerCase() !== 'rozetka') count3p++;
+
+            breakdown.push({
+                id: t.prodId,
+                title: t.name ? t.name.slice(0, 45) : '—',
+                seller: finalSeller,
+                source: source
+            });
+        }
+
+        const sidebarSellers = getKnownSellersFromSidebar();
+
+        console.group('🧪 [TradeScout Test Suite] Результати перевірки продавців на сторінці:');
+        console.log(`📦 Всього перевірено карток на сторінці: ${testedItems.length}`);
+        console.log(`🏪 Знайдено сторонніх продавців (3P): ${count3p} товарів (${Object.keys(sellerCounts).filter(k => k.toLowerCase() !== 'rozetka').length} магазинів)`);
+        console.log(`📋 Розподіл по магазинах:`, sellerCounts);
+        console.table(breakdown.slice(0, 20));
+        console.log(`📌 Зареєстровані продавці в бічному фільтрі:`, sidebarSellers);
+        console.groupEnd();
+
+        return {
+            success: true,
+            totalChecked: testedItems.length,
+            sellersBreakdown: sellerCounts,
+            unique3PCount: Object.keys(sellerCounts).filter(k => k.toLowerCase() !== 'rozetka').length,
+            count3PItems: count3p,
+            sidebarSellers: sidebarSellers,
+            sample: breakdown.slice(0, 10)
+        };
+    }
+
     // Expose direct window handlers for fail-safe invocation
     window.__tradeScoutStartScrape = startScrapingOnThisTab;
     window.__tradeScoutStopScrape = stopScrapingOnThisTab;
     window.__tradeScoutResetState = resetTabState;
+    window.__tradeScoutRunSellerTest = runSellerResolutionTest;
 
     // Listen for clear events from dashboard window
     window.addEventListener('tradescout_reset_extension_sessions', resetTabState);
@@ -2864,6 +3000,13 @@
         if (message.action === 'RESET_TAB_STATE') {
             resetTabState();
             sendResponse({ success: true });
+            return true;
+        }
+
+        if (message.action === 'TEST_SELLER_RESOLUTION') {
+            runSellerResolutionTest().then(res => {
+                sendResponse(res);
+            });
             return true;
         }
 

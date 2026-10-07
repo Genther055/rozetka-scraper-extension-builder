@@ -438,6 +438,23 @@
             <button id="btn-stop" class="btn-action btn-action-stop" disabled>⏹ Зупинити</button>
         </div>
 
+        <!-- Diagnostic Test Button -->
+        <div style="margin-bottom: 10px;">
+            <button id="btn-test-sellers" class="btn-util" style="width: 100%; padding: 6px 10px; font-weight: 700; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.1); font-size: 11px;">
+                🔬 Перевірити продавців на сторінці (Тест)
+            </button>
+        </div>
+
+        <!-- Diagnostic Test Result Box -->
+        <div id="test-results-box" style="display: none; background: #0f172a; border: 1px solid #38bdf8; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; font-size: 11px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <span style="font-weight: 800; color: #38bdf8;">📊 Результат тесту продавців:</span>
+                <span id="test-status-badge" style="font-size: 10px; color: #34d399; font-weight: 700;">✓ Успішно</span>
+            </div>
+            <div id="test-summary-text" style="color: #cbd5e1; font-size: 10.5px; margin-bottom: 6px;">Перевірка...</div>
+            <div id="test-sellers-list" style="max-height: 110px; overflow-y: auto; background: rgba(255,255,255,0.04); border-radius: 4px; padding: 4px 6px; font-size: 10px; color: #f1f5f9; font-family: monospace;"></div>
+        </div>
+
         <!-- Progress Bar -->
         <div class="progress-header">
             <span>Прогрес збору:</span>
