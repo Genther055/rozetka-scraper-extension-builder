@@ -460,8 +460,7 @@ app.post('/api/products', async (req, res) => {
         const sessionSnapshotId = (sessionId || 'snap_' + activeTitle.toLowerCase().replace(/[^a-z0-9а-яіїєґ]/gi, '_')).substring(0, 100);
         const sessionProducts = products.filter((p: any) => 
           (sessionId && p.sessionId === sessionId) || 
-          (p.sessionTitle && p.sessionTitle === activeTitle) ||
-          (p.category && p.category === currentCategory)
+          (p.sessionTitle && p.sessionTitle === activeTitle)
         );
 
         if (sessionProducts.length > 0) {
