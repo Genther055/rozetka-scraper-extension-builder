@@ -103,30 +103,17 @@
         if (!text || typeof text !== 'string') return 0;
         const cleaned = text.replace(/&nbsp;/g, ' ').replace(/\u00A0/g, ' ').replace(/\u202F/g, ' ').trim();
         
-        // Match: "Знайдено 508 товарів" or "Знайдено 531 товар"
-        const m1 = cleaned.match(/(?:знайдено|найдено|показано)?\s*([\d\s\u00A0\u202F.,]+)\s*(?:товар\w*|тов\w*)/i);
+        // Priority 1: 'Знайдено 344 товари' / 'знайдено 344' / 'найдено: 344'
+        const m1 = cleaned.match(/(?:знайдено|найдено|показано|знайдено\s+всього)\s*[:\-–—]?\s*(\d[\d\s\u00A0\u202F.,]*)/i);
         if (m1 && m1[1]) {
             const num = parseInt(m1[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
             if (!isNaN(num) && num > 0 && num < 1000000) return num;
         }
 
-        // Match: "531 товар" or "508 товарів"
-        const m2 = cleaned.match(/\b([\d\s\u00A0\u202F.,]+)\s*(?:товарів|товари|товаров|товара|товар)\b/i);
+        // Priority 2: '344 товарів' / '344 товари' / '344 товар'
+        const m2 = cleaned.match(/(\d[\d\s\u00A0\u202F.,]*)\s*(?:товар\S*|тов\S*)/i);
         if (m2 && m2[1]) {
             const num = parseInt(m2[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
-            if (!isNaN(num) && num > 0 && num < 1000000) return num;
-        }
-
-        // Match: "Знайдено 508"
-        const m3 = cleaned.match(/(?:знайдено|найдено)\s*([\d\s\u00A0\u202F.,]+)/i);
-        if (m3 && m3[1]) {
-            const num = parseInt(m3[1].replace(/[\s\u00A0\u202F.,]/g, ''), 10);
-            if (!isNaN(num) && num > 0 && num < 1000000) return num;
-        }
-
-        const digitsOnly = cleaned.replace(/[^\d]/g, '');
-        if (digitsOnly.length > 0) {
-            const num = parseInt(digitsOnly, 10);
             if (!isNaN(num) && num > 0 && num < 1000000) return num;
         }
 
@@ -136,11 +123,11 @@
     function getEstimatedTotalFromPage() {
         // Priority 1: Search top heading, counter, and settings elements
         const topElements = document.querySelectorAll(`
+            .catalog-selection__label, [class*="selection__label"], rz-selected-filters,
             rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection,
             [data-testid*="found"], [data-testid*="counter"], [data-testid*="total"],
             [class*="found-goods"], [class*="goods-count"], [class*="heading__goods"], [class*="total-goods"],
-            .catalog-selection__label, [class*="selection__label"],
-            h1, h2, rz-selected-filters, [class*="filters-tags"]
+            h1, h2, [class*="filters-tags"]
         `);
         for (const el of topElements) {
             if (el.closest('aside, .sidebar, rz-filter-stack, .sidebar-block, rz-section-slider, rz-viewed-goods, [class*="viewed"], .recently-viewed')) continue;
@@ -185,10 +172,10 @@
             }
         } catch (_) {}
 
-        // Check if forward pagination button exists
-        const hasForward = !!document.querySelector('a.pagination__direction--forward, a[rel="next"], [class*="pagination__direction_type_forward"], [class*="pagination__direction--forward"]');
+        // Priority 4: Check if forward pagination button exists
+        const hasForward = !!document.querySelector('a.pagination__direction--forward, a[rel="next"], [class*="pagination__direction_type_forward"], [class*="pagination__direction--forward"], [class*="paginator"] a[href*="page="]');
         if (hasForward) {
-            return 120;
+            return 300;
         }
 
         return 60;
@@ -2201,23 +2188,32 @@
         }
 
         // 3. Check if all items in catalog are collected
-        const freshNextInDom = !!document.querySelector(`
-            a.pagination__direction--forward, 
-            a[rel="next"], 
-            [class*="pagination__direction_type_forward"], 
-            [class*="pagination__direction--forward"], 
+        const nextPg = currentPage + 1;
+        let actualNextUrl = getRozetkaNextPageUrl(window.location.href, nextPg);
+
+        const domNextLink = document.querySelector(`
+            a.pagination__direction--forward[href], 
+            a[rel="next"][href], 
+            [class*="pagination__direction_type_forward"][href], 
+            [class*="pagination__direction--forward"][href], 
             a.pagination__link[href*="page=${nextPg}"], 
-            a.pagination__link[href*="page=${nextPg};"], 
+            a.pagination__link[href*="page=${nextPg};"],
             [class*="paginator"] a[href*="page=${nextPg}"],
-            a[href*="page=${nextPg}"],
-            a[href*="page=${nextPg};"]
+            [class*="paginator"] a[href*="page=${nextPg};"]
         `);
+        if (domNextLink) {
+            const rawHref = domNextLink.getAttribute('href');
+            if (rawHref) {
+                if (rawHref.startsWith('http')) actualNextUrl = rawHref;
+                else if (rawHref.startsWith('/')) actualNextUrl = window.location.origin + rawHref;
+            }
+        }
 
         const maxPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
-        const isFinished = (!freshNextInDom && currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || 
-                           (pageNewProducts.length === 0 && currentPage > 1 && !freshNextInDom) || 
-                           (!freshNextInDom && (!targetUrl || targetUrl === window.location.href)) || 
-                           (currentPage >= maxPages && !freshNextInDom);
+        const hasMorePages = (currentPage < maxPages) || (pageNewProducts.length >= 40) || (domNextLink !== null);
+        const isFinished = (!hasMorePages && currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || 
+                           (pageNewProducts.length === 0 && currentPage > 1) || 
+                           (!actualNextUrl || actualNextUrl === window.location.href);
 
         if (isFinished) {
             isTabScrapingActive = false;
@@ -2225,7 +2221,7 @@
             currentPercent = 100;
             currentStatusMsg = `Збір завершено! Всього ${sentLinks.size} товарів (100% каталогу).`;
             clearPersistedSession();
-            console.log(`TradeScout Tab ${currentTabId}: Scrape completed with ${sentLinks.size} items.`);
+            console.log(`TradeScout Tab ${currentTabId}: Scrape completed with ${sentLinks.size} items across ${currentPage} pages.`);
 
             sendTabMessage({
                 action: 'tabFinished',
@@ -2243,8 +2239,7 @@
         }
 
         // 4. Navigate directly to Next Page URL
-
-        if (targetUrl && targetUrl !== window.location.href) {
+        if (actualNextUrl && actualNextUrl !== window.location.href) {
             currentStatusMsg = `Перехід на стор. ${nextPg}...`;
             sendTabMessage({
                 action: 'tabProgress',
@@ -2262,7 +2257,7 @@
 
             persistSessionState(nextPg);
             setTimeout(() => {
-                window.location.href = targetUrl;
+                window.location.href = actualNextUrl;
             }, 300);
         } else {
             // If URL did not change, complete
