@@ -755,11 +755,12 @@
                 window.addEventListener('tradescout_request_main_harvest', harvestFromAngularContext);
                 
                 // Handle isolated world requests for batch seller details directly inside the page's main context
-                window.addEventListener('message', async function(e) {
-                    if (!e.data || e.data.type !== 'TRADESCOUT_REQUEST_BATCH_SELLERS') return;
-                    const reqId = e.data.requestId;
-                    const productIds = e.data.productIds;
-                    if (!Array.isArray(productIds) || productIds.length === 0) return;
+                async function handleBatchFetchInMain(productIds, reqId) {
+                    if (!Array.isArray(productIds) || productIds.length === 0) {
+                        window.postMessage({ type: 'TRADESCOUT_BATCH_SELLERS_RESULT', requestId: reqId, data: [] }, '*');
+                        document.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', { detail: { requestId: reqId, results: [] } }));
+                        return;
+                    }
                     const results = [];
                     for (let i = 0; i < productIds.length; i += 60) {
                         const chunk = productIds.slice(i, i + 60);
@@ -770,22 +771,45 @@
                                 headers: {
                                     'Accept': 'application/json, text/plain, */*',
                                     'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
-                                },
-                                credentials: 'include'
+                                }
                             });
                             if (tabRes.ok) {
                                 const tabJson = await tabRes.json();
                                 if (Array.isArray(tabJson?.data)) {
                                     results.push(...tabJson.data);
+                                    for (const it of tabJson.data) {
+                                        if (it && it.id) {
+                                            const sTitle = it.seller?.title || it.seller?.name || it.seller_title || (typeof it.seller === 'string' ? it.seller : '');
+                                            if (sTitle) {
+                                                goodsMap[String(it.id)] = { id: String(it.id), seller: sTitle, sellersCount: it.sellers_count || 1 };
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         } catch (_) {}
                     }
+                    if (results.length > 0) harvestFromAngularContext();
                     window.postMessage({
                         type: 'TRADESCOUT_BATCH_SELLERS_RESULT',
                         requestId: reqId,
                         data: results
                     }, '*');
+                    document.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', {
+                        detail: { requestId: reqId, results: results }
+                    }));
+                }
+
+                window.addEventListener('message', function(e) {
+                    if (e.data && e.data.type === 'TRADESCOUT_REQUEST_BATCH_SELLERS') {
+                        handleBatchFetchInMain(e.data.productIds, e.data.requestId);
+                    }
+                });
+
+                document.addEventListener('tradescout_request_batch_sellers', function(e) {
+                    if (e.detail && e.detail.productIds) {
+                        handleBatchFetchInMain(e.detail.productIds, e.detail.requestId);
+                    }
                 });
 
                 harvestFromAngularContext();
@@ -2007,7 +2031,7 @@
 
         if (distinctTiles.length === 0) return [];
 
-        // Batch fetch official Rozetka product details (Service Worker -> Direct Tab Fetch -> Main World Bridge)
+        // Batch fetch official Rozetka product details (Main World Bridge -> Direct Tab Fetch -> Service Worker)
         const apiProductDetailsMap = new Map();
         try {
             const productIds = [];
@@ -2019,30 +2043,57 @@
             if (productIds.length > 0) {
                 let fetchedProducts = [];
                 
-                // 1. Service Worker Fetch (MV3 host permissions bypass CSP/CORS)
+                // 1. Main World Bridge Fetch (Executes in page context with 100% active Cloudflare clearance)
                 try {
+                    const reqId = 'ts_batch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
                     fetchedProducts = await new Promise((resolve) => {
-                        chrome.runtime.sendMessage({
-                            action: 'FETCH_PRODUCT_DETAILS',
-                            productIds: productIds
-                        }, (res) => {
-                            if (chrome.runtime.lastError || !res || !res.success || !Array.isArray(res.data) || res.data.length === 0) {
-                                resolve([]);
-                            } else {
-                                resolve(res.data);
+                        const timer = setTimeout(() => {
+                            window.removeEventListener('message', msgHandler);
+                            document.removeEventListener('tradescout_batch_sellers_done', eventHandler);
+                            resolve([]);
+                        }, 2500);
+
+                        function msgHandler(e) {
+                            if (e.data && e.data.type === 'TRADESCOUT_BATCH_SELLERS_RESULT' && e.data.requestId === reqId) {
+                                clearTimeout(timer);
+                                window.removeEventListener('message', msgHandler);
+                                document.removeEventListener('tradescout_batch_sellers_done', eventHandler);
+                                resolve(Array.isArray(e.data.data) ? e.data.data : []);
                             }
-                        });
+                        }
+
+                        function eventHandler(e) {
+                            if (e.detail && e.detail.requestId === reqId) {
+                                clearTimeout(timer);
+                                window.removeEventListener('message', msgHandler);
+                                document.removeEventListener('tradescout_batch_sellers_done', eventHandler);
+                                resolve(Array.isArray(e.detail.results) ? e.detail.results : []);
+                            }
+                        }
+
+                        window.addEventListener('message', msgHandler);
+                        document.addEventListener('tradescout_batch_sellers_done', eventHandler);
+
+                        window.postMessage({
+                            type: 'TRADESCOUT_REQUEST_BATCH_SELLERS',
+                            requestId: reqId,
+                            productIds: productIds
+                        }, '*');
+
+                        document.dispatchEvent(new CustomEvent('tradescout_request_batch_sellers', {
+                            detail: { requestId: reqId, productIds: productIds }
+                        }));
                     });
                 } catch (_) {
                     fetchedProducts = [];
                 }
 
-                // 2. Direct Tab Fetch Fallback (in chunks of 50)
+                // 2. Direct Tab Fetch Fallback (in chunks of 60)
                 if (!fetchedProducts || fetchedProducts.length === 0) {
                     try {
                         const directResults = [];
-                        for (let i = 0; i < productIds.length; i += 50) {
-                            const chunk = productIds.slice(i, i + 50);
+                        for (let i = 0; i < productIds.length; i += 60) {
+                            const chunk = productIds.slice(i, i + 60);
                             const tabApiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${chunk.join(',')}`;
                             const tabRes = await fetch(tabApiUrl, {
                                 headers: {
@@ -2061,8 +2112,27 @@
                     } catch (_) {}
                 }
 
-                console.log(`[TradeScout Batch] Received ${fetchedProducts?.length || 0} product details from Rozetka API for ${productIds.length} IDs.`);
+                // 3. Service Worker Fetch Fallback
+                if (!fetchedProducts || fetchedProducts.length === 0) {
+                    try {
+                        fetchedProducts = await new Promise((resolve) => {
+                            chrome.runtime.sendMessage({
+                                action: 'FETCH_PRODUCT_DETAILS',
+                                productIds: productIds
+                            }, (res) => {
+                                if (chrome.runtime.lastError || !res || !res.success || !Array.isArray(res.data) || res.data.length === 0) {
+                                    resolve([]);
+                                } else {
+                                    resolve(res.data);
+                                }
+                            });
+                        });
+                    } catch (_) {
+                        fetchedProducts = [];
+                    }
+                }
 
+                const uniqueSellersFound = new Set();
                 if (Array.isArray(fetchedProducts) && fetchedProducts.length > 0) {
                     for (const apiProd of fetchedProducts) {
                         if (apiProd && apiProd.id) {
@@ -2073,6 +2143,9 @@
                                 const cleaned = cleanSellerName(sTitle);
                                 const finalSeller = (cleaned && cleaned.toLowerCase() !== 'rozetka') ? cleaned : (apiProd.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
                                 pageSellerMap.set(pIdStr, finalSeller);
+                                if (finalSeller && finalSeller.toLowerCase() !== 'rozetka') {
+                                    uniqueSellersFound.add(finalSeller);
+                                }
                             }
                             let sCount = apiProd.sellers_count;
                             if (typeof sCount !== 'number' && apiProd.same_offers && typeof apiProd.same_offers.count === 'number' && apiProd.same_offers.count > 0) {
@@ -2084,6 +2157,8 @@
                         }
                     }
                 }
+
+                console.log(`[TradeScout Batch] Received ${fetchedProducts?.length || 0} product details for ${productIds.length} IDs. 3P Sellers identified: [${Array.from(uniqueSellersFound).join(', ')}]`);
             }
         } catch (_) {}
 
