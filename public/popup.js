@@ -310,17 +310,16 @@ if (btnTestSellers) {
             testStatusBadge.style.color = '#38bdf8';
         }
 
-        chrome.tabs.sendMessage(activeTabId, { action: 'TEST_SELLER_RESOLUTION' }, (res) => {
+        const renderTestResults = (res) => {
             btnTestSellers.disabled = false;
             btnTestSellers.innerText = '🔬 Перевірити продавців на сторінці (Тест)';
-            const err = chrome.runtime.lastError;
-            if (err || !res || !res.success) {
+            if (!res || !res.success) {
                 if (testStatusBadge) {
                     testStatusBadge.innerText = 'Помилка';
                     testStatusBadge.style.color = '#f87171';
                 }
                 if (testSummaryText) {
-                    testSummaryText.innerText = 'Оновіть сторінку Rozetka (F5) та повторіть тест.';
+                    testSummaryText.innerText = 'Будь ласка, натисніть F5 на вкладці Rozetka і повторіть тест.';
                 }
                 return;
             }
@@ -331,7 +330,6 @@ if (btnTestSellers) {
             }
 
             const breakdown = res.sellersBreakdown || {};
-            const keys = Object.keys(breakdown);
             const total3P = res.unique3PCount || 0;
             const items3P = res.count3PItems || 0;
             const totalChecked = res.totalChecked || 0;
@@ -353,7 +351,42 @@ if (btnTestSellers) {
                 }
                 testSellersList.innerHTML = html || 'Дані відсутні';
             }
-        });
+        };
+
+        const trySendMessage = () => {
+            chrome.tabs.sendMessage(activeTabId, { action: 'TEST_SELLER_RESOLUTION' }, (res) => {
+                const err = chrome.runtime.lastError;
+                if (err || !res) {
+                    // Auto-inject and retry
+                    chrome.scripting.executeScript({
+                        target: { tabId: activeTabId },
+                        files: ['main-world.js'],
+                        world: 'MAIN'
+                    }).catch(() => {});
+
+                    chrome.scripting.executeScript({
+                        target: { tabId: activeTabId },
+                        files: ['content.js']
+                    }, () => {
+                        const _ = chrome.runtime.lastError;
+                        setTimeout(() => {
+                            chrome.tabs.sendMessage(activeTabId, { action: 'TEST_SELLER_RESOLUTION' }, (retryRes) => {
+                                const retryErr = chrome.runtime.lastError;
+                                if (retryErr || !retryRes) {
+                                    renderTestResults(null);
+                                } else {
+                                    renderTestResults(retryRes);
+                                }
+                            });
+                        }, 250);
+                    });
+                } else {
+                    renderTestResults(res);
+                }
+            });
+        };
+
+        trySendMessage();
     });
 }
 
