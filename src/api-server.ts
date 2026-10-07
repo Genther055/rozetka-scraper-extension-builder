@@ -88,6 +88,191 @@ function getCleanActiveScrapes(): LiveScrapingTask[] {
   return list;
 }
 
+const SERVER_START_TIME = Date.now();
+const SERVER_VERSION = 'v4.3.0';
+const BUILD_TIMESTAMP = '07.10 10:45';
+
+app.get('/api/version', async (req, res) => {
+  try {
+    const products = await getCurrentProducts();
+    const uptimeSec = Math.floor((Date.now() - SERVER_START_TIME) / 1000);
+    res.json({
+      success: true,
+      version: SERVER_VERSION,
+      buildTimestamp: BUILD_TIMESTAMP,
+      serverTime: new Date().toISOString(),
+      uptimeSeconds: uptimeSec,
+      totalProductsInDb: products.length,
+      dbStatus: 'connected'
+    });
+  } catch (err: any) {
+    res.json({
+      success: true,
+      version: SERVER_VERSION,
+      buildTimestamp: BUILD_TIMESTAMP,
+      serverTime: new Date().toISOString(),
+      uptimeSeconds: 0,
+      totalProductsInDb: 0,
+      dbStatus: 'error: ' + err.message
+    });
+  }
+});
+
+function cleanCategoryNameServer(c: string): string {
+  if (!c) return 'Повербанки та УМБ';
+  let s = c.trim();
+  const brandSuffixes = [
+    'Sigma mobile', 'Sigma', 'Xiaomi', 'Redmi', 'Ugreen', 'Baseus', 'Apple', 'Samsung',
+    'Anker', 'Hoco', 'Borofone', 'Romoss', 'Remax', 'Joyroom', 'ColorWay', 'Proove',
+    'HOPECOM', 'Qinetiq', 'Remzona', '2E', 'Gelius', 'ZMI', 'Belkin', 'Choetech', 'BLUETTI', 'EcoFlow', 'Jackery'
+  ];
+  for (const b of brandSuffixes) {
+    const re = new RegExp('\\s*[-–—|,]?\\s*' + b + '\\b.*$', 'i');
+    s = s.replace(re, '');
+  }
+  return s.trim() || 'Повербанки та УМБ';
+}
+
+function detectBrandServer(p: any): string {
+  if (!p) return 'Інші';
+  const rawMap = p.detailedSpecsMap;
+  let b = '';
+  if (rawMap && (rawMap['Бренд'] || rawMap['Виробник'])) {
+    b = String(rawMap['Бренд'] || rawMap['Виробник']).trim();
+  } else if (p.specs && typeof p.specs === 'string' && p.specs.includes('Бренд:')) {
+    const m = p.specs.match(/Бренд:\s*([^,;]+)/i);
+    if (m) b = m[1].trim();
+  }
+
+  const name = p.name || '';
+  if (!b || /^(?:універсальна|умб|батарея|портативна|павербанк|повербанк|зовнішній|power|зарядний|standard|інші)$/i.test(b) || (b === 'Apple' && /\b(?:для\s+(?:apple|iphone)|qinetiq|remzona)\b/i.test(name))) {
+    const knownBrands = [
+      { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power)\b/i },
+      { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco)\b/i },
+      { name: 'Ugreen', regex: /\bUgreen\b/i },
+      { name: 'Baseus', regex: /\b(?:Baseus|Adaman)\b/i },
+      { name: 'Qinetiq', regex: /\bQinetiq\b/i },
+      { name: 'Remzona', regex: /\bRemzona\b/i },
+      { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для\s+(?:apple|iphone)|айфона)\b/i },
+      { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для\s+samsung|самсунг)\b/i },
+      { name: 'Anker', regex: /\bAnker\b/i },
+      { name: 'Hoco', regex: /\bHoco\b/i },
+      { name: 'Borofone', regex: /\bBorofone\b/i },
+      { name: 'Romoss', regex: /\bRomoss\b/i },
+      { name: 'Remax', regex: /\bRemax\b/i },
+      { name: 'Joyroom', regex: /\bJoyroom\b/i },
+      { name: 'ColorWay', regex: /\bColorWay\b/i },
+      { name: 'Proove', regex: /\bProove\b/i },
+      { name: 'HOPECOM', regex: /\bHOPECOM\b/i },
+      { name: 'ZMI', regex: /\bZMI\b/i },
+      { name: '2E', regex: /\b2E\b/i },
+      { name: 'Gelius', regex: /\bGelius\b/i },
+      { name: 'Platinet', regex: /\bPlatinet\b/i },
+      { name: 'Dudao', regex: /\bDudao\b/i },
+      { name: 'Pisen', regex: /\bPisen\b/i },
+      { name: 'Wekome', regex: /\bWekome\b/i },
+      { name: 'Proda', regex: /\bProda\b/i },
+      { name: 'XO', regex: /\bXO\b/i },
+      { name: 'Vention', regex: /\bVention\b/i },
+      { name: 'Essager', regex: /\bEssager\b/i },
+      { name: 'BLUETTI', regex: /\bBLUETTI\b/i },
+      { name: 'EcoFlow', regex: /\bEcoFlow\b/i },
+      { name: 'Jackery', regex: /\bJackery\b/i }
+    ];
+    for (const rule of knownBrands) {
+      if (rule.excludeIf && rule.excludeIf.test(name)) continue;
+      if (rule.regex.test(name)) {
+        return rule.name;
+      }
+    }
+    let cleanName = name.replace(/^(?:портативна\s+батарея|зовнішній\s+акумулятор|універсальна\s+батарея|батарея\s+універсальна|павербанк|повербанк|зарядний\s+пристрій|бездротова\s+зарядка|power\s*bank|умб)\s+/i, '').trim();
+    const token = cleanName.split(/[\s,]+/)[0];
+    if (token && token.length >= 2 && !/^\d+$/.test(token) && !/^(?:для|з|на|та|fast|pro|mini|led|black|white|grey|gray|red|blue)$/i.test(token)) {
+      return token.charAt(0).toUpperCase() + token.slice(1);
+    }
+  }
+  return b || 'Інші';
+}
+
+async function enrichMissingSellers(items: any[]): Promise<any[]> {
+  const idsToFetch: string[] = [];
+  const idMap = new Map<string, any>();
+  
+  for (const item of items) {
+    if (!item) continue;
+    const link = item.link || '';
+    const m = link.match(/\/p(\d+)/) || link.match(/p-(\d+)/) || link.match(/p(\d+)/) || (item.id ? [null, item.id] : null);
+    const prodId = m ? String(m[1]).trim() : '';
+    const currentSeller = (item.seller || '').trim().toLowerCase();
+    if (prodId && (!currentSeller || currentSeller === 'rozetka' || currentSeller === 'marketplace')) {
+      idsToFetch.push(prodId);
+      idMap.set(prodId, item);
+    }
+  }
+
+  if (idsToFetch.length === 0) return items;
+
+  for (let i = 0; i < idsToFetch.length; i += 60) {
+    const chunk = idsToFetch.slice(i, i + 60);
+    const idsStr = chunk.join(',');
+    const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsStr}`;
+    try {
+      const res = await fetch(apiUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+          'Accept': 'application/json, text/plain, */*',
+          'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
+        }
+      });
+      if (res.ok) {
+        const json: any = await res.json();
+        if (Array.isArray(json?.data)) {
+          for (const apiProd of json.data) {
+            if (apiProd && apiProd.id) {
+              const target = idMap.get(String(apiProd.id));
+              if (target) {
+                const sTitle = apiProd.seller?.title || apiProd.seller?.name || apiProd.seller_title;
+                if (sTitle && sTitle.trim() && sTitle.toLowerCase() !== 'rozetka') {
+                  target.seller = sTitle.trim();
+                } else if (apiProd.seller?.id === 5) {
+                  target.seller = 'Rozetka';
+                }
+                if (typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0) {
+                  target.sellersCount = apiProd.sellers_count;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+  return items;
+}
+
+app.post('/api/enrich-sellers', async (req, res) => {
+  try {
+    let products = await getCurrentProducts();
+    if (products.length > 0) {
+      products = await enrichMissingSellers(products);
+      await saveCurrentProducts(products);
+    }
+    const sellersMap: { [k: string]: number } = {};
+    products.forEach(p => {
+      const s = p.seller || 'Rozetka';
+      sellersMap[s] = (sellersMap[s] || 0) + 1;
+    });
+    res.json({
+      success: true,
+      totalProducts: products.length,
+      uniqueSellers: Object.keys(sellersMap).length,
+      sellers: sellersMap
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/api/scraping-status', (req, res) => {
   try {
     const data = req.body || {};
@@ -260,6 +445,8 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
       seenIds.add(key);
       return true;
     });
+
+    products = await enrichMissingSellers(products);
 
     const currentCategory = newItems[0]?.category || 'Загальна';
     const categoryCount = products.filter((p: any) => p && p.category === currentCategory).length;
