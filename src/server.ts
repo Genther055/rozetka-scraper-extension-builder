@@ -234,6 +234,14 @@ function detectBrandServer(p: any): string {
   return b || 'Інші';
 }
 
+let productsWriteLock = Promise.resolve();
+
+function withProductsLock<T>(fn: () => Promise<T>): Promise<T> {
+  const nextLock = productsWriteLock.then(fn, fn);
+  productsWriteLock = nextLock.then(() => {}, () => {});
+  return nextLock;
+}
+
 async function enrichMissingSellers(items: any[]): Promise<any[]> {
   const idsToFetch: string[] = [];
   const idMap = new Map<string, any>();
@@ -252,18 +260,22 @@ async function enrichMissingSellers(items: any[]): Promise<any[]> {
 
   if (idsToFetch.length === 0) return items;
 
-  for (let i = 0; i < idsToFetch.length; i += 60) {
+  for (let i = 0; i < Math.min(idsToFetch.length, 120); i += 60) {
     const chunk = idsToFetch.slice(i, i + 60);
     const idsStr = chunk.join(',');
     const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsStr}`;
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2000);
       const res = await fetch(apiUrl, {
+        signal: controller.signal,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
           'Accept': 'application/json, text/plain, */*',
           'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
         }
       });
+      clearTimeout(timer);
       if (res.ok) {
         const json: any = await res.json();
         if (Array.isArray(json?.data)) {
@@ -315,183 +327,187 @@ app.post('/api/enrich-sellers', async (req, res) => {
 
 app.post('/api/products', async (req, res) => {
   try {
-    let newItems = req.body ? (req.body.products || req.body) : [];
-    if (typeof newItems === 'string') {
-      try {
-        const parsed = JSON.parse(newItems);
-        newItems = parsed.products || parsed;
-      } catch (e) {}
-    }
-    if (!Array.isArray(newItems)) {
-      newItems = [];
-    }
+    const result = await withProductsLock(async () => {
+      let newItems = req.body ? (req.body.products || req.body) : [];
+      if (typeof newItems === 'string') {
+        try {
+          const parsed = JSON.parse(newItems);
+          newItems = parsed.products || parsed;
+        } catch (e) {}
+      }
+      if (!Array.isArray(newItems)) {
+        newItems = [];
+      }
 
-    const getProductId = (link: string) => {
-      const match = link.match(/\/p(\d+)/) || link.match(/p-(\d+)/) || link.match(/p(\d+)/);
-      return match ? match[1] : '';
-    };
+      const getProductId = (link: string) => {
+        const match = link.match(/\/p(\d+)/) || link.match(/p-(\d+)/) || link.match(/p(\d+)/);
+        return match ? match[1] : '';
+      };
 
-    const getItemKey = (p: any) => {
-      const pLink = p.link ? p.link.split('?')[0].split('#')[0] : '';
-      const pId = getProductId(pLink);
-      if (pId) return pId;
-      const pName = (p.name || '').trim().toLowerCase();
-      return pName;
-    };
+      const getItemKey = (p: any) => {
+        const pLink = p.link ? p.link.split('?')[0].split('#')[0] : '';
+        const pId = getProductId(pLink);
+        if (pId) return pId;
+        const pName = (p.name || '').trim().toLowerCase();
+        return pName;
+      };
 
-    const { sessionId, sessionTitle, clearBefore, reset } = req.body || {};
-    let products = (clearBefore || reset) 
-      ? [] 
-      : await getCurrentProducts();
-    
-    newItems.forEach((item: any) => {
-      if (!item || typeof item !== 'object') return;
-      try {
-        const normalizedLink = item.link ? item.link.split('?')[0].split('#')[0] : '';
-        item.link = normalizedLink;
-        
-        const itemPrice = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
-        const itemReviews = typeof item.reviews === 'number' ? item.reviews : parseInt(item.reviews) || 0;
-        const itemRating = itemReviews > 0 ? (typeof item.rating === 'number' ? item.rating : (item.rating ? parseFloat(item.rating) : 0)) : 0;
-        let itemOldPrice = typeof item.oldPrice === 'number' ? item.oldPrice : (parseFloat(item.oldPrice) || itemPrice);
-        let itemDiscount = typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0);
+      const { sessionId, sessionTitle, clearBefore, reset } = req.body || {};
+      let products = (clearBefore || reset) 
+        ? [] 
+        : await getCurrentProducts();
+      
+      newItems.forEach((item: any) => {
+        if (!item || typeof item !== 'object') return;
+        try {
+          const normalizedLink = item.link ? item.link.split('?')[0].split('#')[0] : '';
+          item.link = normalizedLink;
+          
+          const itemPrice = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+          const itemReviews = typeof item.reviews === 'number' ? item.reviews : parseInt(item.reviews) || 0;
+          const itemRating = itemReviews > 0 ? (typeof item.rating === 'number' ? item.rating : (item.rating ? parseFloat(item.rating) : 0)) : 0;
+          let itemOldPrice = typeof item.oldPrice === 'number' ? item.oldPrice : (parseFloat(item.oldPrice) || itemPrice);
+          let itemDiscount = typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0);
 
-        if (itemOldPrice > itemPrice && !itemDiscount && itemPrice > 0) {
-          itemDiscount = Math.round(((itemOldPrice - itemPrice) / itemOldPrice) * 100);
-        } else if (itemDiscount > 0 && (!itemOldPrice || itemOldPrice <= itemPrice) && itemPrice > 0) {
-          itemOldPrice = Math.round(itemPrice / (1 - itemDiscount / 100));
-        }
-        if (!itemOldPrice || itemOldPrice < itemPrice) {
-          itemOldPrice = itemPrice;
-        }
-
-        const cleanCat = cleanCategoryNameServer(item.category || sessionTitle || 'Повербанки та УМБ');
-        const detectedBrand = detectBrandServer(item);
-        const specsMap = item.detailedSpecsMap && typeof item.detailedSpecsMap === 'object' ? { ...item.detailedSpecsMap } : {};
-        if (!specsMap['Бренд'] || specsMap['Бренд'] === 'None' || specsMap['Бренд'] === 'Undefined') {
-          specsMap['Бренд'] = detectedBrand;
-        }
-
-        let itemSpecs = item.specs || '';
-        if (!itemSpecs.includes('Бренд:') && detectedBrand && detectedBrand !== 'Інші') {
-          itemSpecs = itemSpecs ? `${itemSpecs}; Бренд: ${detectedBrand}` : `Бренд: ${detectedBrand}`;
-        }
-
-        const itemSessionTitle = cleanCategoryNameServer(item.sessionTitle || sessionTitle || cleanCat);
-        const itemSessionId = item.sessionId || sessionId || '';
-
-        const itemKey = getItemKey({ ...item, link: normalizedLink });
-        const exists = products.some(p => p && getItemKey(p) === itemKey);
-        
-        if (!exists) {
-          products.push({
-            name: item.name || 'Товар без назви',
-            price: itemPrice,
-            oldPrice: itemOldPrice,
-            discount: itemDiscount,
-            rating: itemRating,
-            reviews: itemReviews,
-            inStock: item.inStock !== false,
-            category: cleanCat,
-            sessionTitle: itemSessionTitle,
-            sessionId: itemSessionId,
-            specs: itemSpecs,
-            description: item.description || '',
-            detailedSpecsMap: specsMap,
-            seller: item.seller || 'Rozetka',
-            sellersCount: item.sellersCount || 1,
-            link: normalizedLink,
-            scrapedAt: new Date().toISOString(),
-            aiStatus: 'pending',
-            aiVerdict: ''
-          });
-        } else {
-          const index = products.findIndex(p => p && getItemKey(p) === itemKey);
-          if (index !== -1) {
-            const oldPrice = products[index].price || 0;
-            const oldReviews = products[index].reviews || 0;
-
-            products[index].priceChange = itemPrice - oldPrice;
-            products[index].reviewsGrowth = itemReviews - oldReviews;
-
-            products[index].price = itemPrice;
-            products[index].oldPrice = itemOldPrice;
-            products[index].discount = itemDiscount;
-            products[index].reviews = itemReviews;
-            products[index].rating = itemRating;
-            products[index].name = item.name || products[index].name;
-            products[index].inStock = item.inStock !== false;
-            products[index].scrapedAt = new Date().toISOString();
-            products[index].category = cleanCat;
-            products[index].sessionTitle = itemSessionTitle;
-            if (itemSessionId) products[index].sessionId = itemSessionId;
-            products[index].specs = itemSpecs;
-            if (item.description) products[index].description = item.description;
-            products[index].detailedSpecsMap = specsMap;
-            if (item.seller && item.seller !== 'Rozetka') products[index].seller = item.seller;
-            if (item.sellersCount) products[index].sellersCount = item.sellersCount;
+          if (itemOldPrice > itemPrice && !itemDiscount && itemPrice > 0) {
+            itemDiscount = Math.round(((itemOldPrice - itemPrice) / itemOldPrice) * 100);
+          } else if (itemDiscount > 0 && (!itemOldPrice || itemOldPrice <= itemPrice) && itemPrice > 0) {
+            itemOldPrice = Math.round(itemPrice / (1 - itemDiscount / 100));
           }
+          if (!itemOldPrice || itemOldPrice < itemPrice) {
+            itemOldPrice = itemPrice;
+          }
+
+          const cleanCat = cleanCategoryNameServer(item.category || sessionTitle || 'Повербанки та УМБ');
+          const detectedBrand = detectBrandServer(item);
+          const specsMap = item.detailedSpecsMap && typeof item.detailedSpecsMap === 'object' ? { ...item.detailedSpecsMap } : {};
+          if (!specsMap['Бренд'] || specsMap['Бренд'] === 'None' || specsMap['Бренд'] === 'Undefined') {
+            specsMap['Бренд'] = detectedBrand;
+          }
+
+          let itemSpecs = item.specs || '';
+          if (!itemSpecs.includes('Бренд:') && detectedBrand && detectedBrand !== 'Інші') {
+            itemSpecs = itemSpecs ? `${itemSpecs}; Бренд: ${detectedBrand}` : `Бренд: ${detectedBrand}`;
+          }
+
+          const itemSessionTitle = cleanCategoryNameServer(item.sessionTitle || sessionTitle || cleanCat);
+          const itemSessionId = item.sessionId || sessionId || '';
+
+          const itemKey = getItemKey({ ...item, link: normalizedLink });
+          const exists = products.some(p => p && getItemKey(p) === itemKey);
+          
+          if (!exists) {
+            products.push({
+              name: item.name || 'Товар без назви',
+              price: itemPrice,
+              oldPrice: itemOldPrice,
+              discount: itemDiscount,
+              rating: itemRating,
+              reviews: itemReviews,
+              inStock: item.inStock !== false,
+              category: cleanCat,
+              sessionTitle: itemSessionTitle,
+              sessionId: itemSessionId,
+              specs: itemSpecs,
+              description: item.description || '',
+              detailedSpecsMap: specsMap,
+              seller: item.seller || 'Rozetka',
+              sellersCount: item.sellersCount || 1,
+              link: normalizedLink,
+              scrapedAt: new Date().toISOString(),
+              aiStatus: 'pending',
+              aiVerdict: ''
+            });
+          } else {
+            const index = products.findIndex(p => p && getItemKey(p) === itemKey);
+            if (index !== -1) {
+              const oldPrice = products[index].price || 0;
+              const oldReviews = products[index].reviews || 0;
+
+              products[index].priceChange = itemPrice - oldPrice;
+              products[index].reviewsGrowth = itemReviews - oldReviews;
+
+              products[index].price = itemPrice;
+              products[index].oldPrice = itemOldPrice;
+              products[index].discount = itemDiscount;
+              products[index].reviews = itemReviews;
+              products[index].rating = itemRating;
+              products[index].name = item.name || products[index].name;
+              products[index].inStock = item.inStock !== false;
+              products[index].scrapedAt = new Date().toISOString();
+              products[index].category = cleanCat;
+              products[index].sessionTitle = itemSessionTitle;
+              if (itemSessionId) products[index].sessionId = itemSessionId;
+              products[index].specs = itemSpecs;
+              if (item.description) products[index].description = item.description;
+              products[index].detailedSpecsMap = specsMap;
+              if (item.seller && item.seller !== 'Rozetka') products[index].seller = item.seller;
+              if (item.sellersCount) products[index].sellersCount = item.sellersCount;
+            }
+          }
+        } catch (e) {
+          console.error('Error processing scraped product item:', e, item);
         }
-      } catch (e) {
-        console.error('Error processing scraped product item:', e, item);
+      });
+
+      const seenIds = new Set<string>();
+      products = products.filter((p: any) => {
+        if (!p) return false;
+        const key = getItemKey(p);
+        if (seenIds.has(key)) return false;
+        seenIds.add(key);
+        return true;
+      });
+
+      products = await enrichMissingSellers(products);
+
+      const currentCategory = newItems[0]?.category || 'Загальна';
+      const categoryCount = products.filter((p: any) => p && p.category === currentCategory).length;
+
+      await saveCurrentProducts(products);
+
+      // Auto-update or create snapshot in history for this session in Neon DB
+      const activeTitle = (sessionTitle || newItems[0]?.sessionTitle || currentCategory || '').trim();
+      if (activeTitle && activeTitle !== 'Загальна') {
+        try {
+          const sessionSnapshotId = (sessionId || 'snap_' + activeTitle.toLowerCase().replace(/[^a-z0-9а-яіїєґ]/gi, '_')).substring(0, 100);
+          const sessionProducts = products.filter((p: any) => 
+            (sessionId && p.sessionId === sessionId) || 
+            (p.sessionTitle && p.sessionTitle === activeTitle)
+          );
+
+          if (sessionProducts.length > 0) {
+            const inStockProds = sessionProducts.filter((p: any) => p && p.inStock !== false && Number(p.price) > 0);
+            const validProds = inStockProds.length > 0 ? inStockProds : sessionProducts.filter((p: any) => Number(p.price) > 0);
+            const prices = validProds.map((p: any) => Number(p.price) || 0);
+            const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length) : 0;
+            const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+            const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
+            const sellers = new Set(sessionProducts.map((p: any) => p.seller || 'Rozetka'));
+
+            await saveHistorySnapshot({
+              id: sessionSnapshotId,
+              title: `Збір ${activeTitle}`,
+              folderId: null,
+              scrapedAt: new Date().toISOString(),
+              itemCount: sessionProducts.length,
+              category: currentCategory,
+              avgPrice,
+              minPrice,
+              maxPrice,
+              sellersCount: sellers.size,
+              products: sessionProducts
+            });
+          }
+        } catch (snapErr) {
+          console.warn('Auto-snapshot error for session:', snapErr);
+        }
       }
+
+      return { count: products.length, categoryCount };
     });
 
-    const seenIds = new Set<string>();
-    products = products.filter((p: any) => {
-      if (!p) return false;
-      const key = getItemKey(p);
-      if (seenIds.has(key)) return false;
-      seenIds.add(key);
-      return true;
-    });
-
-    products = await enrichMissingSellers(products);
-
-    const currentCategory = newItems[0]?.category || 'Загальна';
-    const categoryCount = products.filter((p: any) => p && p.category === currentCategory).length;
-
-    await saveCurrentProducts(products);
-
-    // Auto-update or create snapshot in history for this session in Neon DB
-    const activeTitle = (sessionTitle || newItems[0]?.sessionTitle || currentCategory || '').trim();
-    if (activeTitle && activeTitle !== 'Загальна') {
-      try {
-        const sessionSnapshotId = (sessionId || 'snap_' + activeTitle.toLowerCase().replace(/[^a-z0-9а-яіїєґ]/gi, '_')).substring(0, 100);
-        const sessionProducts = products.filter((p: any) => 
-          (sessionId && p.sessionId === sessionId) || 
-          (p.sessionTitle && p.sessionTitle === activeTitle)
-        );
-
-        if (sessionProducts.length > 0) {
-          const inStockProds = sessionProducts.filter((p: any) => p && p.inStock !== false && Number(p.price) > 0);
-          const validProds = inStockProds.length > 0 ? inStockProds : sessionProducts.filter((p: any) => Number(p.price) > 0);
-          const prices = validProds.map((p: any) => Number(p.price) || 0);
-          const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length) : 0;
-          const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
-          const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
-          const sellers = new Set(sessionProducts.map((p: any) => p.seller || 'Rozetka'));
-
-          await saveHistorySnapshot({
-            id: sessionSnapshotId,
-            title: `Збір ${activeTitle}`,
-            folderId: null,
-            scrapedAt: new Date().toISOString(),
-            itemCount: sessionProducts.length,
-            category: currentCategory,
-            avgPrice,
-            minPrice,
-            maxPrice,
-            sellersCount: sellers.size,
-            products: sessionProducts
-          });
-        }
-      } catch (snapErr) {
-        console.warn('Auto-snapshot error for session:', snapErr);
-      }
-    }
-
-    res.json({ success: true, count: products.length, categoryCount });
+    res.json({ success: true, ...result });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

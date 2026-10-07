@@ -3476,7 +3476,22 @@ export class DashboardComponent implements OnInit {
           next: (res) => {
             if (res.success) {
               const newProds = res.products || [];
-              this.products = this.sanitizeProducts(newProds);
+              if (silent && this.isAnyScrapeActive && this.products.length > newProds.length) {
+                const existingMap = new Map<string, Product>();
+                this.products.forEach(p => {
+                  if (!p) return;
+                  const key = (p.link ? p.link.split('?')[0].split('#')[0] : '') || p.name;
+                  if (key) existingMap.set(key, p);
+                });
+                newProds.forEach(p => {
+                  if (!p) return;
+                  const key = (p.link ? p.link.split('?')[0].split('#')[0] : '') || p.name;
+                  if (key) existingMap.set(key, p);
+                });
+                this.products = this.sanitizeProducts(Array.from(existingMap.values()));
+              } else {
+                this.products = this.sanitizeProducts(newProds);
+              }
               this.applyFilters();
               this.calculateMetrics();
             }
