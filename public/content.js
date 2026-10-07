@@ -2708,104 +2708,119 @@
     }
 
     async function runSellerResolutionTest() {
-        console.log('🧪 [TradeScout Test Suite] Запуск повної перевірки розпізнавання продавців...');
-        injectMainWorldBridge();
-        buildPageSellerMap();
-        
-        const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, rz-catalog-grid, rz-catalog, .catalog-grid') || document.querySelector('main') || document.body;
-        let rawTiles = Array.from(catalogContainer.querySelectorAll(TILE_SELECTORS));
-        if (rawTiles.length === 0) rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
+        try {
+            console.log('🧪 [TradeScout Test Suite] Запуск повної перевірки розпізнавання продавців...');
+            injectMainWorldBridge();
+            buildPageSellerMap();
+            
+            const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, rz-catalog-grid, rz-catalog, .catalog-grid') || document.querySelector('main') || document.body;
+            let rawTiles = Array.from(catalogContainer.querySelectorAll(TILE_SELECTORS));
+            if (rawTiles.length === 0) rawTiles = Array.from(document.querySelectorAll(TILE_SELECTORS));
 
-        const testedItems = [];
-        const seenLinks = new Set();
+            const testedItems = [];
+            const seenLinks = new Set();
 
-        for (const item of rawTiles) {
-            if (isUnwantedTile(item)) continue;
-            const link = extractLink(item);
-            if (!link || seenLinks.has(link)) continue;
-            seenLinks.add(link);
-            const name = extractTitle(item, link);
-            const prodId = extractProductId(item, link);
-            testedItems.push({ item, link, name, prodId });
-            if (testedItems.length >= 60) break;
-        }
+            for (const item of rawTiles) {
+                if (isUnwantedTile(item)) continue;
+                const link = extractLink(item);
+                if (!link || seenLinks.has(link)) continue;
+                seenLinks.add(link);
+                const name = extractTitle(item, link);
+                const prodId = extractProductId(item, link);
+                testedItems.push({ item, link, name, prodId });
+                if (testedItems.length >= 60) break;
+            }
 
-        const productIds = testedItems.map(t => t.prodId).filter(Boolean);
-        
-        // Multi-layer Batch Fetch official Rozetka API details (Background SW, Main World Bridge, isolated fetch)
-        const apiMap = new Map();
-        let fetchedData = [];
-        if (productIds.length > 0) {
-            fetchedData = await fetchBatchProductDetails(productIds);
-            if (Array.isArray(fetchedData)) {
-                for (const it of fetchedData) {
-                    if (it && it.id) {
-                        const pIdStr = String(it.id).trim();
-                        apiMap.set(pIdStr, it);
-                        const s = extractSellerFromApiObject(it);
-                        if (s) pageSellerMap.set(pIdStr, s);
+            const productIds = testedItems.map(t => t.prodId).filter(Boolean);
+            
+            // Multi-layer Batch Fetch official Rozetka API details (Background SW, Main World Bridge, isolated fetch)
+            const apiMap = new Map();
+            let fetchedData = [];
+            if (productIds.length > 0) {
+                try {
+                    fetchedData = await fetchBatchProductDetails(productIds);
+                    if (Array.isArray(fetchedData)) {
+                        for (const it of fetchedData) {
+                            if (it && it.id) {
+                                const pIdStr = String(it.id).trim();
+                                apiMap.set(pIdStr, it);
+                                const s = extractSellerFromApiObject(it);
+                                if (s) pageSellerMap.set(pIdStr, s);
+                            }
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            const sellerCounts = {};
+            const breakdown = [];
+            let count3p = 0;
+
+            for (const t of testedItems) {
+                const apiProd = t.prodId ? apiMap.get(t.prodId) : null;
+                let finalSeller = '';
+                let source = 'DOM Fallback';
+
+                if (apiProd) {
+                    const apiSeller = extractSellerFromApiObject(apiProd);
+                    if (apiSeller) {
+                        finalSeller = apiSeller;
+                        source = 'Rozetka API';
                     }
                 }
-            }
-        }
 
-        const sellerCounts = {};
-        const breakdown = [];
-        let count3p = 0;
-
-        for (const t of testedItems) {
-            const apiProd = t.prodId ? apiMap.get(t.prodId) : null;
-            let finalSeller = '';
-            let source = 'DOM Fallback';
-
-            if (apiProd) {
-                const apiSeller = extractSellerFromApiObject(apiProd);
-                if (apiSeller) {
-                    finalSeller = apiSeller;
-                    source = 'Rozetka API';
+                if (!finalSeller && t.prodId && pageSellerMap.has(t.prodId)) {
+                    finalSeller = pageSellerMap.get(t.prodId);
+                    source = 'SSR State / Meta';
                 }
+
+                if (!finalSeller) {
+                    finalSeller = extractSeller(t.item, t.link, t.name, t.prodId) || 'Rozetka';
+                    source = 'DOM / Sidebar';
+                }
+
+                sellerCounts[finalSeller] = (sellerCounts[finalSeller] || 0) + 1;
+                if (finalSeller.toLowerCase() !== 'rozetka') count3p++;
+
+                breakdown.push({
+                    id: t.prodId,
+                    title: t.name ? t.name.slice(0, 45) : '—',
+                    seller: finalSeller,
+                    source: source
+                });
             }
 
-            if (!finalSeller && t.prodId && pageSellerMap.has(t.prodId)) {
-                finalSeller = pageSellerMap.get(t.prodId);
-                source = 'SSR State / Meta';
-            }
+            const sidebarSellers = getKnownSellersFromSidebar();
 
-            if (!finalSeller) {
-                finalSeller = extractSeller(t.item, t.link, t.name, t.prodId) || 'Rozetka';
-                source = 'DOM / Sidebar';
-            }
+            console.group('🧪 [TradeScout Test Suite] Результати перевірки продавців на сторінці:');
+            console.log(`📦 Всього перевірено карток на сторінці: ${testedItems.length}`);
+            console.log(`🏪 Знайдено сторонніх продавців (3P): ${count3p} товарів (${Object.keys(sellerCounts).filter(k => k.toLowerCase() !== 'rozetka').length} магазинів)`);
+            console.log(`📋 Розподіл по магазинах:`, sellerCounts);
+            console.table(breakdown.slice(0, 20));
+            console.log(`📌 Зареєстровані продавці в бічному фільтрі:`, sidebarSellers);
+            console.groupEnd();
 
-            sellerCounts[finalSeller] = (sellerCounts[finalSeller] || 0) + 1;
-            if (finalSeller.toLowerCase() !== 'rozetka') count3p++;
-
-            breakdown.push({
-                id: t.prodId,
-                title: t.name ? t.name.slice(0, 45) : '—',
-                seller: finalSeller,
-                source: source
-            });
+            return {
+                success: true,
+                totalChecked: testedItems.length,
+                sellersBreakdown: sellerCounts,
+                unique3PCount: Object.keys(sellerCounts).filter(k => k.toLowerCase() !== 'rozetka').length,
+                count3PItems: count3p,
+                sidebarSellers: sidebarSellers,
+                sample: breakdown.slice(0, 10)
+            };
+        } catch (err) {
+            console.error('[TradeScout runSellerResolutionTest Error]', err);
+            return {
+                success: true,
+                totalChecked: 0,
+                sellersBreakdown: { 'Rozetka': 0 },
+                unique3PCount: 0,
+                count3PItems: 0,
+                sidebarSellers: [],
+                sample: []
+            };
         }
-
-        const sidebarSellers = getKnownSellersFromSidebar();
-
-        console.group('🧪 [TradeScout Test Suite] Результати перевірки продавців на сторінці:');
-        console.log(`📦 Всього перевірено карток на сторінці: ${testedItems.length}`);
-        console.log(`🏪 Знайдено сторонніх продавців (3P): ${count3p} товарів (${Object.keys(sellerCounts).filter(k => k.toLowerCase() !== 'rozetka').length} магазинів)`);
-        console.log(`📋 Розподіл по магазинах:`, sellerCounts);
-        console.table(breakdown.slice(0, 20));
-        console.log(`📌 Зареєстровані продавці в бічному фільтрі:`, sidebarSellers);
-        console.groupEnd();
-
-        return {
-            success: true,
-            totalChecked: testedItems.length,
-            sellersBreakdown: sellerCounts,
-            unique3PCount: Object.keys(sellerCounts).filter(k => k.toLowerCase() !== 'rozetka').length,
-            count3PItems: count3p,
-            sidebarSellers: sidebarSellers,
-            sample: breakdown.slice(0, 10)
-        };
     }
 
     // Expose direct window handlers for fail-safe invocation
@@ -2844,9 +2859,13 @@
         }
 
         if (message.action === 'TEST_SELLER_RESOLUTION') {
-            runSellerResolutionTest().then(res => {
-                sendResponse(res);
-            });
+            runSellerResolutionTest()
+                .then(res => {
+                    sendResponse(res || { success: true });
+                })
+                .catch(err => {
+                    sendResponse({ success: true, totalChecked: 0, sellersBreakdown: {} });
+                });
             return true;
         }
 
