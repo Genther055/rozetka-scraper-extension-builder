@@ -2149,11 +2149,11 @@ export class DashboardComponent implements OnInit {
     }
 
     const SVG_W = this.cumulativeChartSvgWidth;
-    const SVG_H = 330;
+    const SVG_H = 460;
     const PAD_L = 65;
     const PAD_R = 35;
-    const PAD_T = 30;
-    const PAD_B = 40;
+    const PAD_T = 32;
+    const PAD_B = 45;
     const PLOT_W = SVG_W - PAD_L - PAD_R;
     const PLOT_H = SVG_H - PAD_T - PAD_B;
 
@@ -2310,7 +2310,7 @@ export class DashboardComponent implements OnInit {
       const x = PAD_L + (idx / DENSITY_BINS) * PLOT_W;
       const barW = Math.max(4, (PLOT_W / DENSITY_BINS) - 2);
       const heightPct = (b.weight / maxBinWeight);
-      const barH = Math.max(2, Math.round(heightPct * 65));
+      const barH = Math.max(4, Math.round(heightPct * 95));
       const y = PAD_T + PLOT_H - barH;
       const isSweetSpotBin = b.minP <= weightedMedianPrice && b.maxP >= weightedMedianPrice;
 
@@ -2331,10 +2331,10 @@ export class DashboardComponent implements OnInit {
     // 6. Y-Ticks (0%, 25%, 50%, 75%, 100%)
     const yTicks = [
       { y: PAD_T, label: '100%' },
-      { y: PAD_T + 0.25 * PLOT_H, label: '75%' },
-      { y: PAD_T + 0.5 * PLOT_H, label: '50% (Баланс)' },
-      { y: PAD_T + 0.75 * PLOT_H, label: '25%' },
-      { y: PAD_T + PLOT_H, label: '0%' }
+      { y: Math.round(PAD_T + 0.25 * PLOT_H), label: '75%' },
+      { y: Math.round(PAD_T + 0.5 * PLOT_H), label: '50% (Баланс)' },
+      { y: Math.round(PAD_T + 0.75 * PLOT_H), label: '25%' },
+      { y: Math.round(PAD_T + PLOT_H), label: '0%' }
     ];
 
     // 7. X-Ticks (Price)

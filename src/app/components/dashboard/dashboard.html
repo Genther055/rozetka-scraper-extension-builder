@@ -1657,15 +1657,15 @@
                 <div class="relative w-full overflow-hidden">
                   <!-- Pinned Sticky Y-Axis Overlay Rail (Fixed on left during horizontal scroll) -->
                   <div class="absolute left-0 top-0 bottom-1 w-[65px] z-20 pointer-events-none bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent flex items-center">
-                    <svg viewBox="0 0 65 330" class="w-full h-72 sm:h-80 overflow-visible">
+                    <svg viewBox="0 0 65 460" class="w-full h-[420px] sm:h-[480px] lg:h-[520px] overflow-visible">
                       <g *ngFor="let tick of chart.yTicks">
-                        <line x1="56" [attr.y1]="tick.y" x2="65" [attr.y2]="tick.y" [attr.stroke]="tick.y === 155 ? '#f59e0b' : '#334155'" stroke-width="1.5"/>
+                        <line x1="56" [attr.y1]="tick.y" x2="65" [attr.y2]="tick.y" [attr.stroke]="tick.label.includes('50%') ? '#f59e0b' : '#334155'" stroke-width="1.5"/>
                         <text 
                           x="52" 
                           [attr.y]="tick.y + 4" 
                           text-anchor="end" 
-                          [attr.fill]="tick.y === 155 ? '#fbbf24' : '#94a3b8'" 
-                          [attr.font-weight]="tick.y === 155 ? 'bold' : '500'"
+                          [attr.fill]="tick.label.includes('50%') ? '#fbbf24' : '#94a3b8'" 
+                          [attr.font-weight]="tick.label.includes('50%') ? 'bold' : '500'"
                           font-size="10" 
                           font-family="monospace"
                         >
@@ -1678,8 +1678,8 @@
                   <div class="w-full overflow-x-auto custom-scrollbar pb-1 flex items-center justify-center">
                     <div [style.width]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" [style.minWidth]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" class="transition-all flex items-center justify-center">
                       <svg 
-                        [attr.viewBox]="'0 0 ' + chart.svgWidth + ' 330'" 
-                        class="w-full h-72 sm:h-80 cursor-pointer overflow-visible"
+                        [attr.viewBox]="'0 0 ' + chart.svgWidth + ' 460'" 
+                        class="w-full h-[420px] sm:h-[480px] lg:h-[520px] cursor-pointer overflow-visible"
                         (mousemove)="onCumulativeMouseMove($event)"
                         (click)="onCumulativeChartClick($event)"
                       >
@@ -1697,14 +1697,14 @@
                   </defs>
 
                   <!-- 50% Horizontal Equilibrium Baseline Grid Band -->
-                  <rect x="65" y="155" [attr.width]="chart.svgWidth - 100" height="125" fill="#10b981" fill-opacity="0.02"/>
+                  <rect x="65" y="224" [attr.width]="chart.svgWidth - 100" height="191" fill="#10b981" fill-opacity="0.02"/>
 
                   <!-- Shift Corridor Area (Between Shelf Median and Weighted Median 50%) -->
                   <rect 
                     [attr.x]="chart.shiftMinX" 
-                    y="30" 
+                    y="32" 
                     [attr.width]="chart.shiftWidth" 
-                    height="250" 
+                    height="383" 
                     fill="url(#shiftBandGrad)" 
                     stroke="#f59e0b" 
                     stroke-width="1" 
@@ -1716,7 +1716,7 @@
                   <g>
                     <rect 
                       [attr.x]="chart.shiftMinX + 2" 
-                      y="34" 
+                      y="36" 
                       [attr.width]="Math.max(105, chart.shiftWidth - 4)" 
                       height="18" 
                       rx="4" 
@@ -1726,7 +1726,7 @@
                     />
                     <text 
                       [attr.x]="chart.shiftMinX + Math.max(105, chart.shiftWidth - 4) / 2" 
-                      y="46" 
+                      y="48" 
                       text-anchor="middle" 
                       fill="#fef3c7" 
                       font-size="9.5" 
@@ -1745,17 +1745,17 @@
                         [attr.y1]="tick.y" 
                         [attr.x2]="chart.svgWidth - 35" 
                         [attr.y2]="tick.y" 
-                        [attr.stroke]="tick.y === 155 ? '#f59e0b' : '#1e293b'" 
-                        [attr.stroke-width]="tick.y === 155 ? '1.5' : '1'" 
-                        [attr.stroke-dasharray]="tick.y === 155 ? '4 4' : '2 3'"
-                        [attr.stroke-opacity]="tick.y === 155 ? '0.8' : '0.6'"
+                        [attr.stroke]="tick.label.includes('50%') ? '#f59e0b' : '#1e293b'" 
+                        [attr.stroke-width]="tick.label.includes('50%') ? '1.5' : '1'" 
+                        [attr.stroke-dasharray]="tick.label.includes('50%') ? '4 4' : '2 3'"
+                        [attr.stroke-opacity]="tick.label.includes('50%') ? '0.8' : '0.6'"
                       />
                       <text 
                         x="56" 
                         [attr.y]="tick.y + 4" 
                         text-anchor="end" 
-                        [attr.fill]="tick.y === 155 ? '#f59e0b' : '#64748b'" 
-                        [attr.font-weight]="tick.y === 155 ? 'bold' : 'normal'"
+                        [attr.fill]="tick.label.includes('50%') ? '#f59e0b' : '#64748b'" 
+                        [attr.font-weight]="tick.label.includes('50%') ? 'bold' : 'normal'"
                         font-size="10" 
                         font-family="monospace"
                       >
@@ -1776,25 +1776,25 @@
                   <!-- Reference Vertical Guides (Uncluttered, Sleek Lines with Top Markers) -->
                   <!-- 1. Shelf Median Line -->
                   <g>
-                    <line [attr.x1]="chart.medianPriceX" y1="28" [attr.x2]="chart.medianPriceX" y2="280" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
+                    <line [attr.x1]="chart.medianPriceX" y1="28" [attr.x2]="chart.medianPriceX" y2="415" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
                     <circle [attr.cx]="chart.medianPriceX" cy="28" r="3" fill="#38bdf8"/>
                   </g>
 
                   <!-- 2. Shelf Average Line -->
                   <g>
-                    <line [attr.x1]="chart.avgPriceX" y1="28" [attr.x2]="chart.avgPriceX" y2="280" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
+                    <line [attr.x1]="chart.avgPriceX" y1="28" [attr.x2]="chart.avgPriceX" y2="415" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
                     <circle [attr.cx]="chart.avgPriceX" cy="28" r="3" fill="#c084fc"/>
                   </g>
 
                   <!-- 3. Weighted Average Line -->
                   <g>
-                    <line [attr.x1]="chart.weightedAvgPriceX" y1="28" [attr.x2]="chart.weightedAvgPriceX" y2="280" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
+                    <line [attr.x1]="chart.weightedAvgPriceX" y1="28" [attr.x2]="chart.weightedAvgPriceX" y2="415" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
                     <circle [attr.cx]="chart.weightedAvgPriceX" cy="28" r="3" fill="#34d399"/>
                   </g>
 
                   <!-- 4. Weighted Median (50% Mass Equilibrium Anchor) -->
                   <g>
-                    <line [attr.x1]="chart.weightedMedianPriceX" y1="20" [attr.x2]="chart.weightedMedianPriceX" y2="280" stroke="#fbbf24" stroke-width="2"/>
+                    <line [attr.x1]="chart.weightedMedianPriceX" y1="20" [attr.x2]="chart.weightedMedianPriceX" y2="415" stroke="#fbbf24" stroke-width="2"/>
                     <!-- Distinctive Top Anchor Pill -->
                     <rect [attr.x]="chart.weightedMedianPriceX - 48" y="10" width="96" height="18" rx="4" fill="#451a03" stroke="#fbbf24" stroke-width="1.5"/>
                     <text [attr.x]="chart.weightedMedianPriceX" y="22" text-anchor="middle" fill="#fef3c7" font-size="9" font-weight="bold" font-family="monospace">
@@ -1810,11 +1810,11 @@
                   </g>
 
                   <!-- X-Axis Baseline & Ticks -->
-                  <line x1="65" y1="280" [attr.x2]="chart.svgWidth - 35" y2="280" stroke="#334155" stroke-width="1"/>
+                  <line x1="65" y1="415" [attr.x2]="chart.svgWidth - 35" y2="415" stroke="#334155" stroke-width="1"/>
                   <g class="x-labels">
                     <g *ngFor="let xtick of chart.xTicks">
-                      <line [attr.x1]="xtick.x" y1="280" [attr.x2]="xtick.x" y2="285" stroke="#475569" stroke-width="1"/>
-                      <text [attr.x]="xtick.x" y="302" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="monospace">{{ xtick.label }}</text>
+                      <line [attr.x1]="xtick.x" y1="415" [attr.x2]="xtick.x" y2="421" stroke="#475569" stroke-width="1"/>
+                      <text [attr.x]="xtick.x" y="438" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="monospace">{{ xtick.label }}</text>
                     </g>
                   </g>
 
@@ -1825,7 +1825,7 @@
                       [attr.x1]="activeCumulativePoint.x" 
                       y1="20" 
                       [attr.x2]="activeCumulativePoint.x" 
-                      y2="280" 
+                      y2="415" 
                       [attr.stroke]="pinnedCumulativePoint ? '#fbbf24' : '#38bdf8'" 
                       stroke-width="1.5" 
                       stroke-dasharray="2 2"
@@ -1893,8 +1893,8 @@
 
                     <!-- Dynamic X-Axis Price Pill -->
                     <g>
-                      <rect [attr.x]="activeCumulativePoint.x - 36" y="284" width="72" height="18" rx="4" [attr.fill]="pinnedCumulativePoint ? '#78350f' : '#0369a1'" [attr.stroke]="pinnedCumulativePoint ? '#fbbf24' : '#38bdf8'" stroke-width="1"/>
-                      <text [attr.x]="activeCumulativePoint.x" y="296" text-anchor="middle" fill="#ffffff" font-size="9" font-weight="bold" font-family="monospace">
+                      <rect [attr.x]="activeCumulativePoint.x - 36" y="419" width="72" height="18" rx="4" [attr.fill]="pinnedCumulativePoint ? '#78350f' : '#0369a1'" [attr.stroke]="pinnedCumulativePoint ? '#fbbf24' : '#38bdf8'" stroke-width="1"/>
+                      <text [attr.x]="activeCumulativePoint.x" y="431" text-anchor="middle" fill="#ffffff" font-size="9" font-weight="bold" font-family="monospace">
                         {{ activeCumulativePoint.price | number }} ₴
                       </text>
                     </g>
@@ -2064,7 +2064,7 @@
                   </div>
                 </div>
 
-                <div class="h-64 pt-4 flex items-end justify-between gap-1 border-b border-slate-800 pb-2 relative">
+                <div class="h-80 sm:h-96 lg:h-[420px] pt-4 flex items-end justify-between gap-1 border-b border-slate-800 pb-2 relative">
                   <div 
                     *ngFor="let bar of chart.densityBars; let i = index" 
                     (mouseenter)="onDensityBarEnter(bar, i)"
@@ -2080,7 +2080,7 @@
                       [class.to-emerald-400]="!bar.isSweetSpotBin"
                       [class.brightness-125]="hoveredDensityBarIndex === i"
                       [class.scale-y-105]="hoveredDensityBarIndex === i"
-                      [style.height.px]="bar.height * 2.5"
+                      [style.height.px]="bar.height * 3.8"
                     ></div>
                   </div>
                 </div>
@@ -7813,15 +7813,15 @@
         <div *ngIf="activeExpandedChartModal === 'cumulative'" class="flex-1 bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 overflow-hidden flex flex-col justify-center relative select-none">
           <!-- Pinned Sticky Y-Axis Overlay Rail (Fixed on left during horizontal scroll) -->
           <div *ngIf="getCumulativeDemandChartData() as chart" class="absolute left-4 top-4 bottom-4 w-[65px] z-20 pointer-events-none bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent flex items-center">
-            <svg viewBox="0 0 65 330" class="w-full h-full max-h-[520px] overflow-visible">
+            <svg viewBox="0 0 65 460" class="w-full h-full max-h-[620px] overflow-visible">
               <g *ngFor="let tick of chart.yTicks">
-                <line x1="56" [attr.y1]="tick.y" x2="65" [attr.y2]="tick.y" [attr.stroke]="tick.y === 155 ? '#f59e0b' : '#334155'" stroke-width="1.5"/>
+                <line x1="56" [attr.y1]="tick.y" x2="65" [attr.y2]="tick.y" [attr.stroke]="tick.label.includes('50%') ? '#f59e0b' : '#334155'" stroke-width="1.5"/>
                 <text 
                   x="52" 
                   [attr.y]="tick.y + 4" 
                   text-anchor="end" 
-                  [attr.fill]="tick.y === 155 ? '#fbbf24' : '#94a3b8'" 
-                  [attr.font-weight]="tick.y === 155 ? 'bold' : '500'"
+                  [attr.fill]="tick.label.includes('50%') ? '#fbbf24' : '#94a3b8'" 
+                  [attr.font-weight]="tick.label.includes('50%') ? 'bold' : '500'"
                   font-size="10" 
                   font-family="monospace"
                 >
@@ -7834,8 +7834,8 @@
           <div *ngIf="getCumulativeDemandChartData() as chart" class="w-full h-full overflow-x-auto custom-scrollbar flex items-center justify-center">
             <div [style.width]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" [style.minWidth]="cumulativeChartZoom === 1 ? '100%' : (cumulativeChartZoom * 100) + '%'" class="h-full flex items-center justify-center transition-all">
               <svg 
-                [attr.viewBox]="'0 0 ' + chart.svgWidth + ' 330'" 
-                class="w-full h-full max-h-[520px] cursor-pointer overflow-visible"
+                [attr.viewBox]="'0 0 ' + chart.svgWidth + ' 460'" 
+                class="w-full h-full max-h-[620px] cursor-pointer overflow-visible"
                 (mousemove)="onCumulativeMouseMove($event)"
                 (click)="onCumulativeChartClick($event)"
               >
@@ -7852,14 +7852,14 @@
                 </defs>
 
                 <!-- 50% Horizontal Equilibrium Baseline Grid Band -->
-                <rect x="65" y="155" [attr.width]="chart.svgWidth - 100" height="125" fill="#10b981" fill-opacity="0.03"/>
+                <rect x="65" y="224" [attr.width]="chart.svgWidth - 100" height="191" fill="#10b981" fill-opacity="0.03"/>
 
                 <!-- Shift Corridor Area -->
                 <rect 
                   [attr.x]="chart.shiftMinX" 
-                  y="30" 
+                  y="32" 
                   [attr.width]="chart.shiftWidth" 
-                  height="250" 
+                  height="383" 
                   fill="url(#shiftBandGradModal)" 
                   stroke="#f59e0b" 
                   stroke-width="1.5" 
@@ -7875,16 +7875,16 @@
                       [attr.y1]="tick.y" 
                       [attr.x2]="chart.svgWidth - 35" 
                       [attr.y2]="tick.y" 
-                      [attr.stroke]="tick.y === 155 ? '#f59e0b' : '#1e293b'" 
-                      [attr.stroke-width]="tick.y === 155 ? '1.5' : '1'" 
-                      [attr.stroke-dasharray]="tick.y === 155 ? '4 4' : '2 3'"
+                      [attr.stroke]="tick.label.includes('50%') ? '#f59e0b' : '#1e293b'" 
+                      [attr.stroke-width]="tick.label.includes('50%') ? '1.5' : '1'" 
+                      [attr.stroke-dasharray]="tick.label.includes('50%') ? '4 4' : '2 3'"
                     />
                     <text 
                       x="56" 
                       [attr.y]="tick.y + 4" 
                       text-anchor="end" 
-                      [attr.fill]="tick.y === 155 ? '#f59e0b' : '#64748b'" 
-                      [attr.font-weight]="tick.y === 155 ? 'bold' : 'normal'"
+                      [attr.fill]="tick.label.includes('50%') ? '#f59e0b' : '#64748b'" 
+                      [attr.font-weight]="tick.label.includes('50%') ? 'bold' : 'normal'"
                       font-size="10" 
                       font-family="monospace"
                     >
@@ -7904,26 +7904,26 @@
 
                 <!-- 1. Shelf Median Line -->
                 <g>
-                  <line [attr.x1]="chart.medianPriceX" y1="28" [attr.x2]="chart.medianPriceX" y2="280" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.8"/>
+                  <line [attr.x1]="chart.medianPriceX" y1="28" [attr.x2]="chart.medianPriceX" y2="415" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.8"/>
                   <circle [attr.cx]="chart.medianPriceX" cy="28" r="3.5" fill="#38bdf8"/>
                 </g>
 
                 <!-- 2. Shelf Average Line -->
                 <g>
-                  <line [attr.x1]="chart.avgPriceX" y1="28" [attr.x2]="chart.avgPriceX" y2="280" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.8"/>
+                  <line [attr.x1]="chart.avgPriceX" y1="28" [attr.x2]="chart.avgPriceX" y2="415" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.8"/>
                   <circle [attr.cx]="chart.avgPriceX" cy="28" r="3.5" fill="#c084fc"/>
                 </g>
 
                 <!-- 3. Weighted Average Line -->
                 <g>
-                  <line [attr.x1]="chart.weightedAvgPriceX" y1="28" [attr.x2]="chart.weightedAvgPriceX" y2="280" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.8"/>
+                  <line [attr.x1]="chart.weightedAvgPriceX" y1="28" [attr.x2]="chart.weightedAvgPriceX" y2="415" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.8"/>
                   <circle [attr.cx]="chart.weightedAvgPriceX" cy="28" r="3.5" fill="#34d399"/>
                 </g>
 
                 <!-- 4. Weighted Median 50% Equilibrium Line -->
                 <g>
-                  <line [attr.x1]="chart.weightedMedianPriceX" y1="28" [attr.x2]="chart.weightedMedianPriceX" y2="280" stroke="#fbbf24" stroke-width="2.5" class="drop-shadow-md"/>
-                  <circle [attr.cx]="chart.weightedMedianPriceX" cy="28" r="5" fill="#fbbf24" stroke="#000" stroke-width="1.5"/>
+                  <line [attr.x1]="chart.weightedMedianPriceX" y1="20" [attr.x2]="chart.weightedMedianPriceX" y2="415" stroke="#fbbf24" stroke-width="2.5" class="drop-shadow-md"/>
+                  <circle [attr.cx]="chart.weightedMedianPriceX" cy="20" r="5" fill="#fbbf24" stroke="#000" stroke-width="1.5"/>
                 </g>
 
                 <!-- 50% Intersection Golden Star -->
@@ -7934,11 +7934,11 @@
                 </g>
 
                 <!-- X-Axis Baseline & Ticks -->
-                <line x1="65" y1="280" [attr.x2]="chart.svgWidth - 35" y2="280" stroke="#334155" stroke-width="1"/>
+                <line x1="65" y1="415" [attr.x2]="chart.svgWidth - 35" y2="415" stroke="#334155" stroke-width="1"/>
                 <g class="x-labels">
                   <g *ngFor="let xtick of chart.xTicks">
-                    <line [attr.x1]="xtick.x" y1="280" [attr.x2]="xtick.x" y2="285" stroke="#475569" stroke-width="1"/>
-                    <text [attr.x]="xtick.x" y="300" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="monospace">
+                    <line [attr.x1]="xtick.x" y1="415" [attr.x2]="xtick.x" y2="421" stroke="#475569" stroke-width="1"/>
+                    <text [attr.x]="xtick.x" y="438" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="monospace">
                       {{ xtick.label }}
                     </text>
                   </g>
@@ -7946,7 +7946,7 @@
 
                 <!-- Hovered / Pinned Dynamic Crosshairs -->
                 <g *ngIf="activeCumulativePoint">
-                  <line [attr.x1]="activeCumulativePoint.x" y1="25" [attr.x2]="activeCumulativePoint.x" y2="280" [attr.stroke]="pinnedCumulativePoint ? '#fbbf24' : '#38bdf8'" stroke-width="1.5" stroke-dasharray="3 3"/>
+                  <line [attr.x1]="activeCumulativePoint.x" y1="20" [attr.x2]="activeCumulativePoint.x" y2="415" [attr.stroke]="pinnedCumulativePoint ? '#fbbf24' : '#38bdf8'" stroke-width="1.5" stroke-dasharray="3 3"/>
                   <line x1="65" [attr.y1]="activeCumulativePoint.yDemand" [attr.x2]="activeCumulativePoint.x" [attr.y2]="activeCumulativePoint.yDemand" stroke="#10b981" stroke-width="1" stroke-dasharray="2 2" opacity="0.7"/>
 
                   <circle [attr.cx]="activeCumulativePoint.x" [attr.cy]="activeCumulativePoint.yDemand" [attr.r]="pinnedCumulativePoint ? 8 : 6" [attr.fill]="pinnedCumulativePoint ? '#fbbf24' : '#10b981'" stroke="#ffffff" stroke-width="2"/>
