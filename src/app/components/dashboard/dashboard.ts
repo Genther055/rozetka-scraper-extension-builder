@@ -5374,6 +5374,7 @@ export class DashboardComponent implements OnInit {
       { header: 'Рейтинг', key: 'rating', width: 12 },
       { header: 'Відгуки', key: 'reviews', width: 12 },
       { header: 'Наявність', key: 'inStock', width: 16 },
+      { header: 'Бренд', key: 'brand', width: 18 },
       { header: 'Продавець', key: 'seller', width: 20 },
       { header: 'Категорія', key: 'category', width: 22 },
     ];
@@ -5387,14 +5388,15 @@ export class DashboardComponent implements OnInit {
       { header: 'Посилання', key: 'link', width: 16 }
     );
 
-    // 4. Групуємо товари за фірмами / продавцями
-    const sellerGroups = new Map<string, Product[]>();
+    // 4. Групуємо товари за брендами (замість магазинів)
+    const brandGroups = new Map<string, Product[]>();
     baseProducts.forEach(p => {
-      const rawSeller = (p.seller && String(p.seller).trim()) ? String(p.seller).trim() : 'Rozetka';
-      if (!sellerGroups.has(rawSeller)) {
-        sellerGroups.set(rawSeller, []);
+      const b = this.getProductBrand(p);
+      const brandKey = (b && b !== 'Інші') ? b : 'Інші бренди';
+      if (!brandGroups.has(brandKey)) {
+        brandGroups.set(brandKey, []);
       }
-      sellerGroups.get(rawSeller)!.push(p);
+      brandGroups.get(brandKey)!.push(p);
     });
 
     const tabPalette = [
@@ -5410,11 +5412,26 @@ export class DashboardComponent implements OnInit {
       'FF14B8A6'  // Teal
     ];
 
+    const brandTabColors: Record<string, string> = {
+      'Xiaomi': 'FFFF6700',
+      'Ugreen': 'FF10B981',
+      'Sigma mobile': 'FF06B6D4',
+      'Apple': 'FF94A3B8',
+      'Samsung': 'FF3B82F6',
+      'Baseus': 'FFEAB308',
+      'Anker': 'FF38BDF8',
+      'Hoco': 'FFEC4899',
+      'Qinetiq': 'FFA855F7',
+      'Remzona': 'FFF43F5E',
+      'BLUETTI': 'FF2563EB',
+      'EcoFlow': 'FF059669'
+    };
+
     const usedSheetNames = new Set<string>();
 
     const sanitizeSheetName = (raw: string): string => {
       let cleaned = raw.replace(/[:\\/?*\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
-      if (!cleaned) cleaned = 'Продавець';
+      if (!cleaned) cleaned = 'Бренд';
       let name = cleaned.slice(0, 28);
       let uniqueName = name;
       let counter = 2;
@@ -5425,8 +5442,8 @@ export class DashboardComponent implements OnInit {
       return uniqueName;
     };
 
-    if (sellerGroups.size > 1) {
-      // 4.1 Якщо знайдено 2 або більше фірм:
+    if (brandGroups.size > 1) {
+      // 4.1 Якщо знайдено 2 або більше брендів:
       // Аркуш 1: «Всі товари»
       const allSheetName = sanitizeSheetName('Всі товари');
       const allWorksheet = workbook.addWorksheet(allSheetName, {
@@ -5435,27 +5452,27 @@ export class DashboardComponent implements OnInit {
       });
       this.populateWorksheetWithProducts(allWorksheet, baseProducts, dynamicSpecs, columns);
 
-      // Сортуємо продавців за кількістю товарів (від найбільшої до найменшої)
-      const sortedSellers = Array.from(sellerGroups.entries())
+      // Сортуємо бренди за кількістю товарів (від найбільшої до найменшої)
+      const sortedBrands = Array.from(brandGroups.entries())
         .sort((a, b) => b[1].length - a[1].length);
 
-      // Аркуші 2..N: Окремий аркуш для кожної фірми / продавця
-      sortedSellers.forEach(([sellerName, sellerProducts], sIdx) => {
-        const sheetName = sanitizeSheetName(sellerName);
-        const colorArgb = tabPalette[(sIdx + 1) % tabPalette.length];
-        const sellerWorksheet = workbook.addWorksheet(sheetName, {
+      // Аркуші 2..N: Окремий аркуш для кожного бренду
+      sortedBrands.forEach(([brandName, brandProducts], bIdx) => {
+        const sheetName = sanitizeSheetName(brandName);
+        const colorArgb = brandTabColors[brandName] || tabPalette[(bIdx + 1) % tabPalette.length];
+        const brandWorksheet = workbook.addWorksheet(sheetName, {
           views: [{ state: 'frozen', ySplit: 1, showGridLines: true }],
           properties: { tabColor: { argb: colorArgb } }
         });
-        this.populateWorksheetWithProducts(sellerWorksheet, sellerProducts, dynamicSpecs, columns);
+        this.populateWorksheetWithProducts(brandWorksheet, brandProducts, dynamicSpecs, columns);
       });
     } else {
-      // 4.2 Якщо лише 1 фірма у вибірці
-      const singleSellerName = Array.from(sellerGroups.keys())[0] || 'Rozetka';
-      const sheetTitle = sanitizeSheetName(`Товари ${singleSellerName}`);
+      // 4.2 Якщо лише 1 бренд у вибірці
+      const singleBrandName = Array.from(brandGroups.keys())[0] || 'Всі товари';
+      const sheetTitle = sanitizeSheetName(`Товари ${singleBrandName}`);
       const worksheet = workbook.addWorksheet(sheetTitle, {
         views: [{ state: 'frozen', ySplit: 1, showGridLines: true }],
-        properties: { tabColor: { argb: tabPalette[1] } }
+        properties: { tabColor: { argb: brandTabColors[singleBrandName] || tabPalette[1] } }
       });
       this.populateWorksheetWithProducts(worksheet, baseProducts, dynamicSpecs, columns);
     }
@@ -5523,6 +5540,7 @@ export class DashboardComponent implements OnInit {
 
       const inStock = p.inStock !== false;
       const inStockText = inStock ? 'В наявності' : 'Немає';
+      const brandVal = this.getProductBrand(p) || 'Інші';
       const rowData: Record<string, any> = {
         name: p.name || '',
         oldPrice: this.getEffectiveOldPrice(p),
@@ -5531,6 +5549,7 @@ export class DashboardComponent implements OnInit {
         rating: p.rating ? Number(p.rating) : 0,
         reviews: p.reviews ? Number(p.reviews) : 0,
         inStock: inStockText,
+        brand: brandVal,
         seller: p.seller || 'Rozetka',
         category: p.category || ''
       };
@@ -5542,7 +5561,7 @@ export class DashboardComponent implements OnInit {
       const generatedDesc = this.getProductDescription(p);
       const finalDesc = (p.description && typeof p.description === 'string' && p.description.trim().length > 10)
         ? p.description.trim()
-        : (generatedDesc || `${p.name || 'Товар'}. Продавець: ${p.seller || 'Rozetka'}. Ціна: ${p.price || 0} грн.`);
+        : (generatedDesc || `${p.name || 'Товар'}. Бренд: ${brandVal}. Продавець: ${p.seller || 'Rozetka'}. Ціна: ${p.price || 0} грн.`);
       rowData['description'] = finalDesc;
       rowData['link'] = p.link ? { text: 'Відкрити 🔗', hyperlink: p.link } : '';
 
@@ -5590,7 +5609,10 @@ export class DashboardComponent implements OnInit {
             bold: true,
             color: { argb: inStock ? 'FF10B981' : 'FFEF4444' }
           };
-        } else if (colNumber === 8) { // Продавець
+        } else if (colNumber === 8) { // Бренд
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF4F46E5' } };
+        } else if (colNumber === 9) { // Продавець
           cell.alignment = { vertical: 'middle', horizontal: 'left' };
           cell.font = { name: 'Segoe UI', size: 10, bold: (p.seller === 'Rozetka'), color: { argb: 'FF1E293B' } };
         } else if (colNumber === columns.length - 1) { // Опис товару
