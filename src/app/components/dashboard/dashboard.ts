@@ -3359,17 +3359,6 @@ export class DashboardComponent implements OnInit {
           } else {
             this.activeScrapes = [...this.activeScrapes, task];
           }
-          // Auto-purge old cached products when a fresh scrape session starts on page 1
-          if (task.status === 'scraping' && task.pageIndex === 1 && (task.currentCount === 0 || this.products.length > 0)) {
-            const isDifferentSession = this.products.length > 0 && this.products[0]?.sessionId && this.products[0].sessionId !== key;
-            if (isDifferentSession || task.currentCount === 0) {
-              this.products = [];
-              try { localStorage.removeItem(this.STORAGE_PRODUCTS_KEY); } catch (_) {}
-              this.applyFilters();
-              this.calculateMetrics();
-            }
-          }
-
           this.isAnyScrapeActive = this.activeScrapes.some(t => t.status === 'scraping' && (t.percent < 100));
           if (this.isAnyScrapeActive) {
             this.startLiveStopwatch();

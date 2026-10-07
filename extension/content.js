@@ -2216,22 +2216,30 @@
         let consecutiveNoNewRounds = 0;
         let lastItemCount = pageNewProducts.length;
 
+        // If initial batch found nothing on page 1, wait up to 1.5s for Rozetka DOM tiles to mount
+        if (pageNewProducts.length === 0) {
+            for (let retry = 0; retry < 5 && pageNewProducts.length === 0; retry++) {
+                await new Promise(r => setTimeout(r, 300));
+                await harvestBatch();
+            }
+        }
+
         for (let round = 0; round < 15 && pageNewProducts.length < targetForThisPage; round++) {
             if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
 
-            // 1. Paced, progressive step-by-step downward scroll across catalog
+            // 1. Progressive step-by-step downward scroll across catalog (instant auto for reliable background tab execution)
             const catalogScrollHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
-            const scrollStep = 380;
+            const scrollStep = 450;
             const startY = window.scrollY || 0;
             
             for (let curY = startY; curY <= catalogScrollHeight && pageNewProducts.length < targetForThisPage; curY += scrollStep) {
                 if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                window.scrollTo({ top: curY, behavior: 'smooth' });
+                window.scrollTo({ top: curY, behavior: 'auto' });
                 window.dispatchEvent(new Event('scroll'));
                 document.dispatchEvent(new Event('scroll'));
 
                 // Paced pause allowing DOM render and real-time star inspection
-                await new Promise(r => setTimeout(r, 200));
+                await new Promise(r => setTimeout(r, 180));
                 captureVisualRatingsInViewport();
                 await harvestBatch();
             }
@@ -2252,10 +2260,10 @@
                 // Also scroll past paginator area to trigger IntersectionObserver
                 const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"], [class*="catalog-grid__more"]');
                 if (paginator) {
-                    paginator.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    paginator.scrollIntoView({ behavior: 'auto', block: 'center' });
                     window.dispatchEvent(new Event('scroll'));
                     document.dispatchEvent(new Event('scroll'));
-                    await new Promise(r => setTimeout(r, 350));
+                    await new Promise(r => setTimeout(r, 300));
                     captureVisualRatingsInViewport();
                     await harvestBatch();
                 }
@@ -2335,7 +2343,6 @@
         const maxPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
         const isFinished = (!freshNextInDom && currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || 
                            (pageNewProducts.length === 0 && currentPage > 1 && !freshNextInDom) || 
-                           (!freshNextInDom && (!targetUrl || targetUrl === window.location.href)) || 
                            (currentPage >= maxPages && !freshNextInDom);
 
         if (isFinished) {
