@@ -316,118 +316,137 @@
         return '';
     }
 
-    // Smooth, progressive linear downward scroll (gentle, human-like, zero viewport snapping)
+    // Paced Visual Inspector Scrolling through full page height
     async function silentBackgroundScroll() {
         try {
-            const docHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 1200);
-            const stepPx = 380;
-            let currentY = 0;
-            const targetMaxY = Math.max(0, docHeight - window.innerHeight);
+            let lastHeight = 0;
+            let currentScroll = 0;
+            const stepPx = 380; // steady, paced human-like steps
+            const maxSteps = 30;
 
-            while (currentY < targetMaxY && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
-                currentY = Math.min(currentY + stepPx, targetMaxY);
-                window.scrollTo({ top: currentY, behavior: 'smooth' });
-                await new Promise(r => setTimeout(r, 120));
+            for (let i = 0; i < maxSteps; i++) {
+                const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
+                currentScroll = Math.min(maxH, currentScroll + stepPx);
+                window.scrollTo({ top: currentScroll, behavior: 'smooth' });
+                window.dispatchEvent(new Event('scroll'));
+                document.dispatchEvent(new Event('scroll'));
+                
+                // Allow browser & Angular time to render components in the viewport
+                await new Promise(r => setTimeout(r, 240));
+                
+                // Live computer vision / DOM geometry inspection of star fill in viewport
                 captureVisualRatingsInViewport();
+
+                if (currentScroll >= maxH && maxH === lastHeight) break;
+                lastHeight = maxH;
             }
 
-            // Brief calm pause at bottom for dynamic lazy-loaded elements to settle
-            await new Promise(r => setTimeout(r, 400));
+            window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight), behavior: 'smooth' });
+            window.dispatchEvent(new Event('scroll'));
+            await new Promise(r => setTimeout(r, 350));
             captureVisualRatingsInViewport();
         } catch (_) {}
     }
 
-    // Check if DOM contains valid forward navigation to next page
-    function hasNextPageInDom(targetNextPage) {
-        // 1. Forward arrow button
-        const forwardArrows = document.querySelectorAll(`
-            a.pagination__direction--forward, 
-            a[rel="next"], 
-            [class*="pagination__direction_type_forward"], 
-            [class*="pagination__direction--forward"],
-            rz-paginator a[aria-label*="наступ"],
-            [data-testid="pagination-next"]
-        `);
-        for (const btn of forwardArrows) {
-            const isDisabled = btn.classList.contains('disabled') || 
-                               btn.classList.contains('pagination__direction--disabled') || 
-                               btn.getAttribute('aria-disabled') === 'true' || 
-                               btn.hasAttribute('disabled');
-            if (!isDisabled) {
+    // Trigger Rozetka's "Показати ще" button if present to mount remaining products on the current page
+    async function triggerShowMoreAndWait() {
+        try {
+            const candidates = [];
+            const showMoreSelectors = [
+                'a.show-more',
+                'button.show-more',
+                'rz-button-show-more button',
+                'rz-button-show-more a',
+                'rz-button-show-more',
+                '[data-testid="show-more-goods"]',
+                '[data-testid*="show-more"]',
+                '.show-more-button',
+                '[class*="catalog-selection__btn"]',
+                '[class*="catalog-grid__more"]',
+                '[class*="show-more"]',
+                '[class*="show_more"]'
+            ];
+            
+            for (const sel of showMoreSelectors) {
+                document.querySelectorAll(sel).forEach(el => candidates.push(el));
+            }
+
+            // Also search all buttons and links in main catalog area with matching text
+            document.querySelectorAll('main a, main button, rz-catalog a, rz-catalog button, .catalog-grid a, .catalog-grid button, rz-paginator a, rz-paginator button, [class*="paginator"] a, [class*="paginator"] button, button, a').forEach(el => {
+                if (el.classList.contains('pagination__link') || el.classList.contains('pagination__direction')) return;
+                if (el.closest('header, footer, aside, rz-filter-stack, .sidebar, rz-sidebar')) return;
+                const txt = (el.textContent || el.innerText || '').toLowerCase();
+                if (/показати\s+ще|показать\s+еще|ще\s+\d+\s+товар|показати\s+більше|показать\s+больше/i.test(txt)) {
+                    candidates.push(el);
+                }
+            });
+
+            let clicked = false;
+            for (const btn of candidates) {
+                if (btn.classList.contains('pagination__link') || btn.classList.contains('pagination__direction')) continue;
+                if (btn.closest('header, footer, aside, rz-filter-stack')) continue;
+
+                btn.scrollIntoView({ behavior: 'auto', block: 'center' });
+                window.dispatchEvent(new Event('scroll'));
+                
+                ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evtType => {
+                    try {
+                        btn.dispatchEvent(new MouseEvent(evtType, { bubbles: true, cancelable: true, view: window }));
+                    } catch (_) {}
+                });
+                try { btn.click(); } catch (_) {}
+                clicked = true;
+            }
+
+            if (clicked) {
+                await new Promise(r => setTimeout(r, 800));
                 return true;
             }
-        }
-
-        // 2. Specific page number link in paginator
-        const specificPageLink = document.querySelector(`
-            a.pagination__link[href*="page=${targetNextPage}"], 
-            a.pagination__link[href*="page=${targetNextPage};"],
-            [class*="paginator"] a[href*="page=${targetNextPage}"],
-            [class*="paginator"] a[href*="page=${targetNextPage};"]
-        `);
-        if (specificPageLink) return true;
-
-        // 3. Check highest page number in paginator
-        const pageLinks = document.querySelectorAll('a.pagination__link, li.pagination__item a, [class*="paginator"] a');
-        let maxPaginatorPage = 1;
-        pageLinks.forEach(a => {
-            const txt = (a.textContent || '').trim();
-            const num = parseInt(txt, 10);
-            if (!isNaN(num) && num > maxPaginatorPage && num < 500) {
-                maxPaginatorPage = num;
-            }
-            const href = a.getAttribute('href') || '';
-            const m = href.match(/page=(\d+)/i);
-            if (m && m[1]) {
-                const hNum = parseInt(m[1], 10);
-                if (!isNaN(hNum) && hNum > maxPaginatorPage && hNum < 500) {
-                    maxPaginatorPage = hNum;
-                }
-            }
-        });
-
-        if (maxPaginatorPage >= targetNextPage) {
-            return true;
-        }
-
+        } catch (_) {}
         return false;
     }
 
-    // Accurate Rozetka pagination URL builder (query params, filter slug with semicolon, and category paths)
-    function buildNextPageUrl(currentUrl, targetPageNum) {
-        if (!currentUrl) return '';
+    // Generate Rozetka-compliant Next Page URL
+    function getRozetkaNextPageUrl(currentUrl, nextPg) {
         try {
-            let url = currentUrl.split('#')[0];
+            const u = new URL(currentUrl);
+            // Search query parameters
+            if (u.searchParams && (u.searchParams.has('text') || u.pathname.includes('/search'))) {
+                u.searchParams.set('page', nextPg);
+                return u.toString();
+            }
             
-            // 1. Search / query parameters
-            if (url.includes('?')) {
-                const [base, query] = url.split('?');
-                const params = new URLSearchParams(query);
-                params.set('page', String(targetPageNum));
-                return `${base}?${params.toString()}`;
+            let path = u.pathname;
+            // If page= already exists in pathname
+            if (path.includes('page=')) {
+                u.pathname = path.replace(/page=\d+/, `page=${nextPg}`);
+                return u.toString();
+            }
+            
+            // If category ID /c12345/ exists in path
+            const catMatch = path.match(/\/(c\d+)\/(.*)/);
+            if (catMatch) {
+                const catId = catMatch[1];
+                const rest = catMatch[2];
+                if (rest && rest.length > 0) {
+                    // Filtered catalog: /c387969/page=2;producer=xiaomi/
+                    u.pathname = path.replace(`/${catId}/`, `/${catId}/page=${nextPg};`);
+                } else {
+                    // Simple catalog: /c387969/page=2/
+                    u.pathname = path.replace(`/${catId}/`, `/${catId}/page=${nextPg}/`);
+                }
+                return u.toString();
             }
 
-            // 2. Existing ;page=X
-            if (/;page=\d+/i.test(url)) {
-                return url.replace(/;page=\d+/i, `;page=${targetPageNum}`);
+            // Fallback: append page=
+            if (path.endsWith('/')) {
+                u.pathname = `${path}page=${nextPg}/`;
+            } else {
+                u.pathname = `${path}/page=${nextPg}/`;
             }
-
-            // 3. Existing /page=X
-            if (/\/page=\d+/i.test(url)) {
-                return url.replace(/\/page=\d+/i, `/page=${targetPageNum}`);
-            }
-
-            // 4. Category with filter slug (e.g. /c387969/producer=xiaomi/) -> uses semicolon ;page=
-            const clean = url.replace(/\/+$/, '');
-            const catFilterMatch = clean.match(/(\/c\d+\/[^/?#]+)$/i);
-            if (catFilterMatch) {
-                return `${clean};page=${targetPageNum}/`;
-            }
-
-            // 5. Plain category (e.g. /c387969/)
-            return `${clean}/page=${targetPageNum}/`;
+            return u.toString();
         } catch (_) {
-            return '';
+            return currentUrl;
         }
     }
 
@@ -2106,15 +2125,117 @@
         currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
         currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
 
-        // 1. Gentle, linear downward scroll to mount all dynamic tiles & visual star ratings
-        await silentBackgroundScroll();
+        // Check if forward pagination exists on Rozetka
+        const nextPg = currentPage + 1;
+        const targetUrl = getRozetkaNextPageUrl(window.location.href, nextPg);
+        const hasNextPageInDom = !!document.querySelector(`
+            a.pagination__direction--forward, 
+            a[rel="next"], 
+            [class*="pagination__direction_type_forward"], 
+            [class*="pagination__direction--forward"],
+            a.pagination__link[href*="page=${nextPg}"], 
+            a.pagination__link[href*="page=${nextPg};"], 
+            [class*="paginator"] a[href*="page=${nextPg}"],
+            a[href*="page=${nextPg}"],
+            a[href*="page=${nextPg};"]
+        `);
 
-        if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+        // Target for this page: if there's a next page or total > 60, target is 60 items. Otherwise remaining category items.
+        let targetForThisPage = 60;
+        if (currentEstimatedTotal > 0 && !hasNextPageInDom) {
+            const remaining = currentEstimatedTotal - sentLinks.size;
+            if (remaining > 0 && remaining < 60) {
+                targetForThisPage = remaining;
+            }
+        }
 
-        // 2. Perform Single Unified Batch Resolution on all tiles mounted on this page
-        const pageNewProducts = await scrapeCurrentDomItems(meta, currentPage);
+        // Continuous adaptive incremental harvesting across lazy chunks
+        const pageNewProducts = [];
+        const pageLinksSeen = new Set();
 
-        if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+        const harvestBatch = async () => {
+            captureVisualRatingsInViewport();
+            const batch = await scrapeCurrentDomItems(meta, currentPage);
+            for (const item of batch) {
+                if (item.link && !pageLinksSeen.has(item.link)) {
+                    pageLinksSeen.add(item.link);
+                    pageNewProducts.push(item);
+                }
+            }
+        };
+
+        // Round 0: Initial harvest of immediately mounted tiles
+        await harvestBatch();
+
+        // Progressive harvesting cycles (scroll down, trigger lazy-load & show-more until target reached)
+        let consecutiveNoNewRounds = 0;
+        let lastItemCount = pageNewProducts.length;
+
+        for (let round = 0; round < 15 && pageNewProducts.length < targetForThisPage; round++) {
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+
+            // 1. Paced, progressive step-by-step downward scroll across catalog
+            const catalogScrollHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
+            const scrollStep = 380;
+            const startY = window.scrollY || 0;
+            
+            for (let curY = startY; curY <= catalogScrollHeight && pageNewProducts.length < targetForThisPage; curY += scrollStep) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+                window.scrollTo({ top: curY, behavior: 'smooth' });
+                window.dispatchEvent(new Event('scroll'));
+                document.dispatchEvent(new Event('scroll'));
+
+                // Paced pause allowing DOM render and real-time star inspection
+                await new Promise(r => setTimeout(r, 200));
+                captureVisualRatingsInViewport();
+                await harvestBatch();
+            }
+
+            if (pageNewProducts.length >= targetForThisPage) break;
+
+            // 2. Proactively trigger "Show More" / "Показати ще" button if available
+            const clicked = await triggerShowMoreAndWait();
+            if (clicked) {
+                // When clicked, sample every 300ms for up to 1.5s for Rozetka AJAX chunks to attach
+                for (let w = 0; w < 5; w++) {
+                    await new Promise(r => setTimeout(r, 300));
+                    captureVisualRatingsInViewport();
+                    await harvestBatch();
+                    if (pageNewProducts.length >= targetForThisPage) break;
+                }
+            } else {
+                // Also scroll past paginator area to trigger IntersectionObserver
+                const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"], [class*="catalog-grid__more"]');
+                if (paginator) {
+                    paginator.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    window.dispatchEvent(new Event('scroll'));
+                    document.dispatchEvent(new Event('scroll'));
+                    await new Promise(r => setTimeout(r, 350));
+                    captureVisualRatingsInViewport();
+                    await harvestBatch();
+                }
+            }
+
+            if (pageNewProducts.length > lastItemCount) {
+                consecutiveNoNewRounds = 0;
+                lastItemCount = pageNewProducts.length;
+            } else {
+                consecutiveNoNewRounds++;
+                // If 3 full attempts produced no new items and we are past round 4, catalog on page is exhausted
+                if (consecutiveNoNewRounds >= 3 && round >= 4) {
+                    break;
+                }
+            }
+        }
+
+        // Upward sweep back to top to catch any unmounted items
+        if (pageNewProducts.length < targetForThisPage) {
+            window.scrollTo({ top: 0, behavior: 'auto' });
+            window.dispatchEvent(new Event('scroll'));
+            document.dispatchEvent(new Event('scroll'));
+            await new Promise(r => setTimeout(r, 250));
+            await harvestBatch();
+        }
 
         // Update total estimate if catalog counter rendered during scroll
         const postEst = getEstimatedTotalFromPage();
@@ -2153,18 +2274,24 @@
             persistSessionState(currentPage);
         }
 
-        // 3. Check if all items in catalog are collected or if next page exists
-        const nextPg = currentPage + 1;
-        const actualNextUrl = buildNextPageUrl(window.location.href, nextPg);
-        const maxPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
-        const hasNextDom = hasNextPageInDom(nextPg);
-        const alreadyVisited = actualNextUrl ? visitedUrls.has(actualNextUrl) : false;
+        // 3. Check if all items in catalog are collected
+        const freshNextInDom = !!document.querySelector(`
+            a.pagination__direction--forward, 
+            a[rel="next"], 
+            [class*="pagination__direction_type_forward"], 
+            [class*="pagination__direction--forward"], 
+            a.pagination__link[href*="page=${nextPg}"], 
+            a.pagination__link[href*="page=${nextPg};"], 
+            [class*="paginator"] a[href*="page=${nextPg}"],
+            a[href*="page=${nextPg}"],
+            a[href*="page=${nextPg};"]
+        `);
 
-        const isFinished = (pageNewProducts.length === 0 && currentPage > 1) || 
-                           (!hasNextDom && currentPage >= maxPages) ||
-                           (sentLinks.size >= currentEstimatedTotal && !hasNextDom) ||
-                           alreadyVisited ||
-                           (!actualNextUrl);
+        const maxPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
+        const isFinished = (!freshNextInDom && currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || 
+                           (pageNewProducts.length === 0 && currentPage > 1 && !freshNextInDom) || 
+                           (!freshNextInDom && (!targetUrl || targetUrl === window.location.href)) || 
+                           (currentPage >= maxPages && !freshNextInDom);
 
         if (isFinished) {
             isTabScrapingActive = false;
@@ -2172,7 +2299,7 @@
             currentPercent = 100;
             currentStatusMsg = `Збір завершено! Всього ${sentLinks.size} товарів (100% каталогу).`;
             clearPersistedSession();
-            console.log(`TradeScout Tab ${currentTabId}: Scrape completed with ${sentLinks.size} items across ${currentPage} pages.`);
+            console.log(`TradeScout Tab ${currentTabId}: Scrape completed with ${sentLinks.size} items.`);
 
             sendTabMessage({
                 action: 'tabFinished',
@@ -2189,45 +2316,42 @@
             return;
         }
 
-        // 4. Navigate to Next Page URL with calm, human-like transition delay
-        currentStatusMsg = `Зібрано стор. ${currentPage} (${sentLinks.size} тов.). Перехід на стор. ${nextPg}...`;
-        sendTabMessage({
-            action: 'tabProgress',
-            total: sentLinks.size,
-            page: currentPage,
-            percent: currentPercent,
-            statusMsg: currentStatusMsg,
-            syncedCount: sentLinks.size,
-            estimatedTotal: currentEstimatedTotal,
-            sessionTitle: meta.title,
-            category: meta.category,
-            sessionId: currentSessionId,
-            startTime: sessionStartTime
-        });
+        // 4. Navigate directly to Next Page URL
+        if (targetUrl && targetUrl !== window.location.href) {
+            currentStatusMsg = `Перехід на стор. ${nextPg}...`;
+            sendTabMessage({
+                action: 'tabProgress',
+                total: sentLinks.size,
+                page: currentPage,
+                percent: currentPercent,
+                statusMsg: currentStatusMsg,
+                syncedCount: sentLinks.size,
+                estimatedTotal: currentEstimatedTotal,
+                sessionTitle: meta.title,
+                category: meta.category,
+                sessionId: currentSessionId,
+                startTime: sessionStartTime
+            });
 
-        visitedUrls.add(window.location.href);
-        if (actualNextUrl) visitedUrls.add(actualNextUrl);
-        persistSessionState(nextPg);
-
-        setTimeout(() => {
-            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-            if (actualNextUrl && actualNextUrl !== window.location.href) {
-                console.log(`TradeScout Tab ${currentTabId}: Navigating to page ${nextPg} via URL ${actualNextUrl}`);
-                window.location.href = actualNextUrl;
-            } else {
-                isTabScrapingActive = false;
-                window.__tradeScoutIsScrapingActive = false;
-                clearPersistedSession();
-                sendTabMessage({
-                    action: 'tabFinished',
-                    total: sentLinks.size,
-                    page: currentPage,
-                    percent: 100,
-                    statusMsg: `Збір завершено! Всього ${sentLinks.size} товарів.`,
-                    sessionId: currentSessionId
-                });
-            }
-        }, 1000);
+            persistSessionState(nextPg);
+            setTimeout(() => {
+                if (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
+                    window.location.href = targetUrl;
+                }
+            }, 500);
+        } else {
+            isTabScrapingActive = false;
+            window.__tradeScoutIsScrapingActive = false;
+            clearPersistedSession();
+            sendTabMessage({
+                action: 'tabFinished',
+                total: sentLinks.size,
+                page: currentPage,
+                percent: 100,
+                statusMsg: `Збір завершено! Всього ${sentLinks.size} товарів.`,
+                sessionId: currentSessionId
+            });
+        }
     }
 
     function startScrapingOnThisTab(tabId, customUrl) {
