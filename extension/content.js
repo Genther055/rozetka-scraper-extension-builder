@@ -2031,6 +2031,40 @@
 
         if (distinctTiles.length === 0) return [];
 
+        // Helper to extract seller name from Rozetka API product object
+        function extractSellerFromApiObject(apiProd) {
+            if (!apiProd) return '';
+            let title = '';
+            if (apiProd.seller) {
+                if (typeof apiProd.seller === 'string') title = apiProd.seller;
+                else if (typeof apiProd.seller === 'object') {
+                    title = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || apiProd.seller.shop_name || apiProd.seller.title_translit || '';
+                }
+            }
+            if (!title && apiProd.seller_title) title = apiProd.seller_title;
+            if (!title && apiProd.sellerName) title = apiProd.sellerName;
+            if (!title && apiProd.merchant_name) title = apiProd.merchant_name;
+            if (!title && apiProd.merchant) title = apiProd.merchant;
+            if (!title && apiProd.shop_name) title = apiProd.shop_name;
+            if (!title && apiProd.sellers && typeof apiProd.sellers === 'object') {
+                const sId = String(apiProd.seller_id || '');
+                if (sId && apiProd.sellers[sId]) {
+                    const sObj = apiProd.sellers[sId];
+                    title = typeof sObj === 'string' ? sObj : (sObj.title || sObj.name || sObj.seller_title || '');
+                }
+                if (!title) {
+                    const firstS = Object.values(apiProd.sellers)[0];
+                    if (firstS) {
+                        title = typeof firstS === 'string' ? firstS : (firstS.title || firstS.name || firstS.seller_title || '');
+                    }
+                }
+            }
+            const cleaned = cleanSellerName(title);
+            if (cleaned && cleaned.toLowerCase() !== 'rozetka') return cleaned;
+            if (apiProd.seller?.id === 5 || apiProd.seller_id === 5 || /^rozetka\b/i.test(title)) return 'Rozetka';
+            return cleaned || title || '';
+        }
+
         // Batch fetch official Rozetka product details (Main World Bridge -> Direct Tab Fetch -> Service Worker)
         const apiProductDetailsMap = new Map();
         try {
@@ -2051,7 +2085,7 @@
                             window.removeEventListener('message', msgHandler);
                             document.removeEventListener('tradescout_batch_sellers_done', eventHandler);
                             resolve([]);
-                        }, 2500);
+                        }, 4000);
 
                         function msgHandler(e) {
                             if (e.data && e.data.type === 'TRADESCOUT_BATCH_SELLERS_RESULT' && e.data.requestId === reqId) {
@@ -2138,12 +2172,10 @@
                         if (apiProd && apiProd.id) {
                             const pIdStr = String(apiProd.id).trim();
                             apiProductDetailsMap.set(pIdStr, apiProd);
-                            if (apiProd.seller) {
-                                const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || (typeof apiProd.seller === 'string' ? apiProd.seller : '');
-                                const cleaned = cleanSellerName(sTitle);
-                                const finalSeller = (cleaned && cleaned.toLowerCase() !== 'rozetka') ? cleaned : (apiProd.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
+                            const finalSeller = extractSellerFromApiObject(apiProd);
+                            if (finalSeller) {
                                 pageSellerMap.set(pIdStr, finalSeller);
-                                if (finalSeller && finalSeller.toLowerCase() !== 'rozetka') {
+                                if (finalSeller.toLowerCase() !== 'rozetka') {
                                     uniqueSellersFound.add(finalSeller);
                                 }
                             }
@@ -2364,11 +2396,10 @@
                 
                 const apiProd = prodId ? apiProductDetailsMap.get(prodId) : null;
                 let apiSeller = '';
-                if (apiProd && apiProd.seller) {
-                    const sTitle = apiProd.seller.title || apiProd.seller.name || apiProd.seller.seller_name || (typeof apiProd.seller === 'string' ? apiProd.seller : '');
-                    const cleaned = cleanSellerName(sTitle);
-                    apiSeller = cleaned || (apiProd.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
-                } else if (prodId && pageSellerMap.has(prodId)) {
+                if (apiProd) {
+                    apiSeller = extractSellerFromApiObject(apiProd);
+                }
+                if (!apiSeller && prodId && pageSellerMap.has(prodId)) {
                     apiSeller = pageSellerMap.get(prodId);
                 }
                 const seller = apiSeller || (extractSeller(item, link, name) || 'Rozetka');

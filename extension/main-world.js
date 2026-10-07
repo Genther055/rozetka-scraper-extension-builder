@@ -281,9 +281,32 @@
                             for (const item of json.data) {
                                 if (item && item.id) {
                                     collectedResults.push(item);
-                                    const sTitle = item.seller?.title || item.seller?.name || item.seller_title || (typeof item.seller === 'string' ? item.seller : '');
+                                    let sTitle = '';
+                                    if (item.seller) {
+                                        if (typeof item.seller === 'string') sTitle = item.seller;
+                                        else if (typeof item.seller === 'object') {
+                                            sTitle = item.seller.title || item.seller.name || item.seller.seller_name || item.seller.shop_name || item.seller.title_translit || '';
+                                        }
+                                    }
+                                    if (!sTitle && item.seller_title) sTitle = item.seller_title;
+                                    if (!sTitle && item.sellerName) sTitle = item.sellerName;
+                                    if (!sTitle && item.merchant_name) sTitle = item.merchant_name;
+                                    if (!sTitle && item.merchant) sTitle = item.merchant;
+                                    if (!sTitle && item.sellers && typeof item.sellers === 'object') {
+                                        const sId = String(item.seller_id || '');
+                                        if (sId && item.sellers[sId]) {
+                                            const sObj = item.sellers[sId];
+                                            sTitle = typeof sObj === 'string' ? sObj : (sObj.title || sObj.name || sObj.seller_title || '');
+                                        }
+                                        if (!sTitle) {
+                                            const firstS = Object.values(item.sellers)[0];
+                                            if (firstS) {
+                                                sTitle = typeof firstS === 'string' ? firstS : (firstS.title || firstS.name || firstS.seller_title || '');
+                                            }
+                                        }
+                                    }
                                     const cleaned = cleanSeller(sTitle);
-                                    const finalSeller = cleaned || (item.seller?.id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
+                                    const finalSeller = (cleaned && cleaned.toLowerCase() !== 'rozetka') ? cleaned : (item.seller?.id === 5 || item.seller_id === 5 ? 'Rozetka' : (sTitle || 'Rozetka'));
                                     const sCount = item.sellers_count || (item.same_offers?.count ? item.same_offers.count + 1 : 1);
                                     goodsMap[String(item.id)] = {
                                         id: String(item.id),
