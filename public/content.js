@@ -2123,10 +2123,6 @@
         currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
         currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
 
-        // Check if forward pagination exists on Rozetka
-        const nextPg = currentPage + 1;
-        const targetUrl = getRozetkaNextPageUrl(window.location.href, nextPg);
-
         // 1. Paced, smooth downward scroll across entire page height to mount all tiles & capture visual star ratings
         await silentBackgroundScroll();
         await triggerShowMoreAndWait();
