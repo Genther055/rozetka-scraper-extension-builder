@@ -269,10 +269,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    // 0.0 Query genuine tab context
+    if (message.action === 'GET_TAB_CONTEXT') {
+        const trueTabId = (sender && sender.tab ? sender.tab.id : null) || tabId;
+        sendResponse({ success: true, tabId: trueTabId });
+        return true;
+    }
+
     // 0. Tab reports it is idle on load
-    if (message.action === 'tabIdle' && tabId) {
-        if (!stoppedTabs.has(tabId)) {
-            updateTabSession(tabId, {
+    if (message.action === 'tabIdle') {
+        const targetTabId = (sender && sender.tab ? sender.tab.id : null) || tabId;
+        if (targetTabId && !stoppedTabs.has(targetTabId)) {
+            updateTabSession(targetTabId, {
                 isRunning: false,
                 percentProgress: 0,
                 statusMsg: 'Готова до запуску',
@@ -285,17 +293,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     // 0.1 Check if tab is actively allowed to run/resume
-    if (message.action === 'CHECK_TAB_CAN_RUN' && tabId) {
-        if (stoppedTabs.has(tabId)) {
-            sendResponse({ canRun: false, reason: 'stopped' });
+    if (message.action === 'CHECK_TAB_CAN_RUN') {
+        const targetTabId = (sender && sender.tab ? sender.tab.id : null) || tabId;
+        if (!targetTabId || stoppedTabs.has(targetTabId)) {
+            sendResponse({ canRun: false, reason: 'stopped', tabId: targetTabId });
             return true;
         }
         getTabSessions().then(sessions => {
-            const sess = sessions[tabId];
+            const sess = sessions[targetTabId];
             if (sess && sess.isRunning) {
-                sendResponse({ canRun: true, session: sess });
+                sendResponse({ canRun: true, session: sess, tabId: targetTabId });
             } else {
-                sendResponse({ canRun: false, reason: 'not_running' });
+                sendResponse({ canRun: false, reason: 'not_running', tabId: targetTabId });
             }
         });
         return true;
@@ -442,7 +451,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             func: (prods) => {
                                 try {
                                     if (prods && prods.length > 0) {
-                                        localStorage.setItem('tradescout_cached_products', JSON.stringify(prods));
                                         window.dispatchEvent(new CustomEvent('tradescout_products_updated', { detail: prods }));
                                     }
                                 } catch (_) {}
@@ -544,13 +552,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // 7. Start scraping on ALL open Rozetka tabs in parallel
+    // 7. Start scraping on ALL open Rozetka tabs in parallel with staggered launch
     if (message.action === 'START_ALL_TABS') {
         const { webhookUrl } = message;
         stoppedTabs.clear();
         getAllRozetkaTabs().then(async (tabs) => {
-            const promises = tabs.map(t => startScrapingTab(t.id, webhookUrl));
-            await Promise.all(promises);
+            for (const t of tabs) {
+                startScrapingTab(t.id, webhookUrl);
+                await new Promise(r => setTimeout(r, 200));
+            }
             sendResponse({ success: true, launchedCount: tabs.length });
         });
         return true;

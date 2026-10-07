@@ -81,11 +81,11 @@ function getCleanActiveScrapes(): LiveScrapingTask[] {
   const list: LiveScrapingTask[] = [];
   for (const [key, item] of activeScrapes.entries()) {
     if (item.status === 'completed' || item.status === 'stopped') {
-      if (now - item.updatedAt > 15000) {
+      if (now - item.updatedAt > 25000) {
         activeScrapes.delete(key);
         continue;
       }
-    } else if (now - item.updatedAt > 45000) {
+    } else if (now - item.updatedAt > 120000) {
       activeScrapes.delete(key);
       continue;
     }

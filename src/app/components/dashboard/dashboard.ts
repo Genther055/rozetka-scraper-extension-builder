@@ -614,7 +614,19 @@ export class DashboardComponent implements OnInit {
       'Anker': '#38bdf8',
       'Hoco': '#ec4899',
       'Qinetiq': '#a855f7',
-      'Remzona': '#f43f5e'
+      'Remzona': '#f43f5e',
+      'Borofone': '#f59e0b',
+      'Romoss': '#8b5cf6',
+      'Remax': '#ef4444',
+      'Joyroom': '#06b6d4',
+      'ColorWay': '#3b82f6',
+      'Proove': '#14b8a6',
+      'HOPECOM': '#84cc16',
+      '2E': '#64748b',
+      'Gelius': '#f97316',
+      'BLUETTI': '#0ea5e9',
+      'EcoFlow': '#22c55e',
+      'Jackery': '#f59e0b'
     };
 
     // If multiple distinct categories exist, show category pills
@@ -630,25 +642,9 @@ export class DashboardComponent implements OnInit {
       });
     }
 
-    const totalItems = this.products.length;
-    let dominantBrand = '';
-    let maxCount = 0;
-    for (const [b, count] of brandsMap.entries()) {
-      if (count > maxCount) {
-        maxCount = count;
-        dominantBrand = b;
-      }
-    }
-    const isDominant = maxCount >= Math.max(3, Math.round(totalItems * 0.70));
-
-    // Add brands sorted by item count (filtering out parasite 1-off noise)
+    // Add all brands sorted by item count
     const sortedBrands = Array.from(brandsMap.entries())
-      .filter(([b, count]) => {
-        if (isDominant && b !== dominantBrand) {
-          return count >= Math.max(3, Math.round(totalItems * 0.05));
-        }
-        return count >= 2;
-      })
+      .filter(([_, count]) => count >= 1)
       .sort((a, b) => b[1] - a[1]);
 
     for (const [brand, count] of sortedBrands) {

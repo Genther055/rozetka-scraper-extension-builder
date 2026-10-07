@@ -34,6 +34,10 @@
         } catch (_) {}
     }
 
+    function getSessionStorageKey() {
+        return currentTabId ? `__tradeScout_session_tab_${currentTabId}` : SESSION_STORAGE_KEY;
+    }
+
     // Persist session to tab's sessionStorage across page transitions
     function persistSessionState(pageNum) {
         try {
@@ -51,12 +55,15 @@
                 webhookUrl: webhookEndpoint,
                 savedAt: Date.now()
             };
+            const tabKey = getSessionStorageKey();
+            sessionStorage.setItem(tabKey, JSON.stringify(state));
             sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state));
         } catch (_) {}
     }
 
     function clearPersistedSession() {
         try {
+            if (currentTabId) sessionStorage.removeItem(`__tradeScout_session_tab_${currentTabId}`);
             sessionStorage.removeItem(SESSION_STORAGE_KEY);
         } catch (_) {}
     }
@@ -590,15 +597,20 @@
         return cleaned || title || '';
     }
 
+    const fetchedProductIdsCache = new Set();
+
     // Multi-layer batch product details fetcher (Background Service Worker with host permissions & zero CSP conflicts)
     async function fetchBatchProductDetails(productIds) {
         if (!Array.isArray(productIds) || productIds.length === 0) return [];
+        const missingIds = productIds.filter(id => id && !fetchedProductIdsCache.has(id));
+        if (missingIds.length === 0) return [];
+        missingIds.forEach(id => fetchedProductIdsCache.add(id));
         
         // Background Service Worker (100% CORS-free and CSP-free via extension host_permissions)
         try {
             const bgRes = await new Promise(resolve => {
-                const timer = setTimeout(() => resolve(null), 10000);
-                chrome.runtime.sendMessage({ action: 'FETCH_PRODUCT_DETAILS', productIds }, (res) => {
+                const timer = setTimeout(() => resolve(null), 2500);
+                chrome.runtime.sendMessage({ action: 'FETCH_PRODUCT_DETAILS', productIds: missingIds }, (res) => {
                     clearTimeout(timer);
                     if (chrome.runtime.lastError || !res || !res.success) {
                         resolve(null);
@@ -2007,10 +2019,10 @@
                     { name: 'Anker', regex: /\bAnker\b/i },
                     { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power)\b/i },
                     { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco)\b/i, excludeIf: /\b(?:для|сумісн\w*\s+(?:з|із)|compatible\s+with|підходить\s+для)\s+[^,;]*(?:xiaomi|redmi|poco)\b/i },
-                    { name: 'Qinetiq', regex: /\bQinetiq\b/i },
-                    { name: 'Remzona', regex: /\bRemzona\b/i },
                     { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для|сумісн\w*\s+(?:з|із)|айфона|iphone|apple)\b/i },
                     { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для|сумісн\w*\s+(?:з|із)|samsung|самсунг)\b/i },
+                    { name: 'Qinetiq', regex: /\bQinetiq\b/i },
+                    { name: 'Remzona', regex: /\bRemzona\b/i },
                     { name: 'Hoco', regex: /\bHoco\b/i },
                     { name: 'Borofone', regex: /\bBorofone\b/i },
                     { name: 'Romoss', regex: /\bRomoss\b/i },
@@ -2030,15 +2042,60 @@
                     { name: 'XO', regex: /\bXO\b/i },
                     { name: 'Vention', regex: /\bVention\b/i },
                     { name: 'Essager', regex: /\bEssager\b/i },
+                    { name: 'Belkin', regex: /\bBelkin\b/i },
+                    { name: 'Choetech', regex: /\bChoetech\b/i },
+                    { name: 'Sandberg', regex: /\bSandberg\b/i },
+                    { name: 'Usams', regex: /\bUsams\b/i },
+                    { name: 'Toocki', regex: /\bToocki\b/i },
+                    { name: 'Mcdodo', regex: /\bMcdodo\b/i },
+                    { name: 'Tronsmart', regex: /\bTronsmart\b/i },
                     { name: 'BLUETTI', regex: /\bBLUETTI\b/i },
                     { name: 'EcoFlow', regex: /\bEcoFlow\b/i },
-                    { name: 'Jackery', regex: /\bJackery\b/i }
+                    { name: 'Jackery', regex: /\bJackery\b/i },
+                    { name: 'Tellur', regex: /\bTellur\b/i },
+                    { name: 'Intenso', regex: /\bIntenso\b/i },
+                    { name: 'Canyon', regex: /\bCanyon\b/i },
+                    { name: 'Trust', regex: /\bTrust\b/i },
+                    { name: 'Esperanza', regex: /\bEsperanza\b/i },
+                    { name: 'Silicon Power', regex: /\bSilicon\s*Power\b/i },
+                    { name: 'Vinga', regex: /\bVinga\b/i },
+                    { name: 'Defender', regex: /\bDefender\b/i },
+                    { name: 'Energea', regex: /\bEnergea\b/i },
+                    { name: 'Aukey', regex: /\bAukey\b/i },
+                    { name: 'RAVPower', regex: /\bRAVPower\b/i },
+                    { name: 'Cuktech', regex: /\bCuktech\b/i },
+                    { name: 'Shargeek', regex: /\b(?:Shargeek|Sharge)\b/i },
+                    { name: 'Promate', regex: /\bPromate\b/i },
+                    { name: 'realme', regex: /\brealme\b/i },
+                    { name: 'Huawei', regex: /\bHuawei\b/i },
+                    { name: 'Motorola', regex: /\bMotorola\b/i },
+                    { name: 'Asus', regex: /\bAsus\b/i },
+                    { name: 'Lenovo', regex: /\bLenovo\b/i },
+                    { name: 'Dell', regex: /\bDell\b/i },
+                    { name: 'HP', regex: /\bHP\b/i },
+                    { name: 'Sony', regex: /\bSony\b/i },
+                    { name: 'Philips', regex: /\bPhilips\b/i },
+                    { name: 'Energizer', regex: /\bEnergizer\b/i },
+                    { name: 'Duracell', regex: /\bDuracell\b/i },
+                    { name: 'Varta', regex: /\bVarta\b/i },
+                    { name: 'GP', regex: /\bGP\b/i }
                 ];
                 for (const rule of knownBrandRules) {
                     if (rule.excludeIf && rule.excludeIf.test(name) && !new RegExp(`^(?:.*?\\b${rule.name}\\b.*?)(?:для|сумісн)`, 'i').test(name)) continue;
                     if (rule.regex.test(name)) {
                         detailedSpecsMap['Бренд'] = rule.name;
                         break;
+                    }
+                }
+
+                // If not matched, fallback to page/session brand if active
+                if (!detailedSpecsMap['Бренд']) {
+                    const sessionContext = (meta?.title || '') + ' ' + (meta?.category || '') + ' ' + (window.location.href || '');
+                    for (const rule of knownBrandRules) {
+                        if (rule.regex.test(sessionContext)) {
+                            detailedSpecsMap['Бренд'] = rule.name;
+                            break;
+                        }
                     }
                 }
 
@@ -2140,7 +2197,7 @@
             a[href*="page=${nextPg};"]
         `);
 
-        // Target for this page: if there's a next page or total > 60, target is 60 items. Otherwise remaining category items.
+        // Target for this page: 60 items or remaining items
         let targetForThisPage = 60;
         if (currentEstimatedTotal > 0 && !hasNextPageInDom) {
             const remaining = currentEstimatedTotal - sentLinks.size;
@@ -2156,85 +2213,81 @@
         const harvestBatch = async () => {
             captureVisualRatingsInViewport();
             const batch = await scrapeCurrentDomItems(meta, currentPage);
+            let addedAny = false;
             for (const item of batch) {
                 if (item.link && !pageLinksSeen.has(item.link)) {
                     pageLinksSeen.add(item.link);
                     pageNewProducts.push(item);
+                    addedAny = true;
                 }
+            }
+
+            if (addedAny && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
+                currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
+                currentStatusMsg = `Збір (стор. ${currentPage}): ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
+                sendTabMessage({
+                    action: 'tabProgress',
+                    total: sentLinks.size,
+                    page: currentPage,
+                    percent: currentPercent,
+                    statusMsg: currentStatusMsg,
+                    syncedCount: sentLinks.size,
+                    estimatedTotal: currentEstimatedTotal,
+                    sessionTitle: meta.title,
+                    category: meta.category,
+                    sessionId: currentSessionId,
+                    startTime: sessionStartTime
+                });
             }
         };
 
         // Round 0: Initial harvest of immediately mounted tiles
         await harvestBatch();
 
-        // Progressive harvesting cycles (scroll down, trigger lazy-load & show-more until target reached)
-        let consecutiveNoNewRounds = 0;
-        let lastItemCount = pageNewProducts.length;
-
-        for (let round = 0; round < 15 && pageNewProducts.length < targetForThisPage; round++) {
-            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-
-            // 1. Paced, progressive step-by-step downward scroll across catalog
-            const catalogScrollHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
-            const scrollStep = 380;
-            const startY = window.scrollY || 0;
-            
-            for (let curY = startY; curY <= catalogScrollHeight && pageNewProducts.length < targetForThisPage; curY += scrollStep) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                window.scrollTo({ top: curY, behavior: 'smooth' });
-                window.dispatchEvent(new Event('scroll'));
-                document.dispatchEvent(new Event('scroll'));
-
-                // Paced pause allowing DOM render and real-time star inspection
+        // If tiles not mounted yet, short wait for Angular hydration
+        if (pageNewProducts.length === 0) {
+            for (let retry = 0; retry < 4 && pageNewProducts.length === 0; retry++) {
                 await new Promise(r => setTimeout(r, 200));
-                captureVisualRatingsInViewport();
                 await harvestBatch();
-            }
-
-            if (pageNewProducts.length >= targetForThisPage) break;
-
-            // 2. Proactively trigger "Show More" / "Показати ще" button if available
-            const clicked = await triggerShowMoreAndWait();
-            if (clicked) {
-                // When clicked, sample every 300ms for up to 1.5s for Rozetka AJAX chunks to attach
-                for (let w = 0; w < 5; w++) {
-                    await new Promise(r => setTimeout(r, 300));
-                    captureVisualRatingsInViewport();
-                    await harvestBatch();
-                    if (pageNewProducts.length >= targetForThisPage) break;
-                }
-            } else {
-                // Also scroll past paginator area to trigger IntersectionObserver
-                const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"], [class*="catalog-grid__more"]');
-                if (paginator) {
-                    paginator.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    window.dispatchEvent(new Event('scroll'));
-                    document.dispatchEvent(new Event('scroll'));
-                    await new Promise(r => setTimeout(r, 350));
-                    captureVisualRatingsInViewport();
-                    await harvestBatch();
-                }
-            }
-
-            if (pageNewProducts.length > lastItemCount) {
-                consecutiveNoNewRounds = 0;
-                lastItemCount = pageNewProducts.length;
-            } else {
-                consecutiveNoNewRounds++;
-                // If 3 full attempts produced no new items and we are past round 4, catalog on page is exhausted
-                if (consecutiveNoNewRounds >= 3 && round >= 4) {
-                    break;
-                }
             }
         }
 
-        // Upward sweep back to top to catch any unmounted items
+        // Fast progressive scroll if target not yet reached
         if (pageNewProducts.length < targetForThisPage) {
-            window.scrollTo({ top: 0, behavior: 'auto' });
-            window.dispatchEvent(new Event('scroll'));
-            document.dispatchEvent(new Event('scroll'));
-            await new Promise(r => setTimeout(r, 250));
-            await harvestBatch();
+            for (let round = 0; round < 6 && pageNewProducts.length < targetForThisPage; round++) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+
+                const catalogScrollHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
+                const scrollStep = 600;
+                
+                for (let curY = 400; curY <= catalogScrollHeight && pageNewProducts.length < targetForThisPage; curY += scrollStep) {
+                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+                    window.scrollTo({ top: curY, behavior: 'auto' });
+                    window.dispatchEvent(new Event('scroll'));
+                    document.dispatchEvent(new Event('scroll'));
+
+                    await new Promise(r => setTimeout(r, 120));
+                    captureVisualRatingsInViewport();
+                    await harvestBatch();
+                }
+
+                if (pageNewProducts.length >= targetForThisPage) break;
+
+                // Trigger "Показати ще" if present
+                const clicked = await triggerShowMoreAndWait();
+                if (clicked) {
+                    await new Promise(r => setTimeout(r, 300));
+                    await harvestBatch();
+                } else {
+                    const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"], [class*="catalog-grid__more"]');
+                    if (paginator) {
+                        paginator.scrollIntoView({ behavior: 'auto', block: 'center' });
+                        window.dispatchEvent(new Event('scroll'));
+                        await new Promise(r => setTimeout(r, 200));
+                        await harvestBatch();
+                    }
+                }
+            }
         }
 
         // Update total estimate if catalog counter rendered during scroll
@@ -2264,7 +2317,7 @@
             await sendWebhookPayload({
                 products: pageNewProducts,
                 page: currentPage,
-                isNewSession: currentPage === 1,
+                isNewSession: false,
                 sessionId: currentSessionId,
                 sessionTitle: meta.title,
                 category: meta.category,
@@ -2290,7 +2343,6 @@
         const maxPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
         const isFinished = (!freshNextInDom && currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || 
                            (pageNewProducts.length === 0 && currentPage > 1 && !freshNextInDom) || 
-                           (!freshNextInDom && (!targetUrl || targetUrl === window.location.href)) || 
                            (currentPage >= maxPages && !freshNextInDom);
 
         if (isFinished) {
@@ -2338,7 +2390,7 @@
                 if (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
                     window.location.href = targetUrl;
                 }
-            }, 500);
+            }, 350);
         } else {
             isTabScrapingActive = false;
             window.__tradeScoutIsScrapingActive = false;
@@ -2425,68 +2477,70 @@
 
     // Check if resuming from an active session after page navigation
     try {
-        const rawState = sessionStorage.getItem(SESSION_STORAGE_KEY);
-        if (rawState) {
-            const state = JSON.parse(rawState);
-            if (state && state.isRunning && (Date.now() - (state.savedAt || 0) < 600000)) {
-                // Verify with background service worker that this tab is actively authorized to run
-                chrome.runtime.sendMessage({ action: 'CHECK_TAB_CAN_RUN', tabId: state.tabId }, (bgCheck) => {
-                    if (chrome.runtime.lastError || !bgCheck || !bgCheck.canRun) {
-                        clearPersistedSession();
-                        const initialMeta = getPageMetadata();
-                        sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
-                        return;
-                    }
+        chrome.runtime.sendMessage({ action: 'CHECK_TAB_CAN_RUN' }, (bgCheck) => {
+            if (chrome.runtime.lastError || !bgCheck || !bgCheck.canRun) {
+                clearPersistedSession();
+                const initialMeta = getPageMetadata();
+                sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
+                return;
+            }
 
-                    console.log('TradeScout Content Script: Resuming session across page navigation on page', state.currentPage);
-                    isTabScrapingActive = true;
-                    window.__tradeScoutIsScrapingActive = true;
-                    currentTabId = state.tabId;
-                    currentSessionId = state.sessionId;
-                    webhookEndpoint = state.webhookUrl || webhookEndpoint;
-                    sessionStartTime = state.startTime || Date.now();
-                    currentPage = state.currentPage || 1;
-                    currentEstimatedTotal = state.estimatedTotal || getEstimatedTotalFromPage();
-                    
-                    if (Array.isArray(state.sentLinks)) {
-                        state.sentLinks.forEach(l => sentLinks.add(l));
-                    }
-                    if (Array.isArray(state.visitedUrls)) {
-                        state.visitedUrls.forEach(u => visitedUrls.add(u));
-                    }
+            currentTabId = bgCheck.tabId || currentTabId;
+            const tabKey = getSessionStorageKey();
+            let state = null;
+            try {
+                const rawState = sessionStorage.getItem(tabKey) || sessionStorage.getItem(SESSION_STORAGE_KEY);
+                if (rawState) state = JSON.parse(rawState);
+            } catch (_) {}
 
-                    const meta = getPageMetadata();
-                    currentStatusMsg = `Збір (стор. ${currentPage}): ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
-                    
-                    sendTabMessage({
-                        action: 'tabProgress',
-                        total: sentLinks.size,
-                        page: currentPage,
-                        percent: Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)),
-                        statusMsg: currentStatusMsg,
-                        sessionTitle: meta.title,
-                        category: meta.category,
-                        sessionId: currentSessionId,
-                        estimatedTotal: currentEstimatedTotal,
-                        startTime: sessionStartTime
-                    });
+            if (!state) state = bgCheck.session;
 
-                    // Wait 800ms for Angular DOM hydration before starting calm scroll
-                    setTimeout(() => {
-                        if (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
-                            runTabScraper(currentPage);
-                        }
-                    }, 800);
+            if (state && (state.isRunning || bgCheck.session?.isRunning)) {
+                console.log('TradeScout Content Script: Resuming session across page navigation on page', state.currentPage || 1);
+                isTabScrapingActive = true;
+                window.__tradeScoutIsScrapingActive = true;
+                currentTabId = bgCheck.tabId || state.tabId || currentTabId;
+                currentSessionId = state.sessionId || `session_${currentTabId}_${Date.now()}`;
+                webhookEndpoint = state.webhookUrl || webhookEndpoint;
+                sessionStartTime = state.startTime || Date.now();
+                currentPage = state.currentPage || 1;
+                currentEstimatedTotal = state.estimatedTotal || getEstimatedTotalFromPage();
+                
+                if (Array.isArray(state.sentLinks)) {
+                    state.sentLinks.forEach(l => sentLinks.add(l));
+                }
+                if (Array.isArray(state.visitedUrls)) {
+                    state.visitedUrls.forEach(u => visitedUrls.add(u));
+                }
+
+                const meta = getPageMetadata();
+                currentStatusMsg = `Збір (стор. ${currentPage}): ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
+                
+                sendTabMessage({
+                    action: 'tabProgress',
+                    total: sentLinks.size,
+                    page: currentPage,
+                    percent: Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)),
+                    statusMsg: currentStatusMsg,
+                    sessionTitle: meta.title,
+                    category: meta.category,
+                    sessionId: currentSessionId,
+                    estimatedTotal: currentEstimatedTotal,
+                    startTime: sessionStartTime
                 });
+
+                // Wait 400ms for Angular DOM hydration before starting harvest
+                setTimeout(() => {
+                    if (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
+                        runTabScraper(currentPage);
+                    }
+                }, 400);
             } else {
                 clearPersistedSession();
                 const initialMeta = getPageMetadata();
                 sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
             }
-        } else {
-            const initialMeta = getPageMetadata();
-            sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
-        }
+        });
     } catch (_) {
         const initialMeta = getPageMetadata();
         sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });

@@ -1,0 +1,71 @@
+{
+  "manifest_version": 3,
+  "name": "TradeScout Rozetka Scraper",
+  "version": "3.5",
+  "description": "Multi-tab parallel scraper for Rozetka with headless background processing and automated TradeScout integration.",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "scripting",
+    "storage",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://rozetka.com.ua/*",
+    "https://*.rozetka.com.ua/*",
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*",
+    "https://*.onrender.com/*",
+    "https://*.vercel.app/*",
+    "https://*.n8n.cloud/*",
+    "<all_urls>"
+  ],
+  "externally_connectable": {
+    "matches": [
+      "https://*.vercel.app/*",
+      "https://*.onrender.com/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*"
+    ]
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://rozetka.com.ua/*",
+        "https://*.rozetka.com.ua/*"
+      ],
+      "js": [
+        "main-world.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://rozetka.com.ua/*",
+        "https://*.rozetka.com.ua/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "main-world.js"
+      ],
+      "matches": [
+        "https://rozetka.com.ua/*",
+        "https://*.rozetka.com.ua/*"
+      ]
+    }
+  ]
+}
