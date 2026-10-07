@@ -314,35 +314,32 @@
         return '';
     }
 
-    // Paced Visual Inspector Scrolling through full page height
+    // High-speed smooth visual inspector scrolling (1.2s total)
     async function silentBackgroundScroll() {
         try {
-            let lastHeight = 0;
-            let currentScroll = 0;
-            const stepPx = 380; // steady, paced human-like steps
-            const maxSteps = 30;
+            const totalH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
+            const steps = 6;
+            const stepPx = Math.ceil(totalH / steps);
 
-            for (let i = 0; i < maxSteps; i++) {
-                const maxH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
-                currentScroll = Math.min(maxH, currentScroll + stepPx);
-                window.scrollTo({ top: currentScroll, behavior: 'smooth' });
+            for (let i = 1; i <= steps; i++) {
+                const targetY = Math.min(totalH, i * stepPx);
+                window.scrollTo({ top: targetY, behavior: 'smooth' });
                 window.dispatchEvent(new Event('scroll'));
                 document.dispatchEvent(new Event('scroll'));
-                
-                // Allow browser & Angular time to render components in the viewport
-                await new Promise(r => setTimeout(r, 240));
-                
-                // Live computer vision / DOM geometry inspection of star fill in viewport
+                await new Promise(r => setTimeout(r, 140));
                 captureVisualRatingsInViewport();
-
-                if (currentScroll >= maxH && maxH === lastHeight) break;
-                lastHeight = maxH;
             }
 
-            window.scrollTo({ top: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight), behavior: 'smooth' });
+            // Quick bottom sweep
+            window.scrollTo({ top: totalH, behavior: 'auto' });
             window.dispatchEvent(new Event('scroll'));
-            await new Promise(r => setTimeout(r, 350));
+            await new Promise(r => setTimeout(r, 150));
             captureVisualRatingsInViewport();
+
+            // Return to top
+            window.scrollTo({ top: 0, behavior: 'auto' });
+            window.dispatchEvent(new Event('scroll'));
+            await new Promise(r => setTimeout(r, 100));
         } catch (_) {}
     }
 
@@ -2123,25 +2120,8 @@
         currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
         currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
 
-        // 1. Paced, smooth downward scroll across entire page height to mount all tiles & capture visual star ratings
+        // 1. High-speed smooth downward sweep across page height to mount all dynamic tiles & visual star ratings
         await silentBackgroundScroll();
-        await triggerShowMoreAndWait();
-
-        // Check paginator area
-        const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"], [class*="catalog-grid__more"]');
-        if (paginator) {
-            paginator.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            window.dispatchEvent(new Event('scroll'));
-            document.dispatchEvent(new Event('scroll'));
-            await new Promise(r => setTimeout(r, 300));
-            captureVisualRatingsInViewport();
-        }
-
-        // Upward sweep back to top
-        window.scrollTo({ top: 0, behavior: 'auto' });
-        window.dispatchEvent(new Event('scroll'));
-        document.dispatchEvent(new Event('scroll'));
-        await new Promise(r => setTimeout(r, 200));
 
         // 2. Perform Single Unified Batch Resolution on all tiles mounted on this page
         const pageNewProducts = await scrapeCurrentDomItems(meta, currentPage);
@@ -2206,10 +2186,10 @@
         }
 
         const maxPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
-        const hasMorePages = (currentPage < maxPages) || (pageNewProducts.length >= 40) || (domNextLink !== null);
+        const hasMorePages = (currentPage < maxPages) || (pageNewProducts.length >= 35) || (domNextLink !== null);
         const isFinished = (!hasMorePages && currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || 
                            (pageNewProducts.length === 0 && currentPage > 1) || 
-                           (!actualNextUrl || actualNextUrl === window.location.href);
+                           (!actualNextUrl && !domNextLink);
 
         if (isFinished) {
             isTabScrapingActive = false;
@@ -2235,40 +2215,47 @@
         }
 
         // 4. Navigate directly to Next Page URL
-        if (actualNextUrl && actualNextUrl !== window.location.href) {
-            currentStatusMsg = `Перехід на стор. ${nextPg}...`;
-            sendTabMessage({
-                action: 'tabProgress',
-                total: sentLinks.size,
-                page: currentPage,
-                percent: currentPercent,
-                statusMsg: currentStatusMsg,
-                syncedCount: sentLinks.size,
-                estimatedTotal: currentEstimatedTotal,
-                sessionTitle: meta.title,
-                category: meta.category,
-                sessionId: currentSessionId,
-                startTime: sessionStartTime
-            });
+        currentStatusMsg = `Перехід на стор. ${nextPg}...`;
+        sendTabMessage({
+            action: 'tabProgress',
+            total: sentLinks.size,
+            page: currentPage,
+            percent: currentPercent,
+            statusMsg: currentStatusMsg,
+            syncedCount: sentLinks.size,
+            estimatedTotal: currentEstimatedTotal,
+            sessionTitle: meta.title,
+            category: meta.category,
+            sessionId: currentSessionId,
+            startTime: sessionStartTime
+        });
 
-            persistSessionState(nextPg);
-            setTimeout(() => {
+        persistSessionState(nextPg);
+
+        setTimeout(() => {
+            if (actualNextUrl && actualNextUrl !== window.location.href) {
+                console.log(`TradeScout Tab ${currentTabId}: Navigating to page ${nextPg} via URL ${actualNextUrl}`);
                 window.location.href = actualNextUrl;
-            }, 300);
-        } else {
-            // If URL did not change, complete
-            isTabScrapingActive = false;
-            window.__tradeScoutIsScrapingActive = false;
-            clearPersistedSession();
-            sendTabMessage({
-                action: 'tabFinished',
-                total: sentLinks.size,
-                page: currentPage,
-                percent: 100,
-                statusMsg: `Збір завершено! Всього ${sentLinks.size} товарів.`,
-                sessionId: currentSessionId
-            });
-        }
+            } else if (domNextLink) {
+                try {
+                    domNextLink.scrollIntoView({ behavior: 'auto', block: 'center' });
+                    ['mousedown', 'mouseup', 'click'].forEach(evt => domNextLink.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window })));
+                    if (typeof domNextLink.click === 'function') domNextLink.click();
+                } catch (_) {}
+            } else {
+                isTabScrapingActive = false;
+                window.__tradeScoutIsScrapingActive = false;
+                clearPersistedSession();
+                sendTabMessage({
+                    action: 'tabFinished',
+                    total: sentLinks.size,
+                    page: currentPage,
+                    percent: 100,
+                    statusMsg: `Збір завершено! Всього ${sentLinks.size} товарів.`,
+                    sessionId: currentSessionId
+                });
+            }
+        }, 150);
     }
 
     function startScrapingOnThisTab(tabId, customUrl) {
