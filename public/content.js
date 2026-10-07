@@ -601,14 +601,14 @@
         return cleaned || title || '';
     }
 
-    // Multi-layer batch product details fetcher (Background Service Worker -> Main World Bridge -> Direct Fetch)
+    // Multi-layer batch product details fetcher (Background Service Worker with host permissions & zero CSP conflicts)
     async function fetchBatchProductDetails(productIds) {
         if (!Array.isArray(productIds) || productIds.length === 0) return [];
         
-        // Layer 1: Background Service Worker (100% CORS-free with host permissions)
+        // Background Service Worker (100% CORS-free and CSP-free via extension host_permissions)
         try {
             const bgRes = await new Promise(resolve => {
-                const timer = setTimeout(() => resolve(null), 8000);
+                const timer = setTimeout(() => resolve(null), 10000);
                 chrome.runtime.sendMessage({ action: 'FETCH_PRODUCT_DETAILS', productIds }, (res) => {
                     clearTimeout(timer);
                     if (chrome.runtime.lastError || !res || !res.success) {
@@ -623,48 +623,6 @@
             }
         } catch (_) {}
 
-        // Layer 2: Main World Bridge via CustomEvent (zero-CORS in page context)
-        try {
-            const reqId = 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-            const mainRes = await new Promise(resolve => {
-                const timer = setTimeout(() => resolve(null), 6000);
-                const handler = (e) => {
-                    if (e.detail && e.detail.requestId === reqId) {
-                        clearTimeout(timer);
-                        document.removeEventListener('tradescout_batch_sellers_done', handler);
-                        resolve(e.detail.results || []);
-                    }
-                };
-                document.addEventListener('tradescout_batch_sellers_done', handler);
-                document.dispatchEvent(new CustomEvent('tradescout_request_batch_sellers', {
-                    detail: { productIds, requestId: reqId }
-                }));
-            });
-            if (Array.isArray(mainRes) && mainRes.length > 0) {
-                return mainRes;
-            }
-        } catch (_) {}
-
-        // Layer 3: Direct isolated-world fetch fallback
-        try {
-            const directResults = [];
-            for (let i = 0; i < productIds.length; i += 60) {
-                const chunk = productIds.slice(i, i + 60);
-                const res = await fetch(`https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${chunk.join(',')}`, {
-                    credentials: 'include',
-                    headers: {
-                        'Accept': 'application/json, text/plain, */*',
-                        'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
-                    }
-                });
-                if (res.ok) {
-                    const json = await res.json();
-                    if (Array.isArray(json?.data)) directResults.push(...json.data);
-                }
-            }
-            if (directResults.length > 0) return directResults;
-        } catch (_) {}
-
         return [];
     }
 
@@ -672,284 +630,15 @@
     const pageSellersCountMap = new Map();
 
     // =========================================================================
-    // Main World Bridge (Zero-API Angular Memory & Network Hook)
+    // Main World Bridge Communication (Native Manifest V3 world: MAIN)
     // =========================================================================
-    function injectMainWorldBridge() {
+    function requestMainWorldHarvest() {
         try {
-            if (document.getElementById('tradescout-main-bridge-tag')) {
-                window.dispatchEvent(new CustomEvent('tradescout_request_main_harvest'));
-                return;
-            }
-            const script = document.createElement('script');
-            script.id = 'tradescout-main-bridge-tag';
-            script.textContent = `
-            (function() {
-                if (window.__tradeScoutMainBridgeInjected) {
-                    return;
-                }
-                window.__tradeScoutMainBridgeInjected = true;
-
-                const goodsMap = {};
-                const sellerLookup = new Map();
-
-                function cleanSellerBridge(raw) {
-                    if (!raw) return '';
-                    let s = String(raw).trim();
-                    s = s.replace(/^(?:інтернет-магазин|магазин|продавець(?:\s+товару)?|продавец(?:\s+товара)?|seller|merchant|від\s+продавця|от\s+продавца|доставка\s+від(?:\s+продавця)?|доставка\s+от(?:\s+продавца)?|відправник|отправитель)\s*:?\s*/i, '');
-                    s = s.replace(/\b(?:запитати\s+про\s+товар|спросить\s+о\s+товаре|усі\s+товари\s+продавця|все\s+товары\s+продавца|товари\s+продавця|товары\s+продавца|написати\s+продавцю|написать\s+продавцу|повідомити|сообщить|немає\s+в\s+наявності|нет\s+в\s+наличии|в\s+наявності|в\s+наличии|код:\s*\d+|арт(?:икул)?:\s*\d+)\b.*$/i, '');
-                    const lines = s.split(/[\\r\\n]+/).map(l => l.trim()).filter(l => l.length > 0);
-                    if (lines.length === 0) return '';
-                    s = lines[0];
-                    s = s.replace(/\\s*\\b\\d+(?:[.,]\\d+)?\\s*(?:\\/\\s*5|\\s*★|\\%|\\bоцін\\w*|\\bоцен\\w*|\\bвідгук\\w*|\\bотзыв\\w*|\\bтовар\\w*|\\bтов\\w*).*$/i, '');
-                    s = s.replace(/\\s*\\([^)]*\\).*$/, '');
-                    s = s.replace(/\\s+\\d+\\s*$/, '');
-                    s = s.replace(/^[>›»\\s—–:-]+|[>›»\\s—–:-]+$/, '').trim();
-                    if (/^rozetka\\b/i.test(s) || /^розетка\\b/i.test(s)) return 'Rozetka';
-                    if (s.length >= 2 && s.length <= 80 && !/^\\d+$/.test(s)) return s;
-                    return '';
-                }
-
-                function harvestFromAngularContext() {
-                    // 1. Scan window.dataLayer
-                    try {
-                        if (Array.isArray(window.dataLayer)) {
-                            for (const entry of window.dataLayer) {
-                                if (!entry) continue;
-                                const items = entry.ecommerce?.impressions || entry.ecommerce?.items || (entry.ecommerce?.detail?.products) || [];
-                                for (const it of items) {
-                                    if (it && (it.id || it.goods_id)) {
-                                        const id = String(it.id || it.goods_id).trim();
-                                        const seller = it.seller || it.affiliation || it.seller_title || it.brand || '';
-                                        const cleaned = cleanSellerBridge(seller);
-                                        if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
-                                            goodsMap[id] = { id, seller: cleaned, sellersCount: it.sellers_count || 1 };
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } catch (_) {}
-
-                    // 2. Scan DOM elements for __ngContext__ and Angular component instances
-                    try {
-                        const tiles = document.querySelectorAll('rz-catalog-tile, rz-product-tile, app-goods-tile-default, .goods-tile, li.catalog-grid__cell, [data-goods-id], rz-goods-seller, rz-product, article, rz-grid > *, ul.catalog-grid > li, .catalog-grid > div');
-                        const visited = new Set();
-
-                        function scanObject(node, depth) {
-                            if (!node || typeof node !== 'object' || visited.has(node) || depth > 5) return;
-                            visited.add(node);
-
-                            const id = node.id || node.goods_id || node.goodsId || node.productId || node.sku;
-                            const hasGoodsSignature = id && (node.title || node.price || node.seller || node.seller_id || node.seller_title || node.sellers_count || node.href || node.url);
-                            
-                            if (hasGoodsSignature) {
-                                const prodId = String(id).trim();
-                                let sellerName = '';
-                                if (node.seller) {
-                                    sellerName = typeof node.seller === 'string' ? node.seller : (node.seller.title || node.seller.name || node.seller.title_translit || node.seller.seller_name || node.seller.shop_name || '');
-                                }
-                                if (!sellerName) {
-                                    sellerName = node.seller_title || node.sellerName || node.seller_name || node.merchant_name || node.merchant || node.shop_name || node.shopName || '';
-                                }
-                                if (!sellerName && node.seller_id && sellerLookup.has(String(node.seller_id))) {
-                                    sellerName = sellerLookup.get(String(node.seller_id));
-                                }
-                                
-                                let sCount = node.sellers_count || node.sellersCount || node.sellers_amount || node.all_sellers_count;
-                                if (typeof sCount !== 'number' && (node.other_sellers_count || node.otherSellersCount)) {
-                                    const oCount = node.other_sellers_count || node.otherSellersCount;
-                                    if (typeof oCount === 'number') sCount = oCount + 1;
-                                }
-
-                                if (prodId && (sellerName || sCount)) {
-                                    const cleaned = cleanSellerBridge(sellerName);
-                                    if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
-                                        if (!goodsMap[prodId]) goodsMap[prodId] = { id: prodId, seller: '', sellersCount: 1 };
-                                        goodsMap[prodId].seller = cleaned;
-                                    }
-                                    if (typeof sCount === 'number' && sCount > 0) {
-                                        if (!goodsMap[prodId]) goodsMap[prodId] = { id: prodId, seller: '', sellersCount: 1 };
-                                        goodsMap[prodId].sellersCount = sCount;
-                                    }
-                                }
-                            }
-
-                            if (node.sellers && typeof node.sellers === 'object') {
-                                for (const [sId, sObj] of Object.entries(node.sellers)) {
-                                    if (sObj && typeof sObj === 'object') {
-                                        const sName = sObj.title || sObj.name || sObj.seller_title;
-                                        if (sName) sellerLookup.set(String(sId), cleanSellerBridge(sName));
-                                    } else if (typeof sObj === 'string') {
-                                        sellerLookup.set(String(sId), cleanSellerBridge(sObj));
-                                    }
-                                }
-                            }
-
-                            if (Array.isArray(node)) {
-                                for (const item of node) scanObject(item, depth + 1);
-                            } else {
-                                for (const k of Object.keys(node)) {
-                                    if (typeof node[k] === 'object' && node[k] !== null) {
-                                        scanObject(node[k], depth + 1);
-                                    }
-                                }
-                            }
-                        }
-
-                        for (const tile of tiles) {
-                            const directObjs = [tile.goods, tile.item, tile.product, tile.data, tile.dataGoods, tile.__goods];
-                            for (const obj of directObjs) {
-                                if (obj) scanObject(obj, 0);
-                            }
-
-                            if (tile.__ngContext__) {
-                                const ctx = Array.isArray(tile.__ngContext__) ? tile.__ngContext__ : [tile.__ngContext__];
-                                for (const entry of ctx) {
-                                    if (entry) scanObject(entry, 0);
-                                }
-                            }
-
-                            if (window.ng && window.ng.getComponent) {
-                                try {
-                                    const comp = window.ng.getComponent(tile);
-                                    if (comp) scanObject(comp, 0);
-                                } catch (_) {}
-                            }
-                        }
-                    } catch (_) {}
-
-                    if (Object.keys(goodsMap).length > 0) {
-                        window.postMessage({
-                            type: 'TRADESCOUT_MAIN_GOODS_UPDATE',
-                            goods: goodsMap
-                        }, '*');
-                    }
-                }
-
-                // Intercept network requests in main world to capture live JSON payloads
-                try {
-                    const origFetch = window.fetch;
-                    if (origFetch) {
-                        window.fetch = async function(...args) {
-                            const response = await origFetch.apply(this, args);
-                            try {
-                                const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
-                                if (url && (url.includes('rozetka.com.ua') || url.includes('/api/')) && 
-                                    (url.includes('goods') || url.includes('catalog') || url.includes('search') || url.includes('details'))) {
-                                    const clone = response.clone();
-                                    clone.json().then(data => {
-                                        if (data) {
-                                            window.postMessage({
-                                                type: 'TRADESCOUT_NETWORK_DATA',
-                                                data: data
-                                            }, '*');
-                                            harvestFromAngularContext();
-                                        }
-                                    }).catch(() => {});
-                                }
-                            } catch (_) {}
-                            return response;
-                        };
-                    }
-
-                    const origOpen = XMLHttpRequest.prototype.open;
-                    const origSend = XMLHttpRequest.prototype.send;
-                    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-                        this.__tradescout_url = url;
-                        return origOpen.call(this, method, url, ...rest);
-                    };
-                    XMLHttpRequest.prototype.send = function(...args) {
-                        this.addEventListener('load', function() {
-                            try {
-                                const url = this.__tradescout_url || '';
-                                if (url && (url.includes('rozetka.com.ua') || url.includes('/api/')) && 
-                                    (url.includes('goods') || url.includes('catalog') || url.includes('search') || url.includes('details'))) {
-                                    const text = this.responseText;
-                                    if (text && (text.startsWith('{') || text.startsWith('['))) {
-                                        const data = JSON.parse(text);
-                                        window.postMessage({
-                                             type: 'TRADESCOUT_NETWORK_DATA',
-                                             data: data
-                                        }, '*');
-                                        harvestFromAngularContext();
-                                    }
-                                }
-                            } catch (_) {}
-                        });
-                        return origSend.apply(this, args);
-                    };
-                } catch (_) {}
-
-                window.addEventListener('tradescout_request_main_harvest', harvestFromAngularContext);
-                
-                // Handle isolated world requests for batch seller details directly inside the page's main context
-                async function handleBatchFetchInMain(productIds, reqId) {
-                    if (!Array.isArray(productIds) || productIds.length === 0) {
-                        window.postMessage({ type: 'TRADESCOUT_BATCH_SELLERS_RESULT', requestId: reqId, data: [] }, '*');
-                        document.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', { detail: { requestId: reqId, results: [] } }));
-                        return;
-                    }
-                    const results = [];
-                    for (let i = 0; i < productIds.length; i += 60) {
-                        const chunk = productIds.slice(i, i + 60);
-                        const idsChunk = chunk.join(',');
-                        const tabApiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsChunk}`;
-                        try {
-                            const tabRes = await fetch(tabApiUrl, {
-                                headers: {
-                                    'Accept': 'application/json, text/plain, */*',
-                                    'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
-                                }
-                            });
-                            if (tabRes.ok) {
-                                const tabJson = await tabRes.json();
-                                if (Array.isArray(tabJson?.data)) {
-                                    results.push(...tabJson.data);
-                                    for (const it of tabJson.data) {
-                                        if (it && it.id) {
-                                            const sTitle = it.seller?.title || it.seller?.name || it.seller_title || (typeof it.seller === 'string' ? it.seller : '');
-                                            const cleaned = cleanSellerBridge(sTitle);
-                                            if (cleaned && cleaned.toLowerCase() !== 'rozetka') {
-                                                goodsMap[String(it.id)] = { id: String(it.id), seller: cleaned, sellersCount: it.sellers_count || 1 };
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (_) {}
-                    }
-                    if (results.length > 0) harvestFromAngularContext();
-                    window.postMessage({
-                        type: 'TRADESCOUT_BATCH_SELLERS_RESULT',
-                        requestId: reqId,
-                        data: results
-                    }, '*');
-                    document.dispatchEvent(new CustomEvent('tradescout_batch_sellers_done', {
-                        detail: { requestId: reqId, results: results }
-                    }));
-                }
-
-                window.addEventListener('message', function(e) {
-                    if (e.data && e.data.type === 'TRADESCOUT_REQUEST_BATCH_SELLERS') {
-                        handleBatchFetchInMain(e.data.productIds, e.data.requestId);
-                    }
-                });
-
-                document.addEventListener('tradescout_request_batch_sellers', function(e) {
-                    if (e.detail && e.detail.productIds) {
-                        handleBatchFetchInMain(e.detail.productIds, e.detail.requestId);
-                    }
-                });
-
-                harvestFromAngularContext();
-                setInterval(harvestFromAngularContext, 1200);
-            })();
-            `;
-            (document.head || document.documentElement).appendChild(script);
+            window.dispatchEvent(new CustomEvent('tradescout_request_main_harvest'));
         } catch (_) {}
     }
 
-    // Listen for messages from Main World Bridge
+    // Listen for messages from Main World Bridge (main-world.js)
     window.addEventListener('message', (event) => {
         if (!event.data || typeof event.data !== 'object') return;
         if (event.data.type === 'TRADESCOUT_MAIN_GOODS_UPDATE' && event.data.goods) {
@@ -984,8 +673,8 @@
         }
     });
 
-    // Run injection immediately
-    injectMainWorldBridge();
+    // Request initial harvest from main world
+    requestMainWorldHarvest();
 
     function parseSellersFromAnyJson(obj, sellersMap, sellersCountMap) {
         if (!obj) return;
@@ -2064,8 +1753,7 @@
     async function scrapeCurrentDomItems(meta, pageIndex) {
         // Trigger live harvest in main world bridge
         try {
-            injectMainWorldBridge();
-            window.dispatchEvent(new CustomEvent('tradescout_request_main_harvest'));
+            requestMainWorldHarvest();
         } catch (_) {}
         await new Promise(r => setTimeout(r, 60));
 
@@ -2710,7 +2398,7 @@
     async function runSellerResolutionTest() {
         try {
             console.log('🧪 [TradeScout Test Suite] Запуск повної перевірки розпізнавання продавців...');
-            injectMainWorldBridge();
+            requestMainWorldHarvest();
             buildPageSellerMap();
             
             const catalogContainer = document.querySelector('rz-grid, ul.catalog-grid, rz-catalog-grid, rz-catalog, .catalog-grid') || document.querySelector('main') || document.body;
