@@ -2096,7 +2096,7 @@
             return cleaned || title || '';
         }
 
-        // Batch fetch official Rozetka product details (Main World Bridge -> Direct Tab Fetch -> Service Worker)
+        // Direct parallel batch fetch of official Rozetka product details
         const apiProductDetailsMap = new Map();
         try {
             const productIds = [];
@@ -2106,99 +2106,30 @@
             }
 
             if (productIds.length > 0) {
-                let fetchedProducts = [];
-                
-                // 1. Main World Bridge Fetch (Executes in page context with 100% active Cloudflare clearance)
-                try {
-                    const reqId = 'ts_batch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-                    fetchedProducts = await new Promise((resolve) => {
-                        const timer = setTimeout(() => {
-                            window.removeEventListener('message', msgHandler);
-                            document.removeEventListener('tradescout_batch_sellers_done', eventHandler);
-                            resolve([]);
-                        }, 4000);
-
-                        function msgHandler(e) {
-                            if (e.data && e.data.type === 'TRADESCOUT_BATCH_SELLERS_RESULT' && e.data.requestId === reqId) {
-                                clearTimeout(timer);
-                                window.removeEventListener('message', msgHandler);
-                                document.removeEventListener('tradescout_batch_sellers_done', eventHandler);
-                                resolve(Array.isArray(e.data.data) ? e.data.data : []);
+                const chunkPromises = [];
+                for (let i = 0; i < productIds.length; i += 60) {
+                    const chunk = productIds.slice(i, i + 60);
+                    const tabApiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${chunk.join(',')}`;
+                    chunkPromises.push(
+                        fetch(tabApiUrl, {
+                            headers: {
+                                'Accept': 'application/json, text/plain, */*',
+                                'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
                             }
-                        }
-
-                        function eventHandler(e) {
-                            if (e.detail && e.detail.requestId === reqId) {
-                                clearTimeout(timer);
-                                window.removeEventListener('message', msgHandler);
-                                document.removeEventListener('tradescout_batch_sellers_done', eventHandler);
-                                resolve(Array.isArray(e.detail.results) ? e.detail.results : []);
-                            }
-                        }
-
-                        window.addEventListener('message', msgHandler);
-                        document.addEventListener('tradescout_batch_sellers_done', eventHandler);
-
-                        window.postMessage({
-                            type: 'TRADESCOUT_REQUEST_BATCH_SELLERS',
-                            requestId: reqId,
-                            productIds: productIds
-                        }, '*');
-
-                        document.dispatchEvent(new CustomEvent('tradescout_request_batch_sellers', {
-                            detail: { requestId: reqId, productIds: productIds }
-                        }));
-                    });
-                } catch (_) {
-                    fetchedProducts = [];
+                        }).then(r => r.ok ? r.json() : null).catch(() => null)
+                    );
                 }
 
-                // 2. Direct Tab Fetch Fallback (in chunks of 60)
-                if (!fetchedProducts || fetchedProducts.length === 0) {
-                    try {
-                        const directResults = [];
-                        for (let i = 0; i < productIds.length; i += 60) {
-                            const chunk = productIds.slice(i, i + 60);
-                            const tabApiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${chunk.join(',')}`;
-                            const tabRes = await fetch(tabApiUrl, {
-                                headers: {
-                                    'Accept': 'application/json, text/plain, */*',
-                                    'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
-                                }
-                            });
-                            if (tabRes.ok) {
-                                const tabJson = await tabRes.json();
-                                if (Array.isArray(tabJson?.data)) {
-                                    directResults.push(...tabJson.data);
-                                }
-                            }
-                        }
-                        if (directResults.length > 0) fetchedProducts = directResults;
-                    } catch (_) {}
-                }
-
-                // 3. Service Worker Fetch Fallback
-                if (!fetchedProducts || fetchedProducts.length === 0) {
-                    try {
-                        fetchedProducts = await new Promise((resolve) => {
-                            chrome.runtime.sendMessage({
-                                action: 'FETCH_PRODUCT_DETAILS',
-                                productIds: productIds
-                            }, (res) => {
-                                if (chrome.runtime.lastError || !res || !res.success || !Array.isArray(res.data) || res.data.length === 0) {
-                                    resolve([]);
-                                } else {
-                                    resolve(res.data);
-                                }
-                            });
-                        });
-                    } catch (_) {
-                        fetchedProducts = [];
+                const chunkResults = await Promise.all(chunkPromises);
+                const fetchedProducts = [];
+                for (const res of chunkResults) {
+                    if (Array.isArray(res?.data)) {
+                        fetchedProducts.push(...res.data);
                     }
                 }
 
                 const uniqueSellersFound = new Set();
-                if (Array.isArray(fetchedProducts) && fetchedProducts.length > 0) {
+                if (fetchedProducts.length > 0) {
                     for (const apiProd of fetchedProducts) {
                         if (apiProd && apiProd.id) {
                             const pIdStr = String(apiProd.id).trim();
@@ -2224,7 +2155,7 @@
                 const uniqueSellersList = Array.from(uniqueSellersFound);
                 console.group(`[TradeScout Diagnostics] Page ${pageIndex || 1}: "${meta.title}" (${distinctTiles.length} tiles)`);
                 console.log('1. SSR / State Seller Map entries:', pageSellerMap.size);
-                console.log('2. API Batch Received items:', fetchedProducts?.length || 0);
+                console.log('2. API Batch Received items:', fetchedProducts.length);
                 console.log('3. Unique 3P Sellers detected on page:', uniqueSellersList.length, uniqueSellersList);
                 console.log('4. Sidebar Filter Registered Sellers:', getKnownSellersFromSidebar());
                 console.groupEnd();
@@ -2232,6 +2163,8 @@
                 if (uniqueSellersList.length > 0) {
                     currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal}) [${uniqueSellersList.length} 3P-магазинів]`;
                 }
+            }
+        } catch (_) {}
 
         const newItems = [];
 
@@ -2517,114 +2450,29 @@
         // Check if forward pagination exists on Rozetka
         const nextPg = currentPage + 1;
         const targetUrl = getRozetkaNextPageUrl(window.location.href, nextPg);
-        const hasNextPageInDom = !!document.querySelector(`
-            a.pagination__direction--forward, 
-            a[rel="next"], 
-            [class*="pagination__direction_type_forward"], 
-            [class*="pagination__direction--forward"],
-            a.pagination__link[href*="page=${nextPg}"], 
-            a.pagination__link[href*="page=${nextPg};"], 
-            [class*="paginator"] a[href*="page=${nextPg}"],
-            a[href*="page=${nextPg}"],
-            a[href*="page=${nextPg};"]
-        `);
 
-        // Target for this page: if there's a next page or total > 60, target is 60 items. Otherwise remaining category items.
-        let targetForThisPage = 60;
-        if (currentEstimatedTotal > 0 && !hasNextPageInDom) {
-            const remaining = currentEstimatedTotal - sentLinks.size;
-            if (remaining > 0 && remaining < 60) {
-                targetForThisPage = remaining;
-            }
-        }
+        // 1. Paced, smooth downward scroll across entire page height to mount all tiles & capture visual star ratings
+        await silentBackgroundScroll();
+        await triggerShowMoreAndWait();
 
-        // Continuous adaptive incremental harvesting across lazy chunks
-        const pageNewProducts = [];
-        const pageLinksSeen = new Set();
-
-        const harvestBatch = async () => {
-            captureVisualRatingsInViewport();
-            const batch = await scrapeCurrentDomItems(meta, currentPage);
-            for (const item of batch) {
-                if (item.link && !pageLinksSeen.has(item.link)) {
-                    pageLinksSeen.add(item.link);
-                    pageNewProducts.push(item);
-                }
-            }
-        };
-
-        // Round 0: Initial harvest of immediately mounted tiles
-        await harvestBatch();
-
-        // Progressive harvesting cycles (scroll down, trigger lazy-load & show-more until target reached)
-        let consecutiveNoNewRounds = 0;
-        let lastItemCount = pageNewProducts.length;
-
-        for (let round = 0; round < 15 && pageNewProducts.length < targetForThisPage; round++) {
-            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-
-            // 1. Paced, progressive step-by-step downward scroll across catalog
-            const catalogScrollHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-            const scrollStep = 380;
-            const startY = window.scrollY || 0;
-            
-            for (let curY = startY; curY <= catalogScrollHeight && pageNewProducts.length < targetForThisPage; curY += scrollStep) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                window.scrollTo({ top: curY, behavior: 'smooth' });
-                window.dispatchEvent(new Event('scroll'));
-                document.dispatchEvent(new Event('scroll'));
-
-                // Paced pause allowing DOM render and real-time star inspection
-                await new Promise(r => setTimeout(r, 200));
-                captureVisualRatingsInViewport();
-                await harvestBatch();
-            }
-
-            if (pageNewProducts.length >= targetForThisPage) break;
-
-            // 2. Proactively trigger "Show More" / "Показати ще" button if available
-            const clicked = await triggerShowMoreAndWait();
-            if (clicked) {
-                // When clicked, sample every 300ms for up to 1.5s for Rozetka AJAX chunks to attach
-                for (let w = 0; w < 5; w++) {
-                    await new Promise(r => setTimeout(r, 300));
-                    captureVisualRatingsInViewport();
-                    await harvestBatch();
-                    if (pageNewProducts.length >= targetForThisPage) break;
-                }
-            } else {
-                // Also scroll past paginator area to trigger IntersectionObserver
-                const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"], [class*="catalog-grid__more"]');
-                if (paginator) {
-                    paginator.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    window.dispatchEvent(new Event('scroll'));
-                    document.dispatchEvent(new Event('scroll'));
-                    await new Promise(r => setTimeout(r, 350));
-                    captureVisualRatingsInViewport();
-                    await harvestBatch();
-                }
-            }
-
-            if (pageNewProducts.length > lastItemCount) {
-                consecutiveNoNewRounds = 0;
-                lastItemCount = pageNewProducts.length;
-            } else {
-                consecutiveNoNewRounds++;
-                // If 3 full attempts produced no new items and we are past round 4, catalog on page is exhausted
-                if (consecutiveNoNewRounds >= 3 && round >= 4) {
-                    break;
-                }
-            }
-        }
-
-        // Upward sweep back to top to catch any unmounted items
-        if (pageNewProducts.length < targetForThisPage) {
-            window.scrollTo({ top: 0, behavior: 'auto' });
+        // Check paginator area
+        const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"], [class*="catalog-grid__more"]');
+        if (paginator) {
+            paginator.scrollIntoView({ behavior: 'smooth', block: 'center' });
             window.dispatchEvent(new Event('scroll'));
             document.dispatchEvent(new Event('scroll'));
-            await new Promise(r => setTimeout(r, 250));
-            await harvestBatch();
+            await new Promise(r => setTimeout(r, 300));
+            captureVisualRatingsInViewport();
         }
+
+        // Upward sweep back to top
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        window.dispatchEvent(new Event('scroll'));
+        document.dispatchEvent(new Event('scroll'));
+        await new Promise(r => setTimeout(r, 200));
+
+        // 2. Perform Single Unified Batch Resolution on all tiles mounted on this page
+        const pageNewProducts = await scrapeCurrentDomItems(meta, currentPage);
 
         // Update total estimate if catalog counter rendered during scroll
         const postEst = getEstimatedTotalFromPage();
