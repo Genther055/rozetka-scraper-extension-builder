@@ -1656,10 +1656,16 @@
 
         // Priority 5: Known 3P Brand/Merchant signature detection from title (e.g. Qinetiq, Remzona, Mini Shop, Smart Hub)
         if (name) {
-            const brandMatch = name.match(/\b(Qinetiq|Remzona|Mini Shop|Smart Hub|Tech Store|PowerStore|Gadget Shop)\b/i);
+            const brandMatch = name.match(/\b(Qinetiq|Remzona|Mini Shop|Smart Hub|Tech Store|PowerStore|Gadget Shop|Berem&Store|EU seller|SIMo4ka|Vendedor|BeBest|Partner IT)\b/i);
             if (brandMatch && brandMatch[1] && brandMatch[1].toLowerCase() !== 'rozetka') {
                 return cleanSellerName(brandMatch[1]);
             }
+        }
+
+        // Priority 6: Check if the tile explicitly has a Rozetka vendor badge or seller_id 5
+        const hasRozetkaBadge = !!item.querySelector('[class*="seller_type_rozetka"], [data-seller-id="5"], rz-seller-carriage a[href*="rozetka"]');
+        if (hasRozetkaBadge) {
+            return 'Rozetka';
         }
 
         return 'Rozetka';
@@ -2190,9 +2196,17 @@
                     }
                 }
 
-                console.log(`[TradeScout Batch] Received ${fetchedProducts?.length || 0} product details for ${productIds.length} IDs. 3P Sellers identified: [${Array.from(uniqueSellersFound).join(', ')}]`);
-            }
-        } catch (_) {}
+                const uniqueSellersList = Array.from(uniqueSellersFound);
+                console.group(`[TradeScout Diagnostics] Page ${pageIndex || 1}: "${meta.title}" (${distinctTiles.length} tiles)`);
+                console.log('1. SSR / State Seller Map entries:', pageSellerMap.size);
+                console.log('2. API Batch Received items:', fetchedProducts?.length || 0);
+                console.log('3. Unique 3P Sellers detected on page:', uniqueSellersList.length, uniqueSellersList);
+                console.log('4. Sidebar Filter Registered Sellers:', getKnownSellersFromSidebar());
+                console.groupEnd();
+
+                if (uniqueSellersList.length > 0) {
+                    currentStatusMsg = `Збір: ${meta.title} (${sentLinks.size}/${currentEstimatedTotal}) [${uniqueSellersList.length} 3P-магазинів]`;
+                }
 
         const newItems = [];
 
