@@ -95,8 +95,8 @@ function getCleanActiveScrapes(): LiveScrapingTask[] {
 }
 
 const SERVER_START_TIME = Date.now();
-const SERVER_VERSION = 'v4.3.2';
-const BUILD_TIMESTAMP = '07.10 17:50';
+const SERVER_VERSION = 'v4.3.3';
+const BUILD_TIMESTAMP = '07.10 18:00';
 
 app.get('/api/version', async (req, res) => {
   try {
@@ -390,7 +390,7 @@ app.post('/api/products', async (req, res) => {
             itemSpecs = itemSpecs ? `${itemSpecs}; Бренд: ${detectedBrand}` : `Бренд: ${detectedBrand}`;
           }
 
-          const itemSessionTitle = cleanCategoryNameServer(item.sessionTitle || sessionTitle || cleanCat);
+          const itemSessionTitle = (item.sessionTitle || sessionTitle || cleanCat).trim();
           const itemSessionId = item.sessionId || sessionId || '';
 
           const itemKey = getItemKey({ ...item, link: normalizedLink });

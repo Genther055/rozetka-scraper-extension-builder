@@ -2406,11 +2406,11 @@
         }
     }
 
-    function startScrapingOnThisTab(tabId, customUrl) {
+    function startScrapingOnThisTab(tabId, customUrl, customSessionId) {
         isTabScrapingActive = true;
         window.__tradeScoutIsScrapingActive = true;
         currentTabId = tabId || currentTabId || Date.now();
-        currentSessionId = `session_${currentTabId}_${Date.now()}`;
+        currentSessionId = customSessionId || `session_${currentTabId}_${Date.now()}`;
         if (customUrl) webhookEndpoint = customUrl;
         sentLinks.clear();
         visitedUrls.clear();
@@ -2679,7 +2679,7 @@
     // Message listener for popup / background commands
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'START_TAB_SCRAPE') {
-            startScrapingOnThisTab(message.tabId, message.webhookUrl);
+            startScrapingOnThisTab(message.tabId, message.webhookUrl, message.sessionId);
             const meta = getPageMetadata();
             sendResponse({ success: true, sessionTitle: meta.title });
             return true;
