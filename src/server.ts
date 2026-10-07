@@ -173,6 +173,40 @@ function cleanCategoryNameServer(c: string): string {
   return s.trim() || 'Повербанки та УМБ';
 }
 
+const knownBrands = [
+  { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power)\b/i },
+  { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco|70mai)\b/i, excludeIf: /\b(?:для|сумісн\w*|compatible\s+with|підходить\s+для)\s+[^,;]*(?:xiaomi|redmi|poco)\b/i },
+  { name: 'Ugreen', regex: /\bUgreen\b/i },
+  { name: 'Baseus', regex: /\b(?:Baseus|Adaman)\b/i },
+  { name: 'Qinetiq', regex: /\bQinetiq\b/i },
+  { name: 'Remzona', regex: /\bRemzona\b/i },
+  { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для|сумісн\w*|підходить\s+для|for|iphone|айфона|чохол|кабель|type-c|lightning)\b/i },
+  { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для|сумісн\w*|підходить\s+для|for|самсунг|чохол|кабель|type-c)\b/i },
+  { name: 'Anker', regex: /\bAnker\b/i },
+  { name: 'Hoco', regex: /\bHoco\b/i },
+  { name: 'Borofone', regex: /\bBorofone\b/i },
+  { name: 'Romoss', regex: /\bRomoss\b/i },
+  { name: 'Remax', regex: /\bRemax\b/i },
+  { name: 'Joyroom', regex: /\bJoyroom\b/i },
+  { name: 'ColorWay', regex: /\bColorWay\b/i },
+  { name: 'Proove', regex: /\bProove\b/i },
+  { name: 'HOPECOM', regex: /\bHOPECOM\b/i },
+  { name: 'ZMI', regex: /\bZMI\b/i },
+  { name: '2E', regex: /\b2E\b/i },
+  { name: 'Gelius', regex: /\bGelius\b/i },
+  { name: 'Platinet', regex: /\bPlatinet\b/i },
+  { name: 'Dudao', regex: /\bDudao\b/i },
+  { name: 'Pisen', regex: /\bPisen\b/i },
+  { name: 'Wekome', regex: /\bWekome\b/i },
+  { name: 'Proda', regex: /\bProda\b/i },
+  { name: 'XO', regex: /\bXO\b/i },
+  { name: 'Vention', regex: /\bVention\b/i },
+  { name: 'Essager', regex: /\bEssager\b/i },
+  { name: 'BLUETTI', regex: /\bBLUETTI\b/i },
+  { name: 'EcoFlow', regex: /\bEcoFlow\b/i },
+  { name: 'Jackery', regex: /\bJackery\b/i }
+];
+
 function detectBrandServer(p: any): string {
   if (!p) return 'Інші';
   const rawMap = p.detailedSpecsMap;
@@ -190,40 +224,6 @@ function detectBrandServer(p: any): string {
   }
 
   const name = p.name || '';
-  const knownBrands = [
-    { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power)\b/i },
-    { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco|70mai)\b/i, excludeIf: /\b(?:для|сумісн\w*|compatible\s+with|підходить\s+для)\s+[^,;]*(?:xiaomi|redmi|poco)\b/i },
-    { name: 'Ugreen', regex: /\bUgreen\b/i },
-    { name: 'Baseus', regex: /\b(?:Baseus|Adaman)\b/i },
-    { name: 'Qinetiq', regex: /\bQinetiq\b/i },
-    { name: 'Remzona', regex: /\bRemzona\b/i },
-    { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для|сумісн\w*|підходить\s+для|for|iphone|айфона|чохол|кабель|type-c|lightning)\b/i },
-    { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для|сумісн\w*|підходить\s+для|for|самсунг|чохол|кабель|type-c)\b/i },
-    { name: 'Anker', regex: /\bAnker\b/i },
-    { name: 'Hoco', regex: /\bHoco\b/i },
-    { name: 'Borofone', regex: /\bBorofone\b/i },
-    { name: 'Romoss', regex: /\bRomoss\b/i },
-    { name: 'Remax', regex: /\bRemax\b/i },
-    { name: 'Joyroom', regex: /\bJoyroom\b/i },
-    { name: 'ColorWay', regex: /\bColorWay\b/i },
-    { name: 'Proove', regex: /\bProove\b/i },
-    { name: 'HOPECOM', regex: /\bHOPECOM\b/i },
-    { name: 'ZMI', regex: /\bZMI\b/i },
-    { name: '2E', regex: /\b2E\b/i },
-    { name: 'Gelius', regex: /\bGelius\b/i },
-    { name: 'Platinet', regex: /\bPlatinet\b/i },
-    { name: 'Dudao', regex: /\bDudao\b/i },
-    { name: 'Pisen', regex: /\bPisen\b/i },
-    { name: 'Wekome', regex: /\bWekome\b/i },
-    { name: 'Proda', regex: /\bProda\b/i },
-    { name: 'XO', regex: /\bXO\b/i },
-    { name: 'Vention', regex: /\bVention\b/i },
-    { name: 'Essager', regex: /\bEssager\b/i },
-    { name: 'BLUETTI', regex: /\bBLUETTI\b/i },
-    { name: 'EcoFlow', regex: /\bEcoFlow\b/i },
-    { name: 'Jackery', regex: /\bJackery\b/i }
-  ];
-
   for (const rule of knownBrands) {
     if (rule.excludeIf && rule.excludeIf.test(name)) continue;
     if (rule.regex.test(name)) {
@@ -399,7 +399,24 @@ app.post('/api/products', async (req, res) => {
           }
 
           const cleanCat = cleanCategoryNameServer(item.category || sessionTitle || 'Повербанки та УМБ');
-          const detectedBrand = detectBrandServer(item);
+          const itemSessionTitle = (item.sessionTitle || sessionTitle || cleanCat).trim();
+          const itemSessionId = item.sessionId || sessionId || '';
+          const detectedBrand = detectBrandServer({ ...item, sessionTitle: itemSessionTitle, category: cleanCat });
+
+          // If session is dedicated to a specific brand, drop rogue items of conflicting brands
+          const sessionTargetBrand = knownBrands.find(b => b.regex.test(itemSessionTitle))?.name;
+          if (sessionTargetBrand) {
+            const allowed = ({
+              'Xiaomi': ['Xiaomi', 'Mi Power', 'Redmi', 'Poco', '70mai', 'ZMI', 'Cuktech'],
+              'Baseus': ['Baseus', 'Adaman'],
+              'Sigma mobile': ['Sigma mobile', 'Sigma', 'X-POWER']
+            } as Record<string, string[]>)[sessionTargetBrand] || [sessionTargetBrand];
+
+            if (detectedBrand && !allowed.includes(detectedBrand) && detectedBrand !== 'Інші') {
+              return; // skip rogue item
+            }
+          }
+
           const specsMap = item.detailedSpecsMap && typeof item.detailedSpecsMap === 'object' ? { ...item.detailedSpecsMap } : {};
           if (!specsMap['Бренд'] || specsMap['Бренд'] === 'None' || specsMap['Бренд'] === 'Undefined') {
             specsMap['Бренд'] = detectedBrand;
@@ -409,9 +426,6 @@ app.post('/api/products', async (req, res) => {
           if (!itemSpecs.includes('Бренд:') && detectedBrand && detectedBrand !== 'Інші') {
             itemSpecs = itemSpecs ? `${itemSpecs}; Бренд: ${detectedBrand}` : `Бренд: ${detectedBrand}`;
           }
-
-          const itemSessionTitle = (item.sessionTitle || sessionTitle || cleanCat).trim();
-          const itemSessionId = item.sessionId || sessionId || '';
 
           const itemKey = getItemKey({ ...item, link: normalizedLink });
           const exists = products.some(p => p && getItemKey(p) === itemKey);

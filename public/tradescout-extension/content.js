@@ -2088,14 +2088,63 @@
                     }
                 }
 
-                // If not matched, fallback to page/session brand if active
-                if (!detailedSpecsMap['Бренд']) {
-                    const sessionContext = (meta?.title || '') + ' ' + (meta?.category || '') + ' ' + (window.location.href || '');
+                // Target brand detection from session context
+                let targetSessionBrand = null;
+                const pageHref = (window.location.href || '').toLowerCase();
+                const prodMatch = pageHref.match(/producer=([a-z0-9_-]+)/i);
+                if (prodMatch) {
+                    const slug = prodMatch[1].toLowerCase();
                     for (const rule of knownBrandRules) {
-                        if (rule.regex.test(sessionContext)) {
-                            detailedSpecsMap['Бренд'] = rule.name;
+                        if (rule.name.toLowerCase() === slug || rule.regex.test(slug)) {
+                            targetSessionBrand = rule.name;
                             break;
                         }
+                    }
+                }
+                if (!targetSessionBrand) {
+                    const sTitle = (meta?.title || '').toLowerCase();
+                    const sCat = (meta?.category || '').toLowerCase();
+                    for (const rule of knownBrandRules) {
+                        if (rule.regex.test(sTitle) || rule.regex.test(sCat)) {
+                            targetSessionBrand = rule.name;
+                            break;
+                        }
+                    }
+                }
+
+                // If target brand is active, verify this item belongs to it and drop rogue third-party items
+                if (targetSessionBrand) {
+                    const allowedSubBrands = {
+                        'Xiaomi': ['Xiaomi', 'Mi Power', 'Redmi', 'Poco', '70mai', 'ZMI', 'Cuktech'],
+                        'Baseus': ['Baseus', 'Adaman'],
+                        'Sigma mobile': ['Sigma mobile', 'Sigma', 'X-POWER']
+                    }[targetSessionBrand] || [targetSessionBrand];
+
+                    // Check if item was detected as a conflicting brand
+                    if (detailedSpecsMap['Бренд'] && !allowedSubBrands.includes(detailedSpecsMap['Бренд'])) {
+                        // Skip rogue third-party item
+                        continue;
+                    }
+
+                    // Check if name explicitly starts with or contains another known conflicting brand
+                    let isConflictingBrand = false;
+                    for (const rule of knownBrandRules) {
+                        if (rule.name !== targetSessionBrand && !allowedSubBrands.includes(rule.name)) {
+                            if (rule.excludeIf && rule.excludeIf.test(name)) continue;
+                            if (rule.regex.test(name)) {
+                                isConflictingBrand = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (isConflictingBrand) {
+                        // Skip rogue third-party item
+                        continue;
+                    }
+
+                    // Assign target brand cleanly if not already assigned
+                    if (!detailedSpecsMap['Бренд']) {
+                        detailedSpecsMap['Бренд'] = targetSessionBrand;
                     }
                 }
 

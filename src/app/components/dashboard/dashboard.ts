@@ -2360,6 +2360,125 @@ export class DashboardComponent implements OnInit {
       return { x: Math.round(x), label: val.toLocaleString() + ' ₴' };
     });
 
+    // 8. Brand-specific Price Benchmarks & 50% Demand Equilibrium Points
+    const brandMap = new Map<string, Array<{ price: number; reviews: number; weight: number; product: any }>>();
+    const brandColors: { [k: string]: string } = {
+      'Xiaomi': '#ff6700',
+      'Ugreen': '#10b981',
+      'Sigma mobile': '#06b6d4',
+      'Apple': '#94a3b8',
+      'Samsung': '#3b82f6',
+      'Baseus': '#eab308',
+      'Anker': '#38bdf8',
+      'Hoco': '#ec4899',
+      'Qinetiq': '#a855f7',
+      'Remzona': '#f43f5e',
+      'Borofone': '#f59e0b',
+      'Romoss': '#8b5cf6',
+      'Remax': '#ef4444',
+      'Joyroom': '#06b6d4',
+      'ColorWay': '#3b82f6',
+      'Proove': '#14b8a6',
+      'HOPECOM': '#84cc16',
+      '2E': '#64748b',
+      'Gelius': '#f97316',
+      'BLUETTI': '#0ea5e9',
+      'EcoFlow': '#22c55e',
+      'Jackery': '#f59e0b'
+    };
+
+    validProducts.forEach(p => {
+      const b = this.getProductBrand(p);
+      if (b && b !== 'Інші') {
+        let list = brandMap.get(b);
+        if (!list) {
+          list = [];
+          brandMap.set(b, list);
+        }
+        const price = Number(p.price) || 0;
+        const rev = Math.max(0, Number(p.reviews) || 0);
+        const weight = 1 + Math.log(1 + rev);
+        list.push({ price, reviews: rev, weight, product: p });
+      }
+    });
+
+    const brandEquilibriums: Array<{
+      brand: string;
+      color: string;
+      count: number;
+      share: number;
+      reviews: number;
+      reviewsShare: number;
+      medianPrice: number;
+      avgPrice: number;
+      weightedAvgPrice: number;
+      weightedMedianPrice: number;
+      minPrice: number;
+      maxPrice: number;
+      eqX: number;
+      eqY: number;
+      demandLinePath: string;
+    }> = [];
+
+    brandMap.forEach((items, brandName) => {
+      if (items.length < 2) return;
+      const bSorted = [...items].sort((a, b) => a.price - b.price);
+      const bTotalW = bSorted.reduce((acc, x) => acc + x.weight, 0);
+      const bTotalRev = bSorted.reduce((acc, x) => acc + x.reviews, 0);
+      const bPrices = bSorted.map(x => x.price);
+      const bMedPrice = bPrices[Math.floor(bPrices.length / 2)] || minPrice;
+      const bAvgPrice = Math.round(bPrices.reduce((a, b) => a + b, 0) / bPrices.length);
+      const bWeightedAvg = Math.round(bSorted.reduce((acc, x) => acc + x.price * x.weight, 0) / (bTotalW || 1));
+      
+      let bCumW = 0;
+      let bWeightedMedPrice = bSorted[0]?.price || minPrice;
+      for (const item of bSorted) {
+        bCumW += item.weight;
+        if (bCumW >= bTotalW * 0.5) {
+          bWeightedMedPrice = item.price;
+          break;
+        }
+      }
+
+      const bEqX = calcX(bWeightedMedPrice);
+      const bEqY = y50;
+
+      // Brand cumulative curve path
+      let bRunW = 0;
+      let bCurvePath = '';
+      bSorted.forEach((item, idx) => {
+        bRunW += item.weight;
+        const bCumPct = bTotalW > 0 ? (bRunW / bTotalW) * 100 : 0;
+        const bx = calcX(item.price);
+        const by = PAD_T + (1 - Math.min(1, bCumPct / 100)) * PLOT_H;
+        if (idx === 0) {
+          bCurvePath = `M ${bx} ${by}`;
+        } else {
+          bCurvePath += ` L ${bx} ${by}`;
+        }
+      });
+
+      brandEquilibriums.push({
+        brand: brandName,
+        color: brandColors[brandName] || '#818cf8',
+        count: items.length,
+        share: Number(((items.length / totalCount) * 100).toFixed(1)),
+        reviews: bTotalRev,
+        reviewsShare: totalReviews > 0 ? Number(((bTotalRev / totalReviews) * 100).toFixed(1)) : 0,
+        medianPrice: bMedPrice,
+        avgPrice: bAvgPrice,
+        weightedAvgPrice: bWeightedAvg,
+        weightedMedianPrice: bWeightedMedPrice,
+        minPrice: bPrices[0] || 0,
+        maxPrice: bPrices[bPrices.length - 1] || 0,
+        eqX: bEqX,
+        eqY: bEqY,
+        demandLinePath: bCurvePath
+      });
+    });
+
+    brandEquilibriums.sort((a, b) => b.count - a.count);
+
     return {
       svgWidth: SVG_W,
       plotWidth: PLOT_W,
@@ -2385,7 +2504,8 @@ export class DashboardComponent implements OnInit {
       medianPrice,
       avgPrice,
       weightedAvgPrice,
-      weightedMedianPrice
+      weightedMedianPrice,
+      brandEquilibriums
     };
   }
 

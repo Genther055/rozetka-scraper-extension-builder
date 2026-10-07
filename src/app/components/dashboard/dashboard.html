@@ -1770,7 +1770,20 @@
                   <!-- Cumulative Supply Curve (Dashed Lavender Line: Shelf Distribution) -->
                   <path [attr.d]="chart.supplyLinePath" fill="none" stroke="#818cf8" stroke-width="2" stroke-dasharray="4 4" stroke-opacity="0.75"/>
 
-                  <!-- Cumulative Demand Curve (Solid Emerald Line: Demand Mass) -->
+                  <!-- Individual Brand Demand Curves (If multiple brands exist and viewing all) -->
+                  <g *ngIf="selectedBrandFilter === 'all' && chart.brandEquilibriums && chart.brandEquilibriums.length > 1">
+                    <path 
+                      *ngFor="let b of chart.brandEquilibriums" 
+                      [attr.d]="b.demandLinePath" 
+                      fill="none" 
+                      [attr.stroke]="b.color" 
+                      stroke-width="2" 
+                      stroke-dasharray="4 3" 
+                      stroke-opacity="0.85"
+                    />
+                  </g>
+
+                  <!-- Cumulative Demand Curve (Solid Emerald Line: Overall Demand Mass) -->
                   <path [attr.d]="chart.demandLinePath" fill="none" stroke="#10b981" stroke-width="3.5" class="drop-shadow-lg"/>
 
                   <!-- Reference Vertical Guides (Uncluttered, Sleek Lines with Top Markers) -->
@@ -1802,7 +1815,23 @@
                     </text>
                   </g>
 
-                  <!-- ★ 50% Equilibrium Intersection Target Marker -->
+                  <!-- Multi-Brand 50% Equilibrium Points (If multiple brands exist) -->
+                  <g *ngIf="selectedBrandFilter === 'all' && chart.brandEquilibriums && chart.brandEquilibriums.length > 1">
+                    <g *ngFor="let b of chart.brandEquilibriums">
+                      <!-- Brand vertical line to 50% axis -->
+                      <line [attr.x1]="b.eqX" y1="180" [attr.x2]="b.eqX" y2="415" [attr.stroke]="b.color" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.6"/>
+                      <circle [attr.cx]="b.eqX" [attr.cy]="b.eqY" r="9" [attr.fill]="b.color" fill-opacity="0.3"/>
+                      <circle [attr.cx]="b.eqX" [attr.cy]="b.eqY" r="5" [attr.fill]="b.color" stroke="#ffffff" stroke-width="1.5"/>
+                      
+                      <!-- Brand Label Badge above 50% line -->
+                      <rect [attr.x]="b.eqX - 36" [attr.y]="b.eqY - 24" width="72" height="16" rx="4" fill="#090d16" fill-opacity="0.95" [attr.stroke]="b.color" stroke-width="1.2"/>
+                      <text [attr.x]="b.eqX" [attr.y]="b.eqY - 12" text-anchor="middle" [attr.fill]="b.color" font-size="8" font-weight="bold" font-family="monospace">
+                        {{ b.brand }}: {{ b.weightedMedianPrice | number }} ₴
+                      </text>
+                    </g>
+                  </g>
+
+                  <!-- ★ 50% Equilibrium Intersection Target Marker (Overall) -->
                   <g>
                     <circle [attr.cx]="chart.eqX" [attr.cy]="chart.eqY" r="14" fill="#f59e0b" fill-opacity="0.25"/>
                     <circle [attr.cx]="chart.eqX" [attr.cy]="chart.eqY" r="7" fill="#f59e0b" stroke="#ffffff" stroke-width="2.5"/>
@@ -2014,6 +2043,90 @@
                         <span class="material-icons text-xs">{{ analyticsSummary.kpi.demandPriceDiffPct < -3 ? 'trending_down' : (analyticsSummary.kpi.demandPriceDiffPct > 3 ? 'trending_up' : 'trending_flat') }}</span>
                         <span>{{ analyticsSummary.kpi.demandPriceDiffPct > 0 ? '+' : '' }}{{ analyticsSummary.kpi.demandPriceDiffPct }}%</span>
                       </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Multi-Brand Price Benchmarks & 50% Demand Equilibrium Comparison Matrix -->
+                <div *ngIf="chart.brandEquilibriums && chart.brandEquilibriums.length > 1" class="mt-4 p-4 rounded-2xl bg-[#090d16] border border-indigo-500/30 space-y-3 shadow-xl">
+                  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                    <div class="flex items-center gap-2">
+                      <div class="w-7 h-7 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 flex items-center justify-center shrink-0">
+                        <span class="material-icons text-sm">compare_arrows</span>
+                      </div>
+                      <div>
+                        <h4 class="text-xs font-bold text-white uppercase tracking-wider">
+                          Цінові орієнтири, баланс попиту та точка 50% ринкової маси за брендами
+                        </h4>
+                        <p class="text-[10px] text-slate-400">
+                          Порівняльний аналіз центрів тяжіння попиту для зібраних брендів
+                        </p>
+                      </div>
+                    </div>
+                    <span class="text-[10px] text-indigo-300 font-mono bg-indigo-950/80 px-2.5 py-1 rounded-lg border border-indigo-800/60 shrink-0">
+                      {{ chart.brandEquilibriums.length }} брендів у порівнянні
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    <div *ngFor="let b of chart.brandEquilibriums" 
+                         (click)="setBrandFilter(b.brand)"
+                         class="p-3.5 rounded-xl bg-slate-900/90 border transition-all cursor-pointer hover:scale-[1.01] hover:shadow-lg relative overflow-hidden group"
+                         [style.borderColor]="selectedBrandFilter === b.brand ? b.color : 'rgba(51,65,85,0.7)'"
+                         [class.ring-2]="selectedBrandFilter === b.brand"
+                         [style.ringColor]="b.color"
+                    >
+                      <!-- Brand header with color accent -->
+                      <div class="flex items-center justify-between mb-2.5">
+                        <div class="flex items-center gap-2">
+                          <span class="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm border border-white/20" [style.backgroundColor]="b.color"></span>
+                          <span class="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">{{ b.brand }}</span>
+                        </div>
+                        <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded border" [style.borderColor]="b.color" [style.color]="b.color" [style.backgroundColor]="b.color + '18'">
+                          {{ b.count }} тов. ({{ b.share }}%)
+                        </span>
+                      </div>
+
+                      <!-- Metrics Grid -->
+                      <div class="space-y-1.5 text-xs font-mono">
+                        <!-- 50% Demand Equilibrium Point -->
+                        <div class="flex justify-between items-center p-2 rounded-lg bg-slate-950 border border-slate-800">
+                          <span class="text-slate-300 flex items-center gap-1 font-sans text-[11px] font-semibold">
+                            <span [style.color]="b.color">★</span> Точка 50% попиту:
+                          </span>
+                          <b class="text-sm font-black" [style.color]="b.color">{{ b.weightedMedianPrice | number }} ₴</b>
+                        </div>
+
+                        <!-- Shelf Median -->
+                        <div class="flex justify-between items-center px-1 pt-0.5">
+                          <span class="text-slate-400 font-sans text-[11px]">Медіана полиці:</span>
+                          <span class="text-slate-200 font-bold">{{ b.medianPrice | number }} ₴</span>
+                        </div>
+
+                        <!-- Weighted Average -->
+                        <div class="flex justify-between items-center px-1">
+                          <span class="text-slate-400 font-sans text-[11px]">Зважена середня ціна:</span>
+                          <span class="text-slate-300">{{ b.weightedAvgPrice | number }} ₴</span>
+                        </div>
+
+                        <!-- Price Range -->
+                        <div class="flex justify-between items-center px-1">
+                          <span class="text-slate-400 font-sans text-[11px]">Діапазон цін:</span>
+                          <span class="text-slate-400 text-[11px]">{{ b.minPrice | number }} – {{ b.maxPrice | number }} ₴</span>
+                        </div>
+
+                        <!-- Total Reviews & Share -->
+                        <div class="flex justify-between items-center px-1 pt-1.5 border-t border-slate-800/80">
+                          <span class="text-slate-400 font-sans text-[11px]">Частка у відгуках:</span>
+                          <span class="text-emerald-400 font-bold">{{ b.reviews | number }} відг. ({{ b.reviewsShare }}%)</span>
+                        </div>
+                      </div>
+
+                      <!-- Action clue -->
+                      <div class="mt-2 pt-1.5 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500 group-hover:text-slate-300 transition-colors font-sans">
+                        <span>{{ selectedBrandFilter === b.brand ? '✓ Активний фільтр' : 'Натисніть для фільтрації' }}</span>
+                        <span class="material-icons text-xs">arrow_forward</span>
+                      </div>
                     </div>
                   </div>
                 </div>
