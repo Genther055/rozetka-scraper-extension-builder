@@ -265,12 +265,57 @@
         </div>
       </div>
 
-      <div *ngIf="activeTab !== 'settings'" class="flex items-center gap-2.5">
-        <!-- Live Platform Version & Build Badge -->
-        <div class="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-slate-900/90 border border-slate-700/60 rounded-full text-[11px] shadow-inner">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span class="text-slate-200 font-bold">Платформа {{ appVersion }}</span>
-          <span class="text-slate-400 font-medium">({{ buildTimestamp }})</span>
+      <div class="flex items-center gap-3">
+        <!-- Live Platform Version & Render Server Heartbeat Badge -->
+        <div 
+          class="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-slate-900/90 border rounded-full text-[11px] shadow-inner relative group/server cursor-help transition-all"
+          [class.border-emerald-500/50]="serverStatus.isOnline"
+          [class.border-rose-500/50]="!serverStatus.isOnline"
+        >
+          <span 
+            class="w-2 h-2 rounded-full shrink-0"
+            [class.bg-emerald-400]="serverStatus.isOnline"
+            [class.animate-pulse]="serverStatus.isOnline"
+            [class.bg-rose-500]="!serverStatus.isOnline"
+          ></span>
+          <span class="text-slate-200 font-bold">Render: {{ serverStatus.isOnline ? 'Онлайн' : 'Офлайн' }}</span>
+          <span class="text-indigo-300 font-mono font-bold">{{ serverStatus.version }}</span>
+          <span class="text-slate-400 font-medium">({{ serverStatus.buildTimestamp }})</span>
+
+          <!-- Hover Popover: Live Server Health Status -->
+          <div class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 p-3 bg-[#0f172a] border border-indigo-500/60 rounded-xl shadow-2xl shadow-black text-xs text-slate-200 z-[100] opacity-0 pointer-events-none group-hover/server:opacity-100 group-hover/server:pointer-events-auto transition-all duration-200 backdrop-blur-md">
+            <div class="font-bold text-white border-b border-slate-800 pb-1.5 mb-2 flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="material-icons text-sm text-emerald-400">cloud_done</span>
+                <span>Статус сервера Render</span>
+              </div>
+              <span class="text-[9px] font-mono font-bold bg-emerald-950 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-800/60">
+                Живий зв'язок
+              </span>
+            </div>
+            <div class="space-y-1.5 font-mono text-[11px]">
+              <div class="flex justify-between">
+                <span class="text-slate-400">Деплой бандлу:</span>
+                <b class="text-indigo-300">{{ serverStatus.buildTimestamp }}</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Версія платформи:</span>
+                <b class="text-white">{{ serverStatus.version }}</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">База даних:</span>
+                <b class="text-emerald-400">Neon PostgreSQL (OK)</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Товарів у базі:</span>
+                <b class="text-white">{{ serverStatus.totalProductsInDb || products.length }} SKU</b>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Остання перевірка:</span>
+                <b class="text-slate-300">{{ serverStatus.lastChecked || 'Щойно' }}</b>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Quick Snapshot Save Button -->

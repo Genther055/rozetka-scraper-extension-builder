@@ -414,11 +414,21 @@ export class DashboardComponent implements OnInit {
   myPasswordError = '';
   myPasswordSuccess = false;
 
-  // Platform Version & Build Timestamp
-  readonly appVersion: string = 'v4.2.0';
-  readonly buildTimestamp: string = '06.10 18:00';
+  // Platform Version & Live Server Status
+  readonly appVersion: string = 'v4.3.0';
+  readonly buildTimestamp: string = '07.10 10:25';
   isForceRefreshing: boolean = false;
   refreshSuccessToast: string | null = null;
+  serverStatus = {
+    version: 'v4.3.0',
+    buildTimestamp: '07.10 10:25',
+    uptimeSeconds: 0,
+    totalProductsInDb: 0,
+    dbStatus: 'connected',
+    lastChecked: '',
+    isOnline: true
+  };
+  serverHealthTimer: any = null;
 
   // User & System Settings State
   readonly STORAGE_PRODUCTS_KEY = 'tradescout_cached_products';
@@ -3374,6 +3384,8 @@ export class DashboardComponent implements OnInit {
       this.loadFolders();
       this.loadHistory();
       this.loadTeamUsers();
+      this.checkServerHealth();
+      this.serverHealthTimer = setInterval(() => this.checkServerHealth(), 15000);
       this.startLiveStatusPolling();
 
       this.autoRefreshTimer = setInterval(() => {
@@ -3385,6 +3397,9 @@ export class DashboardComponent implements OnInit {
   ngOnDestroy() {
     if (this.autoRefreshTimer) {
       clearInterval(this.autoRefreshTimer);
+    }
+    if (this.serverHealthTimer) {
+      clearInterval(this.serverHealthTimer);
     }
     this.stopLiveStatusPolling();
     this.stopLiveStopwatch();
@@ -3483,8 +3498,61 @@ export class DashboardComponent implements OnInit {
     tryFetch(`${this.apiUrl}/api/products`);
   }
 
+  checkServerHealth() {
+    const cb = Date.now();
+    this.http.get<any>(`${this.apiUrl}/api/version?_cb=${cb}`).subscribe({
+      next: (res) => {
+        if (res && res.success) {
+          this.serverStatus = {
+            version: res.version || this.appVersion,
+            buildTimestamp: res.buildTimestamp || this.buildTimestamp,
+            uptimeSeconds: res.uptimeSeconds || 0,
+            totalProductsInDb: res.totalProductsInDb || 0,
+            dbStatus: res.dbStatus || 'connected',
+            lastChecked: new Date().toLocaleTimeString('uk-UA'),
+            isOnline: true
+          };
+          this.cdr.markForCheck();
+        }
+      },
+      error: () => {
+        this.http.get<any>(`/api/version?_cb=${cb}`).subscribe({
+          next: (res) => {
+            if (res && res.success) {
+              this.serverStatus = {
+                version: res.version || this.appVersion,
+                buildTimestamp: res.buildTimestamp || this.buildTimestamp,
+                uptimeSeconds: res.uptimeSeconds || 0,
+                totalProductsInDb: res.totalProductsInDb || 0,
+                dbStatus: res.dbStatus || 'connected',
+                lastChecked: new Date().toLocaleTimeString('uk-UA'),
+                isOnline: true
+              };
+              this.cdr.markForCheck();
+            }
+          },
+          error: () => {
+            this.serverStatus.isOnline = false;
+            this.serverStatus.dbStatus = 'offline';
+            this.cdr.markForCheck();
+          }
+        });
+      }
+    });
+  }
+
   forceRefreshData() {
     this.isForceRefreshing = true;
+    this.checkServerHealth();
+    
+    // Trigger backend seller auto-enrichment on server
+    this.http.post<any>(`${this.apiUrl}/api/enrich-sellers`, {}).subscribe({
+      next: () => {},
+      error: () => {
+        this.http.post<any>('/api/enrich-sellers', {}).subscribe({ error: () => {} });
+      }
+    });
+
     const cacheBuster = Date.now();
     const tryUrl = `${this.apiUrl}/api/products?_cb=${cacheBuster}`;
     

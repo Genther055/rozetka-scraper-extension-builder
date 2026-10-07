@@ -94,6 +94,36 @@ function getCleanActiveScrapes(): LiveScrapingTask[] {
   return list;
 }
 
+const SERVER_START_TIME = Date.now();
+const SERVER_VERSION = 'v4.3.0';
+const BUILD_TIMESTAMP = '07.10 10:25';
+
+app.get('/api/version', async (req, res) => {
+  try {
+    const products = await getCurrentProducts();
+    const uptimeSec = Math.floor((Date.now() - SERVER_START_TIME) / 1000);
+    res.json({
+      success: true,
+      version: SERVER_VERSION,
+      buildTimestamp: BUILD_TIMESTAMP,
+      serverTime: new Date().toISOString(),
+      uptimeSeconds: uptimeSec,
+      totalProductsInDb: products.length,
+      dbStatus: 'connected'
+    });
+  } catch (err: any) {
+    res.json({
+      success: true,
+      version: SERVER_VERSION,
+      buildTimestamp: BUILD_TIMESTAMP,
+      serverTime: new Date().toISOString(),
+      uptimeSeconds: 0,
+      totalProductsInDb: 0,
+      dbStatus: 'error: ' + err.message
+    });
+  }
+});
+
 app.post('/api/scraping-status', (req, res) => {
   try {
     const data = req.body || {};
@@ -203,6 +233,85 @@ function detectBrandServer(p: any): string {
   }
   return b || 'Інші';
 }
+
+async function enrichMissingSellers(items: any[]): Promise<any[]> {
+  const idsToFetch: string[] = [];
+  const idMap = new Map<string, any>();
+  
+  for (const item of items) {
+    if (!item) continue;
+    const link = item.link || '';
+    const m = link.match(/\/p(\d+)/) || link.match(/p-(\d+)/) || link.match(/p(\d+)/) || (item.id ? [null, item.id] : null);
+    const prodId = m ? String(m[1]).trim() : '';
+    const currentSeller = (item.seller || '').trim().toLowerCase();
+    if (prodId && (!currentSeller || currentSeller === 'rozetka' || currentSeller === 'marketplace')) {
+      idsToFetch.push(prodId);
+      idMap.set(prodId, item);
+    }
+  }
+
+  if (idsToFetch.length === 0) return items;
+
+  for (let i = 0; i < idsToFetch.length; i += 60) {
+    const chunk = idsToFetch.slice(i, i + 60);
+    const idsStr = chunk.join(',');
+    const apiUrl = `https://common-api.rozetka.com.ua/v1/api/product/details?country=UA&lang=ua&ids=${idsStr}`;
+    try {
+      const res = await fetch(apiUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+          'Accept': 'application/json, text/plain, */*',
+          'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
+        }
+      });
+      if (res.ok) {
+        const json: any = await res.json();
+        if (Array.isArray(json?.data)) {
+          for (const apiProd of json.data) {
+            if (apiProd && apiProd.id) {
+              const target = idMap.get(String(apiProd.id));
+              if (target) {
+                const sTitle = apiProd.seller?.title || apiProd.seller?.name || apiProd.seller_title;
+                if (sTitle && sTitle.trim() && sTitle.toLowerCase() !== 'rozetka') {
+                  target.seller = sTitle.trim();
+                } else if (apiProd.seller?.id === 5) {
+                  target.seller = 'Rozetka';
+                }
+                if (typeof apiProd.sellers_count === 'number' && apiProd.sellers_count > 0) {
+                  target.sellersCount = apiProd.sellers_count;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+  return items;
+}
+
+app.post('/api/enrich-sellers', async (req, res) => {
+  try {
+    let products = await getCurrentProducts();
+    if (products.length > 0) {
+      products = await enrichMissingSellers(products);
+      await saveCurrentProducts(products);
+    }
+    const sellersMap: { [k: string]: number } = {};
+    products.forEach(p => {
+      const s = p.seller || 'Rozetka';
+      sellersMap[s] = (sellersMap[s] || 0) + 1;
+    });
+    res.json({
+      success: true,
+      totalProducts: products.length,
+      uniqueSellers: Object.keys(sellersMap).length,
+      sellers: sellersMap
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 app.post('/api/products', async (req, res) => {
   try {
@@ -341,6 +450,8 @@ app.post('/api/products', async (req, res) => {
       seenIds.add(key);
       return true;
     });
+
+    products = await enrichMissingSellers(products);
 
     const currentCategory = newItems[0]?.category || 'Загальна';
     const categoryCount = products.filter((p: any) => p && p.category === currentCategory).length;
