@@ -756,14 +756,23 @@
 
     async function sendWebhookPayload(payload) {
         return new Promise(resolve => {
-            chrome.runtime.sendMessage({
-                action: 'sendWebhook',
-                webhookUrl: webhookEndpoint,
-                tabId: currentTabId,
-                payload: payload
-            }, (res) => {
-                resolve(res?.serverInfo || null);
-            });
+            if (!chrome?.runtime?.id) {
+                resolve(null);
+                return;
+            }
+            try {
+                chrome.runtime.sendMessage({
+                    action: 'sendWebhook',
+                    webhookUrl: webhookEndpoint,
+                    tabId: currentTabId,
+                    payload: payload
+                }, (res) => {
+                    if (chrome.runtime.lastError) {}
+                    resolve(res?.serverInfo || null);
+                });
+            } catch (_) {
+                resolve(null);
+            }
         });
     }
 

@@ -333,7 +333,7 @@ export class DashboardComponent implements OnInit {
   }
 
   hasAnyDiscountsInDataset(): boolean {
-    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.getActiveSessionProducts();
     return list.some(p => this.getDiscountPercent(p) > 0);
   }
 
@@ -1271,7 +1271,7 @@ export class DashboardComponent implements OnInit {
     xVal: number;
     yVal: number;
   }> {
-    const rawList = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const rawList = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.getActiveSessionProducts();
     if (!rawList || rawList.length === 0) return [];
     const inStockList = rawList.filter(p => p && p.inStock !== false && Number(p.price) > 0);
     const list = inStockList.length > 0 ? inStockList : rawList.filter(p => p && Number(p.price) > 0);
@@ -1389,7 +1389,7 @@ export class DashboardComponent implements OnInit {
   }
 
   getOverviewChartYTicks(): Array<{ y: number; label: string; rawVal: number }> {
-    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.getActiveSessionProducts();
     if (!list || list.length === 0) return [];
 
     let maxY = 1;
@@ -1419,7 +1419,7 @@ export class DashboardComponent implements OnInit {
   }
 
   getOverviewChartXTicks(): Array<{ x: number; label: string }> {
-    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.getActiveSessionProducts();
     if (!list || list.length === 0) return [];
 
     const SVG_W = this.overviewChartSvgWidth;
@@ -1555,7 +1555,7 @@ export class DashboardComponent implements OnInit {
   }
 
   getMiniSampleDistributionBars(): number[] {
-    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.getActiveSessionProducts();
     if (!list || list.length === 0) return [8, 12, 16, 14, 10, 8, 6, 4];
     const buckets = [0, 0, 0, 0, 0, 0, 0, 0];
     const chunkSize = Math.max(1, Math.ceil(list.length / 8));
@@ -1711,7 +1711,7 @@ export class DashboardComponent implements OnInit {
     if (this.scatterStoreFilter === 'all') {
       return { count: bin.productsCount, reviews: bin.reviewsSum, pct: bin.productsShare };
     }
-    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.getActiveSessionProducts();
     const top10Names = this.getTop10SellersList().map(s => s.name.toLowerCase());
     const top3Names = top10Names.slice(0, 3);
     
@@ -1755,7 +1755,7 @@ export class DashboardComponent implements OnInit {
   }
 
   getScatterPlotData() {
-    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.getActiveSessionProducts();
     if (!list || list.length === 0) {
       return { points: [], bands: [], xTicks: [], yTicks: [], minP: 0, maxP: 0, maxReviews: 0 };
     }
@@ -1945,7 +1945,7 @@ export class DashboardComponent implements OnInit {
     if (tableEntry && tableEntry.avgRating && tableEntry.avgRating > 0) return tableEntry.avgRating;
 
     // 3. Dynamic Calculation based on the seller's in-stock assortment (User requirement #6)
-    const prods = (this.filteredProducts?.length ? this.filteredProducts : this.products) || [];
+    const prods = (this.filteredProducts?.length ? this.filteredProducts : this.getActiveSessionProducts()) || [];
     const ratedInStock = prods.filter(p => {
       const pSeller = (p.seller && String(p.seller).trim()) ? String(p.seller).trim() : 'Rozetka';
       const match = isRozetka ? this.isRozetkaSeller(pSeller) : pSeller.toLowerCase() === rawName.toLowerCase();
@@ -2037,7 +2037,7 @@ export class DashboardComponent implements OnInit {
   }
 
   getPriceChartFilteredProducts(): Product[] {
-    let raw = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    let raw = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.getActiveSessionProducts();
     const inStockOnly = raw.filter(p => p && p.inStock !== false && Number(p.price) > 0);
     let list = inStockOnly.length > 0 ? inStockOnly : raw.filter(p => p && Number(p.price) > 0);
 
@@ -2085,7 +2085,7 @@ export class DashboardComponent implements OnInit {
   }
 
   getAvailablePriceCategoriesList(): Array<{ name: string; count: number; share: number }> {
-    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.getActiveSessionProducts();
     if (!list || list.length === 0) return [];
 
     const map = new Map<string, number>();
@@ -2114,7 +2114,7 @@ export class DashboardComponent implements OnInit {
   }
 
   getTopBrandsList(): Array<{ name: string; count: number; share: number }> {
-    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products;
+    const list = this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.getActiveSessionProducts();
     if (!list || list.length === 0) return [];
 
     const brandCounts = new Map<string, number>();
@@ -5498,8 +5498,9 @@ export class DashboardComponent implements OnInit {
   }
 
   getNicheCompetitiveness(): { level: string, colorClass: string, desc: string } {
-    const totalReviews = this.products.reduce((acc, p) => acc + p.reviews, 0);
-    const count = this.products.length;
+    const activeList = this.getActiveSessionProducts();
+    const totalReviews = activeList.reduce((acc, p) => acc + p.reviews, 0);
+    const count = activeList.length;
 
     if (count === 0) {
       return { level: 'Немає даних', colorClass: 'text-slate-400 bg-slate-900', desc: 'Зберіть дані про товари, щоб оцінити конкуренцію.' };
@@ -5549,7 +5550,7 @@ export class DashboardComponent implements OnInit {
   async exportToExcel() {
     const rawProducts = (this.filteredProducts && this.filteredProducts.length > 0) 
       ? this.filteredProducts 
-      : this.products;
+      : this.getActiveSessionProducts();
     if (!rawProducts || rawProducts.length === 0) return;
 
     // Filter strictly to IN-STOCK products (товари в наявності)
@@ -5857,7 +5858,7 @@ export class DashboardComponent implements OnInit {
   // ==========================================
 
   private getQuantBaseProducts(): Product[] {
-    const list = (this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.products);
+    const list = (this.filteredProducts && this.filteredProducts.length > 0 ? this.filteredProducts : this.getActiveSessionProducts());
     const inStockList = list.filter(p => p && p.price && p.price > 0 && p.inStock !== false);
     return inStockList.length > 0 ? inStockList : list.filter(p => p && p.price && p.price > 0);
   }
