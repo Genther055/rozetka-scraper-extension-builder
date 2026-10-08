@@ -415,13 +415,13 @@ export class DashboardComponent implements OnInit {
   myPasswordSuccess = false;
 
   // Platform Version & Live Server Status
-  readonly appVersion: string = 'v4.3.7';
-  readonly buildTimestamp: string = '08.10 15:00';
+  readonly appVersion: string = 'v4.3.8';
+  readonly buildTimestamp: string = '08.10 15:30';
   isForceRefreshing: boolean = false;
   refreshSuccessToast: string | null = null;
   serverStatus = {
-    version: 'v4.3.7',
-    buildTimestamp: '08.10 15:00',
+    version: 'v4.3.8',
+    buildTimestamp: '08.10 15:30',
     uptimeSeconds: 0,
     totalProductsInDb: 0,
     dbStatus: 'connected',

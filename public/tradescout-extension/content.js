@@ -97,26 +97,42 @@
     }
 
     const KNOWN_BRAND_RULES = [
-        { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power)\b/i },
-        { name: 'Xiaomi', regex: /\b(?:Xiaomi|Mi\s+Power|Redmi|Poco|70mai)\b/i, excludeIf: /\b(?:для|сумісн\w*|compatible\s+with|підходить\s+для)\s+[^,;]*(?:xiaomi|redmi|poco)\b/i },
-        { name: 'Ugreen', regex: /\bUgreen\b/i },
-        { name: 'Baseus', regex: /\b(?:Baseus|Adaman)\b/i },
-        { name: 'Apple', regex: /\b(?:Apple|MagSafe)\b/i, excludeIf: /\b(?:для|сумісн\w*|підходить\s+для|for|iphone|айфона|чохол|кабель|type-c|lightning)\b/i },
-        { name: 'Samsung', regex: /\bSamsung\b/i, excludeIf: /\b(?:для|сумісн\w*|підходить\s+для|for|самсунг|чохол|кабель|type-c)\b/i },
-        { name: 'Anker', regex: /\bAnker\b/i },
-        { name: 'Qinetiq', regex: /\bQinetiq\b/i },
-        { name: 'Remzona', regex: /\bRemzona\b/i },
-        { name: 'Hoco', regex: /\bHoco\b/i },
-        { name: 'Borofone', regex: /\bBorofone\b/i },
-        { name: 'Romoss', regex: /\bRomoss\b/i },
-        { name: 'Remax', regex: /\bRemax\b/i },
-        { name: 'Joyroom', regex: /\bJoyroom\b/i },
-        { name: 'ColorWay', regex: /\bColorWay\b/i },
-        { name: 'Proove', regex: /\bProove\b/i },
-        { name: 'HOPECOM', regex: /\bHOPECOM\b/i },
+        { name: 'Sigma mobile', regex: /\b(?:Sigma\s*mobile|Sigma|X-POWER|X-power|Сігма|Сигма)\b/i },
+        { 
+            name: 'Xiaomi', 
+            regex: /\b(?:Xiaomi|Redmi|Poco|70mai|ZMI|Cuktech|Сяомі|Ксіомі|Ксяомі|Ксиоми|Ксиаоми|Редмі|Редми|Mi\s*Power|Mi\s*PowerBank|Mi\s*Wireless|Mi\s*\d+|Mi\b)\b/i, 
+            excludeIf: /\b(?:для|сумісн\w*|compatible\s+with|підходить\s+для|чохол\s+для|кабель\s+для|remzona\s+для)\s+[^,;]*(?:xiaomi|redmi|poco|mi)\b/i 
+        },
+        { name: 'Ugreen', regex: /\b(?:Ugreen|Югрін|Югрин)\b/i },
+        { 
+            name: 'Baseus', 
+            regex: /\b(?:Baseus|Adaman|Blade|Amblight|Bipow|Базеус|Бейсеус)\b/i, 
+            excludeIf: /\b(?:для|сумісн\w*|compatible\s+with|підходить\s+для)\s+[^,;]*baseus\b/i 
+        },
+        { 
+            name: 'Apple', 
+            regex: /\b(?:Apple|MagSafe|Епл|Еппл)\b/i, 
+            excludeIf: /\b(?:для|сумісн\w*|підходить\s+для|for|iphone|айфона|чохол|кабель|type-c|lightning)\b/i 
+        },
+        { 
+            name: 'Samsung', 
+            regex: /\b(?:Samsung|Самсунг)\b/i, 
+            excludeIf: /\b(?:для|сумісн\w*|підходить\s+для|for|самсунг|чохол|кабель|type-c)\b/i 
+        },
+        { name: 'Anker', regex: /\b(?:Anker|Soundcore|PowerCore|Анкер)\b/i },
+        { name: 'Qinetiq', regex: /\b(?:Qinetiq|Кінетік|Кінетик)\b/i },
+        { name: 'Remzona', regex: /\b(?:Remzona|Ремзона)\b/i },
+        { name: 'Hoco', regex: /\b(?:Hoco|Хоко)\b/i },
+        { name: 'Borofone', regex: /\b(?:Borofone|Борофон)\b/i },
+        { name: 'Romoss', regex: /\b(?:Romoss|Ромосс)\b/i },
+        { name: 'Remax', regex: /\b(?:Remax|Ремакс)\b/i },
+        { name: 'Joyroom', regex: /\b(?:Joyroom|Джойрум)\b/i },
+        { name: 'ColorWay', regex: /\b(?:ColorWay|Колорвей)\b/i },
+        { name: 'Proove', regex: /\b(?:Proove|Прув)\b/i },
+        { name: 'HOPECOM', regex: /\b(?:HOPECOM|Хоупком)\b/i },
         { name: 'ZMI', regex: /\bZMI\b/i },
         { name: '2E', regex: /\b2E\b/i },
-        { name: 'Gelius', regex: /\bGelius\b/i },
+        { name: 'Gelius', regex: /\b(?:Gelius|Геліус|Гелиус)\b/i },
         { name: 'Platinet', regex: /\bPlatinet\b/i },
         { name: 'Dudao', regex: /\bDudao\b/i },
         { name: 'Pisen', regex: /\bPisen\b/i },
@@ -165,11 +181,11 @@
     ];
 
     const SUB_BRAND_ALIASES = {
-        'Xiaomi': ['Xiaomi', 'Mi Power', 'Redmi', 'Poco', '70mai', 'ZMI', 'Cuktech'],
-        'Baseus': ['Baseus', 'Adaman'],
-        'Sigma mobile': ['Sigma mobile', 'Sigma', 'X-POWER'],
-        'Anker': ['Anker', 'Soundcore'],
-        'Ugreen': ['Ugreen']
+        'Xiaomi': ['Xiaomi', 'Mi Power', 'Redmi', 'Poco', '70mai', 'ZMI', 'Cuktech', 'Mi', 'Сяомі', 'Ксіомі', 'Ксяомі', 'Ксиоми', 'Ксиаоми', 'Редмі', 'Редми'],
+        'Baseus': ['Baseus', 'Adaman', 'Blade', 'Amblight', 'Bipow', 'Базеус', 'Бейсеус'],
+        'Sigma mobile': ['Sigma mobile', 'Sigma', 'X-POWER', 'Сігма', 'Сигма'],
+        'Anker': ['Anker', 'Soundcore', 'PowerCore', 'Анкер'],
+        'Ugreen': ['Ugreen', 'Югрін', 'Югрин']
     };
 
     function cleanBrandChipText(rawText) {
@@ -189,8 +205,25 @@
     function detectActiveTargetBrands(meta) {
         const brandsFound = new Set();
 
-        // 1. Priority 1: From Rozetka Active Filter Chips (The top zone circled in red by user)
+        // 1. Priority 1: From Rozetka Active Filter Chips Strip (Top zone above goods grid)
         try {
+            // Check top filter container text as a whole
+            const topContainers = document.querySelectorAll(`
+                rz-selected-filters, .catalog-selection, [class*="catalog-selection"],
+                [class*="selected-filters"], rz-catalog-settings, .catalog-settings, .filters-tags
+            `);
+            for (const container of topContainers) {
+                const fullTopText = cleanBrandChipText(container.textContent || container.innerText || '');
+                if (fullTopText.length >= 2) {
+                    for (const rule of KNOWN_BRAND_RULES) {
+                        if (rule.regex.test(fullTopText)) {
+                            brandsFound.add(rule.name);
+                        }
+                    }
+                }
+            }
+
+            // Check individual chip elements
             const chipElements = document.querySelectorAll(`
                 rz-selected-filters a, rz-selected-filters button, rz-selected-filters li, rz-selected-filters span,
                 .catalog-selection a, .catalog-selection button, .catalog-selection li, .catalog-selection span,
@@ -229,10 +262,10 @@
         try {
             const rawHref = window.location.href || '';
             const decodedHref = decodeURIComponent(rawHref).toLowerCase();
-            const prodMatches = decodedHref.match(/(?:producer|brand|brand_id|sellers)=([^;/&#?]+)/gi);
+            const prodMatches = decodedHref.match(/(?:producer|brand|brand_id|sellers|producers|brands)=([^;/&#?]+)/gi);
             if (prodMatches) {
                 for (const pm of prodMatches) {
-                    const val = pm.replace(/^(?:producer|brand|brand_id|sellers)=/i, '').trim();
+                    const val = pm.replace(/^(?:producer|brand|brand_id|sellers|producers|brands)=/i, '').trim();
                     const tokens = val.split(/[,+;|%2C%2B]/);
                     for (const t of tokens) {
                         const token = t.replace(/[-_]+/g, ' ').trim();
@@ -242,6 +275,15 @@
                                 brandsFound.add(rule.name);
                             }
                         }
+                    }
+                }
+            }
+            // Broad URL pathname scan if producer/brand filter is in path
+            if (decodedHref.includes('producer=') || decodedHref.includes('brand=') || decodedHref.includes('producers=')) {
+                for (const rule of KNOWN_BRAND_RULES) {
+                    const bLower = rule.name.toLowerCase();
+                    if (decodedHref.includes(bLower) || rule.regex.test(decodedHref)) {
+                        brandsFound.add(rule.name);
                     }
                 }
             }
@@ -256,7 +298,8 @@
                 [class*="filter-stack"] input:checked,
                 [class*="filter-checkbox"] input:checked,
                 li.checkbox-filter__item--checked,
-                [class*="checkbox-filter__link--checked"]
+                [class*="checkbox-filter__link--checked"],
+                [aria-checked="true"]
             `);
             for (const cb of checkedCheckboxes) {
                 const labelEl = cb.closest('label, li, .checkbox, rz-filter-checkbox') || cb.parentElement;
