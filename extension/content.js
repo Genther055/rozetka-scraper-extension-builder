@@ -197,7 +197,7 @@
             }
         } catch (_) {}
 
-        // 2. From Rozetka Active Filter Chips (e.g. [Anker X] [Ugreen X])
+        // 2. From Rozetka Active Filter Chips (e.g. [Ugreen X] [Xiaomi X])
         try {
             const chipElements = document.querySelectorAll(`
                 .catalog-selection__item, .catalog-selection__link,
@@ -238,7 +238,7 @@
         } catch (_) {}
 
         // 4. From Title / Category fallback
-        if (brandsFound.size === 0) {
+        if (brandsFound.size === 0 && meta) {
             const sTitle = (meta?.title || '').toLowerCase();
             const sCat = (meta?.category || '').toLowerCase();
             for (const rule of KNOWN_BRAND_RULES) {
@@ -273,7 +273,14 @@
 
         category = cleanCategoryName(category);
 
-        return { title, category };
+        const activeBrands = detectActiveTargetBrands();
+        if (activeBrands.length > 1) {
+            title = `${category} (${activeBrands.join(', ')})`;
+        } else if (activeBrands.length === 1) {
+            title = `${category} ${activeBrands[0]}`;
+        }
+
+        return { title, category, activeBrands };
     }
 
     function parseCountFromText(text) {

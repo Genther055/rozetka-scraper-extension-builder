@@ -235,12 +235,29 @@ const subBrandAliasesServer: Record<string, string[]> = {
   'Ugreen': ['Ugreen']
 };
 
-function getSessionTargetBrandsServer(sessionTitle: string, payloadTargetBrands?: string[]): string[] {
+function getSessionTargetBrandsServer(sessionTitle: string, payloadTargetBrands?: string[], link?: string): string[] {
   const result = new Set<string>();
-  if (Array.isArray(payloadTargetBrands)) {
+  if (Array.isArray(payloadTargetBrands) && payloadTargetBrands.length > 0) {
     payloadTargetBrands.forEach(b => {
       if (b && typeof b === 'string' && b.trim()) result.add(b.trim());
     });
+    return Array.from(result);
+  }
+  if (link && link.includes('producer=')) {
+    try {
+      const m = decodeURIComponent(link).match(/producer=([^;/&#]+)/i);
+      if (m && m[1]) {
+        const tokens = m[1].split(/[,+;|]/);
+        for (const t of tokens) {
+          const token = t.trim();
+          for (const rule of knownBrands) {
+            if (rule.name.toLowerCase() === token.toLowerCase() || rule.regex.test(token)) {
+              result.add(rule.name);
+            }
+          }
+        }
+      }
+    } catch (_) {}
   }
   if (sessionTitle) {
     for (const rule of knownBrands) {
@@ -438,8 +455,10 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
           const detectedBrand = detectBrandServer({ ...item, sessionTitle: itemSessionTitle, category: cleanCat });
 
           // If session has active target brand(s), drop rogue items of conflicting brands
-          const reqTargetBrands = Array.isArray(req.body?.targetBrands) ? req.body.targetBrands : (Array.isArray(item.targetBrands) ? item.targetBrands : []);
-          const sessionTargetBrands = getSessionTargetBrandsServer(itemSessionTitle, reqTargetBrands);
+          const reqTargetBrands = Array.isArray(req.body?.targetBrands) && req.body.targetBrands.length > 0
+            ? req.body.targetBrands 
+            : (Array.isArray(item.targetBrands) && item.targetBrands.length > 0 ? item.targetBrands : []);
+          const sessionTargetBrands = getSessionTargetBrandsServer(itemSessionTitle, reqTargetBrands, item.link || req.body?.link);
           if (sessionTargetBrands.length > 0) {
             const allowedSet = new Set<string>();
             for (const tb of sessionTargetBrands) {

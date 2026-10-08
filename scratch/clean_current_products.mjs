@@ -12,8 +12,8 @@ async function clean() {
     const prods = res.rows[0].data;
     console.log('Original count in DB:', prods.length);
 
-    // Keep Anker and Ugreen items
-    const allowed = ['Anker', 'Soundcore', 'Ugreen'];
+    // Keep Ugreen and Xiaomi items
+    const allowed = ['Ugreen', 'Xiaomi', 'Redmi', 'Poco', '70mai', 'ZMI', 'Cuktech'];
     const filtered = prods.filter(p => {
       const b = p.detailedSpecsMap?.['Бренд'] || (p.specs && p.specs.match(/Бренд:\s*([^;]+)/)?.[1]);
       return allowed.includes(b);
