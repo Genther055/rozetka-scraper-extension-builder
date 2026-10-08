@@ -1703,55 +1703,15 @@
 
                 </div>
 
-                <!-- INTERACTIVE QUICK LEGEND & LINE GUIDE BAR -->
-                <div class="mb-3 px-3.5 py-2.5 bg-slate-900/80 rounded-xl border border-slate-800/80 flex flex-wrap items-center justify-between gap-3 shadow-inner">
-                  <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
-                    <!-- Green Solid: Demand -->
-                    <div class="flex items-center gap-1.5 cursor-help" title="Кумулятивна крива реального попиту (накопичення купівель за відгуками)">
-                      <span class="w-4 h-1 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"></span>
-                      <span class="text-slate-200 font-semibold">Попит (Замовлення)</span>
-                    </div>
-
-                    <!-- Blue Dashed: Supply -->
-                    <div class="flex items-center gap-1.5 cursor-help" title="Крива пропозиції полиці (накопичений % товарів у каталозі Rozetka)">
-                      <svg width="18" height="6" class="shrink-0">
-                        <line x1="0" y1="3" x2="18" y2="3" stroke="#818cf8" stroke-width="2.5" stroke-dasharray="3 2" />
-                      </svg>
-                      <span class="text-indigo-300 font-semibold">Пропозиція (Полиця)</span>
-                    </div>
-
-                    <!-- Gold 50%: Market Equilibrium -->
-                    <div class="flex items-center gap-1.5 cursor-help" title="Точка 50% рівноваги попиту — зважена медіана (половина всіх покупок)">
-                      <div class="flex items-center text-amber-300 font-mono font-bold text-[10px] bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-500/40">
-                        <span class="mr-0.5 text-amber-400">★</span> 50%
-                      </div>
-                      <span class="text-amber-300 font-semibold">Ринкова рівновага</span>
-                    </div>
-
-                    <!-- Sky Blue Vertical: Shelf Median -->
-                    <div class="flex items-center gap-1.5 cursor-help" title="Медіана цін на полиці — середина каталогу за кількістю карток">
-                      <svg width="12" height="12" class="shrink-0">
-                        <line x1="6" y1="0" x2="6" y2="12" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="2 2" />
-                        <circle cx="6" cy="3" r="2.5" fill="#38bdf8" />
-                      </svg>
-                      <span class="text-sky-300 font-medium">Медіана полиці</span>
-                    </div>
-
-                    <!-- Orange Band: Shift -->
-                    <div class="flex items-center gap-1.5 cursor-help" title="Коридор зсуву між ціною виставлених товарів і реальною купівельною спроможністю">
-                      <span class="w-3.5 h-2.5 rounded bg-amber-500/20 border border-amber-500/60"></span>
-                      <span class="text-amber-200/90 font-medium">Зсув попиту</span>
-                    </div>
-                  </div>
-
-                  <!-- Guide Details Toggle Button -->
+                <!-- LINE GUIDE BUTTON (RIGHT-ALIGNED) -->
+                <div class="mb-3 flex items-center justify-end">
                   <button 
                     (click)="toggleChartLegendGuide()"
-                    class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm border"
+                    class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm border"
                     [class.bg-indigo-600]="showChartLegendGuide"
                     [class.text-white]="showChartLegendGuide"
                     [class.border-indigo-400]="showChartLegendGuide"
-                    [class.bg-slate-950]="!showChartLegendGuide"
+                    [class.bg-slate-900/90]="!showChartLegendGuide"
                     [class.text-indigo-300]="!showChartLegendGuide"
                     [class.hover:text-white]="!showChartLegendGuide"
                     [class.border-slate-800]="!showChartLegendGuide"
@@ -8155,55 +8115,15 @@
           </ng-template>
         </div>
 
-        <!-- MODAL QUICK LEGEND & LINE GUIDE BAR (CUMULATIVE MODAL) -->
-        <div *ngIf="activeExpandedChartModal === 'cumulative'" class="px-3.5 py-2.5 bg-slate-900/80 rounded-xl border border-slate-800/80 flex flex-wrap items-center justify-between gap-3 shadow-inner shrink-0">
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
-            <!-- Green Solid: Demand -->
-            <div class="flex items-center gap-1.5 cursor-help" title="Кумулятивна крива реального попиту (накопичення купівель за відгуками)">
-              <span class="w-4 h-1 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"></span>
-              <span class="text-slate-200 font-semibold">Попит (Замовлення)</span>
-            </div>
-
-            <!-- Blue Dashed: Supply -->
-            <div class="flex items-center gap-1.5 cursor-help" title="Крива пропозиції полиці (накопичений % товарів у каталозі Rozetka)">
-              <svg width="18" height="6" class="shrink-0">
-                <line x1="0" y1="3" x2="18" y2="3" stroke="#818cf8" stroke-width="2.5" stroke-dasharray="3 2" />
-              </svg>
-              <span class="text-indigo-300 font-semibold">Пропозиція (Полиця)</span>
-            </div>
-
-            <!-- Gold 50%: Market Equilibrium -->
-            <div class="flex items-center gap-1.5 cursor-help" title="Точка 50% рівноваги попиту — зважена медіана (половина всіх покупок)">
-              <div class="flex items-center text-amber-300 font-mono font-bold text-[10px] bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-500/40">
-                <span class="mr-0.5 text-amber-400">★</span> 50%
-              </div>
-              <span class="text-amber-300 font-semibold">Ринкова рівновага</span>
-            </div>
-
-            <!-- Sky Blue Vertical: Shelf Median -->
-            <div class="flex items-center gap-1.5 cursor-help" title="Медіана цін на полиці — середина каталогу за кількістю карток">
-              <svg width="12" height="12" class="shrink-0">
-                <line x1="6" y1="0" x2="6" y2="12" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="2 2" />
-                <circle cx="6" cy="3" r="2.5" fill="#38bdf8" />
-              </svg>
-              <span class="text-sky-300 font-medium">Медіана полиці</span>
-            </div>
-
-            <!-- Orange Band: Shift -->
-            <div class="flex items-center gap-1.5 cursor-help" title="Коридор зсуву між ціною виставлених товарів і реальною купівельною спроможністю">
-              <span class="w-3.5 h-2.5 rounded bg-amber-500/20 border border-amber-500/60"></span>
-              <span class="text-amber-200/90 font-medium">Зсув попиту</span>
-            </div>
-          </div>
-
-          <!-- Guide Details Toggle Button -->
+        <!-- MODAL LINE GUIDE BUTTON (RIGHT-ALIGNED) -->
+        <div *ngIf="activeExpandedChartModal === 'cumulative'" class="flex items-center justify-end shrink-0">
           <button 
             (click)="toggleChartLegendGuide()"
-            class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm border"
+            class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm border"
             [class.bg-indigo-600]="showChartLegendGuide"
             [class.text-white]="showChartLegendGuide"
             [class.border-indigo-400]="showChartLegendGuide"
-            [class.bg-slate-950]="!showChartLegendGuide"
+            [class.bg-slate-900/90]="!showChartLegendGuide"
             [class.text-indigo-300]="!showChartLegendGuide"
             [class.hover:text-white]="!showChartLegendGuide"
             [class.border-slate-800]="!showChartLegendGuide"
