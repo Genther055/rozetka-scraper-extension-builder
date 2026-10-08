@@ -1909,6 +1909,17 @@ export class DashboardComponent implements OnInit {
   pinnedCumulativePoint: any = null;
   hoveredDensityBar: any = null;
   hoveredDensityBarIndex: number = -1;
+  showChartLegendGuide: boolean = false;
+
+  toggleChartLegendGuide(): void {
+    this.showChartLegendGuide = !this.showChartLegendGuide;
+    this.cdr.markForCheck();
+  }
+
+  closeChartLegendGuide(): void {
+    this.showChartLegendGuide = false;
+    this.cdr.markForCheck();
+  }
 
   get activeCumulativePoint(): any {
     return this.pinnedCumulativePoint || this.hoveredCumulativePoint;
