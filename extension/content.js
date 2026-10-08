@@ -29,10 +29,12 @@
         if (msg.action === 'tabProgress' && (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive)) {
             return;
         }
+        if (!chrome?.runtime?.id) return;
         try {
-            chrome.runtime.sendMessage({ ...msg, tabId: currentTabId }, () => {
-                if (chrome.runtime.lastError) {}
+            const p = chrome.runtime.sendMessage({ ...msg, tabId: currentTabId }, () => {
+                const _ = chrome.runtime.lastError;
             });
+            if (p && typeof p.catch === 'function') p.catch(() => {});
         } catch (_) {}
     }
 
@@ -810,23 +812,68 @@
     }
 
     async function sendWebhookPayload(payload) {
-        return new Promise(resolve => {
-            if (!chrome?.runtime?.id) {
-                resolve(null);
-                return;
-            }
+        // Direct backup fetch to guarantee data transmission regardless of SW state
+        const directBackupFetch = async () => {
             try {
-                chrome.runtime.sendMessage({
+                const target = webhookEndpoint || 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
+                const res = await fetch(target, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) return await res.json();
+            } catch (_) {}
+            return null;
+        };
+
+        if (!chrome?.runtime?.id) {
+            return await directBackupFetch();
+        }
+
+        return new Promise(resolve => {
+            let resolved = false;
+            const timer = setTimeout(async () => {
+                if (!resolved) {
+                    resolved = true;
+                    const res = await directBackupFetch();
+                    resolve(res);
+                }
+            }, 2500);
+
+            try {
+                const p = chrome.runtime.sendMessage({
                     action: 'sendWebhook',
                     webhookUrl: webhookEndpoint,
                     tabId: currentTabId,
                     payload: payload
-                }, (res) => {
-                    if (chrome.runtime.lastError) {}
-                    resolve(res?.serverInfo || null);
+                }, async (res) => {
+                    clearTimeout(timer);
+                    if (!resolved) {
+                        resolved = true;
+                        if (chrome.runtime.lastError || !res) {
+                            const fRes = await directBackupFetch();
+                            resolve(fRes);
+                        } else {
+                            resolve(res?.serverInfo || null);
+                        }
+                    }
                 });
+                if (p && typeof p.catch === 'function') {
+                    p.catch(async () => {
+                        clearTimeout(timer);
+                        if (!resolved) {
+                            resolved = true;
+                            const fRes = await directBackupFetch();
+                            resolve(fRes);
+                        }
+                    });
+                }
             } catch (_) {
-                resolve(null);
+                clearTimeout(timer);
+                if (!resolved) {
+                    resolved = true;
+                    directBackupFetch().then(resolve);
+                }
             }
         });
     }
@@ -970,15 +1017,31 @@
         // Background Service Worker (100% CORS-free and CSP-free via extension host_permissions)
         try {
             const bgRes = await new Promise(resolve => {
-                const timer = setTimeout(() => resolve(null), 2500);
-                chrome.runtime.sendMessage({ action: 'FETCH_PRODUCT_DETAILS', productIds: missingIds }, (res) => {
+                const timer = setTimeout(() => resolve(null), 1500);
+                if (!chrome?.runtime?.id) {
                     clearTimeout(timer);
-                    if (chrome.runtime.lastError || !res || !res.success) {
-                        resolve(null);
-                    } else {
-                        resolve(res.data || []);
+                    resolve(null);
+                    return;
+                }
+                try {
+                    const p = chrome.runtime.sendMessage({ action: 'FETCH_PRODUCT_DETAILS', productIds: missingIds }, (res) => {
+                        clearTimeout(timer);
+                        if (chrome.runtime.lastError || !res || !res.success) {
+                            resolve(null);
+                        } else {
+                            resolve(res.data || []);
+                        }
+                    });
+                    if (p && typeof p.catch === 'function') {
+                        p.catch(() => {
+                            clearTimeout(timer);
+                            resolve(null);
+                        });
                     }
-                });
+                } catch (_) {
+                    clearTimeout(timer);
+                    resolve(null);
+                }
             });
             if (Array.isArray(bgRes) && bgRes.length > 0) {
                 return bgRes;
@@ -2757,7 +2820,7 @@
             if (raw) localState = JSON.parse(raw);
         } catch (_) {}
 
-        chrome.runtime.sendMessage({ action: 'CHECK_TAB_CAN_RUN' }, (bgCheck) => {
+        const handleResume = (bgCheck) => {
             const isStopped = bgCheck && bgCheck.canRun === false && bgCheck.reason === 'stopped';
             if (isStopped) {
                 clearPersistedSession();
@@ -2817,7 +2880,23 @@
                 const initialMeta = getPageMetadata();
                 sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
             }
-        });
+        };
+
+        if (chrome?.runtime?.id) {
+            try {
+                const p = chrome.runtime.sendMessage({ action: 'CHECK_TAB_CAN_RUN' }, (bgCheck) => {
+                    const _ = chrome.runtime.lastError;
+                    handleResume(bgCheck);
+                });
+                if (p && typeof p.catch === 'function') {
+                    p.catch(() => handleResume(null));
+                }
+            } catch (_) {
+                handleResume(null);
+            }
+        } else {
+            handleResume(null);
+        }
     } catch (_) {
         const initialMeta = getPageMetadata();
         sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
