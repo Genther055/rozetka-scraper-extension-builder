@@ -594,10 +594,10 @@
               [class.text-slate-300]="selectedSessionTitle !== 'all'"
               [class.border-slate-700]="selectedSessionTitle !== 'all'"
               class="px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 shrink-0 hover:border-indigo-400/80"
-              title="Показати повну вибірку всіх зібраних товарів"
+              [title]="'Показати вибірку цільових товарів (' + getActiveSessionProducts().length + ' тов.)'"
             >
               <span>Всі зібрані товари</span>
-              <span class="bg-black/40 px-2 py-0.5 rounded-md text-[11px] font-mono">{{ products.length }}</span>
+              <span class="bg-black/40 px-2 py-0.5 rounded-md text-[11px] font-mono">{{ getActiveSessionProducts().length }}</span>
             </button>
 
             <!-- Individual Category & Brand Pills -->

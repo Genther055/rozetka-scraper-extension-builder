@@ -416,12 +416,12 @@ export class DashboardComponent implements OnInit {
 
   // Platform Version & Live Server Status
   readonly appVersion: string = 'v4.3.8';
-  readonly buildTimestamp: string = '08.10 15:45';
+  readonly buildTimestamp: string = '08.10 15:50';
   isForceRefreshing: boolean = false;
   refreshSuccessToast: string | null = null;
   serverStatus = {
     version: 'v4.3.8',
-    buildTimestamp: '08.10 15:45',
+    buildTimestamp: '08.10 15:50',
     uptimeSeconds: 0,
     totalProductsInDb: 0,
     dbStatus: 'connected',
@@ -793,9 +793,46 @@ export class DashboardComponent implements OnInit {
     });
   }
 
+  getMinorBrandsSet(): Set<string> {
+    if (!this.products || this.products.length === 0) return new Set();
+    const brandsMap = new Map<string, number>();
+    for (const p of this.products) {
+      const brand = this.getProductBrand(p);
+      if (brand && brand !== 'Інші') {
+        brandsMap.set(brand, (brandsMap.get(brand) || 0) + 1);
+      }
+    }
+    const sortedBrands = Array.from(brandsMap.entries())
+      .filter(([brand, count]) => count >= 1 && !/^(?:пауербанк|повербанк|павербанк|інші|акумулятор|power\s*bank|powerbank)$/i.test(brand))
+      .sort((a, b) => b[1] - a[1]);
+
+    const totalItems = this.products.length || 1;
+    const maxBrandCount = sortedBrands.length > 0 ? sortedBrands[0][1] : 0;
+    const hasDominantBrands = maxBrandCount >= 15 || (sortedBrands.length > 1 && (sortedBrands[0][1] + (sortedBrands[1]?.[1] || 0)) >= 0.7 * totalItems);
+
+    const minorSet = new Set<string>();
+    if (hasDominantBrands) {
+      for (const [brand, count] of sortedBrands) {
+        if ((count <= 5 || (count / totalItems) < 0.025) && (count < maxBrandCount * 0.1)) {
+          minorSet.add(brand.toLowerCase());
+        }
+      }
+    }
+    return minorSet;
+  }
+
   getActiveSessionProducts(): Product[] {
     if (!this.products || this.products.length === 0) return [];
-    if (this.selectedSessionTitle === 'all') return this.sanitizeProducts(this.products);
+    if (this.selectedSessionTitle === 'all') {
+      const minorBrands = this.getMinorBrandsSet();
+      if (minorBrands.size > 0) {
+        const targetProds = this.products.filter(p => !minorBrands.has(this.getProductBrand(p).toLowerCase()));
+        if (targetProds.length > 0) {
+          return this.sanitizeProducts(targetProds);
+        }
+      }
+      return this.sanitizeProducts(this.products);
+    }
 
     const sel = this.selectedSessionTitle;
     const target = sel.replace(/^(?:brand|cat):/, '').trim().toLowerCase();
