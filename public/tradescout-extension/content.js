@@ -2282,7 +2282,7 @@
                     }
                 }
 
-                // 2. If target brand filter is active, verify this item belongs to it and drop ONLY rogue sponsored spam ads
+                // 2. If target brand filter is active, strictly verify this item belongs to one of the selected brands
                 if (allowedBrandsSet.size > 0) {
                     // Check if item brand is in allowed target brands
                     let isAllowed = false;
@@ -2300,36 +2300,8 @@
                     }
 
                     if (!isAllowed) {
-                        // Check if it belongs to a known foreign sponsored spam brand inserted as an ad (e.g. Qinetiq, Remzona, HOPECOM)
-                        const KNOWN_SPAM_AD_BRANDS = ['Qinetiq', 'Remzona', 'HOPECOM'];
-                        let isSpamAd = false;
-                        for (const spamBrand of KNOWN_SPAM_AD_BRANDS) {
-                            if (!allowedBrandsSet.has(spamBrand)) {
-                                const rule = KNOWN_BRAND_RULES.find(r => r.name === spamBrand);
-                                if (rule && rule.regex.test(name)) {
-                                    isSpamAd = true;
-                                    break;
-                                }
-                            }
-                        }
-                        if (isSpamAd) {
-                            continue; // Skip foreign sponsored spam ad tile
-                        }
-
-                        // Check if it explicitly belongs to an unselected major brand
-                        let isOtherMajorBrand = false;
-                        for (const rule of KNOWN_BRAND_RULES) {
-                            if (!allowedBrandsSet.has(rule.name) && !KNOWN_SPAM_AD_BRANDS.includes(rule.name)) {
-                                if (rule.excludeIf && rule.excludeIf.test(name)) continue;
-                                if (rule.regex.test(name)) {
-                                    isOtherMajorBrand = true;
-                                    break;
-                                }
-                            }
-                        }
-                        if (isOtherMajorBrand) {
-                            continue; // Skip conflicting major brand
-                        }
+                        // Strict data purity: drop all foreign brands / sponsored ads that do not match user's selected filters
+                        continue;
                     }
 
                     // Assign target brand cleanly if not already assigned and exactly 1 target brand is selected

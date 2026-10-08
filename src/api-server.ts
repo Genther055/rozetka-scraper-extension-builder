@@ -454,7 +454,7 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
           const itemSessionId = item.sessionId || sessionId || '';
           const detectedBrand = detectBrandServer({ ...item, sessionTitle: itemSessionTitle, category: cleanCat });
 
-          // If session has active target brand(s), drop rogue items of conflicting brands
+          // If session has active target brand(s), drop all rogue items of foreign brands for 100% data purity
           const reqTargetBrands = Array.isArray(req.body?.targetBrands) && req.body.targetBrands.length > 0
             ? req.body.targetBrands 
             : (Array.isArray(item.targetBrands) && item.targetBrands.length > 0 ? item.targetBrands : []);
@@ -467,13 +467,21 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
               subs.forEach(s => allowedSet.add(s));
             }
 
-            if (detectedBrand && detectedBrand !== 'Інші' && !allowedSet.has(detectedBrand)) {
-              const knownSpamBrands = ['Qinetiq', 'Remzona', 'HOPECOM'];
-              const isSpam = knownSpamBrands.includes(detectedBrand);
-              const isOtherMajor = knownBrands.some(k => k.name === detectedBrand);
-              if (isSpam || isOtherMajor) {
-                return; // skip rogue conflicting item
+            let isAllowed = false;
+            if (detectedBrand && allowedSet.has(detectedBrand)) {
+              isAllowed = true;
+            } else {
+              for (const tb of allowedSet) {
+                const rule = knownBrands.find(k => k.name === tb);
+                if (rule && rule.regex.test(item.name || '')) {
+                  isAllowed = true;
+                  break;
+                }
               }
+            }
+
+            if (!isAllowed) {
+              return; // skip non-target item for 100% chart and analytics purity
             }
           }
 
