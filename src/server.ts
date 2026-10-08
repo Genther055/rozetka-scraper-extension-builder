@@ -95,8 +95,8 @@ function getCleanActiveScrapes(): LiveScrapingTask[] {
 }
 
 const SERVER_START_TIME = Date.now();
-const SERVER_VERSION = 'v4.3.5';
-const BUILD_TIMESTAMP = '08.10 10:50';
+const SERVER_VERSION = 'v4.3.6';
+const BUILD_TIMESTAMP = '08.10 11:25';
 
 app.get('/api/version', async (req, res) => {
   try {
@@ -281,15 +281,15 @@ function getSessionTargetBrandsServer(sessionTitle: string, payloadTargetBrands?
     payloadTargetBrands.forEach(b => {
       if (b && typeof b === 'string' && b.trim()) result.add(b.trim());
     });
-    return Array.from(result);
   }
-  if (link && link.includes('producer=')) {
+  if (link && (link.includes('producer=') || link.includes('brand='))) {
     try {
-      const m = decodeURIComponent(link).match(/producer=([^;/&#]+)/i);
+      const decoded = decodeURIComponent(link).toLowerCase();
+      const m = decoded.match(/(?:producer|brand)=([^;/&#?]+)/i);
       if (m && m[1]) {
-        const tokens = m[1].split(/[,+;|]/);
+        const tokens = m[1].split(/[,+;|%2C%2B]/);
         for (const t of tokens) {
-          const token = t.trim();
+          const token = t.replace(/[-_]+/g, ' ').trim();
           for (const rule of knownBrands) {
             if (rule.name.toLowerCase() === token.toLowerCase() || rule.regex.test(token)) {
               result.add(rule.name);
@@ -472,7 +472,12 @@ app.post('/api/products', async (req, res) => {
             }
 
             if (detectedBrand && detectedBrand !== 'Інші' && !allowedSet.has(detectedBrand)) {
-              return; // skip rogue item
+              const knownSpamBrands = ['Qinetiq', 'Remzona', 'HOPECOM'];
+              const isSpam = knownSpamBrands.includes(detectedBrand);
+              const isOtherMajor = knownBrands.some(k => k.name === detectedBrand);
+              if (isSpam || isOtherMajor) {
+                return; // skip rogue conflicting item
+              }
             }
           }
 

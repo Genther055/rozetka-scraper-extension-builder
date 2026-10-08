@@ -172,20 +172,66 @@
         'Ugreen': ['Ugreen']
     };
 
+    function cleanBrandChipText(rawText) {
+        if (!rawText) return '';
+        let clean = rawText
+            .replace(/[\u2715\u00D7\u2716\u2A09\u274C\u274E\u00D7xX]/g, ' ')
+            .replace(/\(\d+\)/g, ' ')
+            .replace(/скинути\s+все|скинути|скасувати|очистити|застосувати|фільтр\w*/gi, ' ')
+            .replace(/[\r\n\t]+/g, ' ')
+            .trim();
+        return clean;
+    }
+
     function detectActiveTargetBrands(meta) {
         const brandsFound = new Set();
 
-        // 1. From URL
+        // 1. Priority 1: From Rozetka Active Filter Chips (The top zone circled in red by user)
+        try {
+            const chipElements = document.querySelectorAll(`
+                rz-selected-filters a, rz-selected-filters button, rz-selected-filters li, rz-selected-filters span,
+                .catalog-selection a, .catalog-selection button, .catalog-selection li, .catalog-selection span,
+                .catalog-selection__item, .catalog-selection__link, .catalog-selection__chip,
+                [class*="catalog-selection"] a, [class*="catalog-selection"] button, [class*="catalog-selection"] li,
+                [class*="selected-filters"] a, [class*="selected-filters"] button, [class*="selected-filters"] li,
+                [class*="selection__item"], [class*="selection__link"], [class*="selection__chip"],
+                [class*="filter-tag"], [class*="filters-tags"] a, [class*="filters-tag"],
+                rz-chip, .chip, [data-testid*="chip"], [data-testid*="selected-filter"], [data-testid*="tag"]
+            `);
+            for (const el of chipElements) {
+                const txt = cleanBrandChipText(el.textContent || el.innerText || '');
+                if (txt.length < 2) continue;
+                let matched = false;
+                for (const rule of KNOWN_BRAND_RULES) {
+                    if (rule.regex.test(txt) || rule.name.toLowerCase() === txt.toLowerCase()) {
+                        brandsFound.add(rule.name);
+                        matched = true;
+                    }
+                }
+                if (!matched) {
+                    const words = txt.split(/[\s,;|/]+/);
+                    for (const w of words) {
+                        for (const rule of KNOWN_BRAND_RULES) {
+                            if (rule.name.toLowerCase() === w.toLowerCase() || (w.length >= 3 && rule.regex.test(w))) {
+                                brandsFound.add(rule.name);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_) {}
+
+        // 2. Priority 2: From URL parameters and pathname (producer=ugreen,xiaomi)
         try {
             const rawHref = window.location.href || '';
             const decodedHref = decodeURIComponent(rawHref).toLowerCase();
-            const prodMatches = decodedHref.match(/producer=([^;/&#]+)/gi);
+            const prodMatches = decodedHref.match(/(?:producer|brand|brand_id|sellers)=([^;/&#?]+)/gi);
             if (prodMatches) {
                 for (const pm of prodMatches) {
-                    const val = pm.replace(/^producer=/i, '').trim();
-                    const tokens = val.split(/[,+;|]/);
+                    const val = pm.replace(/^(?:producer|brand|brand_id|sellers)=/i, '').trim();
+                    const tokens = val.split(/[,+;|%2C%2B]/);
                     for (const t of tokens) {
-                        const token = t.trim();
+                        const token = t.replace(/[-_]+/g, ' ').trim();
                         if (!token) continue;
                         for (const rule of KNOWN_BRAND_RULES) {
                             if (rule.name.toLowerCase() === token || rule.regex.test(token)) {
@@ -197,32 +243,16 @@
             }
         } catch (_) {}
 
-        // 2. From Rozetka Active Filter Chips (e.g. [Ugreen X] [Xiaomi X])
-        try {
-            const chipElements = document.querySelectorAll(`
-                .catalog-selection__item, .catalog-selection__link,
-                rz-selected-filters a, rz-selected-filters button,
-                .catalog-settings .chip, [class*="selection__link"],
-                [class*="filters-tags"] a, [class*="selected-filters"] a, [class*="selected-filters"] button
-            `);
-            for (const el of chipElements) {
-                const txt = (el.textContent || el.innerText || '').replace(/[\u2715\u00D7xX]/g, '').trim();
-                if (txt.length < 2) continue;
-                for (const rule of KNOWN_BRAND_RULES) {
-                    if (rule.regex.test(txt) || rule.name.toLowerCase() === txt.toLowerCase()) {
-                        brandsFound.add(rule.name);
-                    }
-                }
-            }
-        } catch (_) {}
-
-        // 3. From Sidebar Checked Brand Checkboxes
+        // 3. Priority 3: From Sidebar Checked Brand Checkboxes
         try {
             const checkedCheckboxes = document.querySelectorAll(`
                 rz-filter-stack input[type="checkbox"]:checked,
                 .sidebar input[type="checkbox"]:checked,
                 rz-sidebar input[type="checkbox"]:checked,
-                [class*="filter-stack"] input:checked
+                [class*="filter-stack"] input:checked,
+                [class*="filter-checkbox"] input:checked,
+                li.checkbox-filter__item--checked,
+                [class*="checkbox-filter__link--checked"]
             `);
             for (const cb of checkedCheckboxes) {
                 const labelEl = cb.closest('label, li, .checkbox, rz-filter-checkbox') || cb.parentElement;
@@ -237,7 +267,7 @@
             }
         } catch (_) {}
 
-        // 4. From Title / Category fallback
+        // 4. Priority 4: From Title / Category fallback
         if (brandsFound.size === 0 && meta) {
             const sTitle = (meta?.title || '').toLowerCase();
             const sCat = (meta?.category || '').toLowerCase();
@@ -2197,36 +2227,64 @@
                 }
 
                 // 1. Detect Brand from specifications or product name
+                let detectedItemBrand = '';
                 for (const rule of KNOWN_BRAND_RULES) {
                     if (rule.excludeIf && rule.excludeIf.test(name)) continue;
                     if (rule.regex.test(name)) {
+                        detectedItemBrand = rule.name;
                         detailedSpecsMap['Бренд'] = rule.name;
                         break;
                     }
                 }
 
-                // 2. If target brand filter is active, verify this item belongs to it and drop rogue/sponsored items
+                // 2. If target brand filter is active, verify this item belongs to it and drop ONLY rogue sponsored spam ads
                 if (allowedBrandsSet.size > 0) {
-                    // Check if item was detected as a conflicting rogue brand
-                    if (detailedSpecsMap['Бренд'] && !allowedBrandsSet.has(detailedSpecsMap['Бренд'])) {
-                        // Skip rogue/sponsored third-party item
-                        continue;
-                    }
-
-                    // Check if name explicitly mentions a conflicting brand that is not in allowedBrandsSet
-                    let isConflictingBrand = false;
-                    for (const rule of KNOWN_BRAND_RULES) {
-                        if (!allowedBrandsSet.has(rule.name)) {
-                            if (rule.excludeIf && rule.excludeIf.test(name)) continue;
-                            if (rule.regex.test(name)) {
-                                isConflictingBrand = true;
+                    // Check if item brand is in allowed target brands
+                    let isAllowed = false;
+                    if (detectedItemBrand && allowedBrandsSet.has(detectedItemBrand)) {
+                        isAllowed = true;
+                    } else {
+                        for (const b of allowedBrandsSet) {
+                            const rule = KNOWN_BRAND_RULES.find(r => r.name === b);
+                            if (rule && rule.regex.test(name)) {
+                                isAllowed = true;
+                                if (!detailedSpecsMap['Бренд']) detailedSpecsMap['Бренд'] = b;
                                 break;
                             }
                         }
                     }
-                    if (isConflictingBrand) {
-                        // Skip rogue/sponsored third-party item
-                        continue;
+
+                    if (!isAllowed) {
+                        // Check if it belongs to a known foreign sponsored spam brand inserted as an ad (e.g. Qinetiq, Remzona, HOPECOM)
+                        const KNOWN_SPAM_AD_BRANDS = ['Qinetiq', 'Remzona', 'HOPECOM'];
+                        let isSpamAd = false;
+                        for (const spamBrand of KNOWN_SPAM_AD_BRANDS) {
+                            if (!allowedBrandsSet.has(spamBrand)) {
+                                const rule = KNOWN_BRAND_RULES.find(r => r.name === spamBrand);
+                                if (rule && rule.regex.test(name)) {
+                                    isSpamAd = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (isSpamAd) {
+                            continue; // Skip foreign sponsored spam ad tile
+                        }
+
+                        // Check if it explicitly belongs to an unselected major brand
+                        let isOtherMajorBrand = false;
+                        for (const rule of KNOWN_BRAND_RULES) {
+                            if (!allowedBrandsSet.has(rule.name) && !KNOWN_SPAM_AD_BRANDS.includes(rule.name)) {
+                                if (rule.excludeIf && rule.excludeIf.test(name)) continue;
+                                if (rule.regex.test(name)) {
+                                    isOtherMajorBrand = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (isOtherMajorBrand) {
+                            continue; // Skip conflicting major brand
+                        }
                     }
 
                     // Assign target brand cleanly if not already assigned and exactly 1 target brand is selected
