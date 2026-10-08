@@ -2280,6 +2280,7 @@
                     category: meta.category,
                     sessionTitle: meta.title,
                     sessionId: currentSessionId,
+                    targetBrands: targetSessionBrands,
                     specs,
                     detailedSpecsMap,
                     description: '',
@@ -2459,6 +2460,7 @@
                 sessionTitle: meta.title,
                 category: meta.category,
                 targetBrands: activeSessionTargetBrands,
+                pageUrl: window.location.href,
                 tabId: currentTabId
             });
 
