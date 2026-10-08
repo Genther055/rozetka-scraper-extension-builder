@@ -227,6 +227,31 @@ function detectBrandServer(p: any): string {
   return 'Інші';
 }
 
+const subBrandAliasesServer: Record<string, string[]> = {
+  'Xiaomi': ['Xiaomi', 'Mi Power', 'Redmi', 'Poco', '70mai', 'ZMI', 'Cuktech'],
+  'Baseus': ['Baseus', 'Adaman'],
+  'Sigma mobile': ['Sigma mobile', 'Sigma', 'X-POWER'],
+  'Anker': ['Anker', 'Soundcore'],
+  'Ugreen': ['Ugreen']
+};
+
+function getSessionTargetBrandsServer(sessionTitle: string, payloadTargetBrands?: string[]): string[] {
+  const result = new Set<string>();
+  if (Array.isArray(payloadTargetBrands)) {
+    payloadTargetBrands.forEach(b => {
+      if (b && typeof b === 'string' && b.trim()) result.add(b.trim());
+    });
+  }
+  if (sessionTitle) {
+    for (const rule of knownBrands) {
+      if (rule.regex.test(sessionTitle)) {
+        result.add(rule.name);
+      }
+    }
+  }
+  return Array.from(result);
+}
+
 let productsWriteLock = Promise.resolve();
 
 function withProductsLock<T>(fn: () => Promise<T>): Promise<T> {
@@ -412,16 +437,18 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
           const itemSessionId = item.sessionId || sessionId || '';
           const detectedBrand = detectBrandServer({ ...item, sessionTitle: itemSessionTitle, category: cleanCat });
 
-          // If session is dedicated to a specific brand, drop rogue items of conflicting brands
-          const sessionTargetBrand = knownBrands.find(b => b.regex.test(itemSessionTitle))?.name;
-          if (sessionTargetBrand) {
-            const allowed = ({
-              'Xiaomi': ['Xiaomi', 'Mi Power', 'Redmi', 'Poco', '70mai', 'ZMI', 'Cuktech'],
-              'Baseus': ['Baseus', 'Adaman'],
-              'Sigma mobile': ['Sigma mobile', 'Sigma', 'X-POWER']
-            } as Record<string, string[]>)[sessionTargetBrand] || [sessionTargetBrand];
+          // If session has active target brand(s), drop rogue items of conflicting brands
+          const reqTargetBrands = Array.isArray(req.body?.targetBrands) ? req.body.targetBrands : (Array.isArray(item.targetBrands) ? item.targetBrands : []);
+          const sessionTargetBrands = getSessionTargetBrandsServer(itemSessionTitle, reqTargetBrands);
+          if (sessionTargetBrands.length > 0) {
+            const allowedSet = new Set<string>();
+            for (const tb of sessionTargetBrands) {
+              allowedSet.add(tb);
+              const subs = subBrandAliasesServer[tb] || [];
+              subs.forEach(s => allowedSet.add(s));
+            }
 
-            if (detectedBrand && !allowed.includes(detectedBrand) && detectedBrand !== 'Інші') {
+            if (detectedBrand && detectedBrand !== 'Інші' && !allowedSet.has(detectedBrand)) {
               return; // skip rogue item
             }
           }
