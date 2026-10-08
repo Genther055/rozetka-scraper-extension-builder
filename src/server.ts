@@ -95,8 +95,8 @@ function getCleanActiveScrapes(): LiveScrapingTask[] {
 }
 
 const SERVER_START_TIME = Date.now();
-const SERVER_VERSION = 'v4.4.1';
-const BUILD_TIMESTAMP = '08.10 16:30';
+const SERVER_VERSION = 'v4.4.2';
+const BUILD_TIMESTAMP = '08.10 16:45';
 
 app.get('/api/version', async (req, res) => {
   try {

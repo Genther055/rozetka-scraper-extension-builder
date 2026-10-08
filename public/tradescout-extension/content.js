@@ -2515,7 +2515,24 @@
             }
         }
 
-        // Continuous adaptive incremental harvesting across lazy chunks
+        // 1. Fast, smooth progressive scroll to mount Angular virtualized tiles
+        const catalogScrollHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
+        const scrollStep = 800;
+        for (let curY = 400; curY <= catalogScrollHeight; curY += scrollStep) {
+            if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+            window.scrollTo({ top: curY, behavior: 'auto' });
+            window.dispatchEvent(new Event('scroll'));
+            document.dispatchEvent(new Event('scroll'));
+            await new Promise(r => setTimeout(r, 60));
+        }
+        window.scrollTo({ top: catalogScrollHeight, behavior: 'auto' });
+        window.dispatchEvent(new Event('scroll'));
+        await new Promise(r => setTimeout(r, 120));
+
+        // 2. Trigger "Показати ще" if present
+        await triggerShowMoreAndWait();
+
+        // 3. Harvest tiles on current page
         const pageNewProducts = [];
         const pageLinksSeen = new Set();
 
@@ -2530,73 +2547,18 @@
                     addedAny = true;
                 }
             }
-
-            if (addedAny && isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
-                currentPercent = Math.min(100, Math.round((sentLinks.size / Math.max(1, currentEstimatedTotal)) * 100)) || 1;
-                currentStatusMsg = `Збір (стор. ${currentPage}): ${meta.title} (${sentLinks.size}/${currentEstimatedTotal})...`;
-                sendTabMessage({
-                    action: 'tabProgress',
-                    total: sentLinks.size,
-                    page: currentPage,
-                    percent: currentPercent,
-                    statusMsg: currentStatusMsg,
-                    syncedCount: sentLinks.size,
-                    estimatedTotal: currentEstimatedTotal,
-                    sessionTitle: meta.title,
-                    category: meta.category,
-                    sessionId: currentSessionId,
-                    startTime: sessionStartTime
-                });
-            }
+            return addedAny;
         };
 
-        // Round 0: Initial harvest of immediately mounted tiles
         await harvestBatch();
 
-        // If tiles not mounted yet, wait for Angular hydration with progressive retries
+        // If tiles not mounted yet, short wait with retries
         if (pageNewProducts.length === 0) {
-            for (let retry = 0; retry < 6 && pageNewProducts.length === 0; retry++) {
-                await new Promise(r => setTimeout(r, 350));
+            for (let retry = 0; retry < 4 && pageNewProducts.length === 0; retry++) {
+                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
+                await new Promise(r => setTimeout(r, 250));
                 captureVisualRatingsInViewport();
                 await harvestBatch();
-            }
-        }
-
-        // Fast progressive scroll if target not yet reached
-        if (pageNewProducts.length < targetForThisPage) {
-            for (let round = 0; round < 6 && pageNewProducts.length < targetForThisPage; round++) {
-                if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-
-                const catalogScrollHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2500);
-                const scrollStep = 600;
-                
-                for (let curY = 400; curY <= catalogScrollHeight && pageNewProducts.length < targetForThisPage; curY += scrollStep) {
-                    if (!isTabScrapingActive || !window.__tradeScoutIsScrapingActive) return;
-                    window.scrollTo({ top: curY, behavior: 'auto' });
-                    window.dispatchEvent(new Event('scroll'));
-                    document.dispatchEvent(new Event('scroll'));
-
-                    await new Promise(r => setTimeout(r, 120));
-                    captureVisualRatingsInViewport();
-                    await harvestBatch();
-                }
-
-                if (pageNewProducts.length >= targetForThisPage) break;
-
-                // Trigger "Показати ще" if present
-                const clicked = await triggerShowMoreAndWait();
-                if (clicked) {
-                    await new Promise(r => setTimeout(r, 300));
-                    await harvestBatch();
-                } else {
-                    const paginator = document.querySelector('rz-paginator, .pagination, [class*="paginator"], [class*="catalog-grid__more"]');
-                    if (paginator) {
-                        paginator.scrollIntoView({ behavior: 'auto', block: 'center' });
-                        window.dispatchEvent(new Event('scroll'));
-                        await new Promise(r => setTimeout(r, 200));
-                        await harvestBatch();
-                    }
-                }
             }
         }
 
@@ -2640,7 +2602,7 @@
             persistSessionState(currentPage);
         }
 
-        // 3. Check if there is a next page to scrape
+        // 4. Check if there is a next page to scrape
         const hasNextPage = checkHasNextPage(nextPg);
 
         // Dynamically expand estimated total if more products/pages are available
@@ -2788,29 +2750,30 @@
 
     // Check if resuming from an active session after page navigation
     try {
+        const tabKey = getSessionStorageKey();
+        let localState = null;
+        try {
+            const raw = sessionStorage.getItem(tabKey) || sessionStorage.getItem(SESSION_STORAGE_KEY);
+            if (raw) localState = JSON.parse(raw);
+        } catch (_) {}
+
         chrome.runtime.sendMessage({ action: 'CHECK_TAB_CAN_RUN' }, (bgCheck) => {
-            if (chrome.runtime.lastError || !bgCheck || !bgCheck.canRun) {
+            const isStopped = bgCheck && bgCheck.canRun === false && bgCheck.reason === 'stopped';
+            if (isStopped) {
                 clearPersistedSession();
                 const initialMeta = getPageMetadata();
                 sendTabMessage({ action: 'tabIdle', sessionTitle: initialMeta.title, category: initialMeta.category });
                 return;
             }
 
-            currentTabId = bgCheck.tabId || currentTabId;
-            const tabKey = getSessionStorageKey();
-            let state = null;
-            try {
-                const rawState = sessionStorage.getItem(tabKey) || sessionStorage.getItem(SESSION_STORAGE_KEY);
-                if (rawState) state = JSON.parse(rawState);
-            } catch (_) {}
+            currentTabId = bgCheck?.tabId || localState?.tabId || currentTabId;
+            let state = localState || bgCheck?.session;
 
-            if (!state) state = bgCheck.session;
-
-            if (state && (state.isRunning || bgCheck.session?.isRunning)) {
+            if (state && (state.isRunning || bgCheck?.session?.isRunning) && (Date.now() - (state.savedAt || 0) < 300000)) {
                 console.log('TradeScout Content Script: Resuming session across page navigation on page', state.currentPage || 1);
                 isTabScrapingActive = true;
                 window.__tradeScoutIsScrapingActive = true;
-                currentTabId = bgCheck.tabId || state.tabId || currentTabId;
+                currentTabId = bgCheck?.tabId || state.tabId || currentTabId;
                 currentSessionId = state.sessionId || `session_${currentTabId}_${Date.now()}`;
                 webhookEndpoint = state.webhookUrl || webhookEndpoint;
                 sessionStartTime = state.startTime || Date.now();
@@ -2843,12 +2806,12 @@
                     startTime: sessionStartTime
                 });
 
-                // Wait 400ms for Angular DOM hydration before starting harvest
+                // Wait 250ms for Angular DOM hydration before starting harvest
                 setTimeout(() => {
                     if (isTabScrapingActive && window.__tradeScoutIsScrapingActive) {
                         runTabScraper(currentPage);
                     }
-                }, 400);
+                }, 250);
             } else {
                 clearPersistedSession();
                 const initialMeta = getPageMetadata();

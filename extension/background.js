@@ -436,11 +436,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log(`TradeScout Background: Tab ${tabId} sending ${itemCount} products for "${payload.sessionTitle || 'Каталог'}"...`);
 
         const RENDER_CLOUD_API = 'https://rozetka-scraper-extension-builder.onrender.com/api/products';
-        const targets = [];
-        if (webhookUrl && !targets.includes(webhookUrl)) targets.push(webhookUrl);
-        if (!targets.includes(RENDER_CLOUD_API)) targets.push(RENDER_CLOUD_API);
-        if (!targets.includes(LOCAL_DASHBOARD_API)) targets.push(LOCAL_DASHBOARD_API);
-        if (!targets.includes(LOCAL_IP_API)) targets.push(LOCAL_IP_API);
+        const primaryUrl = webhookUrl || RENDER_CLOUD_API;
 
         try {
             chrome.tabs.query({ url: ["*://*.vercel.app/*", "*://localhost/*", "*://127.0.0.1/*", "*://*.onrender.com/*"] }, (dashboardTabs) => {
@@ -462,32 +458,45 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
         } catch (_) {}
 
-        const postWithRetry = async (url, data, maxRetries = 3) => {
-            for (let i = 0; i < maxRetries; i++) {
-                try {
-                    const res = await fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(data)
-                    });
-                    if (res.ok) {
-                        return await res.json();
-                    }
-                } catch (e) {
-                    if (i < maxRetries - 1) {
-                        await new Promise(r => setTimeout(r, 1000 * (i + 1)));
-                    }
+        // Primary cloud post with fast timeout
+        (async () => {
+            let serverInfo = null;
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+                const res = await fetch(primaryUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                if (res.ok) {
+                    serverInfo = await res.json();
                 }
+            } catch (err) {
+                console.warn('[TradeScout Background Webhook Primary Error]', err);
             }
-            return null;
-        };
 
-        const sendPromises = targets.map(url => postWithRetry(url, payload));
+            // Also post to fallback cloud URL if primary differed
+            if (primaryUrl !== RENDER_CLOUD_API) {
+                fetch(RENDER_CLOUD_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).catch(() => {});
+            }
 
-        Promise.all(sendPromises).then((results) => {
-            const serverInfo = results.find(r => r && r.success) || null;
+            // Localhost non-blocking attempt (no retry, 1s timeout)
+            fetch(LOCAL_DASHBOARD_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: AbortSignal.timeout(1000)
+            }).catch(() => {});
+
             sendResponse({ success: true, serverInfo });
-        });
+        })();
 
         return true;
     }
