@@ -175,7 +175,10 @@
     function cleanBrandChipText(rawText) {
         if (!rawText) return '';
         let clean = rawText
-            .replace(/[\u2715\u00D7\u2716\u2A09\u274C\u274E\u00D7xX]/g, ' ')
+            .replace(/[\u2715\u00D7\u2716\u2A09\u274C\u274E]/g, ' ')
+            .replace(/\s+[xX]\s*$/g, ' ')
+            .replace(/^\s*[xX]\s+/g, ' ')
+            .replace(/\b[xX]\b/g, ' ')
             .replace(/\(\d+\)/g, ' ')
             .replace(/скинути\s+все|скинути|скасувати|очистити|застосувати|фільтр\w*/gi, ' ')
             .replace(/[\r\n\t]+/g, ' ')
@@ -196,7 +199,8 @@
                 [class*="selected-filters"] a, [class*="selected-filters"] button, [class*="selected-filters"] li,
                 [class*="selection__item"], [class*="selection__link"], [class*="selection__chip"],
                 [class*="filter-tag"], [class*="filters-tags"] a, [class*="filters-tag"],
-                rz-chip, .chip, [data-testid*="chip"], [data-testid*="selected-filter"], [data-testid*="tag"]
+                rz-chip, .chip, [data-testid*="chip"], [data-testid*="selected-filter"], [data-testid*="tag"],
+                rz-catalog-settings a, rz-catalog-settings button, rz-catalog-settings li
             `);
             for (const el of chipElements) {
                 const txt = cleanBrandChipText(el.textContent || el.innerText || '');
@@ -257,7 +261,7 @@
             for (const cb of checkedCheckboxes) {
                 const labelEl = cb.closest('label, li, .checkbox, rz-filter-checkbox') || cb.parentElement;
                 if (labelEl) {
-                    const txt = (labelEl.textContent || labelEl.innerText || '').replace(/\(\d+\)/g, '').trim();
+                    const txt = cleanBrandChipText((labelEl.textContent || labelEl.innerText || '').replace(/\(\d+\)/g, '').trim());
                     for (const rule of KNOWN_BRAND_RULES) {
                         if (rule.regex.test(txt) || rule.name.toLowerCase() === txt.toLowerCase()) {
                             brandsFound.add(rule.name);
