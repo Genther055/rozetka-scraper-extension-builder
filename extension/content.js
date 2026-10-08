@@ -80,7 +80,20 @@
             const re = new RegExp('\\s*[-–—|,]?\\s*' + b + '\\b.*$', 'i');
             s = s.replace(re, '');
         }
-        return s.trim() || 'Повербанки та УМБ';
+        s = s.trim();
+        if (/^(?:повербанк[иа-я]*|павербанк[иа-я]*|пауербанк[иа-я]*|умб|універсальні\s+мобільні\s+батареї|повербанки\s+та\s+умб|power\s*banks?)$/i.test(s)) {
+            return 'Повербанки та УМБ';
+        }
+        if (/^(?:зарядні\s+станції|портативні\s+електростанції|power\s*stations?)$/i.test(s)) {
+            return 'Зарядні станції';
+        }
+        if (/^(?:сонячні\s+панелі|solar\s*panels?)$/i.test(s)) {
+            return 'Сонячні панелі';
+        }
+        if (/^(?:кабелі|кабелі\s+синхронізації|шнури|cables?)$/i.test(s)) {
+            return 'Кабелі та перехідники';
+        }
+        return s || 'Повербанки та УМБ';
     }
 
     // Extract human-readable category & session title from page

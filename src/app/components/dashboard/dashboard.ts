@@ -572,13 +572,25 @@ export class DashboardComponent implements OnInit {
     const brandSuffixes = [
       'Sigma mobile', 'Sigma', 'Xiaomi', 'Redmi', 'Ugreen', 'Baseus', 'Apple', 'Samsung',
       'Anker', 'Hoco', 'Borofone', 'Romoss', 'Remax', 'Joyroom', 'ColorWay', 'Proove',
-      'HOPECOM', 'Qinetiq', 'Remzona', '2E', 'Gelius', 'ZMI', 'Belkin', 'Choetech', 'BLUETTI', 'EcoFlow'
+      'HOPECOM', 'Qinetiq', 'Remzona', '2E', 'Gelius', 'ZMI', 'Belkin', 'Choetech', 'BLUETTI', 'EcoFlow', 'Jackery'
     ];
     for (const b of brandSuffixes) {
       const re = new RegExp('\\s*[-–—|,]?\\s*' + b + '\\b.*$', 'i');
       raw = raw.replace(re, '');
     }
     raw = raw.trim();
+    if (/^(?:повербанк[иа-я]*|павербанк[иа-я]*|пауербанк[иа-я]*|умб|універсальні\s+мобільні\s+батареї|повербанки\s+та\s+умб|power\s*banks?)$/i.test(raw)) {
+      return 'Повербанки та УМБ';
+    }
+    if (/^(?:зарядні\s+станції|портативні\s+електростанції|power\s*stations?)$/i.test(raw)) {
+      return 'Зарядні станції';
+    }
+    if (/^(?:сонячні\s+панелі|solar\s*panels?)$/i.test(raw)) {
+      return 'Сонячні панелі';
+    }
+    if (/^(?:кабелі|кабелі\s+синхронізації|шнури|cables?)$/i.test(raw)) {
+      return 'Кабелі та перехідники';
+    }
     return raw || 'Повербанки та УМБ';
   }
 
