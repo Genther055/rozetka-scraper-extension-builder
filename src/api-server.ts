@@ -90,7 +90,7 @@ function getCleanActiveScrapes(): LiveScrapingTask[] {
 
 const SERVER_START_TIME = Date.now();
 const SERVER_VERSION = 'v4.3.8';
-const BUILD_TIMESTAMP = '08.10 15:30';
+const BUILD_TIMESTAMP = '08.10 15:45';
 
 app.get('/api/version', async (req, res) => {
   try {
@@ -469,37 +469,6 @@ app.post(['/api/products', '/dashboard', '/api/dashboard', '/products'], async (
           const itemSessionTitle = (item.sessionTitle || sessionTitle || cleanCat).trim();
           const itemSessionId = item.sessionId || sessionId || '';
           const detectedBrand = detectBrandServer({ ...item, sessionTitle: itemSessionTitle, category: cleanCat });
-
-          // If session has active target brand(s), drop all rogue items of foreign brands for 100% data purity
-          const reqTargetBrands = Array.isArray(req.body?.targetBrands) && req.body.targetBrands.length > 0
-            ? req.body.targetBrands 
-            : (Array.isArray(item.targetBrands) && item.targetBrands.length > 0 ? item.targetBrands : []);
-          const sessionTargetBrands = getSessionTargetBrandsServer(itemSessionTitle, reqTargetBrands, item.link || req.body?.link);
-          if (sessionTargetBrands.length > 0) {
-            const allowedSet = new Set<string>();
-            for (const tb of sessionTargetBrands) {
-              allowedSet.add(tb);
-              const subs = subBrandAliasesServer[tb] || [];
-              subs.forEach(s => allowedSet.add(s));
-            }
-
-            let isAllowed = false;
-            if (detectedBrand && allowedSet.has(detectedBrand)) {
-              isAllowed = true;
-            } else {
-              for (const tb of allowedSet) {
-                const rule = knownBrands.find(k => k.name === tb);
-                if (rule && rule.regex.test(item.name || '')) {
-                  isAllowed = true;
-                  break;
-                }
-              }
-            }
-
-            if (!isAllowed) {
-              return; // skip non-target item for 100% chart and analytics purity
-            }
-          }
 
           const specsMap = item.detailedSpecsMap && typeof item.detailedSpecsMap === 'object' ? { ...item.detailedSpecsMap } : {};
           if (!specsMap['Бренд'] || specsMap['Бренд'] === 'None' || specsMap['Бренд'] === 'Undefined') {

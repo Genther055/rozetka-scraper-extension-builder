@@ -2329,32 +2329,8 @@
                     }
                 }
 
-                // 2. If target brand filter is active, strictly verify this item belongs to one of the selected brands
-                if (allowedBrandsSet.size > 0) {
-                    // Check if item brand is in allowed target brands
-                    let isAllowed = false;
-                    if (detectedItemBrand && allowedBrandsSet.has(detectedItemBrand)) {
-                        isAllowed = true;
-                    } else {
-                        for (const b of allowedBrandsSet) {
-                            const rule = KNOWN_BRAND_RULES.find(r => r.name === b);
-                            if (rule && rule.regex.test(name)) {
-                                isAllowed = true;
-                                if (!detailedSpecsMap['Бренд']) detailedSpecsMap['Бренд'] = b;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (!isAllowed) {
-                        // Strict data purity: drop all foreign brands / sponsored ads that do not match user's selected filters
-                        continue;
-                    }
-
-                    // Assign target brand cleanly if not already assigned and exactly 1 target brand is selected
-                    if (!detailedSpecsMap['Бренд'] && targetSessionBrands.length === 1) {
-                        detailedSpecsMap['Бренд'] = targetSessionBrands[0];
-                    }
+                if (!detailedSpecsMap['Бренд'] && targetSessionBrands.length === 1) {
+                    detailedSpecsMap['Бренд'] = targetSessionBrands[0];
                 }
 
                 const specs = Object.entries(detailedSpecsMap).map(([k, v]) => `${k}: ${v}`).join('; ') || (capacityMatch ? `${capacityMatch[1]} mAh` : 'Стандартні');
