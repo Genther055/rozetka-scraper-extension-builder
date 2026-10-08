@@ -1556,82 +1556,128 @@
                   
                   <!-- Active Hovered or Pinned State -->
                   <ng-container *ngIf="activeCumulativePoint; else defaultEquilibriumNotice">
-                    <div class="flex items-center gap-3 min-w-0 flex-1">
-                      <!-- Left Price & Demand Badge -->
-                      <div class="flex items-center gap-2.5 bg-slate-950 px-3 py-1.5 rounded-xl border shrink-0 font-mono"
-                           [class.border-amber-500/50]="pinnedCumulativePoint"
-                           [class.border-indigo-500/30]="!pinnedCumulativePoint">
-                        <div class="text-right">
-                          <span class="text-[9px] text-slate-400 font-sans block uppercase leading-none">Ціна</span>
-                          <b class="text-white text-sm leading-none">{{ activeCumulativePoint.price | number }} ₴</b>
-                        </div>
-                        <div class="h-6 w-px bg-slate-800"></div>
-                        <div>
-                          <span class="text-[9px] text-emerald-400 font-sans block uppercase leading-none">Попит</span>
-                          <b class="text-emerald-400 text-sm leading-none">{{ activeCumulativePoint.cumDemandPct }}%</b>
-                        </div>
-                      </div>
+                    <div class="flex flex-col w-full gap-2.5">
+                      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 w-full">
+                        <div class="flex items-center gap-3 min-w-0 flex-1">
+                          <!-- Left Price & Demand Badge -->
+                          <div class="flex items-center gap-2.5 bg-slate-950 px-3 py-1.5 rounded-xl border shrink-0 font-mono"
+                               [class.border-amber-500/50]="pinnedCumulativePoint"
+                               [class.border-indigo-500/30]="!pinnedCumulativePoint">
+                            <div class="text-right">
+                              <span class="text-[9px] text-slate-400 font-sans block uppercase leading-none">Ціна</span>
+                              <b class="text-white text-sm leading-none">{{ activeCumulativePoint.price | number }} ₴</b>
+                            </div>
+                            <div class="h-6 w-px bg-slate-800"></div>
+                            <div>
+                              <span class="text-[9px] text-emerald-400 font-sans block uppercase leading-none">Попит</span>
+                              <b class="text-emerald-400 text-sm leading-none">{{ activeCumulativePoint.cumDemandPct }}%</b>
+                            </div>
+                          </div>
 
-                      <!-- Middle: Product Info -->
-                      <div *ngIf="activeCumulativePoint.product" class="min-w-0 flex-1">
-                        <div class="flex items-center gap-2">
-                          <span *ngIf="pinnedCumulativePoint" class="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider flex items-center gap-0.5 shrink-0">
-                            <span class="material-icons text-[10px]">push_pin</span>
-                            Зафіксовано
-                          </span>
-                          <p class="text-xs font-bold text-white truncate" [title]="activeCumulativePoint.product.name">
-                            {{ activeCumulativePoint.product.name }}
-                          </p>
+                          <!-- Middle: Product Info -->
+                          <div *ngIf="getActiveInspectorProduct(activeCumulativePoint) as activeProd" class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2">
+                              <span *ngIf="pinnedCumulativePoint" class="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider flex items-center gap-0.5 shrink-0">
+                                <span class="material-icons text-[10px]">push_pin</span>
+                                Зафіксовано
+                              </span>
+                              <span *ngIf="selectedInspectorBrandName" class="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-indigo-950 text-indigo-300 border border-indigo-700/60 uppercase tracking-wider flex items-center gap-1 shrink-0">
+                                <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                                {{ selectedInspectorBrandName }}
+                              </span>
+                              <p class="text-xs font-bold text-white truncate" [title]="activeProd.name">
+                                {{ activeProd.name }}
+                              </p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 mt-0.5 text-[11px]">
+                              <!-- Seller Tag -->
+                              <span 
+                                class="px-1.5 py-0.2 rounded text-[9.5px] font-bold border"
+                                [class.bg-emerald-950]="isRozetkaSeller(activeProd.seller)"
+                                [class.text-emerald-300]="isRozetkaSeller(activeProd.seller)"
+                                [class.border-emerald-500/40]="isRozetkaSeller(activeProd.seller)"
+                                [class.bg-indigo-950]="!isRozetkaSeller(activeProd.seller)"
+                                [class.text-indigo-300]="!isRozetkaSeller(activeProd.seller)"
+                                [class.border-indigo-500/40]="!isRozetkaSeller(activeProd.seller)"
+                              >
+                                🏪 {{ activeProd.seller || 'Rozetka' }} ({{ isRozetkaSeller(activeProd.seller) ? '1P' : '3P' }})
+                              </span>
+                              <!-- Rating & Reviews -->
+                              <span class="text-amber-300 font-bold font-mono" *ngIf="activeProd.reviews && activeProd.reviews > 0 && activeProd.rating && activeProd.rating > 0">★ {{ activeProd.rating }}</span>
+                              <span class="text-slate-300 font-mono font-semibold" *ngIf="(activeProd.reviews || 0) > 0">({{ formatReviewsCount(activeProd.reviews) }})</span>
+                              <span class="text-slate-500 font-mono text-xs" *ngIf="!activeProd.reviews || activeProd.reviews === 0">— (0 відгуків)</span>
+                              <span class="text-slate-400 font-mono text-[10px] hidden lg:inline">• До цієї ціни: {{ activeCumulativePoint.cumProducts }} SKU ({{ activeCumulativePoint.cumSupplyPct }}%) / {{ activeCumulativePoint.cumReviews | number }} в.</span>
+                            </div>
+                          </div>
                         </div>
-                        <div class="flex flex-wrap items-center gap-2 mt-0.5 text-[11px]">
-                          <!-- Seller Tag -->
-                          <span 
-                            class="px-1.5 py-0.2 rounded text-[9.5px] font-bold border"
-                            [class.bg-emerald-950]="isRozetkaSeller(activeCumulativePoint.product.seller)"
-                            [class.text-emerald-300]="isRozetkaSeller(activeCumulativePoint.product.seller)"
-                            [class.border-emerald-500/40]="isRozetkaSeller(activeCumulativePoint.product.seller)"
-                            [class.bg-indigo-950]="!isRozetkaSeller(activeCumulativePoint.product.seller)"
-                            [class.text-indigo-300]="!isRozetkaSeller(activeCumulativePoint.product.seller)"
-                            [class.border-indigo-500/40]="!isRozetkaSeller(activeCumulativePoint.product.seller)"
+
+                        <!-- Right: Action Buttons -->
+                        <div *ngIf="getActiveInspectorProduct(activeCumulativePoint) as activeProd" class="flex items-center gap-2 shrink-0">
+                          <button 
+                            (click)="openSpecsModal(activeProd)"
+                            class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer"
                           >
-                            🏪 {{ activeCumulativePoint.product.seller || 'Rozetka' }} ({{ isRozetkaSeller(activeCumulativePoint.product.seller) ? '1P' : '3P' }})
-                          </span>
-                          <!-- Rating & Reviews -->
-                          <span class="text-amber-300 font-bold font-mono" *ngIf="activeCumulativePoint.product.reviews && activeCumulativePoint.product.reviews > 0 && activeCumulativePoint.product.rating && activeCumulativePoint.product.rating > 0">★ {{ activeCumulativePoint.product.rating }}</span>
-                          <span class="text-slate-300 font-mono font-semibold" *ngIf="(activeCumulativePoint.product.reviews || 0) > 0">({{ formatReviewsCount(activeCumulativePoint.product.reviews) }})</span>
-                          <span class="text-slate-500 font-mono text-xs" *ngIf="!activeCumulativePoint.product.reviews || activeCumulativePoint.product.reviews === 0">— (0 відгуків)</span>
-                          <span class="text-slate-400 font-mono text-[10px] hidden lg:inline">• До цієї ціни: {{ activeCumulativePoint.cumProducts }} SKU ({{ activeCumulativePoint.cumSupplyPct }}%) / {{ activeCumulativePoint.cumReviews | number }} в.</span>
+                            <span class="material-icons text-sm">tune</span>
+                            <span>Характеристики</span>
+                          </button>
+                          <a 
+                            *ngIf="activeProd.link" 
+                            [href]="activeProd.link" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700 cursor-pointer"
+                          >
+                            <span class="material-icons text-sm">open_in_new</span>
+                            <span>Rozetka</span>
+                          </a>
+                          <button 
+                            *ngIf="pinnedCumulativePoint"
+                            (click)="unpinCumulativePoint($event)"
+                            class="p-1.5 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all cursor-pointer"
+                            title="Зняти фіксацію"
+                          >
+                            <span class="material-icons text-sm">close</span>
+                          </button>
                         </div>
                       </div>
-                    </div>
 
-                    <!-- Right: Action Buttons -->
-                    <div *ngIf="activeCumulativePoint.product" class="flex items-center gap-2 shrink-0">
-                      <button 
-                        (click)="openSpecsModal(activeCumulativePoint.product)"
-                        class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer"
-                      >
-                        <span class="material-icons text-sm">tune</span>
-                        <span>Характеристики</span>
-                      </button>
-                      <a 
-                        *ngIf="activeCumulativePoint.product.link" 
-                        [href]="activeCumulativePoint.product.link" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700 cursor-pointer"
-                      >
-                        <span class="material-icons text-sm">open_in_new</span>
-                        <span>Rozetka</span>
-                      </a>
-                      <button 
-                        *ngIf="pinnedCumulativePoint"
-                        (click)="unpinCumulativePoint($event)"
-                        class="p-1.5 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all cursor-pointer"
-                        title="Зняти фіксацію"
-                      >
-                        <span class="material-icons text-sm">close</span>
-                      </button>
+                      <!-- MULTI-BRAND COMPARISON SNAPSHOT STRIP (AT HOVERED / PINNED PRICE POINT) -->
+                      <div *ngIf="selectedBrandFilter === 'all' && chart.brandEquilibriums && chart.brandEquilibriums.length > 1" class="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-1.5 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                          <span class="material-icons text-xs text-cyan-400">compare_arrows</span>
+                          <span>Зріз за брендами при {{ activeCumulativePoint.price | number }} ₴:</span>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-1.5">
+                          <button
+                            *ngFor="let bi of getBrandCrosshairIntersections(activeCumulativePoint, chart)"
+                            (click)="selectInspectorBrand(bi, $event)"
+                            class="px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1.5 cursor-pointer border shadow-sm"
+                            [class.bg-slate-950]="selectedInspectorBrandName !== bi.brand"
+                            [class.text-slate-300]="selectedInspectorBrandName !== bi.brand"
+                            [class.border-slate-800]="selectedInspectorBrandName !== bi.brand"
+                            [class.hover:border-slate-600]="selectedInspectorBrandName !== bi.brand"
+                            [style.borderColor]="selectedInspectorBrandName === bi.brand ? bi.color : null"
+                            [style.backgroundColor]="selectedInspectorBrandName === bi.brand ? (bi.color + '25') : null"
+                            [style.color]="selectedInspectorBrandName === bi.brand ? '#ffffff' : null"
+                            [title]="'Клікніть, щоб переглянути товар від ' + bi.brand + ' за ціною ' + (bi.closestProduct?.price | number) + ' ₴'"
+                          >
+                            <span class="w-2 h-2 rounded-full shrink-0" [style.backgroundColor]="bi.color"></span>
+                            <span class="font-sans font-semibold">{{ bi.brand }}:</span>
+                            <span [style.color]="bi.color">{{ bi.cumDemandPct }}% попиту</span>
+                            <span class="text-[10px] text-slate-400 font-normal">({{ bi.cumCount }}/{{ bi.totalCount }} тов.)</span>
+                          </button>
+
+                          <button 
+                            *ngIf="selectedInspectorBrandName"
+                            (click)="resetInspectorBrandSelection($event)"
+                            class="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                            title="Скинути фокус бренду"
+                          >
+                            Всі разом
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </ng-container>
 
@@ -2070,6 +2116,54 @@
                     </g>
                     <!-- Supply Point -->
                     <circle [attr.cx]="activeCumulativePoint.x" [attr.cy]="activeCumulativePoint.ySupply" r="4" fill="#818cf8" stroke="#ffffff" stroke-width="1.5"/>
+
+                    <!-- Brand Curve Intersection Dots & Mini Badges (When viewing all brands) -->
+                    <g *ngIf="selectedBrandFilter === 'all' && chart.brandEquilibriums && chart.brandEquilibriums.length > 1">
+                      <g *ngFor="let bi of getBrandCrosshairIntersections(activeCumulativePoint, chart)">
+                        <!-- Outer Glow -->
+                        <circle 
+                          [attr.cx]="activeCumulativePoint.x" 
+                          [attr.cy]="bi.y" 
+                          [attr.r]="selectedInspectorBrandName === bi.brand ? 11 : 7" 
+                          [attr.fill]="bi.color" 
+                          [attr.fill-opacity]="selectedInspectorBrandName === bi.brand ? 0.45 : 0.25"
+                        />
+                        <!-- Inner Dot -->
+                        <circle 
+                          [attr.cx]="activeCumulativePoint.x" 
+                          [attr.cy]="bi.y" 
+                          [attr.r]="selectedInspectorBrandName === bi.brand ? 5.5 : 3.8" 
+                          [attr.fill]="bi.color" 
+                          stroke="#ffffff" 
+                          [attr.stroke-width]="selectedInspectorBrandName === bi.brand ? 2.2 : 1.4"
+                        />
+                        <!-- Mini Brand Floating Badge on the Curve -->
+                        <g *ngIf="bi.cumDemandPct > 0">
+                          <rect 
+                            [attr.x]="Math.min(chart.svgWidth - 95, Math.max(70, activeCumulativePoint.x + 8))" 
+                            [attr.y]="bi.y - 9" 
+                            width="82" 
+                            height="17" 
+                            rx="3.5" 
+                            fill="#090d16" 
+                            fill-opacity="0.95" 
+                            [attr.stroke]="bi.color" 
+                            [attr.stroke-width]="selectedInspectorBrandName === bi.brand ? 1.8 : 1"
+                          />
+                          <text 
+                            [attr.x]="Math.min(chart.svgWidth - 95, Math.max(70, activeCumulativePoint.x + 8)) + 41" 
+                            [attr.y]="bi.y + 2.5" 
+                            text-anchor="middle" 
+                            [attr.fill]="bi.color" 
+                            font-size="8.5" 
+                            font-weight="bold" 
+                            font-family="monospace"
+                          >
+                            {{ bi.brand }}: {{ bi.cumDemandPct }}%
+                          </text>
+                        </g>
+                      </g>
+                    </g>
 
                     <!-- Dynamic Floating Smart Pill right on the curve -->
                     <g>
@@ -7923,73 +8017,121 @@
       <div class="flex-1 flex flex-col p-4 sm:p-5 gap-3 overflow-hidden">
         
         <!-- STICKY TOP INSPECTOR BAR (CUMULATIVE MODAL) -->
-        <div *ngIf="activeExpandedChartModal === 'cumulative'" class="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900/95 via-[#131d36]/90 to-slate-900/95 border border-indigo-500/40 shadow-lg min-h-[58px] flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+        <div *ngIf="activeExpandedChartModal === 'cumulative'" class="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900/95 via-[#131d36]/90 to-slate-900/95 border border-indigo-500/40 shadow-lg min-h-[58px] flex flex-col justify-between gap-3 shrink-0">
           <ng-container *ngIf="activeCumulativePoint; else modalDefaultEquilibrium">
-            <div class="flex items-center gap-3 min-w-0 flex-1">
-              <!-- Left Price & Demand Badge -->
-              <div class="flex items-center gap-3 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-indigo-500/40 shrink-0 font-mono">
-                <div class="text-right">
-                  <span class="text-[9px] text-slate-400 font-sans block uppercase leading-none">Ціна</span>
-                  <b class="text-white text-base leading-none">{{ activeCumulativePoint.price | number }} ₴</b>
+            <div class="flex flex-col w-full gap-2.5">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 w-full">
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                  <!-- Left Price & Demand Badge -->
+                  <div class="flex items-center gap-3 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-indigo-500/40 shrink-0 font-mono">
+                    <div class="text-right">
+                      <span class="text-[9px] text-slate-400 font-sans block uppercase leading-none">Ціна</span>
+                      <b class="text-white text-base leading-none">{{ activeCumulativePoint.price | number }} ₴</b>
+                    </div>
+                    <div class="h-6 w-px bg-slate-800"></div>
+                    <div>
+                      <span class="text-[9px] text-emerald-400 font-sans block uppercase leading-none">Попит</span>
+                      <b class="text-emerald-400 text-base leading-none">{{ activeCumulativePoint.cumDemandPct }}%</b>
+                    </div>
+                  </div>
+
+                  <!-- Product Info -->
+                  <div *ngIf="getActiveInspectorProduct(activeCumulativePoint) as activeProd" class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                      <span *ngIf="pinnedCumulativePoint" class="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider flex items-center gap-0.5 shrink-0">
+                        <span class="material-icons text-[10px]">push_pin</span>
+                        Зафіксовано
+                      </span>
+                      <span *ngIf="selectedInspectorBrandName" class="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-indigo-950 text-indigo-300 border border-indigo-700/60 uppercase tracking-wider flex items-center gap-1 shrink-0">
+                        <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                        {{ selectedInspectorBrandName }}
+                      </span>
+                      <p class="text-sm font-bold text-white truncate" [title]="activeProd.name">
+                        {{ activeProd.name }}
+                      </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 mt-1 text-xs">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold border bg-indigo-950 text-indigo-300 border-indigo-500/40">
+                        🏪 {{ activeProd.seller || 'Rozetka' }}
+                      </span>
+                      <span class="text-amber-300 font-bold font-mono" *ngIf="activeProd.reviews && activeProd.reviews > 0 && activeProd.rating && activeProd.rating > 0">★ {{ activeProd.rating }}</span>
+                      <span class="text-slate-300 font-mono font-semibold" *ngIf="(activeProd.reviews || 0) > 0">({{ formatReviewsCount(activeProd.reviews) }})</span>
+                      <span class="text-slate-500 font-mono text-xs" *ngIf="!activeProd.reviews || activeProd.reviews === 0">— (0 відгуків)</span>
+                      <span class="text-slate-400 font-mono text-xs">• До цієї ціни: {{ activeCumulativePoint.cumProducts }} SKU ({{ activeCumulativePoint.cumSupplyPct }}%) / {{ activeCumulativePoint.cumReviews | number }} відгуків</span>
+                    </div>
+                  </div>
                 </div>
-                <div class="h-6 w-px bg-slate-800"></div>
-                <div>
-                  <span class="text-[9px] text-emerald-400 font-sans block uppercase leading-none">Попит</span>
-                  <b class="text-emerald-400 text-base leading-none">{{ activeCumulativePoint.cumDemandPct }}%</b>
+
+                <!-- Action Buttons -->
+                <div *ngIf="getActiveInspectorProduct(activeCumulativePoint) as activeProd" class="flex items-center gap-2 shrink-0">
+                  <button 
+                    (click)="openSpecsModal(activeProd); $event.stopPropagation()"
+                    class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
+                  >
+                    <span class="material-icons text-sm">tune</span>
+                    <span>Характеристики</span>
+                  </button>
+                  <a 
+                    *ngIf="activeProd.link" 
+                    [href]="activeProd.link" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    (click)="$event.stopPropagation()"
+                    class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700 cursor-pointer"
+                  >
+                    <span class="material-icons text-sm">open_in_new</span>
+                    <span>Rozetka</span>
+                  </a>
+                  <button 
+                    *ngIf="pinnedCumulativePoint"
+                    (click)="unpinCumulativePoint($event)"
+                    class="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all cursor-pointer"
+                    title="Зняти фіксацію"
+                  >
+                    <span class="material-icons text-sm">close</span>
+                  </button>
                 </div>
               </div>
 
-              <!-- Product Info -->
-              <div *ngIf="activeCumulativePoint.product" class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <span *ngIf="pinnedCumulativePoint" class="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider flex items-center gap-0.5 shrink-0">
-                    <span class="material-icons text-[10px]">push_pin</span>
-                    Зафіксовано
-                  </span>
-                  <p class="text-sm font-bold text-white truncate" [title]="activeCumulativePoint.product.name">
-                    {{ activeCumulativePoint.product.name }}
-                  </p>
-                </div>
-                <div class="flex flex-wrap items-center gap-2 mt-1 text-xs">
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold border bg-indigo-950 text-indigo-300 border-indigo-500/40">
-                    🏪 {{ activeCumulativePoint.product.seller || 'Rozetka' }}
-                  </span>
-                  <span class="text-amber-300 font-bold font-mono" *ngIf="activeCumulativePoint.product.reviews && activeCumulativePoint.product.reviews > 0 && activeCumulativePoint.product.rating && activeCumulativePoint.product.rating > 0">★ {{ activeCumulativePoint.product.rating }}</span>
-                  <span class="text-slate-300 font-mono font-semibold" *ngIf="(activeCumulativePoint.product.reviews || 0) > 0">({{ formatReviewsCount(activeCumulativePoint.product.reviews) }})</span>
-                  <span class="text-slate-500 font-mono text-xs" *ngIf="!activeCumulativePoint.product.reviews || activeCumulativePoint.product.reviews === 0">— (0 відгуків)</span>
-                  <span class="text-slate-400 font-mono text-xs">• До цієї ціни: {{ activeCumulativePoint.cumProducts }} SKU ({{ activeCumulativePoint.cumSupplyPct }}%) / {{ activeCumulativePoint.cumReviews | number }} відгуків</span>
+              <!-- MULTI-BRAND COMPARISON SNAPSHOT STRIP (IN MODAL) -->
+              <div *ngIf="selectedBrandFilter === 'all' && getCumulativeDemandChartData() as chart">
+                <div *ngIf="chart.brandEquilibriums && chart.brandEquilibriums.length > 1" class="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+                  <div class="flex items-center gap-1.5 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                    <span class="material-icons text-xs text-cyan-400">compare_arrows</span>
+                    <span>Зріз за брендами при {{ activeCumulativePoint.price | number }} ₴:</span>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <button
+                      *ngFor="let bi of getBrandCrosshairIntersections(activeCumulativePoint, chart)"
+                      (click)="selectInspectorBrand(bi, $event)"
+                      class="px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1.5 cursor-pointer border shadow-sm"
+                      [class.bg-slate-950]="selectedInspectorBrandName !== bi.brand"
+                      [class.text-slate-300]="selectedInspectorBrandName !== bi.brand"
+                      [class.border-slate-800]="selectedInspectorBrandName !== bi.brand"
+                      [class.hover:border-slate-600]="selectedInspectorBrandName !== bi.brand"
+                      [style.borderColor]="selectedInspectorBrandName === bi.brand ? bi.color : null"
+                      [style.backgroundColor]="selectedInspectorBrandName === bi.brand ? (bi.color + '25') : null"
+                      [style.color]="selectedInspectorBrandName === bi.brand ? '#ffffff' : null"
+                      [title]="'Клікніть, щоб переглянути товар від ' + bi.brand + ' за ціною ' + (bi.closestProduct?.price | number) + ' ₴'"
+                    >
+                      <span class="w-2 h-2 rounded-full shrink-0" [style.backgroundColor]="bi.color"></span>
+                      <span class="font-sans font-semibold">{{ bi.brand }}:</span>
+                      <span [style.color]="bi.color">{{ bi.cumDemandPct }}% попиту</span>
+                      <span class="text-[10px] text-slate-400 font-normal">({{ bi.cumCount }}/{{ bi.totalCount }} тов.)</span>
+                    </button>
+
+                    <button 
+                      *ngIf="selectedInspectorBrandName"
+                      (click)="resetInspectorBrandSelection($event)"
+                      class="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                      title="Скинути фокус бренду"
+                    >
+                      Всі разом
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-
-            <!-- Action Buttons -->
-            <div *ngIf="activeCumulativePoint.product || activeCumulativePoint.price" class="flex items-center gap-2 shrink-0">
-              <button 
-                (click)="openSpecsModal(activeCumulativePoint.product || activeCumulativePoint); $event.stopPropagation()"
-                class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
-              >
-                <span class="material-icons text-sm">tune</span>
-                <span>Характеристики</span>
-              </button>
-              <a 
-                *ngIf="activeCumulativePoint.product?.link || activeCumulativePoint.link" 
-                [href]="activeCumulativePoint.product?.link || activeCumulativePoint.link" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                (click)="$event.stopPropagation()"
-                class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700 cursor-pointer"
-              >
-                <span class="material-icons text-sm">open_in_new</span>
-                <span>Rozetka</span>
-              </a>
-              <button 
-                *ngIf="pinnedCumulativePoint"
-                (click)="unpinCumulativePoint($event)"
-                class="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all cursor-pointer"
-                title="Зняти фіксацію"
-              >
-                <span class="material-icons text-sm">close</span>
-              </button>
             </div>
           </ng-container>
 
@@ -8362,8 +8504,34 @@
                 <!-- Cumulative Supply Curve -->
                 <path [attr.d]="chart.supplyLinePath" fill="none" stroke="#818cf8" stroke-width="2" stroke-dasharray="4 4" stroke-opacity="0.8"/>
 
+                <!-- Individual Brand Demand Curves (If multiple brands exist and viewing all) -->
+                <g *ngIf="selectedBrandFilter === 'all' && chart.brandEquilibriums && chart.brandEquilibriums.length > 1">
+                  <path 
+                    *ngFor="let b of chart.brandEquilibriums" 
+                    [attr.d]="b.demandLinePath" 
+                    fill="none" 
+                    [attr.stroke]="b.color" 
+                    stroke-width="2" 
+                    stroke-dasharray="4 3" 
+                    stroke-opacity="0.85"
+                  />
+                </g>
+
                 <!-- Cumulative Demand Curve -->
                 <path [attr.d]="chart.demandLinePath" fill="none" stroke="#10b981" stroke-width="3.5" class="drop-shadow-lg"/>
+
+                <!-- Multi-Brand 50% Equilibrium Points (If multiple brands exist) -->
+                <g *ngIf="selectedBrandFilter === 'all' && chart.brandEquilibriums && chart.brandEquilibriums.length > 1">
+                  <g *ngFor="let b of chart.brandEquilibriums">
+                    <line [attr.x1]="b.eqX" y1="180" [attr.x2]="b.eqX" y2="415" [attr.stroke]="b.color" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.6"/>
+                    <circle [attr.cx]="b.eqX" [attr.cy]="b.eqY" r="9" [attr.fill]="b.color" fill-opacity="0.3"/>
+                    <circle [attr.cx]="b.eqX" [attr.cy]="b.eqY" r="5" [attr.fill]="b.color" stroke="#ffffff" stroke-width="1.5"/>
+                    <rect [attr.x]="b.eqX - 36" [attr.y]="b.eqY - 24" width="72" height="16" rx="4" fill="#090d16" fill-opacity="0.95" [attr.stroke]="b.color" stroke-width="1.2"/>
+                    <text [attr.x]="b.eqX" [attr.y]="b.eqY - 12" text-anchor="middle" [attr.fill]="b.color" font-size="8" font-weight="bold" font-family="monospace">
+                      {{ b.brand }}: {{ b.weightedMedianPrice | number }} ₴
+                    </text>
+                  </g>
+                </g>
 
                 <!-- 1. Shelf Median Line -->
                 <g>
@@ -8414,6 +8582,54 @@
 
                   <circle [attr.cx]="activeCumulativePoint.x" [attr.cy]="activeCumulativePoint.yDemand" [attr.r]="pinnedCumulativePoint ? 8 : 6" [attr.fill]="pinnedCumulativePoint ? '#fbbf24' : '#10b981'" stroke="#ffffff" stroke-width="2"/>
                   <circle [attr.cx]="activeCumulativePoint.x" [attr.cy]="activeCumulativePoint.ySupply" r="4.5" fill="#818cf8" stroke="#ffffff" stroke-width="1.5"/>
+
+                  <!-- Brand Curve Intersection Dots & Mini Badges (When viewing all brands in modal) -->
+                  <g *ngIf="selectedBrandFilter === 'all' && chart.brandEquilibriums && chart.brandEquilibriums.length > 1">
+                    <g *ngFor="let bi of getBrandCrosshairIntersections(activeCumulativePoint, chart)">
+                      <!-- Outer Glow -->
+                      <circle 
+                        [attr.cx]="activeCumulativePoint.x" 
+                        [attr.cy]="bi.y" 
+                        [attr.r]="selectedInspectorBrandName === bi.brand ? 11 : 7" 
+                        [attr.fill]="bi.color" 
+                        [attr.fill-opacity]="selectedInspectorBrandName === bi.brand ? 0.45 : 0.25"
+                      />
+                      <!-- Inner Dot -->
+                      <circle 
+                        [attr.cx]="activeCumulativePoint.x" 
+                        [attr.cy]="bi.y" 
+                        [attr.r]="selectedInspectorBrandName === bi.brand ? 5.5 : 3.8" 
+                        [attr.fill]="bi.color" 
+                        stroke="#ffffff" 
+                        [attr.stroke-width]="selectedInspectorBrandName === bi.brand ? 2.2 : 1.4"
+                      />
+                      <!-- Mini Brand Floating Badge on the Curve -->
+                      <g *ngIf="bi.cumDemandPct > 0">
+                        <rect 
+                          [attr.x]="Math.min(chart.svgWidth - 95, Math.max(70, activeCumulativePoint.x + 8))" 
+                          [attr.y]="bi.y - 9" 
+                          width="82" 
+                          height="17" 
+                          rx="3.5" 
+                          fill="#090d16" 
+                          fill-opacity="0.95" 
+                          [attr.stroke]="bi.color" 
+                          [attr.stroke-width]="selectedInspectorBrandName === bi.brand ? 1.8 : 1"
+                        />
+                        <text 
+                          [attr.x]="Math.min(chart.svgWidth - 95, Math.max(70, activeCumulativePoint.x + 8)) + 41" 
+                          [attr.y]="bi.y + 2.5" 
+                          text-anchor="middle" 
+                          [attr.fill]="bi.color" 
+                          font-size="8.5" 
+                          font-weight="bold" 
+                          font-family="monospace"
+                        >
+                          {{ bi.brand }}: {{ bi.cumDemandPct }}%
+                        </text>
+                      </g>
+                    </g>
+                  </g>
 
                   <!-- Dynamic Floating Smart Pill -->
                   <g>

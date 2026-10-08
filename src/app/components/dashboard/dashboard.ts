@@ -1910,6 +1910,8 @@ export class DashboardComponent implements OnInit {
   hoveredDensityBar: any = null;
   hoveredDensityBarIndex: number = -1;
   showChartLegendGuide: boolean = false;
+  selectedInspectorBrandProduct: any = null;
+  selectedInspectorBrandName: string | null = null;
 
   toggleChartLegendGuide(): void {
     this.showChartLegendGuide = !this.showChartLegendGuide;
@@ -1921,6 +1923,93 @@ export class DashboardComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
+  getActiveInspectorProduct(activePoint: any): any {
+    if (!activePoint) return null;
+    return this.selectedInspectorBrandProduct || activePoint.product;
+  }
+
+  selectInspectorBrand(brandIntersection: any, event?: MouseEvent): void {
+    if (event) event.stopPropagation();
+    if (brandIntersection?.closestProduct) {
+      this.selectedInspectorBrandProduct = brandIntersection.closestProduct;
+      this.selectedInspectorBrandName = brandIntersection.brand;
+      this.cdr.markForCheck();
+    }
+  }
+
+  resetInspectorBrandSelection(event?: MouseEvent): void {
+    if (event) event.stopPropagation();
+    this.selectedInspectorBrandProduct = null;
+    this.selectedInspectorBrandName = null;
+    this.cdr.markForCheck();
+  }
+
+  getBrandCrosshairIntersections(point: any, chartData: any): Array<{
+    brand: string;
+    color: string;
+    y: number;
+    cumDemandPct: number;
+    cumSupplyPct: number;
+    closestProduct: any;
+    cumCount: number;
+    totalCount: number;
+    diffPct: number;
+    isCurrentProductBrand: boolean;
+  }> {
+    if (!point || !chartData?.brandEquilibriums || chartData.brandEquilibriums.length <= 1) {
+      return [];
+    }
+
+    const price = point.price;
+    const PAD_T = 32;
+    const PAD_B = 45;
+    const SVG_H = 460;
+    const PLOT_H = SVG_H - PAD_T - PAD_B;
+
+    const currentBrand = this.getProductBrand(this.getActiveInspectorProduct(point));
+
+    return chartData.brandEquilibriums.map((b: any) => {
+      const items: Array<any> = b.items || [];
+      const totalW = b.totalWeight || 1;
+      const totalCount = items.length || 1;
+
+      let runW = 0;
+      let cumCount = 0;
+      let closestProduct = items[0]?.product;
+      let minDiff = Infinity;
+
+      for (const it of items) {
+        if (it.price <= price) {
+          runW += it.weight;
+          cumCount++;
+        }
+        const diff = Math.abs(it.price - price);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestProduct = it.product;
+        }
+      }
+
+      const cumDemandPct = Number(((runW / totalW) * 100).toFixed(1));
+      const cumSupplyPct = Number(((cumCount / totalCount) * 100).toFixed(1));
+      const normY = Math.max(0, Math.min(1, cumDemandPct / 100));
+      const y = Math.round((PAD_T + (1 - normY) * PLOT_H) * 10) / 10;
+
+      return {
+        brand: b.brand,
+        color: b.color,
+        y,
+        cumDemandPct,
+        cumSupplyPct,
+        closestProduct,
+        cumCount,
+        totalCount,
+        diffPct: Number((cumDemandPct - cumSupplyPct).toFixed(1)),
+        isCurrentProductBrand: currentBrand === b.brand
+      };
+    });
+  }
+
   get activeCumulativePoint(): any {
     return this.pinnedCumulativePoint || this.hoveredCumulativePoint;
   }
@@ -1929,6 +2018,8 @@ export class DashboardComponent implements OnInit {
     this.activePriceChartTab = tab;
     this.hoveredCumulativePoint = null;
     this.pinnedCumulativePoint = null;
+    this.selectedInspectorBrandProduct = null;
+    this.selectedInspectorBrandName = null;
     this.hoveredDensityBar = null;
     this.hoveredDensityBarIndex = -1;
     this.cdr.markForCheck();
@@ -1938,6 +2029,8 @@ export class DashboardComponent implements OnInit {
     this.cumulativeZoomMode = mode;
     this.hoveredCumulativePoint = null;
     this.pinnedCumulativePoint = null;
+    this.selectedInspectorBrandProduct = null;
+    this.selectedInspectorBrandName = null;
     this.cdr.markForCheck();
   }
 
@@ -2500,6 +2593,8 @@ export class DashboardComponent implements OnInit {
       eqX: number;
       eqY: number;
       demandLinePath: string;
+      items?: any[];
+      totalWeight?: number;
     }> = [];
 
     const brandEntries = Array.from(brandMap.entries()).sort((a, b) => b[1].length - a[1].length);
@@ -2565,7 +2660,9 @@ export class DashboardComponent implements OnInit {
         maxPrice: bPrices[bPrices.length - 1] || 0,
         eqX: bEqX,
         eqY: bEqY,
-        demandLinePath: bCurvePath
+        demandLinePath: bCurvePath,
+        items: bSorted,
+        totalWeight: bTotalW
       });
     });
 
@@ -2626,6 +2723,25 @@ export class DashboardComponent implements OnInit {
     }
 
     this.hoveredCumulativePoint = closest;
+
+    if (this.selectedInspectorBrandName && data.brandEquilibriums && data.brandEquilibriums.length > 1) {
+      const brandData = data.brandEquilibriums.find((b: any) => b.brand === this.selectedInspectorBrandName);
+      if (brandData && brandData.items) {
+        let bClosest = brandData.items[0]?.product;
+        let bMinDiff = Infinity;
+        for (const it of brandData.items) {
+          const diff = Math.abs(it.price - closest.price);
+          if (diff < bMinDiff) {
+            bMinDiff = diff;
+            bClosest = it.product;
+          }
+        }
+        this.selectedInspectorBrandProduct = bClosest;
+      }
+    } else {
+      this.selectedInspectorBrandProduct = null;
+    }
+
     this.cdr.markForCheck();
   }
 
@@ -2653,9 +2769,26 @@ export class DashboardComponent implements OnInit {
 
     if (this.pinnedCumulativePoint && this.pinnedCumulativePoint.x === closest.x) {
       this.pinnedCumulativePoint = null; // Toggle unpin if clicking same
+      this.selectedInspectorBrandProduct = null;
+      this.selectedInspectorBrandName = null;
     } else {
       this.pinnedCumulativePoint = closest;
       this.hoveredCumulativePoint = closest;
+      if (this.selectedInspectorBrandName && data.brandEquilibriums && data.brandEquilibriums.length > 1) {
+        const brandData = data.brandEquilibriums.find((b: any) => b.brand === this.selectedInspectorBrandName);
+        if (brandData && brandData.items) {
+          let bClosest = brandData.items[0]?.product;
+          let bMinDiff = Infinity;
+          for (const it of brandData.items) {
+            const diff = Math.abs(it.price - closest.price);
+            if (diff < bMinDiff) {
+              bMinDiff = diff;
+              bClosest = it.product;
+            }
+          }
+          this.selectedInspectorBrandProduct = bClosest;
+        }
+      }
     }
     this.cdr.markForCheck();
   }
@@ -2666,6 +2799,8 @@ export class DashboardComponent implements OnInit {
     }
     this.pinnedCumulativePoint = null;
     this.hoveredCumulativePoint = null;
+    this.selectedInspectorBrandProduct = null;
+    this.selectedInspectorBrandName = null;
     this.cdr.markForCheck();
   }
 
