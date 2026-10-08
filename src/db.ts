@@ -256,25 +256,42 @@ async function autoMigrateLocalData(client: pg.PoolClient) {
   }
 }
 
+let inMemoryProducts: any[] = [];
+let dbFailureCooldown = 0;
+
 // --- Current Products CRUD ---
 export async function getCurrentProducts(): Promise<any[]> {
-  if (pool && isDbAvailable) {
+  const now = Date.now();
+  if (pool && isDbAvailable && now > dbFailureCooldown) {
     try {
       const res = await pool.query('SELECT data FROM current_products WHERE id = 1');
       if (res.rows.length > 0 && res.rows[0].data) {
-        return res.rows[0].data;
+        inMemoryProducts = res.rows[0].data;
+        return inMemoryProducts;
       }
-      return [];
-    } catch (err) {
-      console.error('[Neon DB] Error reading products:', err);
+      return inMemoryProducts;
+    } catch (err: any) {
+      console.warn('[Neon DB] Error reading products (using fallback):', err.message);
+      if (err.code === '53000' || err.message?.includes('quota')) {
+        isDbAvailable = false;
+        dbFailureCooldown = now + 600000;
+      }
     }
   }
 
-  // Fallback
+  // Fallback: in-memory first
+  if (inMemoryProducts.length > 0) {
+    return inMemoryProducts;
+  }
+
+  // Fallback: file
   if (existsSync(dataFilePath)) {
     try {
       const raw = readFileSync(dataFilePath, 'utf-8').replace(/^\uFEFF/, '').trim();
-      return raw ? JSON.parse(raw) : [];
+      if (raw) {
+        inMemoryProducts = JSON.parse(raw);
+        return inMemoryProducts;
+      }
     } catch (_) {}
   }
   return [];
@@ -282,27 +299,34 @@ export async function getCurrentProducts(): Promise<any[]> {
 
 export async function saveCurrentProducts(products: any[]): Promise<void> {
   const safeProducts = Array.isArray(products) ? products : [];
-  
-  // Save to DB
-  if (pool && isDbAvailable) {
+  inMemoryProducts = safeProducts;
+
+  // Sync to local file for offline resilience
+  try {
+    writeFileSync(dataFilePath, JSON.stringify(safeProducts, null, 2), 'utf-8');
+  } catch (_) {}
+
+  // Save to DB if available
+  const now = Date.now();
+  if (pool && isDbAvailable && now > dbFailureCooldown) {
     try {
       await pool.query(`
         INSERT INTO current_products (id, data, updated_at)
         VALUES (1, $1, NOW())
         ON CONFLICT (id) DO UPDATE SET data = $1, updated_at = NOW()
       `, [JSON.stringify(safeProducts)]);
-    } catch (err) {
-      console.error('[Neon DB] Error saving products:', err);
+    } catch (err: any) {
+      console.warn('[Neon DB] Error saving products (in-memory/file saved):', err.message);
+      if (err.code === '53000' || err.message?.includes('quota')) {
+        isDbAvailable = false;
+        dbFailureCooldown = now + 600000;
+      }
     }
   }
-
-  // Also sync to local file for offline resilience
-  try {
-    writeFileSync(dataFilePath, JSON.stringify(safeProducts, null, 2), 'utf-8');
-  } catch (_) {}
 }
 
 export async function clearCurrentProducts(): Promise<void> {
+  inMemoryProducts = [];
   await saveCurrentProducts([]);
 }
 
