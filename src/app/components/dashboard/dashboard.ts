@@ -598,7 +598,7 @@ export class DashboardComponent implements OnInit {
     return this.getAvailableCategoryAndBrandPills().map(p => ({ title: p.id, count: p.count }));
   }
 
-  getAvailableCategoryAndBrandPills(): Array<{ id: string; title: string; count: number; type: 'category' | 'brand'; color: string }> {
+  getAvailableCategoryAndBrandPills(): Array<{ id: string; title: string; count: number; type: 'category' | 'brand'; color: string; isMinor?: boolean }> {
     if (!this.products || this.products.length === 0) return [];
 
     const categoriesMap = new Map<string, number>();
@@ -614,7 +614,7 @@ export class DashboardComponent implements OnInit {
       }
     }
 
-    const pills: Array<{ id: string; title: string; count: number; type: 'category' | 'brand'; color: string }> = [];
+    const pills: Array<{ id: string; title: string; count: number; type: 'category' | 'brand'; color: string; isMinor?: boolean }> = [];
 
     const brandColors: { [k: string]: string } = {
       'Xiaomi': '#ff6700',
@@ -649,7 +649,8 @@ export class DashboardComponent implements OnInit {
           title: cat,
           count,
           type: 'category',
-          color: '#6366f1'
+          color: '#6366f1',
+          isMinor: false
         });
       });
     }
@@ -659,18 +660,24 @@ export class DashboardComponent implements OnInit {
       .filter(([brand, count]) => count >= 1 && !/^(?:пауербанк|повербанк|павербанк|інші|акумулятор|power\s*bank|powerbank)$/i.test(brand))
       .sort((a, b) => b[1] - a[1]);
 
+    const totalItems = this.products.length || 1;
+    const maxBrandCount = sortedBrands.length > 0 ? sortedBrands[0][1] : 0;
+    const hasDominantBrands = maxBrandCount >= 15 || (sortedBrands.length > 1 && (sortedBrands[0][1] + (sortedBrands[1]?.[1] || 0)) >= 0.7 * totalItems);
+
     let otherBrandsCount = 0;
     for (const [brand, count] of sortedBrands) {
-      if (count < 2 && sortedBrands.length > 3) {
+      if (count < 2 && sortedBrands.length > 5) {
         otherBrandsCount += count;
         continue;
       }
+      const isMinor = hasDominantBrands && (count <= 5 || (count / totalItems) < 0.025) && (count < maxBrandCount * 0.1);
       pills.push({
         id: 'brand:' + brand,
         title: brand,
         count,
         type: 'brand',
-        color: brandColors[brand] || '#818cf8'
+        color: brandColors[brand] || '#818cf8',
+        isMinor
       });
     }
 
@@ -680,7 +687,8 @@ export class DashboardComponent implements OnInit {
         title: 'Інші бренди',
         count: otherBrandsCount,
         type: 'brand',
-        color: '#64748b'
+        color: '#64748b',
+        isMinor: true
       });
     }
 
@@ -2081,17 +2089,25 @@ export class DashboardComponent implements OnInit {
     }
 
     const total = list.length || 1;
-    const sorted = Array.from(brandCounts.entries())
-      .filter(([_, count]) => count >= 2)
+    const sorted = Array.from(brandCounts.entries()).sort((a, b) => b[1] - a[1]);
+    const maxCount = sorted.length > 0 ? sorted[0][1] : 0;
+    const hasDominant = maxCount >= 15;
+
+    const filtered = sorted
+      .filter(([_, count]) => {
+        if (hasDominant && (count <= 5 || (count / total) < 0.025) && count < maxCount * 0.1) {
+          return false;
+        }
+        return count >= 2;
+      })
       .map(([name, count]) => ({
         name,
         count,
         share: Math.round((count / total) * 1000) / 10
       }))
-      .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
-    return sorted.length >= 2 ? sorted : [];
+    return filtered.length >= 2 ? filtered : [];
   }
 
   setBrandFilter(brand: string): void {
@@ -2432,8 +2448,15 @@ export class DashboardComponent implements OnInit {
       demandLinePath: string;
     }> = [];
 
+    const dominantBrandCount = Math.max(0, ...Array.from(brandMap.values()).map(v => v.length));
+    const hasDominant = dominantBrandCount >= 15;
+
     brandMap.forEach((items, brandName) => {
       if (items.length < 2) return;
+      // Exclude minor stray brands (< 2.5% share or <= 5 items when dominant brands exist) so they don't distort comparative curves
+      if (hasDominant && (items.length <= 5 || (items.length / totalCount) < 0.025) && items.length < dominantBrandCount * 0.1) {
+        return;
+      }
       const bSorted = [...items].sort((a, b) => a.price - b.price);
       const bTotalW = bSorted.reduce((acc, x) => acc + x.weight, 0);
       const bTotalRev = bSorted.reduce((acc, x) => acc + x.reviews, 0);
