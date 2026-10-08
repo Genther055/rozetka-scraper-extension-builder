@@ -21,6 +21,8 @@
     let currentEstimatedTotal = 0;
     let currentStatusMsg = 'Готова до запуску';
     let currentPage = 1;
+    let stableSessionTitle = null;
+    let stableCategory = null;
 
     // Helper to send messages safely to background service worker
     function sendTabMessage(msg) {
@@ -41,6 +43,7 @@
     // Persist session to tab's sessionStorage across page transitions
     function persistSessionState(pageNum) {
         try {
+            const meta = getPageMetadata();
             const state = {
                 isRunning: isTabScrapingActive && window.__tradeScoutIsScrapingActive,
                 tabId: currentTabId,
@@ -49,8 +52,8 @@
                 visitedUrls: Array.from(visitedUrls),
                 currentPage: pageNum || currentPage,
                 estimatedTotal: currentEstimatedTotal,
-                sessionTitle: getPageMetadata().title,
-                category: getPageMetadata().category,
+                sessionTitle: stableSessionTitle || meta.title,
+                category: stableCategory || meta.category,
                 startTime: sessionStartTime,
                 webhookUrl: webhookEndpoint,
                 savedAt: Date.now()
@@ -63,6 +66,8 @@
 
     function clearPersistedSession() {
         try {
+            stableSessionTitle = null;
+            stableCategory = null;
             if (currentTabId) sessionStorage.removeItem(`__tradeScout_session_tab_${currentTabId}`);
             sessionStorage.removeItem(SESSION_STORAGE_KEY);
         } catch (_) {}
@@ -353,6 +358,11 @@
 
     // Extract human-readable category & session title from page
     function getPageMetadata() {
+        if (stableSessionTitle && stableCategory) {
+            const activeBrands = detectActiveTargetBrands();
+            return { title: stableSessionTitle, category: stableCategory, activeBrands };
+        }
+
         let title = '';
         const h1 = document.querySelector('h1');
         if (h1 && h1.innerText && h1.innerText.trim().length > 2) {
@@ -405,7 +415,14 @@
     }
 
     function checkHasNextPage(nextPg) {
-        // 1. Check forward arrow link / button
+        // Priority 0: Mathematical guarantee if currentEstimatedTotal indicates remaining items
+        // (nextPg - 1) * 60 is the minimum count for pages 1..(nextPg-1).
+        // If currentEstimatedTotal > (nextPg - 1) * 60 (e.g. 515 items > 4 * 60 = 240), then nextPg DEFINITELY exists!
+        if (currentEstimatedTotal > 0 && (nextPg - 1) * 60 < currentEstimatedTotal) {
+            return true;
+        }
+
+        // Priority 1: Check forward arrow link / button
         const forwardEls = document.querySelectorAll(`
             a.pagination__direction--forward, 
             button.pagination__direction--forward,
@@ -413,6 +430,8 @@
             [class*="pagination__direction--forward"],
             [class*="paginator__direction_type_forward"],
             [class*="paginator__direction--forward"],
+            [class*="pagination__arrow--forward"],
+            [class*="pagination__btn--next"],
             a[rel="next"],
             [aria-label*="наступн" i],
             [aria-label*="следующ" i],
@@ -430,17 +449,30 @@
             }
         }
 
-        // 2. Check if page link for nextPg exists in DOM
+        // Priority 2: Check if page link for nextPg (or any page >= nextPg!) exists in DOM
         const pageLinkEls = document.querySelectorAll(`
             a.pagination__link,
             button.pagination__link,
             [class*="pagination"] a,
             [class*="paginator"] a,
-            rz-paginator a
+            rz-paginator a,
+            rz-paginator button,
+            a[href*="page="]
         `);
         for (const el of pageLinkEls) {
             const txt = (el.textContent || '').trim();
+            const num = parseInt(txt, 10);
+            if (!isNaN(num) && num >= nextPg) {
+                return true;
+            }
             const href = el.getAttribute('href') || '';
+            const m = href.match(/page=(\d+)/i) || href.match(/\/(\d+)\/?$/);
+            if (m && m[1]) {
+                const hNum = parseInt(m[1], 10);
+                if (!isNaN(hNum) && hNum >= nextPg) {
+                    return true;
+                }
+            }
             if (txt === String(nextPg) || href.includes(`page=${nextPg}`) || href.includes(`page=${nextPg};`) || href.includes(`/${nextPg}/`)) {
                 return true;
             }
@@ -2521,10 +2553,11 @@
         // Round 0: Initial harvest of immediately mounted tiles
         await harvestBatch();
 
-        // If tiles not mounted yet, short wait for Angular hydration
+        // If tiles not mounted yet, wait for Angular hydration with progressive retries
         if (pageNewProducts.length === 0) {
-            for (let retry = 0; retry < 4 && pageNewProducts.length === 0; retry++) {
-                await new Promise(r => setTimeout(r, 200));
+            for (let retry = 0; retry < 6 && pageNewProducts.length === 0; retry++) {
+                await new Promise(r => setTimeout(r, 350));
+                captureVisualRatingsInViewport();
                 await harvestBatch();
             }
         }
@@ -2694,6 +2727,8 @@
         currentPage = 1;
 
         const meta = getPageMetadata();
+        stableSessionTitle = meta.title;
+        stableCategory = meta.category;
         currentEstimatedTotal = getEstimatedTotalFromPage();
         currentPercent = 1;
         currentStatusMsg = `Запуск скрейпінгу: ${meta.title}...`;
@@ -2782,6 +2817,9 @@
                 currentPage = state.currentPage || 1;
                 currentEstimatedTotal = state.estimatedTotal || getEstimatedTotalFromPage();
                 
+                if (state.sessionTitle) stableSessionTitle = state.sessionTitle;
+                if (state.category) stableCategory = state.category;
+
                 if (Array.isArray(state.sentLinks)) {
                     state.sentLinks.forEach(l => sentLinks.add(l));
                 }

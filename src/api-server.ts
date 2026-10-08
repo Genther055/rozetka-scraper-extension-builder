@@ -2,6 +2,7 @@ import express from 'express';
 import { join } from 'node:path';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import {
+  // Database functions
   initDb,
   getCurrentProducts,
   saveCurrentProducts,
@@ -87,10 +88,10 @@ function getCleanActiveScrapes(): LiveScrapingTask[] {
   }
   return list;
 }
-
+// API Endpoints
 const SERVER_START_TIME = Date.now();
-const SERVER_VERSION = 'v4.4.0';
-const BUILD_TIMESTAMP = '08.10 16:15';
+const SERVER_VERSION = 'v4.4.1';
+const BUILD_TIMESTAMP = '08.10 16:30';
 
 app.get('/api/version', async (req, res) => {
   try {
@@ -275,6 +276,7 @@ function getSessionTargetBrandsServer(sessionTitle: string, payloadTargetBrands?
       }
     } catch (_) {}
   }
+  // Fallback to session title detection
   if (sessionTitle) {
     for (const rule of knownBrands) {
       if (rule.regex.test(sessionTitle)) {
