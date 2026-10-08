@@ -2640,6 +2640,8 @@
                     startTime: sessionStartTime
                 });
 
+
+                // Resume scraping after a short delay to allow page to stabilize
                 setTimeout(() => {
                     runTabScraper(currentPage);
                 }, 350);
@@ -2686,6 +2688,7 @@
             sendResponse({ success: true });
             return true;
         }
+        //  34 - 20 
 
         if (message.action === 'PING_TAB_STATUS') {
             const meta = getPageMetadata();

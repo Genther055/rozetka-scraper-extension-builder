@@ -188,6 +188,29 @@
         'Ugreen': ['Ugreen', 'Югрін', 'Югрин']
     };
 
+    function detectTileBrand(name) {
+        if (!name || typeof name !== 'string') return null;
+        for (const rule of KNOWN_BRAND_RULES) {
+            if (rule.excludeIf && rule.excludeIf.test(name)) continue;
+            if (rule.regex.test(name)) {
+                return rule.name;
+            }
+        }
+        return null;
+    }
+
+    function isBrandAllowed(brandName, allowedSet) {
+        if (!brandName || !allowedSet || allowedSet.size === 0) return true;
+        const bLower = brandName.toLowerCase();
+        for (const allowed of allowedSet) {
+            const aLower = allowed.toLowerCase();
+            if (bLower === aLower || bLower.includes(aLower) || aLower.includes(bLower)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     function cleanBrandChipText(rawText) {
         if (!rawText) return '';
         let clean = rawText
@@ -2095,6 +2118,16 @@
 
             const name = extractTitle(item, link);
             if (!name || name.length < 2) continue;
+
+            // If active target brands are specified from filters (e.g. ['Xiaomi', 'Sigma mobile']),
+            // and the tile name clearly belongs to a known conflicting brand (e.g. 'Hoco', 'Apple', 'Baseus', 'Proove')
+            // that is NOT in allowedBrandsSet, skip this stray injected tile!
+            if (allowedBrandsSet.size > 0) {
+                const detectedTileBrand = detectTileBrand(name);
+                if (detectedTileBrand && !isBrandAllowed(detectedTileBrand, allowedBrandsSet)) {
+                    continue;
+                }
+            }
 
             if (sentLinks.has(link) || seenElements.has(link)) continue;
             seenElements.add(link);
