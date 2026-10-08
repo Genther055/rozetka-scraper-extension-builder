@@ -334,6 +334,51 @@
         return 0;
     }
 
+    function checkHasNextPage(nextPg) {
+        // 1. Check forward arrow link / button
+        const forwardEls = document.querySelectorAll(`
+            a.pagination__direction--forward, 
+            button.pagination__direction--forward,
+            [class*="pagination__direction_type_forward"], 
+            [class*="pagination__direction--forward"],
+            [class*="paginator__direction_type_forward"],
+            [class*="paginator__direction--forward"],
+            a[rel="next"],
+            [aria-label*="наступн" i],
+            [aria-label*="следующ" i],
+            [aria-label*="next" i],
+            [title*="наступн" i],
+            [title*="следующ" i],
+            [data-testid*="next" i],
+            [data-testid*="forward" i]
+        `);
+        for (const el of forwardEls) {
+            const cls = (el.className || '').toLowerCase();
+            const isDisabled = cls.includes('disabled') || el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true';
+            if (!isDisabled) {
+                return true;
+            }
+        }
+
+        // 2. Check if page link for nextPg exists in DOM
+        const pageLinkEls = document.querySelectorAll(`
+            a.pagination__link,
+            button.pagination__link,
+            [class*="pagination"] a,
+            [class*="paginator"] a,
+            rz-paginator a
+        `);
+        for (const el of pageLinkEls) {
+            const txt = (el.textContent || '').trim();
+            const href = el.getAttribute('href') || '';
+            if (txt === String(nextPg) || href.includes(`page=${nextPg}`) || href.includes(`page=${nextPg};`) || href.includes(`/${nextPg}/`)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     function getEstimatedTotalFromPage() {
         // Priority 1: Search top heading, counter, and settings elements
         const topElements = document.querySelectorAll(`
@@ -341,7 +386,7 @@
             rz-catalog-settings, .catalog-settings, .catalog-heading, .catalog-selection,
             [data-testid*="found"], [data-testid*="counter"], [data-testid*="total"],
             [class*="found-goods"], [class*="goods-count"], [class*="heading__goods"], [class*="total-goods"],
-            h1, h2, [class*="filters-tags"]
+            h1, h2, [class*="filters-tags"], [class*="catalog-settings__heading"]
         `);
         for (const el of topElements) {
             if (el.closest('aside, .sidebar, rz-filter-stack, .sidebar-block, rz-section-slider, rz-viewed-goods, [class*="viewed"], .recently-viewed')) continue;
@@ -356,7 +401,7 @@
         try {
             const headerSection = document.querySelector('rz-category-page, rz-catalog, main, body');
             if (headerSection) {
-                const fullText = (headerSection.innerText || '').slice(0, 3000);
+                const fullText = (headerSection.innerText || '').slice(0, 4000);
                 const count = parseCountFromText(fullText);
                 if (count > 0 && count < 1000000) return count;
             }
@@ -364,7 +409,7 @@
 
         // Priority 3: Check pagination links (max page * 60)
         try {
-            const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a, rz-paginator a, [class*="paginator"] a');
+            const pageLinks = document.querySelectorAll('a.pagination__link, [class*="pagination"] a, li.pagination__item a, rz-paginator a, [class*="paginator"] a, a[href*="page="]');
             let maxPage = 1;
             pageLinks.forEach(link => {
                 const txt = (link.textContent || '').trim();
@@ -386,10 +431,10 @@
             }
         } catch (_) {}
 
-        // Priority 4: Check if forward pagination button exists
-        const hasForward = !!document.querySelector('a.pagination__direction--forward, a[rel="next"], [class*="pagination__direction_type_forward"], [class*="pagination__direction--forward"], [class*="paginator"] a[href*="page="]');
+        // Priority 4: Check if forward pagination button exists (default to 880 if catalog has multiple pages)
+        const hasForward = checkHasNextPage(2);
         if (hasForward) {
-            return 300;
+            return 880;
         }
 
         return 60;
@@ -2525,23 +2570,19 @@
             persistSessionState(currentPage);
         }
 
-        // 3. Check if all items in catalog are collected
-        const freshNextInDom = !!document.querySelector(`
-            a.pagination__direction--forward, 
-            a[rel="next"], 
-            [class*="pagination__direction_type_forward"], 
-            [class*="pagination__direction--forward"], 
-            a.pagination__link[href*="page=${nextPg}"], 
-            a.pagination__link[href*="page=${nextPg};"], 
-            [class*="paginator"] a[href*="page=${nextPg}"],
-            a[href*="page=${nextPg}"],
-            a[href*="page=${nextPg};"]
-        `);
+        // 3. Check if there is a next page to scrape
+        const hasNextPage = checkHasNextPage(nextPg);
 
-        const maxPages = currentEstimatedTotal > 0 ? Math.ceil(currentEstimatedTotal / 60) : 999;
-        const isFinished = (!freshNextInDom && currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) || 
-                           (pageNewProducts.length === 0 && currentPage > 1 && !freshNextInDom) || 
-                           (currentPage >= maxPages && !freshNextInDom);
+        // Dynamically expand estimated total if more products/pages are available
+        if (hasNextPage && currentEstimatedTotal <= sentLinks.size) {
+            currentEstimatedTotal = Math.max(currentEstimatedTotal + 60, (nextPg + 1) * 60);
+        }
+
+        const isFinished = !hasNextPage && (
+            (pageNewProducts.length === 0 && currentPage > 1) || 
+            (currentEstimatedTotal > 0 && sentLinks.size >= currentEstimatedTotal) ||
+            (!targetUrl || targetUrl === window.location.href)
+        );
 
         if (isFinished) {
             isTabScrapingActive = false;
